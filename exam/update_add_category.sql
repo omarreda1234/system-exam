@@ -1,0 +1,1 @@
+ALTER PROCEDURE [dbo].[sp_AddCategory] @CategoryName NVARCHAR(100), @ExamTypeId INT = NULL AS BEGIN SET NOCOUNT ON; BEGIN TRY INSERT INTO [dbo].[Categories] ([CategoryName], [ExamTypeId]) VALUES (@CategoryName, @ExamTypeId); END TRY BEGIN CATCH THROW; END CATCH END;
