@@ -102,7 +102,7 @@
                     <th>Finish Time</th>
                     <th>Time (M)</th>
                     <th>Score</th>
-                    <th>Pass/Fail</th>
+                    <th>Result Status</th>
                     <th>User Code</th>
                     <th class="text-right px-8">Actions</th>
                 </tr>
@@ -156,10 +156,10 @@
                             </div>
                         </td>
                         <td>
-                            @if (s.IsPassed == true) {
-                                <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-emerald-50 text-emerald-600">PASSED</span>
-                            } else if (s.IsPassed == false) {
-                                <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-rose-50 text-rose-600">FAILED</span>
+                            @if (s.Status.StartsWith("Completed")) {
+                                <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-emerald-50 text-emerald-600">COMPLETED</span>
+                            } else {
+                                <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-slate-100 text-slate-500">INCOMPLETE</span>
                             }
                             @if (s.AttemptNumber > 1) {
                                 <div class="mt-1">
@@ -199,7 +199,7 @@
             const year = $('#yearFilter').val();
             const month = $('#monthFilter').val();
 
-            $.get('/Admin/GetFilteredExams', { typeId: type, month: month, year: year }, function (data) {
+            $.get('/Admin/GetFilteredExams', { typeId: type, month: month, year: year, mode: 'wavey' }, function (data) {
                 const $examFilter = $('#examFilter');
                 $examFilter.empty();
 

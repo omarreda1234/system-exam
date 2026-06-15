@@ -105,10 +105,8 @@
                     var statusClass = s.Status.StartsWith("Completed") ? "bg-emerald-500" : "bg-slate-400";
                     <tr class="student-row">
                          <td class="px-4 text-center">
-                             @if(s.Status == "Completed" && s.Score >= 75) {
-                                 <input type="checkbox" class="student-checkbox" value="@s.Id" data-passed="@(s.IsPassed?.ToString().ToLower())" />
-                             } else if (s.Status == "Completed") {
-                                 <span class="text-[9px] font-bold text-slate-400">Not Eligible (&lt; 75%)</span>
+                             @if(s.Status == "Completed") {
+                                 <input type="checkbox" class="student-checkbox" value="@s.Id" data-passed="true" />
                              }
                          </td>
                         <td>
@@ -188,7 +186,7 @@
             const year = $('#yearFilter').val();
             const month = $('#monthFilter').val();
 
-            $.get('/Admin/GetFilteredExams', { typeId: type, month: month, year: year }, function (data) {
+            $.get('/Admin/GetFilteredExams', { typeId: type, month: month, year: year, mode: 'cert' }, function (data) {
                 const $examFilter = $('#examFilter');
                 $examFilter.empty();
 

@@ -164,7 +164,7 @@
             const year = $('#yearFilter').val();
             const month = $('#monthFilter').val();
 
-            $.get('/Admin/GetFilteredExams', { typeId: type, month: month, year: year }, function (data) {
+            $.get('/Admin/GetFilteredExams', { typeId: type, month: month, year: year, mode: 'weekly' }, function (data) {
                 const $examFilter = $('#examFilter');
                 $examFilter.empty();
 

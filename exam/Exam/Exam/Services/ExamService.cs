@@ -1227,7 +1227,87 @@ WHERE U.Id = @UserId;";
                     AND NOT EXISTS (SELECT 1 FROM UserExamAttempts UA WHERE UA.UserId = EA.StudentId AND UA.ExamId = EA.ExamId)
                 )
                 SELECT * FROM AllResults ORDER BY StudentName, AttemptNumber DESC, CompletionDate DESC";
-            var results = await conn.QueryAsync<ExamResultRowDto>(sql, new { ExamId = examId });
+            var results = (await conn.QueryAsync<ExamResultRowDto>(sql, new { ExamId = examId })).ToList();
+
+            // Dynamic Wave Aggregate Score Override
+            var exam = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT Id, Title, WaveId, IsFinalExam FROM Exams WHERE Id = @ExamId", 
+                new { ExamId = examId });
+
+            if (exam != null && (bool)exam.IsFinalExam && exam.WaveId != null && (int)exam.WaveId > 0)
+            {
+                int waveId = (int)exam.WaveId;
+                var waveExams = (await conn.QueryAsync<dynamic>(
+                    "SELECT Id, Title, IsFinalExam FROM Exams WHERE WaveId = @WaveId", 
+                    new { WaveId = waveId })).ToList();
+                var quizzes = waveExams.Where(e => !(bool)e.IsFinalExam).ToList();
+
+                var waveAttempts = (await conn.QueryAsync(
+                    "SELECT UA.UserId, UA.ExamId, UA.Score, UA.IsPassed, UA.FinalScore " +
+                    "FROM UserExamAttempts UA " +
+                    "JOIN Exams E ON UA.ExamId = E.Id " +
+                    "WHERE E.WaveId = @WaveId", 
+                    new { WaveId = waveId })).ToList();
+
+                var attemptsByUser = waveAttempts
+                    .GroupBy(a => (string)a.UserId)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                foreach (var row in results)
+                {
+                    string userId = row.Id;
+                    bool isPharmacist = row.RoleName != null && (row.RoleName.ToLower().Contains("pharmacist") || row.RoleName.Contains("صيدل"));
+                    bool isAssistant = row.RoleName != null && (row.RoleName.ToLower().Contains("assistant") || row.RoleName.Contains("مساعد"));
+
+                    double totalPoints = isPharmacist ? 200.0 : 100.0;
+                    double quizzesWeight = isPharmacist ? 110.0 : 60.0;
+                    double finalWeight = isPharmacist ? 90.0 : 40.0;
+
+                    // 1. Calculate Quiz Average Percentage
+                    double quizSum = 0;
+                    int quizCount = quizzes.Count;
+                    if (quizCount > 0)
+                    {
+                        foreach (var q in quizzes)
+                        {
+                            double bestQuizScorePercent = 0;
+                            if (attemptsByUser.TryGetValue(userId, out var userAttempts))
+                            {
+                                var quizAttempts = userAttempts.Where(a => (int)a.ExamId == (int)q.Id).ToList();
+                                if (quizAttempts.Any())
+                                {
+                                    bestQuizScorePercent = quizAttempts.Max(a => a.Score != null ? Convert.ToDouble(a.Score) : 0.0);
+                                }
+                            }
+                            quizSum += bestQuizScorePercent;
+                        }
+                    }
+                    double quizAvgPercent = quizCount > 0 ? quizSum / quizCount : 0.0;
+
+                    // 2. Calculate Final Exam Percentage
+                    double bestFinalPercent = 0;
+                    if (attemptsByUser.TryGetValue(userId, out var userAttemptsList))
+                    {
+                        var finalAttempts = userAttemptsList.Where(a => (int)a.ExamId == examId).ToList();
+                        if (finalAttempts.Any())
+                        {
+                            bestFinalPercent = finalAttempts.Max(a => a.Score != null ? Convert.ToDouble(a.Score) : 0.0);
+                        }
+                    }
+
+                    // 3. Scale scores
+                    double quizScaled = (quizAvgPercent / 100.0) * quizzesWeight;
+                    double finalScaled = (bestFinalPercent / 100.0) * finalWeight;
+                    double aggregateScore = quizScaled + finalScaled;
+
+                    // 4. Overwrite properties on the row
+                    row.FinalScore = (decimal)aggregateScore;
+                    row.TotalScoreAvailable = (decimal)totalPoints;
+                    row.Score = (decimal)((aggregateScore / totalPoints) * 100.0);
+                    row.IsPassed = row.Status == "Completed"; 
+                }
+            }
+
             return results;
         }
 
@@ -1361,33 +1441,38 @@ WHERE U.Id = @UserId;";
                 -- IF THIS IS A FINAL EXAM, CALCULATE OVERALL WAVE SCORE
                 IF @IsFinalExam = 1 AND @WaveId > 0
                 BEGIN
-                    DECLARE @WaveTotalAbsolute DECIMAL(18,2) = 0;
-                    
-                    SELECT @WaveTotalAbsolute = ISNULL(SUM(BestScore), 0)
+                    DECLARE @QuizAvg DECIMAL(18,2) = 0;
+                    SELECT @QuizAvg = ISNULL(AVG(BestScore), 0)
                     FROM (
-                        SELECT MAX(ISNULL(FinalScore, 0)) as BestScore
-                        FROM UserExamAttempts UA
-                        JOIN Exams E ON UA.ExamId = E.Id
-                        WHERE UA.UserId = @UserId
-                        AND E.WaveId = @WaveId
+                        SELECT E.Id, ISNULL(MAX(UA.Score), 0) as BestScore
+                        FROM Exams E
+                        LEFT JOIN UserExamAttempts UA ON E.Id = UA.ExamId AND UA.UserId = @UserId
+                        WHERE E.WaveId = @WaveId AND ISNULL(E.IsFinalExam, 0) = 0
                         GROUP BY E.Id
                     ) T;
-                    
+
+                    DECLARE @FinalScorePercent DECIMAL(18,2) = 0;
+                    SELECT @FinalScorePercent = ISNULL(MAX(UA.Score), 0)
+                    FROM Exams E
+                    LEFT JOIN UserExamAttempts UA ON E.Id = UA.ExamId AND UA.UserId = @UserId
+                    WHERE E.WaveId = @WaveId AND ISNULL(E.IsFinalExam, 0) = 1;
+
                     -- Hardcode user requirements for totals based on role
                     IF LOWER(@RoleName) = 'pharmacist' OR @RoleName LIKE N'%صيدل%'
                     BEGIN
                         SET @TotalPoints = 200;
+                        SET @AbsolutePoints = (@QuizAvg * 1.10) + (@FinalScorePercent * 0.90);
                     END
                     ELSE IF LOWER(@RoleName) = 'assistant' OR @RoleName LIKE N'%مساعد%'
                     BEGIN
                         SET @TotalPoints = 100;
+                        SET @AbsolutePoints = (@QuizAvg * 0.60) + (@FinalScorePercent * 0.40);
                     END
                     ELSE
                     BEGIN
                         SET @TotalPoints = 100; -- Default fallback
+                        SET @AbsolutePoints = (@QuizAvg * 0.60) + (@FinalScorePercent * 0.40);
                     END
-
-                    SET @AbsolutePoints = @WaveTotalAbsolute;
                     
                     -- Override Pass Percentage for Final Exams based on user request (70% for pass, but certificates are 75%)
                     -- We'll set IsPassed = 1 if >= 70%.
@@ -1402,7 +1487,7 @@ WHERE U.Id = @UserId;";
                 UPDATE UserExamAttempts
                 SET FinalScore = CASE WHEN @IsFinalExam = 1 THEN @AbsolutePoints ELSE (CASE WHEN @AchievementPercentage >= @PassPercentage THEN FinalScore ELSE FinalScore END) END,
                     Score = @AchievementPercentage, 
-                    IsPassed = CASE WHEN @AchievementPercentage >= @PassPercentage THEN 1 ELSE 0 END
+                    IsPassed = CASE WHEN @WaveId > 0 THEN 1 ELSE (CASE WHEN @AchievementPercentage >= @PassPercentage THEN 1 ELSE 0 END) END
                 WHERE Id = @AttemptId;
             ";
 

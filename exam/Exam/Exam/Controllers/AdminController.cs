@@ -1,4 +1,4 @@
-using ClosedXML.Excel;
+﻿using ClosedXML.Excel;
 using Exam.Services;
 using Exam.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -687,8 +687,8 @@ namespace Exam.Controllers
                             results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
                     }
                     
-                    // Filter only those who passed (Score >= 75 or IsPassed == true)
-                    var passedResults = results.Where(r => r.IsPassed == true || r.Score >= 75).ToList();
+                    // Since wave exams don't have pass/fail, return all completed exam results for certificate generation
+                    var passedResults = results.Where(r => r.Status == "Completed").ToList();
                     
                     ViewBag.ExamTitle = exam.Title;
                     return View(passedResults);
@@ -705,11 +705,17 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetFilteredExams(int? typeId, int? month, int? year)
+        public async Task<IActionResult> GetFilteredExams(int? typeId, int? month, int? year, string mode = "weekly")
         {
-            var exams = (await _examService.GetActiveExamsForDropdownAsync(typeId, month, year))
-                .Where(e => e.TypeName != null && e.TypeName.ToLower().Contains("wave"))
-                .ToList();
+            var exams = await _examService.GetActiveExamsForDropdownAsync(typeId, month, year);
+            if (mode == "wavey" || mode == "cert")
+            {
+                exams = exams.Where(e => (e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave")).ToList();
+            }
+            else
+            {
+                exams = exams.Where(e => !((e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave"))).ToList();
+            }
             var results = exams.Select(e => new {
                 id = e.Id,
                 title = !string.IsNullOrEmpty(e.WaveName)
@@ -815,14 +821,14 @@ namespace Exam.Controllers
                 var examInfo = await _examService.GetExamByIdAsync(examId);
                 if (examInfo == null) return Json(new { success = false, message = "Exam not found" });
 
-                var candidates = results.Where(r => r.Status == "Completed" && r.Score >= 75);
+                var candidates = results.Where(r => r.Status == "Completed");
                 if (selectedIds != null && selectedIds.Any())
                 {
                     candidates = candidates.Where(c => selectedIds.Contains(c.Id));
                 }
 
                 var passedStudents = candidates.ToList();
-                if (!passedStudents.Any()) return Json(new { success = false, message = "Ù„Ù… ÙŠØªÙ… Ø§Ø®ØªÙŠØ§Ø± Ø·Ù„Ø§Ø¨ Ù…Ø¤Ù‡Ù„ÙŠÙ† (Ø¨Ù†Ø³Ø¨Ø© 75% ÙÙ…Ø§ ÙÙˆÙ‚) Ù„Ø¥Ø±Ø³Ø§Ù„ Ø§Ù„Ø´Ù‡Ø§Ø¯Ø§Øª." });
+                if (!passedStudents.Any()) return Json(new { success = false, message = "لم يتم اختيار طلاب أكملوا الامتحان لإرسال الشهادات." });
 
                 int count = 0;
 
@@ -858,7 +864,14 @@ namespace Exam.Controllers
                         
                         string yearStr = (student.ActualStartTime ?? examInfo.StartTime).Year.ToString();
                         string userCodeStr = student.UserCode ?? "0000";
-                        code = $"WTTA-{yearStr}-{waveNum}-{courseType}-ON-{userCodeStr}";
+                        
+                        string roleAbbr = "PH";
+                        if (student.RoleName != null && (student.RoleName.ToLower().Contains("assistant") || student.RoleName.Contains("مساعد")))
+                        {
+                            roleAbbr = "AS";
+                        }
+                        
+                        code = $"WTTA-{yearStr}-{waveNum}-{courseType}-{roleAbbr}-{userCodeStr}";
 
                         using var conn = new SqlConnection(_connectionString);
                         
@@ -3532,4 +3545,5 @@ namespace Exam.Controllers
         }
     }
 }
+
 
