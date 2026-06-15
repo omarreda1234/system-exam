@@ -1,0 +1,46 @@
+name: Deploy ASP.NET Core Application
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Restore Dependencies
+      run: dotnet restore exam/Exam/Exam/Exam.csproj
+
+    - name: Publish Application
+      run: dotnet publish exam/Exam/Exam/Exam.csproj -c Release -o ./publish
+
+    - name: Stop Existing Application Process
+      shell: powershell
+      run: |
+        # Stop any running instances of the application to prevent file lock
+        Stop-Process -Name "Exam" -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+
+    - name: Copy Files to Deploy Directory
+      shell: powershell
+      run: |
+        # Ensure the destination folder exists (adjust C:\exam-prod if you want another path)
+        $deployDir = "C:\exam-prod"
+        if (!(Test-Path -Path $deployDir)) {
+            New-Item -ItemType Directory -Path $deployDir -Force
+        }
+        
+        # Copy published files to the server's deployment directory
+        Copy-Item -Path "./publish/*" -Destination $deployDir -Recurse -Force
+
+    - name: Start Application in Background
+      shell: powershell
+      run: |
+        # Start the application in the background
+        $deployDir = "C:\exam-prod"
+        Start-Process -FilePath "$deployDir\Exam.exe" -WorkingDirectory $deployDir -WindowStyle Hidden
