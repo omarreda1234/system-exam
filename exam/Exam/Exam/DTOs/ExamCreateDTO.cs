@@ -212,6 +212,42 @@ namespace Exam.DTOs
         public string RoleName { get; set; }
     }
 
+    // For Live Monitor / cross-dimensional reporting
+    public class LiveMonitorRowDto
+    {
+        public string UserId { get; set; }
+        public string StudentName { get; set; }
+        public string StudentEmail { get; set; }
+        public string UserCode { get; set; }
+        public string RoleName { get; set; }
+        public string BranchName { get; set; }
+        public string ShiftName { get; set; }
+        public string ExamTitle { get; set; }
+        public string ExamType { get; set; }
+        public string WaveName { get; set; }
+        public string Status { get; set; }            // Not Started / InProgress / Completed
+        public decimal FinalScore { get; set; }
+        public decimal TotalPoints { get; set; }
+        public decimal Percentage { get; set; }
+        public DateTime? StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+        public int DurationInMinutes { get; set; }
+        public int AttemptNumber { get; set; }
+        public bool? IsPassed { get; set; }
+        public string CertificateCode { get; set; }
+        public int? AttemptId { get; set; }
+    }
+
+    // For Live Monitor filter dropdowns
+    public class LiveMonitorFiltersDto
+    {
+        public IEnumerable<BranchDto> Branches { get; set; }
+        public IEnumerable<ShiftDto> Shifts { get; set; }
+        public IEnumerable<ExamTypeDto> ExamTypes { get; set; }
+        public IEnumerable<WaveDto> Waves { get; set; }
+        public IEnumerable<string> Roles { get; set; }
+    }
+
     public class StudentExamReviewRowDto
     {
         public int QuestionId { get; set; }

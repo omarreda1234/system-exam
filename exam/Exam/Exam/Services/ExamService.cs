@@ -558,6 +558,73 @@ namespace Exam.Services
             return rows;
         }
 
+        public async Task<IEnumerable<Exam.DTOs.LiveMonitorRowDto>> GetLiveMonitorDataAsync(
+            int? branchId = null,
+            int? shiftId = null,
+            string roleName = null,
+            string status = null,
+            int? waveId = null,
+            DateTime? date = null,
+            int? examId = null)
+        {
+            using var conn = new SqlConnection(_connectionString);
+
+            const string sql = @"
+                SELECT
+                    u.Id               AS UserId,
+                    ISNULL(u.FullName, u.UserName) AS StudentName,
+                    u.Email            AS StudentEmail,
+                    u.UserCode,
+                    r.Name             AS RoleName,
+                    b.BranchName,
+                    s.ShiftName,
+                    e.Title            AS ExamTitle,
+                    et.TypeName        AS ExamType,
+                    tw.WaveName,
+                    ISNULL(uea.Status, 'Not Started') AS Status,
+                    ISNULL(uea.FinalScore, 0)          AS FinalScore,
+                    ISNULL(e.TotalPoints, 0)           AS TotalPoints,
+                    ISNULL(uea.Score, 0)               AS Percentage,
+                    uea.StartTime,
+                    uea.EndTime,
+                    ISNULL(uea.DurationInMinutes, 0)   AS DurationInMinutes,
+                    ISNULL(uea.AttemptNumber, 0)       AS AttemptNumber,
+                    uea.IsPassed,
+                    uea.CertificateCode,
+                    uea.Id             AS AttemptId
+                FROM AspNetUsers u
+                INNER JOIN UserExamAttempts uea ON uea.UserId = u.Id
+                INNER JOIN Exams e              ON e.Id = uea.ExamId
+                LEFT  JOIN ExamTypes et         ON et.Id = e.ExamTypeId
+                LEFT  JOIN Branches b           ON b.Id = u.BranchId
+                LEFT  JOIN Shifts s             ON s.Id = u.ShiftId
+                LEFT  JOIN AspNetUserRoles ur   ON ur.UserId = u.Id
+                LEFT  JOIN AspNetRoles r        ON r.Id = ur.RoleId
+                LEFT  JOIN TrainingWaves tw     ON tw.Id = e.WaveId
+                WHERE u.IsActive = 1
+                    AND (@BranchId  IS NULL OR u.BranchId = @BranchId)
+                    AND (@ShiftId   IS NULL OR u.ShiftId  = @ShiftId)
+                    AND (@RoleName  IS NULL OR r.Name     = @RoleName)
+                    AND (@Status    IS NULL OR uea.Status = @Status)
+                    AND (@WaveId    IS NULL OR e.WaveId   = @WaveId)
+                    AND (@ExamId    IS NULL OR e.Id       = @ExamId)
+                    AND (@Date      IS NULL OR CAST(uea.StartTime AS DATE) = @Date)
+                ORDER BY uea.StartTime DESC";
+
+            var rows = await conn.QueryAsync<Exam.DTOs.LiveMonitorRowDto>(sql, new
+            {
+                BranchId = branchId,
+                ShiftId  = shiftId,
+                RoleName = string.IsNullOrWhiteSpace(roleName) ? null : roleName,
+                Status   = string.IsNullOrWhiteSpace(status)   ? null : status,
+                WaveId   = waveId,
+                ExamId   = examId,
+                Date     = date?.Date
+            });
+
+            return rows;
+        }
+
         /// <summary>
         /// Aggregate all exam results for every student in a wave.
         /// For each student we sum up their FinalScore across all completed exams

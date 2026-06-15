@@ -687,7 +687,78 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
+        public async Task<IActionResult> LiveMonitor(
+            int? branchId = null, int? shiftId = null, string roleName = null,
+            string status = null, int? waveId = null, string date = null, int? examId = null)
+        {
+            // Load filter options
+            var branches  = await _examService.GetAllBranchesAsync();
+            var shifts    = await _examService.GetAllShiftsAsync();
+            var waves     = await _examService.GetAllWavesAsync();
+            var examTypes = await _examService.GetAllExamTypesAsync();
+
+            using var conn = new SqlConnection(_connectionString);
+            var roles = (await conn.QueryAsync<string>(
+                "SELECT DISTINCT r.Name FROM AspNetRoles r " +
+                "INNER JOIN AspNetUserRoles ur ON ur.RoleId = r.Id " +
+                "WHERE r.Name NOT IN ('Admin','HR','Human Resources','Branch Manager','Reception','SoftSkills Specialist') " +
+                "ORDER BY r.Name")).ToList();
+
+            ViewBag.Branches  = branches;
+            ViewBag.Shifts    = shifts;
+            ViewBag.Waves     = waves;
+            ViewBag.ExamTypes = examTypes;
+            ViewBag.Roles     = roles;
+            ViewBag.SelectedBranchId = branchId;
+            ViewBag.SelectedShiftId  = shiftId;
+            ViewBag.SelectedRoleName = roleName;
+            ViewBag.SelectedStatus   = status;
+            ViewBag.SelectedWaveId   = waveId;
+            ViewBag.SelectedDate     = date;
+            ViewBag.SelectedExamId   = examId;
+
+            DateTime? parsedDate = null;
+            if (!string.IsNullOrWhiteSpace(date) && DateTime.TryParse(date, out var d))
+                parsedDate = d;
+
+            var results = (await _examService.GetLiveMonitorDataAsync(
+                branchId, shiftId, roleName, status, waveId, parsedDate, examId)).ToList();
+
+            // Summary stats
+            ViewBag.TotalCount      = results.Count;
+            ViewBag.InProgressCount = results.Count(r => r.Status == "InProgress");
+            ViewBag.CompletedCount  = results.Count(r => r.Status == "Completed");
+            ViewBag.NotStartedCount = results.Count(r => r.Status == "Not Started");
+
+            return View(results);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetLiveMonitorData(
+            int? branchId, int? shiftId, string roleName, string status,
+            int? waveId, string date, int? examId)
+        {
+            DateTime? parsedDate = null;
+            if (!string.IsNullOrWhiteSpace(date) && DateTime.TryParse(date, out var d))
+                parsedDate = d;
+
+            var results = await _examService.GetLiveMonitorDataAsync(
+                branchId, shiftId, roleName, status, waveId, parsedDate, examId);
+
+            return Json(results.Select(r => new {
+                r.UserId, r.StudentName, r.StudentEmail, r.UserCode,
+                r.RoleName, r.BranchName, r.ShiftName,
+                r.ExamTitle, r.ExamType, r.WaveName,
+                r.Status, r.FinalScore, r.TotalPoints, r.Percentage,
+                startTime = r.StartTime?.ToString("dd/MM/yyyy HH:mm"),
+                endTime   = r.EndTime?.ToString("dd/MM/yyyy HH:mm"),
+                r.DurationInMinutes, r.AttemptNumber, r.IsPassed, r.CertificateCode
+            }));
+        }
+
+        [HttpGet]
         public async Task<IActionResult> Certificates(int? waveId, int? examId = null, int? typeId = null, int? month = null, int? year = null)
+
         {
             var examTypes = (await _examService.GetAllExamTypesAsync())
                 .Where(t => t.TypeName != null && t.TypeName.ToLower().Contains("wave"))

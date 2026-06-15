@@ -1,0 +1,278 @@
+@model IEnumerable<Exam.DTOs.LiveMonitorRowDto>
+@{
+    ViewData["Title"] = "Live Monitor";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var branches  = ViewBag.Branches  as IEnumerable<Exam.DTOs.BranchDto>    ?? Enumerable.Empty<Exam.DTOs.BranchDto>();
+    var shifts    = ViewBag.Shifts    as IEnumerable<Exam.DTOs.ShiftDto>      ?? Enumerable.Empty<Exam.DTOs.ShiftDto>();
+    var waves     = ViewBag.Waves     as IEnumerable<Exam.DTOs.WaveDto>       ?? Enumerable.Empty<Exam.DTOs.WaveDto>();
+    var roles     = ViewBag.Roles     as IEnumerable<string>                  ?? Enumerable.Empty<string>();
+    string selBranch = ViewBag.SelectedBranchId?.ToString() ?? "";
+    string selShift  = ViewBag.SelectedShiftId?.ToString()  ?? "";
+    string selRole   = ViewBag.SelectedRoleName ?? "";
+    string selStatus = ViewBag.SelectedStatus   ?? "";
+    string selWave   = ViewBag.SelectedWaveId?.ToString()   ?? "";
+    string selDate   = ViewBag.SelectedDate     ?? "";
+}
+
+<!-- Header -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-6 shadow-sm">
+    <div class="flex flex-col gap-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Reports & Monitoring</h2>
+                <div class="flex items-center gap-3">
+                    <p class="text-xl font-bold">Live Monitor</p>
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <span class="bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-200">
+                        Real-Time Data
+                    </span>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button id="btnExport" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-5 py-2.5 rounded-2xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2">
+                    <i class="fas fa-file-excel"></i> Export Excel
+                </button>
+                <button id="btnRefresh" class="bg-slate-50 text-slate-600 hover:bg-slate-100 px-5 py-2.5 rounded-2xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <form method="get" action="/Admin/LiveMonitor" id="filterForm" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+            <div class="flex flex-col gap-1">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Branch</label>
+                <select name="branchId" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
+                    <option value="">All Branches</option>
+                    @foreach (var b in branches)
+                    {
+                        <option value="@b.Id" selected="@(selBranch == b.Id.ToString() ? "selected" : null)">@b.BranchName</option>
+                    }
+                </select>
+            </div>
+            <div class="flex flex-col gap-1">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Shift</label>
+                <select name="shiftId" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
+                    <option value="">All Shifts</option>
+                    @foreach (var s in shifts)
+                    {
+                        <option value="@s.ShiftId" selected="@(selShift == s.ShiftId.ToString() ? "selected" : null)">@s.ShiftName</option>
+                    }
+                </select>
+            </div>
+            <div class="flex flex-col gap-1">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Role</label>
+                <select name="roleName" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
+                    <option value="">All Roles</option>
+                    @foreach (var r in roles)
+                    {
+                        <option value="@r" selected="@(selRole == r ? "selected" : null)">@r</option>
+                    }
+                </select>
+            </div>
+            <div class="flex flex-col gap-1">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Status</label>
+                <select name="status" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
+                    <option value="">All Statuses</option>
+                    <option value="InProgress"  selected="@(selStatus == "InProgress"  ? "selected" : null)">🟡 In Progress</option>
+                    <option value="Completed"   selected="@(selStatus == "Completed"   ? "selected" : null)">🟢 Completed</option>
+                    <option value="Not Started" selected="@(selStatus == "Not Started" ? "selected" : null)">⚪ Not Started</option>
+                </select>
+            </div>
+            <div class="flex flex-col gap-1">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Wave</label>
+                <select name="waveId" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
+                    <option value="">All Waves</option>
+                    @foreach (var w in waves)
+                    {
+                        <option value="@w.Id" selected="@(selWave == w.Id.ToString() ? "selected" : null)">@w.WaveName</option>
+                    }
+                </select>
+            </div>
+            <div class="flex flex-col gap-1">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Date</label>
+                <input type="date" name="date" value="@selDate"
+                    class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold" />
+            </div>
+            <div class="flex flex-col gap-1 justify-end">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 opacity-0">Go</label>
+                <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-search"></i> Apply
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[20px] p-5 shadow-sm">
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Records</div>
+        <div class="text-3xl font-black text-slate-900 dark:text-white">@ViewBag.TotalCount</div>
+    </div>
+    <div class="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-[20px] p-5 shadow-sm">
+        <div class="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1 flex items-center gap-2">
+            <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span></span>
+            In Progress Now
+        </div>
+        <div class="text-3xl font-black text-amber-700">@ViewBag.InProgressCount</div>
+    </div>
+    <div class="bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-[20px] p-5 shadow-sm">
+        <div class="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Completed</div>
+        <div class="text-3xl font-black text-emerald-700">@ViewBag.CompletedCount</div>
+    </div>
+    <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[20px] p-5 shadow-sm">
+        <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Not Started</div>
+        <div class="text-3xl font-black text-slate-600 dark:text-slate-300">@ViewBag.NotStartedCount</div>
+    </div>
+</div>
+
+<!-- Results Table -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 overflow-hidden shadow-sm">
+    <div class="overflow-x-auto">
+        <table class="datatable saas-table" id="liveMonitorTable">
+            <thead>
+                <tr>
+                    <th class="min-w-[220px]">Personnel</th>
+                    <th>Branch</th>
+                    <th>Shift</th>
+                    <th>Role</th>
+                    <th>Exam</th>
+                    <th>Wave</th>
+                    <th>Status</th>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Time (M)</th>
+                    <th>Score</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model)
+                {
+                    <tr>
+                        <td>
+                            <div class="flex items-center gap-3 flex-nowrap">
+                                <div class="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase text-sm flex-shrink-0">
+                                    @(r.StudentName?.Length > 0 ? r.StudentName.Substring(0,1) : "?")
+                                </div>
+                                <div class="flex flex-col min-w-0">
+                                    <span class="font-bold text-slate-900 dark:text-white text-sm leading-tight truncate">@r.StudentName</span>
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase">@r.UserCode</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="text-[11px] font-bold text-slate-500 uppercase">@(string.IsNullOrEmpty(r.BranchName) ? "--" : r.BranchName)</span></td>
+                        <td><span class="text-[11px] font-bold text-slate-500">@(string.IsNullOrEmpty(r.ShiftName) ? "--" : r.ShiftName)</span></td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(r.RoleName))
+                            {
+                                bool isPharm = r.RoleName.ToLower().Contains("pharmacist") || r.RoleName.Contains("صيدل");
+                                <span class="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase @(isPharm ? "bg-purple-50 text-purple-600 border border-purple-200" : "bg-sky-50 text-sky-600 border border-sky-200")">
+                                    @(isPharm ? "Pharm." : "Asst.")
+                                </span>
+                            }
+                            else { <span class="text-slate-300 text-xs">--</span> }
+                        </td>
+                        <td>
+                            <div class="flex flex-col max-w-[180px]">
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">@r.ExamTitle</span>
+                                <span class="text-[9px] font-bold text-slate-400 uppercase">@r.ExamType</span>
+                            </div>
+                        </td>
+                        <td><span class="text-[11px] font-bold text-slate-400 uppercase">@(string.IsNullOrEmpty(r.WaveName) ? "--" : r.WaveName)</span></td>
+                        <td>
+                            @switch (r.Status)
+                            {
+                                case "InProgress":
+                                    <span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200 flex items-center gap-1 w-fit">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0"></span> In Progress
+                                    </span>
+                                    break;
+                                case "Completed":
+                                    <span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200 w-fit">✓ Completed</span>
+                                    break;
+                                default:
+                                    <span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-slate-100 text-slate-400 w-fit">Not Started</span>
+                                    break;
+                            }
+                        </td>
+                        <td>
+                            <div class="flex flex-col">
+                                <span class="text-[10px] font-bold text-slate-500">@(r.StartTime?.ToString("dd/MM/yyyy") ?? "--")</span>
+                                <span class="text-[9px] text-slate-400">@(r.StartTime?.ToString("hh:mm tt") ?? "")</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="flex flex-col">
+                                <span class="text-[10px] font-bold text-slate-500">@(r.EndTime?.ToString("dd/MM/yyyy") ?? "--")</span>
+                                <span class="text-[9px] text-slate-400">@(r.EndTime?.ToString("hh:mm tt") ?? "")</span>
+                            </div>
+                        </td>
+                        <td><span class="text-xs font-bold text-slate-500">@(r.DurationInMinutes > 0 ? $"{r.DurationInMinutes} min" : "--")</span></td>
+                        <td>
+                            <div class="flex flex-col">
+                                <span class="text-sm font-bold font-mono text-brand-600">@r.FinalScore.ToString("0") / @r.TotalPoints.ToString("0")</span>
+                                <span class="text-[9px] text-slate-400">@r.Percentage.ToString("0.0")%</span>
+                            </div>
+                        </td>
+                        <td>
+                            @if (r.Status == "Completed")
+                            {
+                                double pct = (double)r.Percentage;
+                                bool isPharm = (r.RoleName ?? "").ToLower().Contains("pharmacist") || (r.RoleName ?? "").Contains("صيدل");
+                                double cert = 75.0, pass = 70.0;
+                                if (pct >= cert)
+                                {
+                                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200">PASS ✓CERT</span>
+                                }
+                                else if (pct >= pass)
+                                {
+                                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-50 text-blue-600 border border-blue-200">PASS</span>
+                                }
+                                else
+                                {
+                                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-rose-50 text-rose-600 border border-rose-200">FAILED</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-slate-300 text-xs">--</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Auto-refresh every 60 seconds if InProgress filter is active
+        const statusFilter = '@selStatus';
+        if (statusFilter === 'InProgress') {
+            setTimeout(() => location.reload(), 60000);
+        }
+
+        $('#btnRefresh').on('click', () => location.reload());
+
+        $('#btnExport').on('click', function() {
+            const params = new URLSearchParams(window.location.search);
+            params.set('export', 'excel');
+            window.location = '/Admin/ExportLiveMonitorToExcel?' + params.toString();
+        });
+
+        // Today's shortcut
+        document.addEventListener('keydown', e => {
+            if (e.altKey && e.key === 't') {
+                const today = new Date().toISOString().split('T')[0];
+                document.querySelector('[name="date"]').value = today;
+                document.getElementById('filterForm').submit();
+            }
+        });
+    </script>
+}
