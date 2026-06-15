@@ -40,6 +40,8 @@ jobs:
 
     - name: Start Application in Background
       shell: powershell
+      env:
+        RUNNER_TRACKING_ID: ""
       run: |
         # Start the application in the background
         $deployDir = "C:\exam-prod"
