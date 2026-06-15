@@ -1,0 +1,129 @@
+@model Exam.DTOs.RegisterDTO
+
+@{
+    ViewBag.Title = "Add New User";
+    var branches = ViewBag.Branches as IEnumerable<dynamic> ?? new List<dynamic>();
+}
+
+<div class="min-h-[70vh] flex items-center justify-center p-4">
+    <div class="w-full max-w-lg">
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-50 mb-6 shadow-inner border border-brand-100">
+                <svg class="w-8 h-8 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+            </div>
+            <h1 class="text-3xl font-black text-slate-900 tracking-tight">Add New User</h1>
+            <p class="mt-2 text-sm font-medium text-slate-500">Create a new student or faculty account</p>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-[32px] shadow-xl shadow-slate-200/50 overflow-hidden relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-brand-400 to-brand-600"></div>
+            <div class="p-8 sm:p-10">
+                <form asp-action="Register" method="post" class="space-y-6">
+                    @Html.AntiForgeryToken()
+
+                    <div asp-validation-summary="ModelOnly" class="text-rose-600 text-[11px] font-bold uppercase tracking-widest bg-rose-50 p-3 rounded-xl border border-rose-100 text-center"></div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-1.5">
+                            <label asp-for="UserName" class="block text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Full Name</label>
+                            <input asp-for="UserName" class="block w-full border-slate-200 bg-slate-50 text-slate-900 font-medium rounded-xl shadow-sm focus:border-brand-500 focus:bg-white focus:ring-brand-500 px-4 py-3.5 transition-colors" placeholder="John Doe" />
+                            <span asp-validation-for="UserName" class="text-rose-500 text-[10px] font-bold tracking-widest uppercase ml-1 block mt-1"></span>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label asp-for="Email" class="block text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Email Address</label>
+                            <input asp-for="Email" class="block w-full border-slate-200 bg-slate-50 text-slate-900 font-medium rounded-xl shadow-sm focus:border-brand-500 focus:bg-white focus:ring-brand-500 px-4 py-3.5 transition-colors" placeholder="user@example.com" />
+                            <span asp-validation-for="Email" class="text-rose-500 text-[10px] font-bold tracking-widest uppercase ml-1 block mt-1"></span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-1.5">
+                            <label asp-for="Phone" class="block text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Phone Number</label>
+                            <input asp-for="Phone" class="block w-full border-slate-200 bg-slate-50 text-slate-900 font-medium rounded-xl shadow-sm focus:border-brand-500 focus:bg-white focus:ring-brand-500 px-4 py-3.5 transition-colors" placeholder="+1..." />
+                            <span asp-validation-for="Phone" class="text-rose-500 text-[10px] font-bold tracking-widest uppercase ml-1 block mt-1"></span>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label asp-for="BranchId" class="block text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Assigned Branch</label>
+                            <select asp-for="BranchId" class="block w-full border-slate-200 bg-slate-50 text-slate-900 font-medium rounded-xl shadow-sm focus:border-brand-500 focus:bg-white focus:ring-brand-500 px-4 py-3.5 transition-colors">
+                                <option value="">-- Select Campus --</option>
+                                @foreach (var b in branches)
+                                {
+                                    bool isSelected = Model?.BranchId.ToString() == b.Id?.ToString();
+                                    <option value="@b.Id" selected="@(isSelected ? "selected" : null)">
+                                        @b.BranchName
+                                    </option>
+                                }
+                            </select>
+                            <span asp-validation-for="BranchId" class="text-rose-500 text-[10px] font-bold tracking-widest uppercase ml-1 block mt-1"></span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-1.5">
+                            <label asp-for="UserCode" class="block text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Student / Staff ID</label>
+                            <input asp-for="UserCode" class="block w-full border-slate-200 bg-slate-50 text-slate-900 font-medium rounded-xl shadow-sm focus:border-brand-500 focus:bg-white focus:ring-brand-500 px-4 py-3.5 transition-colors" placeholder="S12345" />
+                            <span asp-validation-for="UserCode" class="text-rose-500 text-[10px] font-bold tracking-widest uppercase ml-1 block mt-1"></span>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label asp-for="Password" class="block text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Initial Password</label>
+                            <input asp-for="Password" class="block w-full border-slate-200 bg-slate-50 text-slate-900 font-medium rounded-xl shadow-sm focus:border-brand-500 focus:bg-white focus:ring-brand-500 px-4 py-3.5 transition-colors" type="password" placeholder="••••••••" />
+                            <span asp-validation-for="Password" class="text-rose-500 text-[10px] font-bold tracking-widest uppercase ml-1 block mt-1"></span>
+                        </div>
+                    </div>
+
+                    <div class="pt-6 border-t border-slate-100 flex items-center justify-between gap-4">
+                        <a asp-action="Index" asp-controller="Home" class="text-slate-500 hover:text-slate-900 font-bold uppercase text-[10px] tracking-widest transition-colors">
+                            Cancel
+                        </a>
+                        <button type="submit" id="submitBtn" class="flex-1 max-w-[200px] bg-brand-600 hover:bg-brand-700 text-white px-4 py-4 rounded-xl transition-all font-black uppercase tracking-widest text-[11px] shadow-lg shadow-brand-500/30 flex items-center justify-center disabled:opacity-80 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0 relative overflow-hidden group">
+                            <svg id="loader" class="hidden animate-spin -ml-1 mr-3 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span id="btnText">Provision Identity</span>
+                            <div class="absolute inset-0 h-full w-full bg-white/20 scale-x-0 group-hover:scale-x-100 transform origin-left transition-transform duration-300 pointer-events-none"></div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function () {
+            // Check for Success Message from Admin user creation
+            var successMsg = '@(TempData["SuccessMessage"] ?? "")';
+            if (successMsg) {
+                Swal.fire({
+                    title: 'User Created',
+                    text: successMsg,
+                    icon: 'success',
+                    confirmButtonText: 'Great!',
+                    customClass: {
+                        confirmButton: 'bg-brand-600 text-white px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-[11px]'
+                    }
+                });
+            }
+
+            $('form').on('submit', function (e) {
+                if ($(this).valid()) {
+                    var $btn = $('#submitBtn');
+                    var $loader = $('#loader');
+                    var $text = $('#btnText');
+
+                    $btn.prop('disabled', true);
+                    $loader.removeClass('hidden');
+                    $text.text('Processing...');
+
+                    $btn.addClass('cursor-wait');
+                }
+            });
+        });
+    </script>
+}

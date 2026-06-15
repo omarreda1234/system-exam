@@ -1,0 +1,754 @@
+@model IEnumerable<Exam.Models.Material>
+@{
+    ViewBag.Title = "Scientific Library & Materials";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+
+<div class="space-y-8 animate-fade-in">
+    <!-- Header Card -->
+    <div class="bg-gradient-to-r from-brand-600 to-brand-500 rounded-[32px] p-8 md:p-12 text-white shadow-xl shadow-brand-600/10 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
+        <div class="absolute -right-8 -top-8 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+        <div class="absolute -left-8 -bottom-8 w-64 h-64 bg-black/10 rounded-full blur-3xl"></div>
+        
+        <div class="relative z-10">
+            <span class="px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-[10px] font-black uppercase tracking-widest border border-white/10">Academic Resource Hub</span>
+            <h2 class="text-3xl md:text-4xl font-black mt-4 tracking-tight">Scientific Library</h2>
+            <p class="text-brand-100 mt-2 font-medium max-w-xl">
+                Access and download lectures, blueprints, reference spreadsheets, and training materials.
+            </p>
+        </div>
+
+        @if (User.IsInRole("Admin"))
+        {
+            <button onclick="openUploadModal()" class="relative z-10 bg-white hover:bg-slate-50 text-brand-600 font-bold px-6 py-3.5 rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2 text-xs md:text-sm">
+                <i class="fas fa-cloud-upload-alt text-base"></i>
+                <span>Upload New Material</span>
+            </button>
+        }
+    </div>
+
+    <!-- Toolbar: Search and Filter -->
+    <div class="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800/50">
+        <div class="relative w-full md:w-96">
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                <i class="fas fa-search"></i>
+            </span>
+            <input type="text" id="materialSearch" onkeyup="filterMaterials()" placeholder="Search library by title or type..." class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm outline-none transition-all focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500" />
+        </div>
+        <div class="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+            <button onclick="filterType('All')" class="type-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition-all bg-brand-500 text-white" id="filter-All">All Files</button>
+            <button onclick="filterType('PDF')" class="type-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700" id="filter-PDF"><i class="fas fa-file-pdf mr-1 text-red-500"></i> PDFs</button>
+            <button onclick="filterType('Excel')" class="type-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700" id="filter-Excel"><i class="fas fa-file-excel mr-1 text-emerald-500"></i> Spreadsheets</button>
+            <button onclick="filterType('Image')" class="type-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700" id="filter-Image"><i class="fas fa-image mr-1 text-blue-500"></i> Images</button>
+            <button onclick="filterType('Video')" class="type-filter-btn px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700" id="filter-Video"><i class="fas fa-video mr-1 text-purple-500"></i> Recorded Lectures</button>
+        </div>
+    </div>
+
+    <!-- Materials responsive grid -->
+    <div id="materialsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        @if (!Model.Any())
+        {
+            <div class="col-span-full py-16 flex flex-col items-center justify-center text-slate-400" id="emptyState">
+                <div class="w-20 h-20 rounded-3xl bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center text-slate-300 dark:text-slate-700 mb-4 text-3xl">
+                    <i class="fas fa-folder-open"></i>
+                </div>
+                <h3 class="text-base font-bold text-slate-700 dark:text-slate-300">Library is Empty</h3>
+                <p class="text-xs text-slate-400 mt-1">No educational materials have been uploaded yet.</p>
+            </div>
+        }
+        else
+        {
+            @foreach (var file in Model)
+            {
+                var cardIcon = "fa-file";
+                var iconColor = "text-slate-400";
+                var iconBg = "bg-slate-50 dark:bg-slate-900";
+                if (file.FileType == "PDF")
+                {
+                    cardIcon = "fa-file-pdf";
+                    iconColor = "text-red-500";
+                    iconBg = "bg-red-50 dark:bg-red-950/20";
+                }
+                else if (file.FileType == "Excel")
+                {
+                    cardIcon = "fa-file-excel";
+                    iconColor = "text-emerald-500";
+                    iconBg = "bg-emerald-50 dark:bg-emerald-950/20";
+                }
+                else if (file.FileType == "Image")
+                {
+                    cardIcon = "fa-file-image";
+                    iconColor = "text-blue-500";
+                    iconBg = "bg-blue-50 dark:bg-blue-950/20";
+                }
+                else if (file.FileType == "Video")
+                {
+                    cardIcon = "fa-video";
+                    iconColor = "text-purple-500";
+                    iconBg = "bg-purple-50 dark:bg-purple-950/20";
+                }
+
+                var sizeText = "Unknown Size";
+                if (file.FileSizeBytes > 0)
+                {
+                    if (file.FileSizeBytes >= 1048576)
+                        sizeText = $"{(file.FileSizeBytes / 1048576.0):F2} MB";
+                    else
+                        sizeText = $"{(file.FileSizeBytes / 1024.0):F1} KB";
+                }
+
+                <div class="material-card bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200/50 dark:border-slate-800/50 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between overflow-hidden group relative" data-title="@file.Title.ToLower()" data-type="@file.FileType">
+                    <div>
+                        <!-- Card Cover Image or Fallback -->
+                        @if (!string.IsNullOrWhiteSpace(file.PosterPath))
+                        {
+                            <div class="w-full aspect-video bg-slate-100 dark:bg-slate-950 relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-500 cursor-pointer border-b border-slate-100 dark:border-slate-800/50" onclick="openStudyModal('@file.FilePath', '@file.FileType', '@file.Title')">
+                                <img src="@file.PosterPath" alt="@file.Title" class="w-full h-full object-cover" />
+                                <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-60 group-hover:opacity-85 transition-opacity">
+                                    @if (file.FileType == "Video")
+                                    {
+                                        <div class="w-12 h-12 bg-white/20 hover:bg-white/35 backdrop-blur-md rounded-full border border-white/35 flex items-center justify-center text-white text-lg shadow-lg transition-transform transform hover:scale-110">
+                                            <i class="fas fa-play ml-1"></i>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="w-12 h-12 bg-white/20 hover:bg-white/35 backdrop-blur-md rounded-full border border-white/35 flex items-center justify-center text-white text-lg shadow-lg transition-transform transform hover:scale-110">
+                                            <i class="fas fa-book-open"></i>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="absolute bottom-4 left-4 text-white text-[9px] font-black tracking-widest uppercase bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg">
+                                    <i class="fas @cardIcon mr-1 @iconColor"></i> @file.FileType
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <!-- Fallback when no custom poster is uploaded -->
+                            @if (file.FileType == "Image")
+                            {
+                                <div class="w-full aspect-video bg-slate-100 dark:bg-slate-950 relative overflow-hidden group-hover:scale-102 transition-transform duration-500 cursor-pointer" onclick="viewImageLightbox('@file.FilePath', '@file.Title')">
+                                    <img src="@file.FilePath" alt="@file.Title" class="w-full h-full object-cover" />
+                                    <div class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-lg">
+                                        <i class="fas fa-expand"></i>
+                                    </div>
+                                </div>
+                            }
+                            else if (file.FileType == "Video")
+                            {
+                                <div class="w-full aspect-video bg-slate-950 relative overflow-hidden group-hover:scale-102 transition-transform duration-500 cursor-pointer flex items-center justify-center border-b border-slate-100 dark:border-slate-800/50" onclick="openStudyModal('@file.FilePath', '@file.FileType', '@file.Title')">
+                                    <div class="absolute inset-0 bg-gradient-to-tr from-purple-900/30 to-brand-900/30 opacity-60"></div>
+                                    <div class="w-14 h-14 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-full border border-white/35 flex items-center justify-center text-white text-xl shadow-lg relative z-10 transition-all transform hover:scale-110">
+                                        <i class="fas fa-play ml-1"></i>
+                                    </div>
+                                    <div class="absolute bottom-4 left-4 text-white/80 text-[9px] font-black tracking-widest uppercase relative z-10">
+                                        <i class="fas fa-video mr-1"></i> Recorded Lecture
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <!-- Dynamic styled header fallback for PDFs / Spreadsheets without custom poster -->
+                                <div class="w-full aspect-video bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-center relative overflow-hidden group-hover:scale-102 transition-transform duration-500 cursor-pointer" onclick="openStudyModal('@file.FilePath', '@file.FileType', '@file.Title')">
+                                    <div class="w-16 h-16 rounded-3xl @iconBg flex items-center justify-center text-3xl @iconColor shadow-md border border-slate-200/20 dark:border-slate-800/20 transform group-hover:scale-110 transition-transform">
+                                        <i class="fas @cardIcon"></i>
+                                    </div>
+                                    <div class="absolute bottom-4 left-4 text-slate-500 dark:text-slate-400 text-[9px] font-black tracking-widest uppercase bg-slate-100/80 dark:bg-slate-900/80 backdrop-blur-md px-2 py-0.5 rounded-md">
+                                        <i class="fas @cardIcon mr-1 @iconColor"></i> @file.FileType
+                                    </div>
+                                </div>
+                            }
+                        }
+
+                        <!-- Info Padding -->
+                        <div class="p-6">
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="w-10 h-10 rounded-xl @iconBg flex items-center justify-center text-lg @iconColor">
+                                    <i class="fas @cardIcon"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <span class="text-[9px] font-black uppercase tracking-widest text-slate-400">@file.FileType Document</span>
+                                    <h4 class="text-sm font-bold text-slate-800 dark:text-white truncate group-hover:text-brand-500 transition-colors">@file.Title</h4>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed">
+                                @(string.IsNullOrWhiteSpace(file.Description) ? "No description provided for this resource." : file.Description)
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Footer Meta -->
+                    <div class="px-6 py-4 bg-slate-50/50 dark:bg-slate-950/20 border-t border-slate-100 dark:border-slate-800/50 flex items-center justify-between gap-4 mt-auto">
+                        <div class="flex flex-col">
+                            <span class="text-[9px] font-bold text-slate-400">Size: @sizeText</span>
+                            <span class="text-[9px] text-slate-400 mt-0.5">Uploaded @file.UploadedAt.ToString("MMM dd, yyyy")</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="openStudyModal('@file.FilePath', '@file.FileType', '@file.Title')" class="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center w-9 h-9" title="Study Directly on Site">
+                                <i class="fas fa-book-open"></i>
+                            </button>
+                            <a href="@file.FilePath" download="@file.Title" class="bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-500/20 p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center w-9 h-9" title="Download file">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <button onclick="deleteMaterial(@file.Id, this)" class="bg-red-50 dark:bg-red-950/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center w-9 h-9" title="Delete file">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+
+
+<!-- Lightbox Modal (For images) -->
+<div id="lightboxModal" class="fixed inset-0 bg-black/90 z-[70] hidden backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-300 opacity-0" onclick="closeLightbox()">
+    <button class="absolute top-6 right-6 text-white text-3xl hover:text-slate-300 transition-colors" onclick="closeLightbox()">
+        <i class="fas fa-times"></i>
+    </button>
+    <div class="max-w-4xl max-h-[85vh] flex flex-col items-center gap-4" onclick="event.stopPropagation()">
+        <img id="lightboxImg" src="" alt="Preview" class="rounded-2xl max-w-full max-h-[75vh] object-contain shadow-2xl" />
+        <h3 id="lightboxTitle" class="text-white text-lg font-bold"></h3>
+    </div>
+</div>
+
+<!-- Unified In-Site Study Viewer Modal -->
+<div id="studyModal" class="fixed inset-0 bg-slate-900/40 dark:bg-black/80 z-[70] hidden backdrop-blur-md flex-col justify-between transition-all duration-300 opacity-0">
+    <!-- Header -->
+    <div class="bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-800/50 px-6 py-4 flex items-center justify-between shadow-sm relative z-10">
+        <div class="flex items-center gap-3">
+            <div id="studyTypeIcon" class="w-10 h-10 rounded-xl flex items-center justify-center text-lg">
+                <i class="fas fa-file-alt"></i>
+            </div>
+            <div>
+                <h3 id="studyTitle" class="text-sm font-black text-slate-800 dark:text-white leading-tight">Document Viewer</h3>
+                <span id="studyTypeBadge" class="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-1 block">Study Resource</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <a id="studyDownloadBtn" href="" download="" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm">
+                <i class="fas fa-download"></i>
+                <span>Download Offline</span>
+            </a>
+            <button onclick="closeStudyModal()" class="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Workspace View -->
+    <div class="flex-1 bg-slate-50/50 dark:bg-slate-950/40 p-4 md:p-8 flex items-center justify-center overflow-hidden">
+        <div class="w-full h-full max-w-7xl bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200/50 dark:border-slate-800/50 shadow-2xl overflow-hidden relative flex flex-col justify-center items-center">
+            
+            <!-- Loader -->
+            <div id="studyLoader" class="absolute inset-0 bg-white dark:bg-slate-900 z-20 flex flex-col items-center justify-center gap-4">
+                <div class="w-12 h-12 rounded-full border-4 border-brand-200 border-t-brand-600 animate-spin"></div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading Study Hub...</span>
+            </div>
+
+            <!-- PDF Viewer -->
+            <iframe id="studyPdfFrame" src="" class="w-full h-full border-none hidden" onload="hideStudyLoader()"></iframe>
+
+            <!-- Video Player -->
+            <div id="studyVideoContainer" class="w-full h-full hidden bg-black relative flex items-center justify-center">
+                <video id="studyVideo" controls class="w-full h-full object-contain focus:outline-none">
+                    <source id="studyVideoSource" src="" type="video/mp4" />
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+
+            <!-- Image Viewer -->
+            <div id="studyImgContainer" class="w-full h-full hidden overflow-auto p-4 flex items-center justify-center">
+                <img id="studyImg" src="" class="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-xl transition-all duration-300 hover:scale-102 cursor-zoom-in" onclick="window.open(this.src)" />
+            </div>
+
+            <!-- Spreadsheet / Office / CSV Viewer -->
+            <div id="studySpreadsheetContainer" class="w-full h-full hidden overflow-hidden flex-col justify-center items-center p-8 text-center bg-slate-50 dark:bg-slate-900/50">
+                <iframe id="studyExcelFrame" src="" class="w-full h-full border-none hidden" onload="hideStudyLoader()"></iframe>
+                
+                <div id="studyExcelFallback" class="flex flex-col items-center justify-center gap-4 max-w-md">
+                    <div class="w-20 h-20 rounded-3xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-500 flex items-center justify-center text-3xl shadow-lg border border-emerald-100 dark:border-emerald-900/20">
+                        <i class="fas fa-file-excel animate-bounce"></i>
+                    </div>
+                    <h3 class="text-base font-black text-slate-800 dark:text-white">Excel Spreadsheet Resource</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        To study this reference sheet interactively, you can load it in Office Online or open it using your desktop program.
+                    </p>
+                    <a id="excelDirectLink" href="" class="bg-brand-600 hover:bg-brand-700 text-white font-bold px-6 py-3 rounded-2xl text-xs transition-all shadow-lg shadow-brand-600/20 flex items-center gap-2">
+                        <i class="fas fa-external-link-alt"></i>
+                        <span>Open Sheet in Browser</span>
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+@if (User.IsInRole("Admin"))
+{
+    <!-- Upload Slide-down Modal -->
+    <div id="uploadModal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4 opacity-0 transition-all duration-300">
+        <div class="bg-white dark:bg-slate-900 rounded-[32px] w-full max-w-[550px] shadow-2xl border border-slate-200/50 dark:border-slate-800/50 p-8 transform scale-95 transition-all duration-300">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-950/20 text-brand-500 flex items-center justify-center text-lg">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-black tracking-tight">Upload Lecture Material</h3>
+                        <p class="text-xs text-slate-400">PDF, Excel sheets, Images, and Video files are supported.</p>
+                    </div>
+                </div>
+                <button onclick="closeUploadModal()" class="w-8 h-8 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <form id="uploadForm" enctype="multipart/form-data" onsubmit="submitUpload(event)" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Document Title</label>
+                    <input type="text" name="title" required placeholder="e.g. Clinical Laboratory Safety Protocol" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500" />
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Short Description</label>
+                    <textarea name="description" rows="3" placeholder="Explain the content and importance of this document..." class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Select File</label>
+                    <div class="border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 rounded-2xl p-8 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all bg-slate-50/50 dark:bg-slate-950/20 relative" id="dropzone" onclick="document.getElementById('fileInput').click()">
+                        <input type="file" id="fileInput" name="file" required class="hidden" onchange="fileSelected(this)" />
+                        <div class="w-12 h-12 rounded-full bg-white dark:bg-slate-900 flex items-center justify-center shadow-md text-slate-400 text-lg" id="fileIcon">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <span class="text-xs font-bold text-slate-700 dark:text-slate-300 mt-2" id="fileLabel">Drag & drop your file or click to browse</span>
+                        <span class="text-[10px] text-slate-400">PDF, Excel, PNG, JPG, MP4, WEBM (Max 500MB)</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Upload Poster / Cover Image (Optional)</label>
+                    <div class="flex items-center gap-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
+                        <div class="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center overflow-hidden flex-shrink-0" id="posterPreviewContainer">
+                            <i class="fas fa-image text-slate-400 text-xl" id="posterFallbackIcon"></i>
+                            <img id="posterPreviewImg" class="w-full h-full object-cover hidden" />
+                        </div>
+                        <div class="flex-1">
+                            <input type="file" id="posterInput" name="posterFile" accept="image/*" class="hidden" onchange="posterSelected(this)" />
+                            <button type="button" onclick="document.getElementById('posterInput').click()" class="bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs transition-all flex items-center gap-2 shadow-sm">
+                                <i class="fas fa-camera text-slate-400"></i>
+                                <span>Choose Cover Image</span>
+                            </button>
+                            <p class="text-[10px] text-slate-400 mt-2">Used as the card background thumbnail (PNG, JPG, WEBP).</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 mt-8">
+                    <button type="button" onclick="closeUploadModal()" class="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-white font-bold py-3.5 rounded-2xl text-xs transition-all">Cancel</button>
+                    <button type="submit" id="submitBtn" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 rounded-2xl text-xs transition-all shadow-lg flex items-center justify-center gap-2">
+                        <i class="fas fa-paper-plane"></i>
+                        <span>Upload File</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        // Materials Filtering
+        let activeTypeFilter = 'All';
+
+        function filterMaterials() {
+            const query = document.getElementById('materialSearch').value.toLowerCase().trim();
+            const cards = document.querySelectorAll('.material-card');
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const title = card.getAttribute('data-title') || '';
+                const type = card.getAttribute('data-type') || '';
+                
+                const matchesSearch = title.includes(query);
+                const matchesType = activeTypeFilter === 'All' || type === activeTypeFilter;
+
+                if (matchesSearch && matchesType) {
+                    card.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            // Adjust empty state
+            const emptyState = document.getElementById('emptyState');
+            if (emptyState) {
+                emptyState.style.display = visibleCount === 0 ? 'flex' : 'none';
+            }
+        }
+
+        function filterType(type) {
+            activeTypeFilter = type;
+            
+            // Highlight buttons
+            document.querySelectorAll('.type-filter-btn').forEach(btn => {
+                btn.classList.remove('bg-brand-500', 'text-white');
+                btn.classList.add('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-400', 'hover:bg-slate-200', 'dark:hover:bg-slate-700');
+            });
+
+            const activeBtn = document.getElementById(`filter-${type}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-400', 'hover:bg-slate-200', 'dark:hover:bg-slate-700');
+                activeBtn.classList.add('bg-brand-500', 'text-white');
+            }
+
+            filterMaterials();
+        }
+
+        // Image Lightbox
+        function viewImageLightbox(src, title) {
+            const modal = document.getElementById('lightboxModal');
+            const img = document.getElementById('lightboxImg');
+            const t = document.getElementById('lightboxTitle');
+            
+            img.src = src;
+            t.innerText = title;
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+            }, 50);
+        }
+
+        function closeLightbox() {
+            const modal = document.getElementById('lightboxModal');
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // Upload Modal Controls
+        function openUploadModal() {
+            const modal = document.getElementById('uploadModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.querySelector('.transform').classList.remove('scale-95');
+                modal.querySelector('.transform').classList.add('scale-100');
+            }, 50);
+        }
+
+        function closeUploadModal() {
+            const modal = document.getElementById('uploadModal');
+            modal.classList.add('opacity-0');
+            modal.querySelector('.transform').classList.remove('scale-100');
+            modal.querySelector('.transform').classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+                document.getElementById('uploadForm').reset();
+                document.getElementById('fileLabel').innerText = 'Drag & drop your file or click to browse';
+                document.getElementById('fileIcon').innerHTML = '<i class="fas fa-file-alt"></i>';
+                
+                // Reset poster preview elements
+                document.getElementById('posterPreviewImg').src = '';
+                document.getElementById('posterPreviewImg').classList.add('hidden');
+                document.getElementById('posterFallbackIcon').classList.remove('hidden');
+            }, 300);
+        }
+
+        function posterSelected(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('posterPreviewImg').src = e.target.result;
+                    document.getElementById('posterPreviewImg').classList.remove('hidden');
+                    document.getElementById('posterFallbackIcon').classList.add('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function fileSelected(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                document.getElementById('fileLabel').innerText = file.name + ' (' + (file.size / 1024 / 1024).toFixed(2) + ' MB)';
+                
+                // Show custom file icons
+                let iconClass = 'fa-file-alt';
+                let colorClass = 'text-brand-500';
+                const ext = file.name.split('.').pop().toLowerCase();
+                if (ext === 'pdf') { iconClass = 'fa-file-pdf'; colorClass = 'text-red-500'; }
+                else if (['xls', 'xlsx', 'csv'].includes(ext)) { iconClass = 'fa-file-excel'; colorClass = 'text-emerald-500'; }
+                else if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) { iconClass = 'fa-file-image'; colorClass = 'text-blue-500'; }
+                else if (['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(ext)) { iconClass = 'fa-video'; colorClass = 'text-purple-500'; }
+                
+                document.getElementById('fileIcon').innerHTML = `<i class="fas ${iconClass} ${colorClass}"></i>`;
+            }
+        }
+
+        // Dropzone drag-over feedback
+        const dropzone = document.getElementById('dropzone');
+        if (dropzone) {
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    dropzone.classList.add('border-brand-500', 'bg-brand-50/10');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    dropzone.classList.remove('border-brand-500', 'bg-brand-50/10');
+                }, false);
+            });
+
+            dropzone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) {
+                    const fileInput = document.getElementById('fileInput');
+                    fileInput.files = files;
+                    fileSelected(fileInput);
+                }
+            });
+        }
+
+        // Submit Upload Action
+        function submitUpload(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const origHtml = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner animate-spin"></i> <span>Uploading Matrix...</span>';
+            
+            const formData = new FormData(document.getElementById('uploadForm'));
+            
+            $.ajax({
+                url: '@Url.Action("Upload", "Materials")',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(res) {
+                    if (res.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Uploaded!',
+                            text: res.message,
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                        setTimeout(() => { location.reload(); }, 2000);
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: res.message
+                        });
+                        btn.disabled = false;
+                        btn.innerHTML = origHtml;
+                    }
+                },
+                error: function() {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'A connection error occurred. Please try again.'
+                    });
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+            });
+        }
+
+        // Delete Material
+        function deleteMaterial(id, btn) {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: 'This document will be permanently removed from the library catalog.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#01443c',
+                cancelButtonColor: '#ef4444',
+                confirmButtonText: 'Yes, Delete it'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '@Url.Action("Delete", "Materials")',
+                        type: 'POST',
+                        data: { id: id },
+                        success: function(res) {
+                            if (res.success) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Deleted!',
+                                    text: res.message,
+                                    timer: 1500,
+                                    showConfirmButton: false
+                                });
+                                $(btn).closest('.material-card').fadeOut(500, function() {
+                                    $(this).remove();
+                                    filterMaterials(); // Trigger filter to verify if grid is empty
+                                });
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Error',
+                                    text: res.message
+                                });
+                            }
+                        },
+                        error: function() {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: 'Could not connect to the system.'
+                            });
+                        }
+                    });
+                }
+            });
+          }
+
+        // ==========================================
+        // Unified In-Site Document Viewer Modal Logic
+        // ==========================================
+        function openStudyModal(path, type, title) {
+            const modal = document.getElementById('studyModal');
+            const pdfFrame = document.getElementById('studyPdfFrame');
+            const imgContainer = document.getElementById('studyImgContainer');
+            const img = document.getElementById('studyImg');
+            const sheetContainer = document.getElementById('studySpreadsheetContainer');
+            const sheetFrame = document.getElementById('studyExcelFrame');
+            const sheetFallback = document.getElementById('studyExcelFallback');
+            const directLink = document.getElementById('excelDirectLink');
+            const videoContainer = document.getElementById('studyVideoContainer');
+            const video = document.getElementById('studyVideo');
+            const videoSource = document.getElementById('studyVideoSource');
+            const downloadBtn = document.getElementById('studyDownloadBtn');
+            const loader = document.getElementById('studyLoader');
+            
+            // Set header parameters
+            document.getElementById('studyTitle').innerText = title;
+            downloadBtn.href = path;
+            downloadBtn.download = title;
+            
+            // Hide all sub-viewers
+            pdfFrame.classList.add('hidden');
+            imgContainer.classList.add('hidden');
+            sheetContainer.classList.add('hidden');
+            sheetFrame.classList.add('hidden');
+            sheetFallback.classList.add('hidden');
+            videoContainer.classList.add('hidden');
+            
+            // Reset frame sources
+            pdfFrame.src = '';
+            sheetFrame.src = '';
+            if (video) {
+                video.pause();
+                videoSource.src = '';
+                video.load();
+            }
+            
+            // Show main modal
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            loader.style.display = 'flex';
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+            }, 50);
+            
+            const typeIcon = document.getElementById('studyTypeIcon');
+            const typeBadge = document.getElementById('studyTypeBadge');
+            
+            if (type === 'PDF') {
+                typeIcon.className = 'w-10 h-10 rounded-xl bg-red-50 dark:bg-red-950/20 text-red-500 flex items-center justify-center text-lg';
+                typeIcon.innerHTML = '<i class="fas fa-file-pdf"></i>';
+                typeBadge.innerText = 'PDF Study Guide / Syllabus';
+                
+                pdfFrame.src = path;
+                pdfFrame.classList.remove('hidden');
+                
+            } else if (type === 'Image') {
+                typeIcon.className = 'w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/20 text-blue-500 flex items-center justify-center text-lg';
+                typeIcon.innerHTML = '<i class="fas fa-file-image"></i>';
+                typeBadge.innerText = 'Clinical Graphic / Diagram';
+                
+                img.src = path;
+                imgContainer.classList.remove('hidden');
+                hideStudyLoader();
+                
+            } else if (type === 'Video') {
+                typeIcon.className = 'w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/20 text-purple-500 flex items-center justify-center text-lg';
+                typeIcon.innerHTML = '<i class="fas fa-video"></i>';
+                typeBadge.innerText = 'Recorded Lecture / Video Resource';
+                
+                videoSource.src = path;
+                videoContainer.classList.remove('hidden');
+                video.load();
+                hideStudyLoader();
+                
+            } else if (type === 'Excel') {
+                typeIcon.className = 'w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-500 flex items-center justify-center text-lg';
+                typeIcon.innerHTML = '<i class="fas fa-file-excel"></i>';
+                typeBadge.innerText = 'Excel Reference Matrix';
+                
+                sheetContainer.classList.remove('hidden');
+                directLink.href = path;
+                
+                // Try to embed using Office Online Viewer if running in production, else fallback gracefully
+                if (!window.location.origin.includes('localhost') && !window.location.origin.includes('127.0.0.1')) {
+                    const fullUrl = window.location.origin + path;
+                    sheetFrame.src = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(fullUrl);
+                    sheetFrame.classList.remove('hidden');
+                } else {
+                    sheetFallback.classList.remove('hidden');
+                    hideStudyLoader();
+                }
+            }
+        }
+
+        function closeStudyModal() {
+            const modal = document.getElementById('studyModal');
+            const video = document.getElementById('studyVideo');
+            if (video) video.pause();
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+                document.getElementById('studyPdfFrame').src = '';
+                document.getElementById('studyExcelFrame').src = '';
+                if (video) {
+                    document.getElementById('studyVideoSource').src = '';
+                    video.load();
+                }
+            }, 300);
+        }
+
+        function hideStudyLoader() {
+            const loader = document.getElementById('studyLoader');
+            if (loader) {
+                $(loader).fadeOut(300);
+            }
+        }
+
+    </script>
+}

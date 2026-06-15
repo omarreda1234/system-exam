@@ -1,0 +1,38 @@
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Denied | 403 Forbidden</title>
+    <script src="~/lib/tailwind/tailwindcss.js"></script>
+</head>
+<body class="min-h-screen bg-slate-900 text-slate-50 overflow-hidden relative">
+    <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div class="h-[420px] w-[420px] rounded-full bg-blue-500/20 blur-[110px]"></div>
+    </div>
+
+    <div class="relative z-10 flex min-h-screen items-center justify-center px-6">
+        <div class="w-full max-w-lg text-center">
+            <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500/15 text-3xl ring-1 ring-inset ring-rose-500/30">
+                🔒
+            </div>
+            <h1 class="text-5xl font-bold tracking-tight">403</h1>
+            <p class="mt-3 text-slate-300">
+                <strong class="text-slate-100">Access Denied.</strong>
+                You don't have permission to view this resource. If you think this is a mistake, please contact your administrator.
+            </p>
+
+            <div class="mt-8">
+                <a asp-action="Index" asp-controller="Home"
+                   class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition-colors">
+                    Return to Homepage
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

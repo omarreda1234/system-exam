@@ -1,0 +1,247 @@
+@model IEnumerable<Exam.DTOs.ExamResultRowDto>
+@{
+    ViewData["Title"] = "Certificates Management";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var exams = ViewBag.Exams as IEnumerable<Exam.DTOs.ExamDropdownDto> ?? Enumerable.Empty<Exam.DTOs.ExamDropdownDto>();
+    var selectedExamId = ViewBag.SelectedExamId as int? ?? 0;
+}
+
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div>
+            <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Analytical Filter</h2>
+            <div class="flex items-center gap-3">
+                <p class="text-xl font-bold">Certificates Management</p>
+                <span class="bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-200">
+                     Advanced Mode Active
+                </span>
+            </div>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-4">
+            <div class="space-y-2">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Exam Type</label>
+                <select id="typeFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold min-w-[150px]">
+                    <option value="0">All Types</option>
+                    @foreach (var type in (IEnumerable<Exam.DTOs.ExamTypeDto>)ViewBag.ExamTypes)
+                    {
+                        <option value="@type.Id" selected="@(ViewBag.SelectedTypeId == type.Id ? "selected" : null)">@type.TypeName.ToUpper()</option>
+                    }
+                </select>
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Year</label>
+                <select id="yearFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold w-[100px]">
+                    <option value="0">Year</option>
+                    @for (int y = DateTime.Now.Year; y >= 2024; y--)
+                    {
+                        <option value="@y" selected="@(ViewBag.SelectedYear == y ? "selected" : null)">@y</option>
+                    }
+                </select>
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Month</label>
+                <select id="monthFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold w-[120px]">
+                    <option value="0">Month</option>
+                    @for (int m = 1; m <= 12; m++)
+                    {
+                        <option value="@m" selected="@(ViewBag.SelectedMonth == m ? "selected" : null)">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m)</option>
+                    }
+                </select>
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Selected Module</label>
+                <select id="examFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3 text-sm font-bold min-w-[280px]">
+                    @{
+                        var groupedExams = exams.GroupBy(e => e.TypeName).OrderByDescending(g => g.Key);
+                        foreach (var group in groupedExams)
+                        {
+                            <optgroup label="@(group.Key?.ToUpper() ?? "OTHER")">
+                                @foreach (var e in group)
+                                {
+                                    <option value="@e.Id" selected="@(e.Id == selectedExamId ? "selected" : null)">
+                                        @e.Title.ToUpper() @(!string.IsNullOrEmpty(e.WaveName) ? $"- {e.WaveName.ToUpper()}" : "") (@e.StartTime.ToString("MMM yyyy"))
+                                    </option>
+                                }
+                            </optgroup>
+                        }
+                    }
+                </select>
+            </div>
+
+            <div class="flex items-center gap-2 mt-auto">
+                <button onclick="sendSelectedCerts(@selectedExamId)" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-lg flex items-center gap-2">
+                    <i class="fas fa-certificate"></i> Send Selected Certs
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 overflow-hidden shadow-sm">
+    <div class="overflow-x-auto">
+        <table class="datatable saas-table">
+            <thead>
+                <tr>
+                    <th class="w-10 px-4"><input type="checkbox" id="selectAll" /></th>
+                    <th class="min-w-[280px]">Personnel</th>
+                    <th>Wave</th>
+                    <th>Branch</th>
+                    <th>Status</th>
+                    <th>Start Time</th>
+                    <th>Finish Time</th>
+                    <th>Time (M)</th>
+                    <th>Score</th>
+                    <th>User Code</th>
+                    <th>Certificate Code</th>
+                    <th class="text-right px-8">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in Model) {
+                    var statusClass = s.Status.StartsWith("Completed") ? "bg-emerald-500" : "bg-slate-400";
+                    <tr class="student-row">
+                         <td class="px-4 text-center">
+                             @if(s.Status == "Completed" && s.Score >= 75) {
+                                 <input type="checkbox" class="student-checkbox" value="@s.Id" data-passed="@(s.IsPassed?.ToString().ToLower())" />
+                             } else if (s.Status == "Completed") {
+                                 <span class="text-[9px] font-bold text-slate-400">Not Eligible (&lt; 75%)</span>
+                             }
+                         </td>
+                        <td>
+                            <div class="flex items-center gap-3 px-4 py-3 flex-nowrap">
+                                <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase transition-transform hover:scale-105">@s.StudentName.Substring(0,1)</div>
+                                <div class="flex flex-col">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-bold text-slate-900 dark:text-white leading-tight">@s.StudentName</span>
+                                        <span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                            @s.RoleName
+                                        </span>
+                                    </div>
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">@s.ExamType</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="text-[10px] font-black text-slate-400 uppercase">@s.WaveName</span></td>
+                        <td><span class="text-[10px] font-black text-slate-400 uppercase">@(string.IsNullOrEmpty(s.BranchName) ? "--" : s.BranchName)</span></td>
+                        <td>
+                            <div class="flex items-center gap-1.5 px-3 py-1 rounded-full @(statusClass.Replace("bg-", "bg-opacity-10 text-")) w-fit">
+                                <span class="text-[10px] font-black uppercase tracking-widest">@s.Status.ToUpper()</span>
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <div class="flex flex-col">
+                                <span class="text-[9px] text-slate-400 font-bold mb-0.5">@(s.ActualStartTime.HasValue ? s.ActualStartTime.Value.ToString("dd/MM/yyyy") : "")</span>
+                                <span class="text-[10px] font-bold text-slate-500 uppercase">@(s.ActualStartTime.HasValue ? s.ActualStartTime.Value.ToString("hh:mm tt") : "--")</span>
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <div class="flex flex-col">
+                                <span class="text-[9px] text-slate-400 font-bold mb-0.5">@(s.ActualEndTime.HasValue ? s.ActualEndTime.Value.ToString("dd/MM/yyyy") : "")</span>
+                                <span class="text-[10px] font-bold text-slate-500 uppercase">@(s.ActualEndTime.HasValue ? s.ActualEndTime.Value.ToString("hh:mm tt") : "--")</span>
+                            </div>
+                        </td>
+                        <td class="text-xs font-bold text-slate-500">
+                            @(s.DurationInMinutes > 0 ? s.DurationInMinutes + " min" : "--")
+                        </td>
+                        <td class="font-mono font-bold text-slate-700 dark:text-slate-300">
+                            <div class="flex flex-col">
+                                <span class="text-brand-600 dark:text-brand-400 text-sm">@s.FinalScore.ToString("0") / @s.TotalScoreAvailable.ToString("0")</span>
+                                <span class="text-[9px] text-slate-400 uppercase tracking-widest">@s.Score.ToString("0.0")% Achievement</span>
+                            </div>
+                        </td>
+                        <td>
+                             <span class="text-[10px] font-bold text-slate-500 uppercase">@s.UserCode</span>
+                        </td>
+                        <td>
+                            <span class="px-3 py-1.5 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-mono text-[10px] font-bold tracking-widest rounded-lg border border-amber-200 dark:border-amber-800 shadow-sm whitespace-nowrap">
+                                @(string.IsNullOrEmpty(s.CertificateCode) ? "--" : s.CertificateCode)
+                            </span>
+                        </td>
+                        <td class="text-right px-8">
+                            <div class="flex items-center justify-end gap-2">
+                                <button class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-xl view-review" data-student-id="@s.Id">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                @if (User.IsInRole("Admin"))
+                                {
+                                    <button class="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 rounded-xl wipe-data" data-student-id="@s.Id" data-student-name="@s.StudentName" title="Wipe Data & Reset">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function updateExamList() {
+            const type = $('#typeFilter').val();
+            const year = $('#yearFilter').val();
+            const month = $('#monthFilter').val();
+
+            $.get('/Admin/GetFilteredExams', { typeId: type, month: month, year: year }, function (data) {
+                const $examFilter = $('#examFilter');
+                $examFilter.empty();
+
+                if (data.length === 0) {
+                    $examFilter.append('<option value="0">No exams found</option>');
+                    return;
+                }
+
+                // Group by typeName
+                const grouped = {};
+                data.forEach(e => {
+                    if (!grouped[e.typeName]) grouped[e.typeName] = [];
+                    grouped[e.typeName].push(e);
+                });
+
+                Object.keys(grouped).sort().reverse().forEach(type => {
+                    const $group = $('<optgroup>').attr('label', type.toUpperCase());
+                    grouped[type].forEach(e => {
+                        $group.append($('<option>').val(e.id).text(e.title));
+                    });
+                    $examFilter.append($group);
+                });
+            });
+        }
+
+        $('#typeFilter, #yearFilter, #monthFilter').change(updateExamList);
+
+        $('#examFilter').change(function () { 
+            const type = $('#typeFilter').val();
+            const year = $('#yearFilter').val();
+            const month = $('#monthFilter').val();
+            let newUrl = '/Admin/Certificates?examId=' + $(this).val() + '&typeId=' + type + '&year=' + year + '&month=' + month; 
+            if (window.location.search.includes('iframe=true')) newUrl += '&iframe=true';
+            window.location = newUrl;
+        });
+
+        $('#selectAll').on('change', function() { $('.student-checkbox').prop('checked', this.checked); });
+
+        function sendSelectedCerts(examId) {
+            var ids = [];
+            $('.student-checkbox:checked').each(function() { ids.push($(this).val()); });
+            if(ids.length === 0) { Swal.fire('Error', 'Select students first', 'error'); return; }
+            
+            Swal.fire({ title: 'Issuing...', didOpen: () => Swal.showLoading() });
+            fetch('/Admin/SendCertificates?examId=' + examId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ids)
+            }).then(r => r.json()).then(res => {
+                if(res.success) Swal.fire('Success', res.message, 'success').then(() => location.reload());
+                else Swal.fire('Error', res.message, 'error');
+            });
+        }
+
+    </script>
+}

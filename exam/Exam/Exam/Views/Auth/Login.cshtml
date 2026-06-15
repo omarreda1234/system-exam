@@ -1,0 +1,90 @@
+@model Exam.DTOs.LoginDTO
+
+@{
+    ViewData["Title"] = "Platform Login";
+}
+
+<div class="min-h-[70vh] flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-white mb-6 shadow-lg border border-slate-100 p-2 overflow-hidden">
+                <img src="~/images/logo.jpeg" alt="Eltarshoubi Logo" class="w-full h-full object-contain" />
+            </div>
+            <h1 class="text-3xl font-black text-slate-900 tracking-tight">Eltarshoubi Academy</h1>
+            <p class="mt-2 text-sm font-bold text-slate-500 uppercase tracking-widest">Secure Login Portal</p>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-[32px] shadow-xl shadow-slate-200/50 overflow-hidden relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-brand-400 to-brand-600"></div>
+            <div class="p-8 sm:p-10">
+                <form asp-action="Login" method="post" class="space-y-6">
+                    @Html.AntiForgeryToken()
+                    <div asp-validation-summary="ModelOnly" class="text-rose-600 text-[11px] font-bold uppercase tracking-widest bg-rose-50 p-3 rounded-xl border border-rose-100 text-center"></div>
+
+                    <div class="space-y-1.5">
+                        <label asp-for="Email" class="block text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Email Address</label>
+                        <input asp-for="Email" class="block w-full border-slate-200 bg-slate-50 text-slate-900 font-medium rounded-xl shadow-sm focus:border-brand-500 focus:bg-white focus:ring-brand-500 px-4 py-3.5 transition-colors" placeholder="student@example.com" />
+                        <span asp-validation-for="Email" class="text-rose-500 text-[10px] font-bold tracking-widest uppercase ml-1 block mt-1"></span>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label asp-for="Password" class="block text-xs font-bold text-slate-700 uppercase tracking-widest ml-1">Password</label>
+                        <div class="relative group">
+                            <input asp-for="Password" id="passwordInput" class="block w-full border-slate-200 bg-slate-50 text-slate-900 font-medium rounded-xl shadow-sm focus:border-brand-500 focus:bg-white focus:ring-brand-500 px-4 py-3.5 pr-12 transition-colors" type="password" placeholder="••••••••" />
+                            <button type="button" id="togglePassword" class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-400 hover:text-brand-600 transition-colors focus:outline-none">
+                                <i class="fas fa-eye text-sm" id="eyeIcon"></i>
+                            </button>
+                        </div>
+                        <span asp-validation-for="Password" class="text-rose-500 text-[10px] font-bold tracking-widest uppercase ml-1 block mt-1"></span>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-2">
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <div class="relative flex items-center justify-center">
+                                <input asp-for="RemmberMe" class="peer h-5 w-5 cursor-pointer appearance-none rounded-lg border-2 border-slate-200 bg-slate-50 transition-all checked:border-brand-600 checked:bg-brand-600 hover:border-brand-400" />
+                                <svg class="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="4">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+                            <span class="text-sm font-semibold text-slate-600 group-hover:text-slate-900 transition-colors">Remember me</span>
+                        </label>
+                        <a asp-action="ForgotPassword" class="text-xs font-bold text-slate-400 hover:text-brand-600 uppercase tracking-widest transition-colors">Forgot Password?</a>
+                    </div>
+
+                    <div class="pt-4">
+                        <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white px-4 py-4 rounded-xl transition-all text-sm font-black uppercase tracking-widest shadow-lg shadow-brand-500/30 hover:-translate-y-0.5 active:translate-y-0">
+                            Secure Login
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="mt-8 text-center">
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">New to the Academy?</p>
+            <a href="@Url.Action("Apply", "Auth")" class="inline-flex items-center gap-3 bg-white border border-slate-200 px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-brand-600 transition-all shadow-sm">
+                <i class="fas fa-user-plus text-brand-600"></i>
+                Apply for registration
+            </a>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function() {
+            $('#togglePassword').on('click', function() {
+                const passwordInput = $('#passwordInput');
+                const eyeIcon = $('#eyeIcon');
+                
+                if (passwordInput.attr('type') === 'password') {
+                    passwordInput.attr('type', 'text');
+                    eyeIcon.removeClass('fa-eye').addClass('fa-eye-slash');
+                } else {
+                    passwordInput.attr('type', 'password');
+                    eyeIcon.removeClass('fa-eye-slash').addClass('fa-eye');
+                }
+            });
+        });
+    </script>
+}

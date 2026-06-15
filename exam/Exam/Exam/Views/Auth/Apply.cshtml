@@ -1,0 +1,166 @@
+@model Exam.Models.RegistrationRequest
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>طلب انضمام جديد - أكاديمية الطرشوبي</title>
+    <script src="~/lib/tailwind/tailwindcss.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700&family=Noto+Kufi+Arabic:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/lib/font-awesome/css/all.min.css" />
+    <style>
+        body { font-family: 'Noto Kufi Arabic', 'Plus Jakarta Sans', sans-serif; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex items-center justify-center p-4 sm:p-8">
+    <div class="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        <div class="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] rounded-full bg-brand-500/5 blur-[120px]"></div>
+        <div class="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] rounded-full bg-brand-500/5 blur-[120px]"></div>
+    </div>
+
+    <div class="w-full max-w-2xl glass-card rounded-[40px] shadow-2xl shadow-slate-200/50 border border-white p-8 sm:p-12 relative z-10">
+        <div class="text-center mb-12">
+            <div class="w-20 h-20 bg-emerald-600 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-lg shadow-emerald-600/20">
+                <i class="fas fa-user-plus text-3xl text-white"></i>
+            </div>
+            <h1 class="text-3xl font-black text-slate-900 tracking-tight">طلب انضمام جديد</h1>
+            <p class="text-slate-500 font-bold mt-2 uppercase tracking-widest text-[10px]">Eltarshoubi Training Academy</p>
+        </div>
+
+        <form asp-action="Apply" method="post" class="space-y-8">
+            <div asp-validation-summary="ModelOnly" class="text-rose-500 text-sm font-bold bg-rose-50 p-4 rounded-2xl border border-rose-100"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Name -->
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 pr-2">الاسم خماسي بالعربي *</label>
+                    <input asp-for="FullName" placeholder="ادخل اسمك الكامل كما في البطاقة" required 
+                           class="w-full bg-slate-100/50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all text-right" />
+                </div>
+
+                <!-- Email -->
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 pr-2">البريد الإلكتروني (Gmail) *</label>
+                    <input asp-for="Email" type="email" placeholder="username@gmail.com" required 
+                           class="w-full bg-slate-100/50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all dir-ltr" />
+                </div>
+
+                <!-- Code & Phone -->
+                <div>
+                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 pr-2">كود الموظف *</label>
+                    <input asp-for="UserCode" placeholder="مثلاً: 5526" required 
+                           class="w-full bg-slate-100/50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all" />
+                </div>
+                <div>
+                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 pr-2">رقم الموبايل (واتساب) *</label>
+                    <input asp-for="PhoneNumber" placeholder="01xxxxxxxxx" required 
+                           class="w-full bg-slate-100/50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/5 transition-all" />
+                </div>
+
+                <!-- Job & Shift -->
+                <div>
+                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 pr-2">الوظيفة *</label>
+                    <select asp-for="JobTitle" required class="w-full bg-slate-100/50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all appearance-none">
+                        <option value="">اختر الوظيفة...</option>
+                        <option value="صيدلي">صيدلي (Pharmacist)</option>
+                        <option value="مساعد">مساعد (Assistant)</option>
+                        <option value="أخرى">أخرى</option>
+                    </select>
+                </div>
+                <div class="space-y-3">
+                    <label asp-for="Shift" class="block text-xs font-black text-slate-500 uppercase tracking-widest mr-1">الشيفت:</label>
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-2">
+                        <p class="text-[11px] font-bold text-slate-600 mb-1">اذا شيفت صباحي اختار رقم 2</p>
+                        <p class="text-[11px] font-bold text-slate-600 mb-1">اذا شيفت وسط اختار رقم 3</p>
+                        <p class="text-[11px] font-bold text-slate-600">اذا شيفت ليلي اختار رقم 4</p>
+                    </div>
+                    <select asp-for="Shift" class="block w-full border-slate-200 bg-white text-slate-900 font-bold rounded-xl shadow-sm focus:border-emerald-500 focus:ring-emerald-500 px-4 py-3.5 transition-all">
+                        <option value="">اختر الشيفت</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                    <span asp-validation-for="Shift" class="text-rose-500 text-[10px] font-bold tracking-widest uppercase mr-1 block mt-1"></span>
+                </div>
+
+                <!-- Branch -->
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 pr-2">الفرع *</label>
+                    <select asp-for="BranchId" required class="w-full bg-slate-100/50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all appearance-none">
+                        <option value="">اختر فرعك...</option>
+                        @foreach (var b in ViewBag.Branches)
+                        {
+                            <option value="@b.Id">@b.BranchName</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Password -->
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 pr-2">كلمة المرور المطلوبة *</label>
+                <div class="space-y-1.5 md:col-span-2">
+                    <label asp-for="Password" class="block text-xs font-black text-slate-500 uppercase tracking-widest mr-1">كلمة المرور المطلوبة *</label>
+                    <div class="relative group">
+                        <input asp-for="Password" id="passwordInput" class="block w-full border-slate-200 bg-slate-50 text-slate-900 font-bold rounded-xl shadow-sm focus:border-emerald-500 focus:bg-white focus:ring-emerald-500 px-4 py-3.5 pr-12 transition-all" type="password" placeholder="••••••••" />
+                        <button type="button" id="togglePassword" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-emerald-600 transition-colors focus:outline-none">
+                            <i class="fas fa-eye text-sm" id="eyeIcon"></i>
+                        </button>
+                    </div>
+                    <span asp-validation-for="Password" class="text-rose-500 text-[10px] font-bold tracking-widest uppercase mr-1 block mt-1"></span>
+                </div>
+
+                <!-- Notes -->
+                <div class="space-y-1.5 md:col-span-2">
+                    <label asp-for="Notes" class="block text-xs font-black text-slate-500 uppercase tracking-widest mr-1">ملاحظات إضافية</label>
+                    <textarea asp-for="Notes" rows="3" class="block w-full border-slate-200 bg-slate-50 text-slate-900 font-bold rounded-xl shadow-sm focus:border-emerald-500 focus:bg-white focus:ring-emerald-500 px-4 py-3.5 transition-all" placeholder="أي تفاصيل أخرى تود إضافتها..."></textarea>
+                </div>
+            </div>
+
+            <div class="pt-6">
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-2xl transition-all text-sm font-black uppercase tracking-widest shadow-xl shadow-emerald-500/20 hover:-translate-y-1 active:translate-y-0">
+                    إرسال طلب التحاق
+                </button>
+            </div>
+            
+            <p class="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest pt-6 border-t border-slate-100">
+                هل لديك حساب بالفعل؟ <a href="@Url.Action("Login")" class="text-emerald-600 hover:underline">تسجيل الدخول</a>
+            </p>
+        </form>
+    </div>
+    
+    <script src="~/lib/jquery-3.6.0/jquery.min.js"></script>
+    <script src="~/lib/sweetalert2-11/sweetalert2.all.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#togglePassword').on('click', function() {
+                const passwordInput = $('#passwordInput');
+                const eyeIcon = $('#eyeIcon');
+                
+                if (passwordInput.attr('type') === 'password') {
+                    passwordInput.attr('type', 'text');
+                    eyeIcon.removeClass('fa-eye').addClass('fa-eye-slash');
+                } else {
+                    passwordInput.attr('type', 'password');
+                    eyeIcon.removeClass('fa-eye-slash').addClass('fa-eye');
+                }
+            });
+        });
+    </script>
+    @if (ViewBag.ShowSuccess == true)
+    {
+        <script>
+            Swal.fire({
+                title: 'تم إرسال طلبك!',
+                text: 'تم استلام بياناتك بنجاح. سيقوم الأدمن بمراجعة الطلب والموافقة عليه، وسيتم إخطارك عبر البريد الإلكتروني.',
+                icon: 'success',
+                confirmButtonText: 'حسناً',
+                confirmButtonColor: '#059669'
+            });
+        </script>
+    }
+</body>
+</html>

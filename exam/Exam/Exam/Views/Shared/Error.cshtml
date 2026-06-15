@@ -1,0 +1,74 @@
+@model Exam.Models.ErrorViewModel
+@{
+    ViewData["Title"] = "System Error - Eltarshouby Academy";
+    Layout = null; // We can use null if we want a full screen error, or we can use the default layout.
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link rel="icon" type="image/jpeg" href="~/images/logo.jpeg" />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/lib/font-awesome/css/all.min.css" />
+    <script src="~/lib/tailwind/tailwindcss.js"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: { colors: { brand: { 50: '#f0f9ff', 600: '#0284c7', 700: '#0369a1' } }, fontFamily: { sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'] } } }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 flex items-center justify-center min-h-screen font-sans selection:bg-rose-100 selection:text-rose-900 overflow-hidden">
+    <!-- Background Decor -->
+    <div class="absolute top-0 w-full h-full overflow-hidden pointer-events-none">
+        <div class="absolute -top-40 -left-40 w-96 h-96 bg-rose-200 rounded-full blur-[100px] opacity-50"></div>
+        <div class="absolute top-40 right-20 w-80 h-80 bg-brand-200 rounded-full blur-[100px] opacity-30"></div>
+    </div>
+
+    <div class="bg-white border border-slate-100 rounded-[40px] shadow-2xl p-12 max-w-2xl w-full mx-6 relative z-10 z-10 text-center relative overflow-hidden group">
+        <div class="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform duration-700 pointer-events-none">
+            <i class="fas fa-triangle-exclamation text-[150px] -rotate-12"></i>
+        </div>
+        
+        <div class="w-24 h-24 bg-rose-50 rounded-[28px] flex items-center justify-center text-rose-500 mx-auto mb-8 border border-rose-100 shadow-sm">
+            <i class="fas fa-bug text-4xl"></i>
+        </div>
+        
+        <h1 class="text-3xl lg:text-4xl font-black text-slate-900 mb-4 tracking-tight">System Exception Detected</h1>
+        <p class="text-slate-500 font-medium leading-relaxed max-w-md mx-auto mb-8 text-sm md:text-base">
+            @(string.IsNullOrEmpty(Model.ErrorMessage) ? "An unexpected error occurred while processing your request. Our technical team has been notified." : Model.ErrorMessage)
+        </p>
+
+        @if (Model.ShowRequestId)
+        {
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 inline-flex items-center gap-3 mb-8">
+                <span class="text-[10px] font-black uppercase text-slate-400 tracking-widest shrink-0">Req ID</span>
+                <code class="text-xs font-mono font-bold text-slate-600">@Model.RequestId</code>
+            </div>
+        }
+
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <a href="/Admin/AllUsers" class="w-full sm:w-auto px-8 py-3.5 bg-white border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-widest rounded-xl hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm">
+                <i class="fas fa-users mr-2"></i> Personnel Registry
+            </a>
+            <a href="/" class="w-full sm:w-auto px-8 py-3.5 bg-brand-600 text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-brand-600/20 hover:bg-brand-700 hover:-translate-y-1 transition-all">
+                <i class="fas fa-home mr-2"></i> Return Home
+            </a>
+        </div>
+        
+        @if (!string.IsNullOrEmpty(Model.StackTrace))
+        {
+            <div class="mt-8 text-left">
+                <button onclick="document.getElementById('stack-trace').classList.toggle('hidden')" class="text-[10px] font-bold text-slate-400 hover:text-brand-600 uppercase tracking-widest uppercase items-center gap-1">
+                    <i class="fas fa-code"></i> Toggle Developer Info
+                </button>
+                <div id="stack-trace" class="hidden mt-4 bg-slate-900 rounded-2xl p-4 overflow-x-auto border border-slate-800">
+                    <pre class="text-[10px] text-emerald-400 font-mono leading-relaxed whitespace-pre-wrap">@Model.StackTrace</pre>
+                </div>
+            </div>
+        }
+    </div>
+</body>
+</html>

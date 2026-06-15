@@ -1,0 +1,629 @@
+@model Exam.DTOs.ExamCreateDTO
+@{
+    ViewBag.Title = "Create Protocol";
+    Layout = "_DashboardLayout";
+    var examTypes = ViewBag.ExamTypes as IEnumerable<Exam.DTOs.ExamTypeDto> ?? Enumerable.Empty<Exam.DTOs.ExamTypeDto>();
+    var categories = ViewBag.Categories as IEnumerable<Exam.DTOs.CategoryDto> ?? Enumerable.Empty<Exam.DTOs.CategoryDto>();
+    var questionTypeOptionsHtml = string.Join("", categories.Select(t => $"<option value=\"{t.Id}\">{System.Net.WebUtility.HtmlEncode(t.CategoryName)}</option>"));
+}
+
+<div class="max-w-5xl mx-auto py-12">
+    <!-- Header -->
+    <div class="flex items-center gap-6 mb-12">
+        <div class="w-16 h-16 bg-brand-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-brand-500/20">
+            <i class="fas fa-plus-circle text-2xl"></i>
+        </div>
+        <div>
+            <h1 class="text-3xl font-black tracking-tight text-slate-900 dark:text-white">Create New Exam</h1>
+            <p class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">LMS Examination Portal v3.0</p>
+        </div>
+    </div>
+
+    <form id="examForm" action="@Url.Action("Create", "Exams")" method="post" class="space-y-8">
+        @Html.AntiForgeryToken()
+
+        <!-- Configuration Card -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] shadow-sm overflow-hidden p-10">
+            <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-8">Basic Information</h3>
+            <div class="space-y-8">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 px-1">Exam Title</label>
+                    <input name="Title" required class="block w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-6 py-4 rounded-2xl text-lg font-bold outline-none focus:border-brand-500" />
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 px-1">Exam Description / Instructions</label>
+                    <textarea name="Description" rows="3" class="block w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 text-sm font-medium resize-none outline-none focus:border-brand-500"></textarea>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50 dark:bg-slate-950/50 p-8 rounded-[24px] border border-slate-100 dark:border-slate-800">
+                    <div class="space-y-6">
+                        <div>
+                             <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Start Time</label>
+                             <input name="StartTime" type="datetime-local" class="block w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold focus:border-brand-500 outline-none" />
+                        </div>
+                        <div>
+                             <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">End Time</label>
+                             <input name="EndTime" type="datetime-local" class="block w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold focus:border-brand-500 outline-none" />
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 h-fit">
+                        <div class="col-span-2">
+                             <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Exam Type</label>
+                             <select name="ExamTypeId" id="ExamTypeId" required class="block w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold focus:border-brand-500 outline-none">
+                                <option value="">SELECT EXAM TYPE...</option>
+                                @foreach (var t in examTypes) {
+                                    <option value="@t.Id" data-type-name="@t.TypeName">@t.TypeName.ToUpper()</option>
+                                }
+                             </select>
+                        </div>
+                        <div class="col-span-2 wave-container" style="display:none;">
+                             <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Target Batch (Wave)</label>
+                             <select name="WaveId" id="WaveId" class="block w-full bg-amber-50 dark:bg-amber-900/10 text-amber-600 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 text-sm font-bold focus:border-brand-500 outline-none">
+                                <option value="">--- ASSIGN TO A MODULE/WAVE ---</option>
+                             </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Duration (M)</label>
+                            <input name="Duration" required type="number" value="60" class="block w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-black text-brand-600 focus:border-brand-500 outline-none" />
+                        </div>
+                        <div id="passGradeWrapper">
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Passing Grade %</label>
+                            <input name="PassPercentage" type="number" required value="60" class="block w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-black text-brand-600 focus:border-brand-500 outline-none" />
+                        </div>
+                        <div id="totalQuestionsWrapper" class="col-span-2 mt-2" style="display:none;">
+                            <label class="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Total Dynamic Questions</label>
+                            <input name="TotalQuestionsToShow" id="TotalQuestionsToShow" type="hidden" />
+                            <div class="bg-indigo-50/50 dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-black text-indigo-600 mb-2">
+                                <span id="displayTotal">0</span> Questions Total
+                            </div>
+
+                            <!-- Role Specific Summary -->
+                            <div id="roleSummary" class="flex gap-4 mt-3">
+                                <div class="bg-indigo-100/50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-500/20">
+                                    <span class="text-[8px] font-black text-indigo-400 uppercase block leading-none mb-1">Pharmacist</span>
+                                    <div class="flex items-center gap-2">
+                                        <div><span id="sumPharmacist" class="text-xs font-black text-indigo-600">0</span> <span class="text-[8px] font-bold text-indigo-400">Qs</span></div>
+                                        <div class="w-px h-3 bg-indigo-200 dark:bg-indigo-500/30"></div>
+                                        <div><span id="ptsPharmacist" class="text-xs font-black text-indigo-600">0</span> <span class="text-[8px] font-bold text-indigo-400">Pts</span></div>
+                                    </div>
+                                </div>
+                                <div class="bg-emerald-100/50 dark:bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-100 dark:border-emerald-500/20">
+                                    <span class="text-[8px] font-black text-emerald-400 uppercase block leading-none mb-1">Assistant</span>
+                                    <div class="flex items-center gap-2">
+                                        <div><span id="sumAssistant" class="text-xs font-black text-emerald-600">0</span> <span class="text-[8px] font-bold text-emerald-400">Qs</span></div>
+                                        <div class="w-px h-3 bg-emerald-200 dark:bg-emerald-500/30"></div>
+                                        <div><span id="ptsAssistant" class="text-xs font-black text-emerald-600">0</span> <span class="text-[8px] font-bold text-emerald-400">Pts</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-[9px] text-slate-400 mt-2 uppercase font-bold italic">The system will dynamically pick questions based on the candidate's role.</p>
+                        </div>
+                        <div class="col-span-2 mt-4 flex flex-col md:flex-row items-start md:items-center gap-4">
+                            <!-- Question Overview -->
+                            <div class="flex-1 w-full flex items-center gap-4 bg-amber-50/50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30">
+                                <div class="relative inline-block w-12 h-6 transition duration-200 ease-in">
+                                    <input type="checkbox" name="ShowQuestionOverview" id="ShowQuestionOverview" value="true" checked class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
+                                    <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-brand-600 transition-colors"></div>
+                                    <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
+                                </div>
+                                <div class="flex flex-col">
+                                    <label for="ShowQuestionOverview" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Question Overview & Back Navigation</label>
+                                    <span class="text-[9px] font-medium text-slate-500 italic">If disabled, students can only move forward and cannot see the question list.</span>
+                                </div>
+                            </div>
+
+                            <!-- Is Final Exam -->
+                            <div class="flex-1 w-full flex items-center gap-4 bg-rose-50/50 dark:bg-rose-900/10 p-4 rounded-2xl border border-rose-100 dark:border-rose-900/30">
+                                <div class="relative inline-block w-12 h-6 transition duration-200 ease-in">
+                                    <input type="checkbox" name="IsFinalExam" id="IsFinalExam" value="true" class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
+                                    <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-rose-600 transition-colors"></div>
+                                    <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
+                                </div>
+                                <div class="flex flex-col">
+                                    <label for="IsFinalExam" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Mark as Final Exam</label>
+                                    <span class="text-[9px] font-medium text-slate-500 italic">Enable this to apply Final Exam certification rules.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="blueprintSection" class="bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 rounded-[32px] p-8 space-y-6" style="display:none;">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-xs font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">Blueprint Console</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="cloneRulesBtn" class="bg-white hover:bg-slate-50 text-indigo-600 border border-indigo-200 dark:border-indigo-800 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm transition-all">
+                        <i class="fas fa-copy mr-2"></i> Clone Rules
+                    </button>
+                    <button type="button" id="addRuleBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg transition-all">
+                        <i class="fas fa-magic mr-2"></i> Add Smart Injection Rule
+                    </button>
+                </div>
+            </div>
+            <div id="rulesContainer" class="grid grid-cols-1 gap-4"></div>
+        </div>
+
+        <div class="bg-slate-100 dark:bg-slate-800/50 p-8 rounded-[32px] mt-8">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Manual Questions</h3>
+                <button type="button" id="addQuestionBtn" class="bg-brand-600 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg">
+                    + Add Fixed Question
+                </button>
+            </div>
+            <div id="questionsContainer" class="space-y-6"></div>
+        </div>
+
+        <div class="flex justify-end pt-8">
+            <button type="submit" class="bg-brand-600 text-white px-10 py-4 rounded-2xl font-black text-sm uppercase shadow-xl hover:-translate-y-1 transition-all"><i class="fas fa-rocket mr-2"></i> Deploy Exam Config</button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        $(function() {
+            var qIdx = 0;
+            var rIdx = 0;
+            var currentExamId = 0;
+            var addQUrl = '@Url.Action("AddQuestion", "Exams")';
+            var updateQUrl = '@Url.Action("UpdateQuestion", "Exams")';
+            var addCUrl = '@Url.Action("AddChoice", "Exams")';
+            var updateCUrl = '@Url.Action("UpdateChoice", "Exams")';
+            var currentCategoryOptions = '<option value="">--- CATEGORY ---</option>';
+
+            $('#ExamTypeId').on('change', function() {
+                var name = $(this).find(':selected').attr('data-type-name') || '';
+                name = name.toLowerCase();
+                var typeId = $(this).val();
+                var isWavey = name.includes('wave') || $(this).val() == '2';
+                
+                if (typeId) {
+                    $.getJSON('/Admin/GetCategoriesByExamType?examTypeId=' + typeId, function(data) {
+                        currentCategoryOptions = '<option value="">--- CATEGORY ---</option>';
+                        data.forEach(function(c) {
+                            currentCategoryOptions += '<option value="' + c.id + '">' + c.categoryName.toUpperCase() + '</option>';
+                        });
+                        // Update existing dropdowns
+                        $('.rule-category, .q-category').each(function() {
+                            var $sel = $(this);
+                            var oldVal = $sel.val();
+                            $sel.html(currentCategoryOptions);
+                            $sel.val(oldVal); // try to keep selected if exists
+                        });
+                    });
+                }
+
+                if(isWavey) {
+                    $('.wave-container').show();
+                    $('#blueprintSection').show();
+                    $('#totalQuestionsWrapper').show();
+                    $('#passGradeWrapper').show();
+                    $.getJSON('/Admin/GetWaves', function(waves) {
+                        $('#WaveId').empty().append('<option value="">-- SELECT TARGET BATCH --</option>');
+                        if(waves && waves.length > 0) {
+                            var uw = {};
+                            waves.forEach(w => {
+                                if (w.waveName && !uw[w.id]) {
+                                    uw[w.id] = true;
+                                    $('#WaveId').append('<option value="' + w.id + '">' + w.waveName.toUpperCase() + '</option>');
+                                }
+                            });
+                        }
+                    });
+                } else if (typeId && typeId != '0') {
+                    $('.wave-container').hide();
+                    $('#blueprintSection').show();
+                    $('#totalQuestionsWrapper').show();
+                    $('#passGradeWrapper').hide();
+                } else {
+                    $('.wave-container').hide();
+                    $('#blueprintSection').hide();
+                    $('#totalQuestionsWrapper').hide();
+                    $('#passGradeWrapper').hide();
+                }
+                updateTotalQuestions();
+            });
+
+            var defaultType = '@(ViewBag.DefaultType ?? "")';
+            if (defaultType === 'wave') {
+                $('#ExamTypeId option').filter(function() {
+                    return $(this).attr('data-type-name') && $(this).attr('data-type-name').toLowerCase().includes('wave');
+                }).first().prop('selected', true);
+                $('#ExamTypeId').trigger('change');
+            } else if (defaultType === 'weekly') {
+                $('#ExamTypeId option').filter(function() {
+                    return $(this).val() !== "" && (!$(this).attr('data-type-name') || !$(this).attr('data-type-name').toLowerCase().includes('wave'));
+                }).first().prop('selected', true);
+                $('#ExamTypeId').trigger('change');
+            }
+
+            async function ensureDraft(isFinal) {
+                if (currentExamId && currentExamId > 0) return true;
+                const title = $('input[name="Title"]').val();
+                if(!title) {
+                    if(!isFinal) Swal.fire('Missing Details', 'Please complete the Basic Configuration (Title) before adding pieces.', 'info');
+                    return false;
+                }
+                try {
+                    const fd = new FormData($('#examForm')[0]);
+                    const res = await fetch('@Url.Action("CreateDraft", "Exams")', {
+                        method: 'POST', body: fd
+                    }).then(r => r.json());
+                    if (res.success) {
+                        currentExamId = res.examId;
+                        return true;
+                    }
+                } catch(e) {}
+                return false;
+            }
+
+            function showAutosave() {
+                Swal.fire({ toast: true, position: 'bottom-end', icon: 'success', title: 'Autosaved to Draft', showConfirmButton: false, timer: 1500 });
+            }
+
+            function createRule(idx) {
+                return `
+                <div class="rule-row grid grid-cols-1 md:grid-cols-6 gap-3 bg-white dark:bg-slate-900 border border-indigo-100 dark:border-indigo-900/30 p-4 rounded-2xl">
+                    <div class="col-span-1 md:col-span-2">
+                        <label class="block text-[8px] font-black uppercase text-indigo-400 mb-1">Injected Category</label>
+                        <select name="GenerationRules[${idx}].CategoryId" required class="rule-category w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-bold outline-none">
+                             ${currentCategoryOptions}
+                        </select>
+                    </div>
+                    <div class="col-span-1 md:col-span-1">
+                        <label class="block text-[8px] font-black uppercase text-indigo-400 mb-1">Lecture/Topic</label>
+                        <select name="GenerationRules[${idx}].TopicId" class="rule-topic w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-bold outline-none">
+                             <option value="0">-- ALL TOPICS --</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1">
+                        <label class="block text-[8px] font-black uppercase text-indigo-400 mb-1">Apply To</label>
+                        <select name="GenerationRules[${idx}].TargetRole" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-bold outline-none">
+                             <option value="All">ALL ROLES</option>
+                             <option value="Pharmacist">PHARMACISTS ONLY</option>
+                             <option value="Assistant">ASSISTANTS ONLY</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[8px] font-black uppercase text-emerald-500 mb-1">Easy</label>
+                        <input type="number" name="GenerationRules[${idx}].EasyCount" value="0" min="0" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-bold" />
+                    </div>
+                    <div>
+                        <label class="block text-[8px] font-black uppercase text-amber-500 mb-1">Mid</label>
+                        <input type="number" name="GenerationRules[${idx}].MediumCount" value="0" min="0" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-bold" />
+                    </div>
+                    <div class="relative">
+                        <label class="block text-[8px] font-black uppercase text-rose-500 mb-1">Hard</label>
+                        <input type="number" name="GenerationRules[${idx}].HardCount" value="0" min="0" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-bold" />
+                        <button type="button" class="remove-rule absolute -right-2 -top-2 w-5 h-5 bg-rose-500 text-white rounded-full flex items-center justify-center"><i class="fas fa-times text-[10px]"></i></button>
+                    </div>
+                </div>`;
+            }
+
+            function createChoice(qIdx, cIdx) {
+                return `
+                <div class="choice-row grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 mb-2">
+                    <input type="hidden" name="Questions[${qIdx}].Choices[${cIdx}].ChoiceId" class="choice-db-id" value="0" />
+                    <input type="checkbox" name="Questions[${qIdx}].Choices[${cIdx}].IsCorrect" value="true" class="w-5 h-5 text-brand-600 rounded" />
+                    <input type="text" name="Questions[${qIdx}].Choices[${cIdx}].ChoiceText" class="choice-input w-full bg-transparent outline-none text-sm font-bold dark:text-white" placeholder="Answer option text..." />
+                    <button type="button" class="save-choice text-brand-500 hover:scale-110 transition-transform"><i class="fas fa-check"></i></button>
+                    <button type="button" class="remove-choice text-rose-500 hover:scale-110 transition-transform px-2"><i class="fas fa-trash"></i></button>
+                </div>`;
+            }
+
+            function createQ(idx) {
+                return `
+                <div class="question-panel bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 relative" data-qidx="${idx}">
+                    <input type="hidden" name="Questions[${idx}].QuestionId" class="q-db-id" value="0" />
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="text-xs font-black text-brand-500 uppercase">Q${idx+1}</h4>
+                        <button type="button" class="remove-question text-rose-500 text-xs font-bold"><i class="fas fa-trash mr-1"></i> Remove</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <div class="md:col-span-2">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Question Text</label>
+                            <input type="text" name="Questions[${idx}].QuestionText" class="q-text block w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold dark:text-white outline-none focus:border-brand-500" />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Category</label>
+                            <select name="Questions[${idx}].QuestionTypeId" class="q-category block w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-brand-500">
+                                ${currentCategoryOptions}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Topic</label>
+                            <select name="Questions[${idx}].TopicId" class="q-topic block w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-brand-500">
+                                <option value="0">-- ALL TOPICS --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Difficulty</label>
+                            <select name="Questions[${idx}].Difficulty" class="q-diff block w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-brand-500">
+                                <option value="1">EASY</option>
+                                <option value="2">MEDIUM</option>
+                                <option value="3">HARD</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Points</label>
+                            <input type="number" name="Questions[${idx}].Points" value="1" class="q-pts block w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-brand-500" />
+                        </div>
+                        <div class="flex items-end">
+                            <button type="button" class="save-individual-q bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 w-full py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all"><i class="fas fa-save"></i> Save Question to DB</button>
+                        </div>
+                    </div>
+                    <div class="choice-save-area mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                        <h5 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Answers</h5>
+                        <div class="choices-container">
+                            ${createChoice(idx, 0)}
+                            ${createChoice(idx, 1)}
+                            ${createChoice(idx, 2)}
+                            ${createChoice(idx, 3)}
+                        </div>
+                        <button type="button" class="add-choice text-brand-600 dark:text-brand-400 text-[10px] font-black uppercase mt-2 w-full text-center py-2 bg-brand-50 dark:bg-brand-900/20 rounded-xl">+ Add Choice</button>
+                    </div>
+                </div>`;
+            }
+
+            $('#addRuleBtn').on('click', function() { $('#rulesContainer').append(createRule(rIdx++)); });
+            $('#addQuestionBtn').on('click', function() { $('#questionsContainer').append(createQ(qIdx++)); });
+
+            $('#cloneRulesBtn').on('click', async function() {
+                try {
+                    // Fetch list of exams
+                    const exams = await $.getJSON('/Admin/GetFilteredExams');
+                    if (!exams || exams.length === 0) {
+                        Swal.fire('No Exams Found', 'There are no recent exams to clone from.', 'info');
+                        return;
+                    }
+                    
+                    let optionsHtml = '<option value="">-- Select Exam to Clone --</option>';
+                    exams.forEach(e => {
+                        optionsHtml += `<option value="${e.id}">${e.title}</option>`;
+                    });
+
+                    const { value: selectedExamId } = await Swal.fire({
+                        title: '<h3 class="text-xl font-black">CLONE RULES</h3>',
+                        html: `
+                            <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-4">Select a previous exam to copy its injection blueprint.</p>
+                            <select id="swal-exam-select" class="w-full border p-4 rounded-2xl text-sm font-bold bg-slate-50 dark:bg-slate-900 dark:text-white dark:border-slate-800 outline-none focus:border-brand-500">
+                                ${optionsHtml}
+                            </select>
+                        `,
+                        focusConfirm: false,
+                        showCancelButton: true,
+                        confirmButtonText: 'Clone Blueprint',
+                        confirmButtonColor: '#4f46e5',
+                        preConfirm: () => {
+                            const val = document.getElementById('swal-exam-select').value;
+                            if (!val) { Swal.showValidationMessage('Please select an exam first.'); }
+                            return val;
+                        }
+                    });
+
+                    if (selectedExamId) {
+                        Swal.fire({ title: 'Cloning...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                        const rules = await $.getJSON('/Admin/GetGenerationRules?examId=' + selectedExamId);
+                        if (rules && rules.length > 0) {
+                            $('#rulesContainer').empty();
+                            rIdx = 0;
+                            for (const rule of rules) {
+                                const newHtml = createRule(rIdx);
+                                $('#rulesContainer').append(newHtml);
+                                const $row = $('#rulesContainer .rule-row').last();
+                                
+                                const catId = rule.categoryId || rule.CategoryId;
+                                const catName = rule.categoryName || rule.CategoryName || ('Category ' + catId);
+                                const topicId = rule.topicId || rule.TopicId;
+                                const targetRole = rule.targetRole || rule.TargetRole || 'All';
+                                const easyCount = rule.easyCount || rule.EasyCount || 0;
+                                const mediumCount = rule.mediumCount || rule.MediumCount || 0;
+                                const hardCount = rule.hardCount || rule.HardCount || 0;
+
+                                // If the cloned category doesn't exist in the current dropdown (e.g. crossing Exam Types), append it so it's not blank
+                                if ($row.find(`.rule-category option[value="${catId}"]`).length === 0) {
+                                    $row.find('.rule-category').append(`<option value="${catId}">${catName.toUpperCase()}</option>`);
+                                }
+
+                                $row.find('.rule-category').val(catId);
+                                $row.find('select[name$=".TargetRole"]').val(targetRole);
+                                $row.find('input[name$=".EasyCount"]').val(easyCount);
+                                $row.find('input[name$=".MediumCount"]').val(mediumCount);
+                                $row.find('input[name$=".HardCount"]').val(hardCount);
+
+                                await fetchTopics(catId, $row.find('.rule-topic'), topicId);
+                                rIdx++;
+                            }
+                            updateTotalQuestions();
+                            Swal.fire({ toast: true, position: 'bottom-end', icon: 'success', title: 'Blueprint Cloned!', showConfirmButton: false, timer: 2000 });
+                        } else {
+                            Swal.fire('No Rules', 'The selected exam has no smart injection rules.', 'info');
+                        }
+                    }
+                } catch(e) {
+                    console.error(e);
+                    Swal.fire('Error', 'Failed to clone rules.', 'error');
+                }
+            });
+
+            async function fetchTopics(catId, $target, selectedTopicId = null) {
+                if (!catId || catId == '0') {
+                    $target.empty().append('<option value="0">-- ALL TOPICS / GENERAL --</option>');
+                    return;
+                }
+                // THIS IS THE FIX THE USER REQUESTED PREVIOUSLY!
+                const url = '@Url.Action("GetTopicsByCategoryId", "Admin")' + '?categoryId=' + catId;
+                try {
+                    const topics = await $.getJSON(url);
+                    $target.empty().append('<option value="0">-- ALL TOPICS / GENERAL --</option>');
+                    topics.forEach(t => {
+                        const tId = t.id !== undefined ? t.id : t.Id;
+                        const tName = t.topicName || t.TopicName || "Unnamed Topic";
+                        $target.append($('<option>').val(tId).text(tName.toUpperCase()));
+                    });
+                    if (selectedTopicId) {
+                        $target.val(selectedTopicId);
+                    }
+                } catch (e) { console.error('Fetch topics failed', e); }
+            }
+
+            $(document).on('change', '.rule-category', function() {
+                const $p = $(this).closest('.rule-row');
+                fetchTopics($(this).val(), $p.find('.rule-topic'));
+            });
+
+            $(document).on('change', '.q-category', function() {
+                const $p = $(this).closest('.question-panel');
+                fetchTopics($(this).val(), $p.find('.q-topic'));
+            });
+
+            $('#examForm').on('submit', async function(e) {
+                e.preventDefault();
+                await ensureDraft(true);
+                this.submit();
+            });
+
+            $(document).on('click', '.save-individual-q', async function() { 
+                const $btn = $(this);
+                const $p = $btn.closest('.question-panel');
+                if (!(await ensureDraft(false))) return;
+
+                const qId = $p.find('.q-db-id').val();
+                const qText = $p.find('.q-text').val();
+                const qCat = $p.find('.q-category').val();
+                const qTopic = $p.find('.q-topic').val();
+                const qDiff = $p.find('.q-diff').val();
+                const qPts = $p.find('.q-pts').val();
+
+                if (!qText) return;
+
+                $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+                
+                try {
+                    let r;
+                    if (!qId || qId == "0") {
+                        r = await $.post(addQUrl, { 
+                            examId: currentExamId, questionText: qText, points: qPts, 
+                            QuestionTypeId: qCat, topicId: qTopic, difficulty: qDiff,
+                            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                        });
+                        if (r.success) $p.find('.q-db-id').val(r.questionId);
+                    } else {
+                        r = await $.post(updateQUrl, {
+                            examId: currentExamId, questionId: qId, questionText: qText, points: qPts, 
+                            difficulty: qDiff, categoryId: qCat, topicId: qTopic,
+                            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                        });
+                    }
+                    if (r.success) {
+                        showAutosave();
+                        $p.find('.choice-save-area').slideDown();
+                    }
+                } catch(e) { 
+                } finally {
+                    $btn.prop('disabled', false).html('<i class="fas fa-save"></i> Save Question to DB');
+                }
+            });
+
+            $(document).on('click', '.save-choice', async function() {
+                const $btn = $(this);
+                if ($btn.prop('disabled')) return;
+                const $row = $btn.closest('.choice-row');
+                const $p = $row.closest('.question-panel');
+                const qId = $p.find('.q-db-id').val();
+                const choiceId = $row.find('.choice-db-id').val();
+                if (!qId || qId == "0") return;
+
+                const txt = $row.find('.choice-input').val();
+                const isCorrect = $row.find('input[type="checkbox"]').is(':checked');
+                if (!txt) return;
+
+                $btn.prop('disabled', true);
+                try {
+                    let r;
+                    if (!choiceId || choiceId == "0") {
+                        r = await $.post(addCUrl, { 
+                            questionId: qId, choiceText: txt, isCorrect: isCorrect,
+                            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                        });
+                        if (r.success) $row.find('.choice-db-id').val(r.choiceId);
+                    } else {
+                        r = await $.post(updateCUrl, {
+                            choiceId: choiceId, questionId: qId, choiceText: txt, isCorrect: isCorrect,
+                            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                        });
+                    }
+                    if (r.success) {
+                         showAutosave();
+                         $btn.find('i').removeClass('fa-check text-slate-300').addClass('fa-check-circle text-emerald-500');
+                    }
+                } catch(e) {}
+                finally {
+                    $btn.prop('disabled', false);
+                }
+            });
+
+            $(document).on('click', '.add-choice', function() {
+                const $p = $(this).closest('.question-panel');
+                const qIdx = $p.data('qidx');
+                const cIdx = $p.find('.choice-row').length;
+                $p.find('.choices-container').append(createChoice(qIdx, cIdx));
+            });
+
+            $(document).on('click', '.remove-choice', function() { $(this).closest('.choice-row').remove(); });
+             function updateTotalQuestions() {
+                let totalPharma = 0;
+                let totalAssist = 0;
+
+                $('#rulesContainer .rule-row').each(function() {
+                    const $row = $(this);
+                    const easy = parseInt($row.find('input[name$="EasyCount"]').val()) || 0;
+                    const med = parseInt($row.find('input[name$="MediumCount"]').val()) || 0;
+                    const hard = parseInt($row.find('input[name$="HardCount"]').val()) || 0;
+                    const count = (easy + med + hard);
+                    const target = ($row.find('select[name$=".TargetRole"]').val() || "").toLowerCase();
+
+                    if (target === "all") {
+                        totalPharma += count;
+                        totalAssist += count;
+                    } else if (target === "pharmacist") {
+                        totalPharma += count;
+                    } else if (target === "assistant") {
+                        totalAssist += count;
+                    }
+                });
+
+                $('#sumPharmacist').text(totalPharma);
+                $('#sumAssistant').text(totalAssist);
+
+                const opt = $('#ExamTypeId').find(':selected');
+                const typeName = (opt.attr('data-type-name') || opt.data('type-name') || '').toLowerCase();
+                const isWavey = (opt.val() == '2' || typeName.includes('wave'));
+                const multiplier = isWavey ? 2 : 1;
+
+                $('#ptsPharmacist').text(totalPharma * multiplier);
+                $('#ptsAssistant').text(totalAssist * multiplier);
+                
+                const maxTotal = Math.max(totalPharma, totalAssist);
+                $('#displayTotal').text(maxTotal);
+                $('#TotalQuestionsToShow').val(maxTotal);
+            }
+            updateTotalQuestions();
+
+            $(document).on('input', 'input[name$="Count"]', function() {
+                updateTotalQuestions();
+            });
+
+            $(document).on('change', 'select[name$=".TargetRole"]', function() {
+                updateTotalQuestions();
+            });
+            $(document).on('click', '.remove-rule', function() { $(this).closest('.rule-row').remove(); });
+            $(document).on('click', '.remove-question', function() { $(this).closest('.question-panel').remove(); });
+        });
+    </script>
+}

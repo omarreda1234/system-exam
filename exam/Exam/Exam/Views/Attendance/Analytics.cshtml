@@ -1,0 +1,316 @@
+﻿@using System.Text.Json
+@{
+    ViewData["Title"] = "Attendance Analytics Dashboard";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var stats = ViewBag.Stats;
+    var waveStats = ViewBag.WaveStats;
+    var branchStats = ViewBag.BranchStats;
+    var trendStats = ViewBag.TrendStats;
+
+    double globalRate = stats.TotalRecords > 0 ? (double)stats.PresentCount * 100 / stats.TotalRecords : 0;
+
+    var attendanceLog = (IEnumerable<dynamic>)ViewBag.AttendanceLog;
+    var allWaves = ViewBag.AllWaves as List<string> ?? new List<string>();
+    var allCompanies = ViewBag.AllCompanies as List<string> ?? new List<string>();
+
+    var groupSessionsMap = attendanceLog
+        .GroupBy(l => (string)l.GroupName)
+        .ToDictionary(
+            g => g.Key, 
+            g => g.Select(l => (string)l.SessionName).Distinct().OrderBy(s => s).ToList()
+        );
+    var groupSessionsJson = JsonSerializer.Serialize(groupSessionsMap);
+}
+
+<div class="min-h-screen pb-20">
+    <!-- Hero Header -->
+    <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 pt-24 pb-12 mb-8">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                    <h1 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Attendance Analytics</h1>
+                    <p class="text-sm font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">Visual Performance & Participation Insights</p>
+                </div>
+                <div class="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-[24px] border border-slate-100 dark:border-slate-800/50">
+                    <div class="text-right">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Participation</p>
+                        <p class="text-2xl font-black text-brand-600 dark:text-brand-400">@globalRate.ToString("0.0")%</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-2xl bg-brand-500/10 flex items-center justify-center text-brand-600">
+                        <i class="fas fa-chart-pie text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-6">
+        <!-- Quick Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Sessions</p>
+                <p class="text-3xl font-black text-slate-900 dark:text-white">@stats.TotalSessions</p>
+            </div>
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Checks</p>
+                <p class="text-3xl font-black text-slate-900 dark:text-white">@stats.TotalRecords</p>
+            </div>
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm border-l-4 border-l-emerald-500">
+                <p class="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Total Present</p>
+                <p class="text-3xl font-black text-slate-900 dark:text-white">@stats.PresentCount</p>
+            </div>
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm border-l-4 border-l-rose-500">
+                <p class="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">Total Absent</p>
+                <p class="text-3xl font-black text-slate-900 dark:text-white">@stats.AbsentCount</p>
+            </div>
+        </div>
+
+
+        <!-- Detailed Attendance Log Section -->
+        <div class="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm mt-12">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                <div>
+                    <h3 class="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Detailed Attendance Log / سجل الحضور بالتفصيل</h3>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Live tracking and export for Waves & Companies</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-4">
+                    <!-- Search Input -->
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="logSearch" placeholder="Search by name or code..." 
+                               class="pl-10 pr-4 py-2.5 w-64 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white" />
+                    </div>
+
+                    <!-- Type Filter -->
+                    <select id="typeFilter" class="px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white">
+                        <option value="ALL">All Types / جميع الأنواع</option>
+                        <option value="Wave">Waves Only / الدفعات فقط</option>
+                        <option value="Company">Companies Only / الشركات فقط</option>
+                    </select>
+
+                    <!-- Wave Filter (Visible only when Type is Wave) -->
+                    <select id="waveFilter" class="hidden px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white">
+                        <option value="ALL">All Waves / جميع الدفعات</option>
+                        @foreach (var w in allWaves)
+                        {
+                            <option value="@w">@w</option>
+                        }
+                    </select>
+
+                    <!-- Company Filter (Visible only when Type is Company) -->
+                    <select id="companyFilter" class="hidden px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white">
+                        <option value="ALL">All Companies / جميع الشركات</option>
+                        @foreach (var c in allCompanies)
+                        {
+                            <option value="@c">@c</option>
+                        }
+                    </select>
+
+                    <!-- Session Filter -->
+                    <select id="sessionFilter" class="hidden px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white">
+                        <option value="ALL">⭐ All Sessions / جميع المحاضرات</option>
+                    </select>
+
+                    <!-- Status Filter -->
+                    <select id="statusFilter" class="px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white">
+                        <option value="ALL">All Status / جميع الحالات</option>
+                        <option value="Present">Present / حضور</option>
+                        <option value="Absent">Absent / غياب</option>
+                    </select>
+
+                    <!-- Export to Excel Button -->
+                    <a href="@Url.Action("ExportAllAttendanceToExcel", "Attendance")" 
+                       class="flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/30 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all">
+                        <i class="fas fa-file-excel text-sm"></i>
+                        <span>Export Excel / تصدير إكسيل</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table id="attendanceLogTable" class="datatable saas-table w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-100 dark:border-slate-800 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            <th class="py-4 px-2">Trainee / المتدرب</th>
+                            <th class="py-4 px-2">Code / الكود</th>
+                            <th class="py-4 px-2">Type / النوع</th>
+                            <th class="py-4 px-2">Group/Company / المجموعة/الشركة</th>
+                            <th class="py-4 px-2">Session / المحاضرة</th>
+                            <th class="py-4 px-2">Date / التاريخ</th>
+                            <th class="py-4 px-2 text-center">Status / الحالة</th>
+                            <th class="py-4 px-2 text-center">Check-In / الحضور</th>
+                            <th class="py-4 px-2 text-center">Check-Out / الانصراف</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/50">
+                        @foreach (var log in ViewBag.AttendanceLog)
+                        {
+                            var isPresentVal = log.IsPresent == true;
+                            var statusColor = isPresentVal ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30" 
+                                                           : "bg-rose-50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-400 border-rose-100 dark:border-rose-900/30";
+                            
+                            var fullNameStr = log.FullName?.ToString() ?? "";
+                            var userCodeStr = log.UserCode?.ToString() ?? "";
+                            var sessionTypeStr = log.SessionType?.ToString() ?? "";
+                            var groupNameStr = log.GroupName?.ToString() ?? "";
+                            var sessionNameStr = log.SessionName?.ToString() ?? "";
+                            var sessionDateStr = "";
+                            if (log.SessionDate != null)
+                            {
+                                if (log.SessionDate is DateTime dt)
+                                {
+                                    sessionDateStr = dt.ToString("yyyy-MM-dd");
+                                }
+                                else
+                                {
+                                    sessionDateStr = log.SessionDate.ToString("yyyy-MM-dd");
+                                }
+                            }
+                            var checkInStr = log.CheckInTime?.ToString() ?? "--:--";
+                            var checkOutStr = log.CheckOutTime?.ToString() ?? "--:--";
+
+                            <tr class="log-row hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors text-xs font-bold text-slate-700 dark:text-slate-300"
+                                data-name="@fullNameStr.ToLower()"
+                                data-code="@userCodeStr.ToLower()"
+                                data-type="@(sessionTypeStr.Contains("Company") ? "Company" : "Wave")"
+                                data-status="@(isPresentVal ? "Present" : "Absent")"
+                                data-group="@groupNameStr"
+                                data-session="@sessionNameStr">
+                                
+                                <td class="py-4 px-2 font-black text-slate-900 dark:text-white">@fullNameStr</td>
+                                <td class="py-4 px-2 font-mono">@userCodeStr</td>
+                                <td class="py-4 px-2">
+                                    <span class="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border @(sessionTypeStr.Contains("Company") ? "bg-violet-50 text-violet-600 border-violet-100" : "bg-blue-50 text-blue-600 border-blue-100")">
+                                        @sessionTypeStr
+                                    </span>
+                                </td>
+                                <td class="py-4 px-2 font-medium text-slate-500">@groupNameStr</td>
+                                <td class="py-4 px-2 text-slate-600 dark:text-slate-400">@sessionNameStr</td>
+                                <td class="py-4 px-2 text-slate-500 font-mono">@sessionDateStr</td>
+                                <td class="py-4 px-2 text-center">
+                                    <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase border @statusColor">
+                                        @(isPresentVal ? "Present / حاضر" : "Absent / غائب")
+                                    </span>
+                                </td>
+                                <td class="py-4 px-2 text-center font-mono font-bold text-slate-600 dark:text-slate-400">@checkInStr</td>
+                                <td class="py-4 px-2 text-center font-mono font-bold text-slate-600 dark:text-slate-400">@checkOutStr</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+
+        // 4. Detailed Log filtering with DataTable integration (solving excessive scrolling)
+        $(document).ready(function() {
+            const table = $('#attendanceLogTable').DataTable({
+                destroy: true, // override automatic initialization cleanly
+                deferRender: true,
+                processing: true,
+                autoWidth: false,
+                orderClasses: false,
+                pageLength: 10,
+                lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
+                dom: '<"flex flex-col sm:flex-row justify-between items-center mb-4"l>rt<"flex flex-col sm:flex-row justify-between items-center mt-4"ip>',
+                language: {
+                    processing: '<div class="flex items-center gap-2 text-brand-600 font-bold"><i class="fas fa-circle-notch animate-spin text-lg"></i> Loading Matrix...</div>'
+                }
+            });
+
+            // Dynamically sync and populate subfilters
+            const groupSessions = @Html.Raw(groupSessionsJson);
+
+            function handleTypeChange() {
+                const type = $('#typeFilter').val();
+                if (type === 'Wave') {
+                    $('#waveFilter').removeClass('hidden');
+                    $('#companyFilter').addClass('hidden').val('ALL');
+                    handleGroupChange('waveFilter');
+                } else if (type === 'Company') {
+                    $('#companyFilter').removeClass('hidden');
+                    $('#waveFilter').addClass('hidden').val('ALL');
+                    handleGroupChange('companyFilter');
+                } else {
+                    $('#waveFilter').addClass('hidden').val('ALL');
+                    $('#companyFilter').addClass('hidden').val('ALL');
+                    $('#sessionFilter').addClass('hidden').val('ALL');
+                }
+                table.draw();
+            }
+
+            function handleGroupChange(filterId) {
+                const groupVal = $('#' + filterId).val();
+                const sessionSelect = $('#sessionFilter');
+
+                if (!groupVal || groupVal === 'ALL') {
+                    sessionSelect.addClass('hidden').val('ALL');
+                } else {
+                    // Populate sessions
+                    const sessions = groupSessions[groupVal] || [];
+                    sessionSelect.empty();
+                    sessionSelect.append('<option value="ALL">⭐ All Sessions / جميع المحاضرات</option>');
+                    sessions.forEach(s => {
+                        sessionSelect.append(`<option value="${s}">${s}</option>`);
+                    });
+                    sessionSelect.removeClass('hidden').val('ALL');
+                }
+                table.draw();
+            }
+
+            $('#typeFilter').on('change', handleTypeChange);
+            $('#waveFilter').on('change', function() { handleGroupChange('waveFilter'); });
+            $('#companyFilter').on('change', function() { handleGroupChange('companyFilter'); });
+            $('#sessionFilter').on('change', function() { table.draw(); });
+            $('#statusFilter').on('change', function() { table.draw(); });
+            $('#logSearch').on('input', function() { table.draw(); });
+
+            // Push a custom search filter to DataTable API
+            $.fn.dataTable.ext.search.push(
+                function(settings, data, dataIndex) {
+                    if (settings.nTable.id !== 'attendanceLogTable') return true;
+
+                    const row = table.row(dataIndex).node();
+                    const query = $('#logSearch').val().toLowerCase().trim();
+                    const type = $('#typeFilter').val();
+                    const status = $('#statusFilter').val();
+                    const waveVal = $('#waveFilter').val();
+                    const companyVal = $('#companyFilter').val();
+                    const sessionVal = $('#sessionFilter').val();
+
+                    const name = row.getAttribute('data-name') || '';
+                    const code = row.getAttribute('data-code') || '';
+                    const rowType = row.getAttribute('data-type') || '';
+                    const rowStatus = row.getAttribute('data-status') || '';
+                    const rowGroup = row.getAttribute('data-group') || '';
+                    const rowSession = row.getAttribute('data-session') || '';
+
+                    const matchesQuery = !query || name.includes(query) || code.includes(query);
+                    const matchesType = type === 'ALL' || rowType === type;
+                    const matchesStatus = status === 'ALL' || rowStatus === status;
+
+                    // Group (Wave/Company) match
+                    let matchesGroup = true;
+                    if (type === 'Wave' && waveVal !== 'ALL') {
+                        matchesGroup = (rowGroup === waveVal);
+                    } else if (type === 'Company' && companyVal !== 'ALL') {
+                        matchesGroup = (rowGroup === companyVal);
+                    }
+
+                    // Session match
+                    let matchesSession = true;
+                    if (sessionVal !== 'ALL' && $('#sessionFilter').is(':visible')) {
+                        matchesSession = (rowSession === sessionVal);
+                    }
+
+                    return matchesQuery && matchesType && matchesStatus && matchesGroup && matchesSession;
+                }
+            );
+        });
+    </script>
+}
+

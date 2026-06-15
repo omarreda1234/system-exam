@@ -1,0 +1,993 @@
+@model IEnumerable<Exam.DTOs.adminExamDto>
+@{
+    ViewData["Title"] = "Exam Control Center";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var examTypes = ViewBag.ExamTypes as IEnumerable<Exam.DTOs.ExamTypeDto> ?? new List<Exam.DTOs.ExamTypeDto>();
+}
+
+<!-- Filters Area -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div>
+            <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Search & Filter</h2>
+            <p class="text-xl font-bold">Exam Management Matrix</p>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-4">
+            @if (User.IsInRole("Admin"))
+            {
+                <button onclick="window.parent.openNewTab('Create Protocol', 'fas fa-plus', '@Url.Action("Create", "Exams", new { type = "weekly" })');" class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2 mr-4">
+                    <i class="fas fa-plus"></i>
+                    <span>Create Weekly Exam</span>
+                </button>
+            }
+            <div class="space-y-2">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Classification Hub</label>
+                <select id="examTypeFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3 text-sm font-bold focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all min-w-[220px]">
+                    <option value="0">ALL WEEKLY EXAM TYPES</option>
+                    @foreach (var t in examTypes)
+                    {
+                        <option value="@t.Id">@t.TypeName.ToUpper()</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden File Input for Excel Import -->
+<input type="file" id="excelQuestionInput" accept=".xlsx, .xls" style="display:none;" />
+
+<!-- Table Area -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+    <div class="overflow-x-auto">
+        <table id="examsTable" class="saas-table">
+            <thead>
+                <tr>
+                    <th>Exam Title</th>
+                    <th>Category</th>
+                    <th>Batch/Wave</th>
+                    <th>Availability</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-right px-8">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="examsTbody">
+                @foreach (var exam in Model)
+                {
+                    <tr>
+                        <td>
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400">
+                                    <i class="fas fa-file-code"></i>
+                                </div>
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-slate-900 dark:text-white">@exam.Title</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-600">ID: @exam.Id.ToString("D4")</span>
+                                        @if (exam.Stats != null && exam.Stats.TotalQuestions > 0)
+                                        {
+                                            <button type="button" class="show-stats-btn text-[9px] font-black bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 px-2 py-0.5 rounded-md hover:bg-brand-600 hover:text-white transition-all" 
+                                                    data-stats='@Json.Serialize(exam.Stats)'>
+                                                <i class="fas fa-layer-group mr-1"></i> @exam.Stats.TotalQuestions Qs
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg text-[10px] font-bold uppercase tracking-wider">@exam.ExamType</span>
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(exam.ExamType) && exam.ExamType.ToLower().Contains("wave"))
+                            {
+                                <span class="text-xs font-bold text-brand-600 dark:text-brand-400 uppercase">@(string.IsNullOrEmpty(exam.WaveName) ? "GLOBAL" : exam.WaveName)</span>
+                            }
+                            else
+                            {
+                                <span class="text-xs font-bold text-slate-400 uppercase">-</span>
+                            }
+                        </td>
+                        <td>
+                            <div class="flex flex-col">
+                                <span class="text-xs font-bold">@exam.StartTime.ToString("MMM d, HH:mm")</span>
+                                <span class="text-[10px] font-bold text-slate-400">@exam.EndTime.ToString("MMM d, HH:mm")</span>
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            @if (exam.IsActive)
+                            {
+                                <span class="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-emerald-50 dark:bg-emerald-500/10 rounded-full">
+                                    <i class="fas fa-circle text-[6px] animate-pulse"></i>
+                                    ACTIVE
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-slate-100 dark:bg-slate-800/50 rounded-full">
+                                    <i class="fas fa-circle text-[6px]"></i>
+                                    INACTIVE
+                                </span>
+                            }
+                        </td>
+                        <td class="text-right px-8">
+                            <div class="flex items-center justify-end gap-2">
+                                <a href="@Url.Action("Edit", "Exams", new { id = exam.Id })" class="p-2.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl" title="Configure">
+                                    <i class="fas fa-cog"></i>
+                                </a>
+                                <button class="p-2.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl import-questions-btn" data-examid="@exam.Id" title="Import Questions (Excel)">
+                                    <i class="fas fa-file-excel"></i>
+                                </button>
+                                <button class="p-2.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl assign-btn" data-examid="@exam.Id" data-isactive="@exam.IsActive.ToString().ToLower()" title="Assign Students">
+                                    <i class="fas fa-users"></i>
+                                </button>
+                                <button class="p-2.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl clone-btn" data-examid="@exam.Id" title="Clone">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                <button class="p-2.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl delete-btn"
+                                        data-examid="@exam.Id"
+                                        data-examtitle="@exam.Title"
+                                        title="Delete Exam">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+
+
+@section Scripts {
+    <script>
+        $(function () {
+            const examsUrl = '@Url.Action("GetWeeklyExamsForFilter", "Admin")';
+            const editExamBaseUrl = '@Url.Action("Edit", "Exams")';
+
+            function escapeHtml(str) { return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+            function formatDate(value) { if (!value) return ''; let d = new Date(value); return d.toLocaleString(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+
+            function showStatus(msg, isError = false) {
+                const toastId = 'custom-toast-' + Date.now();
+                const bg = isError ? '#ef4444' : '#10b981';
+                const toastHtml = `
+                    <div id="${toastId}" style="position:fixed; top:20px; right:20px; background:${bg}; color:white; padding:12px 24px; border-radius:12px; z-index:999999; font-weight:bold; font-size:13px; box-shadow:0 10px 15px -3px rgba(0,0,0,0.1); animation: slideIn 0.3s ease-out; display:flex; align-items:center; gap:8px;">
+                        <i class="fas ${isError ? 'fa-exclamation-circle' : 'fa-check-circle'}"></i>
+                        <span>${msg}</span>
+                    </div>
+                    <style>
+                        @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+                    </style>
+                `;
+                $('body').append(toastHtml);
+                setTimeout(() => {
+                    $(`#${toastId}`).fadeOut(300, function() { $(this).remove(); });
+                }, 3000);
+            }
+
+            function renderExamRows(exams) {
+                if (!exams || exams.length === 0) return '';
+                return exams.map(exam => {
+                    const id = exam.id ?? exam.Id;
+                    const isActive = exam.isActive ?? exam.IsActive;
+                    return `
+                        <tr>
+                            <td>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"><i class="fas fa-file-code"></i></div>
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-slate-900 dark:text-white">${escapeHtml(exam.title ?? exam.Title)}</span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-[10px] font-bold text-slate-400 dark:text-slate-600">ID: ${String(id).padStart(4, '0')}</span>
+                                            ${exam.stats && exam.stats.totalQuestions > 0 ? `
+                                                <button type="button" class="show-stats-btn text-[9px] font-black bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 px-2 py-0.5 rounded-md hover:bg-brand-600 hover:text-white transition-all" 
+                                                        data-stats='${JSON.stringify(exam.stats)}'>
+                                                    <i class="fas fa-layer-group mr-1"></i> ${exam.stats.totalQuestions} Qs
+                                                </button>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td><span class="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg text-[10px] font-bold uppercase tracking-wider">${escapeHtml(exam.examType ?? exam.ExamType ?? 'N/A')}</span></td>
+                            <td>
+                                ${ (exam.examType ?? exam.ExamType ?? '').toLowerCase().includes('wave') ? 
+                                    `<span class="text-xs font-bold text-brand-600 dark:text-brand-400 uppercase">${escapeHtml(exam.waveName ?? exam.WaveName ?? 'GLOBAL')}</span>` 
+                                    : `<span class="text-xs font-bold text-slate-400 uppercase">-</span>` 
+                                }
+                            </td>
+                            <td>
+                                <div class="flex flex-col">
+                                    <span class="text-xs font-bold">${formatDate(exam.startTime ?? exam.StartTime)}</span>
+                                    <span class="text-[10px] font-bold text-slate-400">${formatDate(exam.endTime ?? exam.EndTime)}</span>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                ${isActive ? '<span class="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-emerald-50 dark:bg-emerald-500/10 rounded-full"><i class="fas fa-circle text-[6px] animate-pulse"></i>ACTIVE</span>' : '<span class="inline-flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-slate-100 dark:bg-slate-800/50 rounded-full"><i class="fas fa-circle text-[6px]"></i>INACTIVE</span>'}
+                            </td>
+                            <td class="text-right px-8">
+                                <div class="flex items-center justify-end gap-2">
+                                    <a href="${editExamBaseUrl}/${id}" class="p-2.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl"><i class="fas fa-cog"></i></a>
+                                    <button class="p-2.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl import-questions-btn" data-examid="${id}" title="Import Questions (Excel)">
+                                        <i class="fas fa-file-excel"></i>
+                                    </button>
+                                    <button class="p-2.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl assign-btn" 
+                                            data-examid="${id}" 
+                                            data-isactive="${isActive.toString().toLowerCase()}"
+                                            data-wave="${escapeHtml(exam.waveName ?? exam.WaveName ?? '')}">
+                                        <i class="fas fa-user-plus"></i>
+                                    </button>
+                                    <button class="p-2.5 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl clone-btn" data-examid="${id}"><i class="fas fa-copy"></i></button>
+                                    <button class="p-2.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl delete-btn" data-examid="${id}" data-examtitle="${escapeHtml(exam.title ?? exam.Title)}" title="Delete Exam"><i class="fas fa-trash-alt"></i></button>
+                                </div>
+                            </td>
+                        </tr>`;
+                }).join('');
+            }
+
+            let table = $('#examsTable').DataTable({
+                pageLength: 10,
+                deferRender: true,
+                processing: true,
+                orderClasses: false,
+                language: { search: "", searchPlaceholder: "Search exams..." }
+            });
+            $('.dataTables_filter input').addClass('bg-slate-50 border-slate-200 rounded-xl px-4 py-2 text-xs focus:ring-0 outline-none mb-4');
+
+            // Standard Filter Logic
+            $('#examTypeFilter').on('change', async function() {
+                const typeId = parseInt($(this).val());
+                await refreshExams(typeId);
+            });
+                    // منطق حذف الامتحان
+        $(document).on('click', '.delete-btn', function() {
+            const examId = $(this).data('examid');
+            const examTitle = $(this).data('examtitle');
+
+            Swal.fire({
+                title: 'Are you sure?',
+                html: `You are about to delete <br><b class="text-rose-600">${examTitle}</b><br>This action cannot be undone!`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, Delete it!',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    confirmButton: 'bg-rose-600 hover:bg-rose-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({ title: 'Deleting...', didOpen: () => Swal.showLoading() });
+
+                    $.ajax({
+                        url: '/Exams/DeleteExam',
+                        type: 'POST',
+                        data: { examid: examId },
+                        success: function(r) {
+                            if (r.success) {
+                                Swal.fire({ icon: 'success', title: 'Deleted!', text: 'Exam has been removed.', timer: 1500, showConfirmButton: false });
+                                // تحديث الجدول أو الصفحة
+                                setTimeout(() => location.reload(), 1500);
+                            } else {
+                                Swal.fire({ icon: 'error', title: 'Error', text: r.message || 'Could not delete exam.' });
+                            }
+                        },
+                            error: function() {
+                            Swal.fire({ icon: 'error', title: 'Error', text: 'Network request failed.' });
+                        }
+                    });
+                }
+            });
+        });
+
+            $(document).on('click', '.show-stats-btn', function() {
+                const stats = $(this).data('stats');
+                if (!stats) return;
+
+                let html = `<div class="text-left space-y-4 max-h-[400px] overflow-y-auto px-2">`;
+                stats.categories.forEach(cat => {
+                    html += `
+                        <div class="border-b border-slate-100 dark:border-slate-800 pb-3 last:border-0">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">${cat.categoryName}</span>
+                                <span class="bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 text-[10px] font-black px-2 py-0.5 rounded-full">${cat.count} Questions</span>
+                            </div>
+                            <div class="grid grid-cols-1 gap-1 pl-3">
+                                ${cat.topics.map(t => `
+                                    <div class="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 italic">
+                                        <span>• ${t.topicName}</span>
+                                        <span class="font-bold">${t.count}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>`;
+                });
+                html += `</div>`;
+
+                Swal.fire({
+                    title: '<span class="text-sm font-black uppercase tracking-widest text-slate-400">Question Bank Summary</span>',
+                    html: html,
+                    confirmButtonText: 'CLOSE',
+                    customClass: {
+                        popup: 'rounded-[32px] dark:bg-slate-900 border border-slate-200 dark:border-slate-800',
+                        confirmButton: 'bg-slate-900 dark:bg-brand-600 text-white px-8 py-3 rounded-2xl font-bold text-xs'
+                    }
+                });
+            });
+
+            async function refreshExams(tid) {
+                const exams = await $.getJSON(examsUrl, { examTypeId: tid });
+                table.destroy();
+                $('#examsTbody').html(renderExamRows(exams));
+                table = $('#examsTable').DataTable({
+                    pageLength: 10,
+                    deferRender: true,
+                    processing: true,
+                    orderClasses: false,
+                    language: { search: "", searchPlaceholder: "Search exams..." }
+                });
+                $('.dataTables_filter input').addClass('bg-slate-50 border-slate-200 rounded-xl px-4 py-2 text-xs focus:ring-0 outline-none mb-4');
+            }
+
+            // MODAL LOGIC (Simplified)
+            $(document).on('click', '.assign-btn', function() {
+                const selectedExamId = $(this).data('examid');
+                const rowTitle = $(this).closest('tr').find('span.font-bold').first().text();
+                
+                if ($(this).data('isactive').toString() !== 'true') {
+                    Swal.fire({ icon: 'warning', title: 'Exam Inactive', text: 'Please activate the exam before assigning students.' });
+                    return;
+                }
+
+                Swal.fire({ title: 'Fetching Students...', didOpen: () => Swal.showLoading() });
+                
+                $.getJSON(`/Admin/GetEligibleUsersForExam?examId=${selectedExamId}`).done(users => {
+                    
+                    // Filter out users who are already assigned or have successfully completed the exam
+                    const eligibleUsers = users.filter(u => {
+                        const status = u.lastExamStatus || '';
+                        const isPassedOrCompleted = status && (status.toLowerCase() === 'passed' || status.toLowerCase() === 'completed');
+                        const isAlreadyAssigned = (u.isAlreadyAssigned === 1 || u.IsAlreadyAssigned === 1);
+                        return !isAlreadyAssigned && !isPassedOrCompleted;
+                    });
+
+                    Swal.fire({
+                        title: `<div class="text-left border-b border-slate-100 pb-4"><p class="text-[10px] font-bold text-brand-600 uppercase tracking-[0.2em] mb-1">Assign Students to</p><p class="text-2xl font-black italic uppercase text-slate-900">${rowTitle}</p></div>`,
+                        html: `
+                            <div class="mt-8 text-left">
+                                <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+                                    <div class="flex items-center gap-2 bg-rose-50 dark:bg-rose-500/10 p-3 rounded-xl border border-rose-100 dark:border-rose-500/20 w-fit">
+                                        <input type="checkbox" id="filterFailedOnly" class="w-4 h-4 accent-rose-500 rounded cursor-pointer">
+                                        <label for="filterFailedOnly" class="text-[10px] font-bold text-rose-600 dark:text-rose-500 uppercase tracking-widest cursor-pointer select-none">Assign to Failed Only (Retake Mode)</label>
+                                    </div>
+                                    <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2">Filter by Role</label>
+                                        <div class="flex items-center gap-3 text-[10px] font-bold">
+                                            <label class="flex items-center gap-1.5 cursor-pointer">
+                                                <input type="checkbox" id="rolePharmacist" class="swal-role-cb w-3.5 h-3.5 accent-brand-500 rounded" checked>
+                                                <span>PHARMACISTS</span>
+                                            </label>
+                                            <label class="flex items-center gap-1.5 cursor-pointer">
+                                                <input type="checkbox" id="roleAssistant" class="swal-role-cb w-3.5 h-3.5 accent-brand-500 rounded" checked>
+                                                <span>ASSISTANTS</span>
+                                            </label>
+                                            <label class="flex items-center gap-1.5 cursor-pointer">
+                                                <input type="checkbox" id="roleOther" class="swal-role-cb w-3.5 h-3.5 accent-brand-500 rounded" checked>
+                                                <span>OTHERS</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table id="swalExamUserTable" class="saas-table display w-full text-xs">
+                                    <thead>
+                                        <tr class="bg-slate-50">
+                                            <th class="w-10"><input type="checkbox" id="selectAllSwal" class="w-4 h-4 accent-brand-500"></th>
+                                            <th>Student</th>
+                                            <th>Code</th>
+                                            <th>Role</th>
+                                            <th>Branch</th>
+                                            <th>Last Status</th>
+                                            <th class="text-right">Action Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${eligibleUsers.map(u => {
+                                            const status = u.lastExamStatus || '';
+                                            const isFailed = status && (status.startsWith('Fail') || status === 'Cheating');
+                                            const absenceCount = u.absenceCount ?? u.AbsenceCount ?? 0;
+                                            const isSuspended = absenceCount >= 2;
+                                            
+                                            return `
+                                                <tr class="border-b border-slate-50 transition-colors ${isSuspended ? 'bg-rose-50/50 opacity-75' : 'cursor-pointer hover:bg-slate-50'}" data-is-failed="${isFailed}">
+                                                    <td><input type="checkbox" class="exam-user-cb w-4 h-4 accent-brand-500" value="${u.id ?? u.Id}" ${isSuspended ? 'disabled' : ''}></td>
+                                                    <td>
+                                                        <div class="flex flex-col">
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="font-bold text-slate-900">${u.fullName ?? u.FullName ?? u.userName ?? u.UserName}</span>
+                                                            </div>
+                                                            <span class="text-[9px] text-slate-500 uppercase">${u.email ?? u.Email}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="font-bold text-slate-500">${u.userCode ?? u.UserCode ?? '--'}</td>
+                                                    <td>
+                                                        <span class="js-role-name px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                                                            ${u.roleName ?? u.RoleName ?? 'User'}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="text-[9px] font-bold text-slate-400 uppercase">
+                                                            ${u.branchName ?? u.BranchName ?? 'N/A'}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        ${status ? 
+                                                            `<span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${isFailed ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}">${status}</span>` : 
+                                                            '<span class="text-slate-300 text-[8px] font-bold uppercase tracking-widest">New Candidate</span>'
+                                                        }
+                                                    </td>
+                                                    <td class="text-right">
+                                                        ${isSuspended ? 
+                                                            `<span class="text-[8px] font-bold px-2 py-0.5 bg-rose-100 text-rose-600 rounded-full uppercase" title="${absenceCount} Absences">Suspended (${absenceCount} Absences)</span>` : 
+                                                            '<span class="text-[8px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full uppercase">Ready</span>'
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `,
+                        width: '1000px',
+                        showCancelButton: true,
+                        confirmButtonText: 'Confirm Assignment',
+                        cancelButtonText: 'Cancel',
+                        customClass: {
+                           confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                           cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                        },
+                        buttonsStyling: false,
+                        didOpen: () => {
+                            window._failedFilterFn = function(settings, data, dataIndex) {
+                                if (settings.nTable.id !== 'swalExamUserTable') return true;
+                                var isChecked = $('#filterFailedOnly').is(':checked');
+                                if (!isChecked) return true;
+                                var row = settings.aoData[dataIndex].nTr;
+                                return $(row).attr('data-is-failed') === 'true';
+                            };
+                            $.fn.dataTable.ext.search.push(window._failedFilterFn);
+
+                            const table = $('#swalExamUserTable').DataTable({
+                                pageLength: 5,
+                                lengthMenu: [5, 10, 25, 50],
+                                language: { search: "", searchPlaceholder: "Filter students..." },
+                                columnDefs: [{ orderable: false, targets: 0 }]
+                            });
+
+                            function updateSelectAllState() {
+                                const visibleRows = table.rows({ search: 'applied' }).nodes();
+                                const visibleCBs = $('input.exam-user-cb:not(:disabled)', visibleRows);
+                                const checkedVisibleCBs = visibleCBs.filter(':checked');
+                                $('#selectAllSwal').prop('checked', visibleCBs.length > 0 && visibleCBs.length === checkedVisibleCBs.length);
+                            }
+
+                            function syncFilteredCheckedState() {
+                                const isPharmacistChecked = $('#rolePharmacist').is(':checked');
+                                const isAssistantChecked = $('#roleAssistant').is(':checked');
+                                const isOtherChecked = $('#roleOther').is(':checked');
+                                const isFailedOnly = $('#filterFailedOnly').is(':checked');
+
+                                table.rows().every(function() {
+                                    const rowNode = this.node();
+                                    const rowRole = $(rowNode).find('.js-role-name').text().trim().toLowerCase();
+                                    const isPharmacist = rowRole === 'pharmacist' || rowRole === 'صيدلي';
+                                    const isAssistant = rowRole === 'assistant' || rowRole === 'مساعد صيدلي';
+                                    const isFailed = $(rowNode).attr('data-is-failed') === 'true';
+
+                                    let matchesRole = true;
+                                    if (isPharmacist) matchesRole = isPharmacistChecked;
+                                    else if (isAssistant) matchesRole = isAssistantChecked;
+                                    else matchesRole = isOtherChecked;
+
+                                    let matchesFailed = true;
+                                    if (isFailedOnly) matchesFailed = isFailed;
+
+                                    if (!matchesRole || !matchesFailed) {
+                                        $(rowNode).find('input.exam-user-cb').prop('checked', false);
+                                    }
+                                });
+                                updateSelectAllState();
+                            }
+
+                            $('#filterFailedOnly').on('change', function() { 
+                                table.draw(); 
+                                syncFilteredCheckedState();
+                            });
+
+                            // Enhanced Role Filter Logic (Handles Synonyms and Multi-selection)
+                            window._swalRoleFilterFn = function(settings, data, dataIndex) {
+                                if (settings.nTable.id !== 'swalExamUserTable') return true;
+                                
+                                const isPharmacistChecked = $('#rolePharmacist').is(':checked');
+                                const isAssistantChecked = $('#roleAssistant').is(':checked');
+                                const isOtherChecked = $('#roleOther').is(':checked');
+                                
+                                const rowRole = $(settings.aoData[dataIndex].nTr).find('.js-role-name').text().trim().toLowerCase();
+                                const isPharmacist = rowRole === 'pharmacist' || rowRole === 'صيدلي';
+                                const isAssistant = rowRole === 'assistant' || rowRole === 'مساعد صيدلي';
+                                
+                                if (isPharmacist) {
+                                    return isPharmacistChecked;
+                                }
+                                if (isAssistant) {
+                                    return isAssistantChecked;
+                                }
+                                return isOtherChecked;
+                            };
+                            $.fn.dataTable.ext.search.push(window._swalRoleFilterFn);
+
+                            $('.swal-role-cb').on('change', function() { 
+                                table.draw(); 
+                                syncFilteredCheckedState();
+                            });
+
+                            $('#selectAllSwal').on('change', function() {
+                                const rows = table.rows({ search: 'applied' }).nodes();
+                                $('input.exam-user-cb:not(:disabled)', rows).prop('checked', this.checked);
+                            });
+
+                            $('#swalExamUserTable tbody').on('change', 'input.exam-user-cb', function() {
+                                updateSelectAllState();
+                            });
+
+                            // Row click toggle logic
+                            $('#swalExamUserTable tbody').on('click', 'tr', function (e) {
+                                if ($(e.target).is('input[type="checkbox"]')) return;
+                                const cb = $(this).find('input.exam-user-cb');
+                                if (!cb.prop('disabled')) {
+                                    cb.prop('checked', !cb.prop('checked'));
+                                    updateSelectAllState();
+                                }
+                            });
+
+                            $('.dataTables_filter input').addClass('bg-slate-50 border-slate-200 rounded-xl px-4 py-2 text-xs focus:ring-0 outline-none mb-4');
+                            
+                            // Trigger initial draw for filters
+                            table.draw();
+                            syncFilteredCheckedState();
+                        },
+                        didClose: () => {
+                            if (window._failedFilterFn) {
+                                const idx = $.fn.dataTable.ext.search.indexOf(window._failedFilterFn);
+                                if (idx !== -1) $.fn.dataTable.ext.search.splice(idx, 1);
+                                window._failedFilterFn = null;
+                            }
+                            if (window._waveFilterFn) {
+                                const idx = $.fn.dataTable.ext.search.indexOf(window._waveFilterFn);
+                                if (idx !== -1) $.fn.dataTable.ext.search.splice(idx, 1);
+                                window._waveFilterFn = null;
+                            }
+                            if (window._swalRoleFilterFn) {
+                                const idx = $.fn.dataTable.ext.search.indexOf(window._swalRoleFilterFn);
+                                if (idx !== -1) $.fn.dataTable.ext.search.splice(idx, 1);
+                                window._swalRoleFilterFn = null;
+                            }
+                        },
+                        preConfirm: () => {
+                           const ids = [];
+                           const isPharmacistChecked = $('#rolePharmacist').is(':checked');
+                           const isAssistantChecked = $('#roleAssistant').is(':checked');
+                           const isOtherChecked = $('#roleOther').is(':checked');
+                           const isFailedOnly = $('#filterFailedOnly').is(':checked');
+
+                           $('#swalExamUserTable').DataTable().rows().every(function() {
+                               const rowNode = this.node();
+                               const cb = $(rowNode).find('input.exam-user-cb');
+                               if (cb.is(':checked')) {
+                                   const rowRole = $(rowNode).find('.js-role-name').text().trim().toLowerCase();
+                                   const isPharmacist = rowRole === 'pharmacist' || rowRole === 'صيدلي';
+                                   const isAssistant = rowRole === 'assistant' || rowRole === 'مساعد صيدلي';
+                                   const isFailed = $(rowNode).attr('data-is-failed') === 'true';
+
+                                   let matchesRole = true;
+                                   if (isPharmacist) matchesRole = isPharmacistChecked;
+                                   else if (isAssistant) matchesRole = isAssistantChecked;
+                                   else matchesRole = isOtherChecked;
+
+                                   let matchesFailed = true;
+                                   if (isFailedOnly) matchesFailed = isFailed;
+
+                                   if (matchesRole && matchesFailed) {
+                                       ids.push(cb.val());
+                                   }
+                               }
+                           });
+
+                           if(!ids.length) { Swal.showValidationMessage('Selection required.'); return false; }
+                           return ids;
+                        }
+                    }).then(result => {
+                        if(result.isConfirmed) {
+                            Swal.fire({ title: 'Processing...', didOpen: () => Swal.showLoading() });
+                            $.ajax({
+                                url: '/Admin/AssignExamToStudents?examId=' + selectedExamId,
+                                type: 'POST', contentType: 'application/json', data: JSON.stringify(result.value),
+                                success: r => {
+                                    Swal.fire({ icon: 'success', title: 'Assigned', text: `${r.assignedCount || r.AssignedCount} students granted access.` });
+                                },
+                                error: (xhr) => {
+                                    Swal.fire({ icon: 'error', title: 'Assignment Failed', text: xhr.responseJSON?.error || 'Database communication error during assignment.' });
+                                }
+                            });
+                        }
+                    });
+                }).fail((jqXHR, textStatus, errorThrown) => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Selection Failed',
+                        text: 'Unable to retrieve students list: ' + (errorThrown || 'Server Error'),
+                        footer: '<p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Database Connection might be unstable</p>'
+                    });
+                });
+            });
+
+            // DOUBLE CLICK TO VIEW ASSIGNED STUDENTS
+            $(document).on('dblclick', '#examsTable tbody tr', function() {
+                const examId = $(this).find('.assign-btn').data('examid');
+                const title = $(this).find('span.font-bold').text();
+                if (examId) openExamAssignedUsersModal(examId, title);
+            });
+
+            async function openExamAssignedUsersModal(examId, examTitle) {
+                Swal.fire({ title: 'Loading Enrollments...', didOpen: () => Swal.showLoading() });
+                
+                const res = await fetch(`/Admin/GetEligibleUsersForExam?examId=${examId}`);
+                const allUsers = await res.json();
+                // Filter for those ALREADY assigned (flag we added in AdminController)
+                const assignedUsers = allUsers.filter(u => u.isAlreadyAssigned === 1 || u.IsAlreadyAssigned === 1);
+
+                Swal.fire({
+                    title: `
+                        <div class="text-left border-b border-slate-100 dark:border-slate-800 pb-5">
+                            <div class="flex items-center justify-between mb-2">
+                                <p class="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-[0.3em]">Operational Infrastructure</p>
+                                <div class="flex items-center gap-2">
+                                    ${assignedUsers.length > 0 ? `
+                                        <button onclick="unassignAllStudentsFromExam(${examId})" class="text-[9px] font-black bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white px-3 py-1.5 rounded-xl border border-rose-100 dark:border-rose-900/30 uppercase tracking-widest transition-all">
+                                            <i class="fas fa-trash-alt mr-1"></i> Clear All Assignments
+                                        </button>
+                                    ` : ''}
+                                    <div class="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-100 dark:border-emerald-500/20">
+                                        <span class="relative flex h-2 w-2">
+                                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                        </span>
+                                        <span class="text-[9px] font-black tracking-widest uppercase">Active Protocol</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-2xl font-black italic uppercase text-slate-900 dark:text-white">${examTitle}</p>
+                        </div>`,
+                    html: `
+                        <div class="mt-8 text-left">
+                            <div class="overflow-x-auto">
+                                <table id="swalAssignedTable" class="saas-table display w-full text-xs">
+                                <thead>
+                                    <tr class="bg-slate-50 text-slate-400">
+                                        <th>Student</th>
+                                        <th>Code</th>
+                                        <th>Role</th>
+                                        <th>Branch</th>
+                                                                                <th class="text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${assignedUsers.map(u => `
+                                        <tr class="border-b border-slate-50">
+                                            <td>
+                                                <div class="flex flex-col">
+                                                    <span class="font-bold text-slate-900">${u.fullName ?? u.FullName ?? u.userName ?? u.UserName ?? u.username}</span>
+                                                    <span class="text-[9px] text-slate-500 uppercase">${u.email ?? u.Email}</span>
+                                                </div>
+                                            </td>
+                                            <td class="font-bold text-slate-500 uppercase">${u.userCode ?? u.UserCode ?? '--'}</td>
+                                            <td><span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">${u.roleName ?? u.RoleName ?? 'User'}</span></td>
+                                            <td>${u.branchName ?? 'N/A'}</td>
+                                                                                        <td class="text-right flex items-center justify-end gap-2">
+                                            <button class="resend-mail-btn w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center border border-indigo-100" title="Resend Assignment Mail" data-userid="${u.id ?? u.Id}" data-examid="${examId}">
+                                                <i class="fas fa-envelope text-[10px]"></i>
+                                            </button>
+                                            <button class="remove-enroll-btn unassign-user-btn w-8 h-8 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-all flex items-center justify-center border border-rose-100" data-userid="${u.id ?? u.Id}" data-examid="${examId}">
+                                                <i class="fas fa-user-minus text-[10px]"></i>
+                                            </button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                                </table>
+                            </div>
+                            ${assignedUsers.length === 0 ? '<div class="p-12 text-center text-slate-400 font-bold uppercase tracking-widest">No active enrollments for this exam</div>' : ''}
+                        </div>
+                    `,
+                    width: '1000px',
+                    showConfirmButton: false,
+                    showCloseButton: true,
+                    customClass: { popup: 'rounded-3xl' },
+                    didOpen: () => {
+                        if (assignedUsers.length > 0) {
+                            $('#swalAssignedTable').DataTable({
+                                pageLength: 5,
+                                lengthMenu: [5, 10, 25],
+                                language: { search: "", searchPlaceholder: "Filter enrolled students..." }
+                            });
+                            $('.dataTables_filter input').addClass('bg-slate-50 border-slate-200 rounded-xl px-4 py-2 text-[10px] focus:ring-0 outline-none mb-4');
+                        }
+                    }
+                });
+            }
+
+            window.unassignAllStudentsFromExam = function(examId) {
+                Swal.fire({
+                    title: 'Clear All Assignments?',
+                    text: 'This will permanently remove all enrolled students from this exam and wipe their attempts. This action cannot be undone.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, Clear All',
+                    cancelButtonText: 'Cancel',
+                    customClass: {
+                        confirmButton: 'bg-rose-600 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                        cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                    },
+                    buttonsStyling: false
+                }).then(result => {
+                    if (result.isConfirmed) {
+                        Swal.fire({ title: 'Clearing Enrollments...', didOpen: () => Swal.showLoading() });
+                        $.post('/Admin/RemoveAllStudentsFromExam', { examId }, function(r) {
+                            if (r.success) {
+                                Swal.fire({ icon: 'success', title: 'Cleared', text: r.message, timer: 1500, showConfirmButton: false }).then(() => {
+                                    Swal.close();
+                                    window.location.reload();
+                                });
+                            } else {
+                                Swal.fire({ icon: 'error', title: 'Failed', text: r.message });
+                            }
+                        });
+                    }
+                });
+            };
+
+            $(document).on('click', '.unassign-user-btn, .remove-enroll-btn', function() {
+                const btn = $(this);
+                const examId = btn.data('examid');
+                const userId = btn.data('userid');
+                const row = btn.closest('tr');
+
+                if (confirm('Are you sure you want to revoke this student\'s access?')) {
+                    // Show a spinner on the button
+                    const icon = btn.find('i');
+                    const originalClass = icon.attr('class');
+                    icon.attr('class', 'fas fa-spinner fa-spin text-[10px]');
+                    btn.prop('disabled', true);
+
+                    $.post('/Admin/RemoveStudentFromExam', { examId, studentId: userId }, function(r) {
+                        if (r.success) {
+                            showStatus('Student access revoked successfully');
+                            
+                            // Remove from DataTable
+                            const table = $('#swalAssignedTable').DataTable();
+                            table.row(row).remove().draw();
+                        } else {
+                            showStatus('Failed: ' + (r.message || 'Error occurred'), true);
+                            icon.attr('class', originalClass);
+                            btn.prop('disabled', false);
+                        }
+                    }).fail(function() {
+                        showStatus('Connection error', true);
+                        icon.attr('class', originalClass);
+                        btn.prop('disabled', false);
+                    });
+                }
+            });
+
+            // Handle Resend Email with Spinner
+            $(document).on('click', '.resend-mail-btn', async function(e) {
+                e.preventDefault();
+                const $btn = $(this);
+                const $icon = $btn.find('i');
+                const userId = $btn.attr('data-userid');
+                const examId = $btn.attr('data-examid');
+
+                if (!userId) return;
+
+                // UI Feedback: Spinner
+                const originalClass = $icon.attr('class');
+                $icon.attr('class', 'fas fa-spinner fa-spin text-[10px]');
+                $btn.prop('disabled', true).addClass('opacity-50');
+
+                try {
+                    const res = await fetch(`/Admin/ResendAssignmentEmail?examId=${examId}&userId=${userId}`, {
+                        method: 'POST',
+                        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
+                    });
+                    const result = await res.json();
+
+                    if (result.success) {
+                        showStatus('Reminder sent successfully');
+                        $btn.removeClass('bg-indigo-50 text-indigo-600').addClass('bg-emerald-500 text-white border-emerald-600');
+                        $icon.attr('class', 'fas fa-check text-[10px]');
+                        // Don't restore icon if success, keep it as checkmark
+                        return; 
+                    } else {
+                        showStatus('Failed: ' + result.message, true);
+                    }
+                } catch (e) {
+                    showStatus('Connection Error', true);
+                } finally {
+                    // Only restore icon if it's NOT a success checkmark
+                    if (!$btn.hasClass('bg-emerald-500')) {
+                        $icon.attr('class', originalClass);
+                        $btn.prop('disabled', false).removeClass('opacity-50');
+                    }
+                }
+            });
+
+            // MODAL LOGIC FOR CLONE
+            $(document).on('click', '.clone-btn', async function() {
+                const oldExamId = $(this).data('examid');
+                Swal.fire({ title: 'Loading...', didOpen: () => Swal.showLoading() });
+                
+                try {
+                    const waves = await $.getJSON(wavesUrl);
+                    let wavesHtml = '<option value="">-- SELECT TARGET BATCH --</option>';
+                    waves.forEach(w => wavesHtml += `<option value="${w.id ?? w.Id}">${escapeHtml((w.waveName ?? w.WaveName).toUpperCase())}</option>`);
+
+                    Swal.fire({
+                        title: `<div class="text-left border-b border-slate-100 pb-4"><p class="text-[10px] font-bold text-amber-600 uppercase tracking-[0.2em] mb-1">Create a copy of this exam with new dates</p><p class="text-2xl font-black uppercase text-slate-900">CLONE EXAM INSTANCE</p></div>`,
+                        html: `
+                            <div class="mt-8 text-left space-y-4">
+                                <div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">New Title (Optional)</label><input id="clone-title" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-amber-500 font-bold" placeholder="Leave empty to use original"></div>
+                                <div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Target Batch</label><select id="clone-wave" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-amber-500 font-bold">${wavesHtml}</select></div>
+                                <div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">New Start Time</label><input type="datetime-local" id="clone-start" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-amber-500 font-bold"></div>
+                                <div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">New End Time</label><input type="datetime-local" id="clone-end" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-amber-500 font-bold"></div>
+                            </div>
+                        `,
+                        width: '800px',
+                        showCancelButton: true,
+                        confirmButtonText: 'Confirm Clone',
+                        cancelButtonText: 'Cancel',
+                        customClass: {
+                           confirmButton: 'bg-amber-600 hover:bg-amber-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                           cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                        },
+                        buttonsStyling: false,
+                        preConfirm: () => {
+                            const newTitle = document.getElementById('clone-title').value;
+                            const newWaveId = document.getElementById('clone-wave').value;
+                            const newStart = document.getElementById('clone-start').value;
+                            const newEnd = document.getElementById('clone-end').value;
+
+                            if (!newWaveId) { Swal.showValidationMessage('Please select a target batch'); return false; }
+                            if (!newStart || !newEnd) { Swal.showValidationMessage('Start and End times are required'); return false; }
+                            if (new Date(newEnd) <= new Date(newStart)) { Swal.showValidationMessage('End time must be after start time'); return false; }
+
+                            return {
+                                OldExamId: oldExamId,
+                                NewWaveId: parseInt(newWaveId),
+                                NewStartTime: newStart,
+                                NewEndTime: newEnd,
+                                NewTitle: newTitle || null
+                            };
+                        }
+                    }).then(result => {
+                        if (result.isConfirmed) {
+                            Swal.fire({ title: 'Cloning...', didOpen: () => Swal.showLoading() });
+                            $.ajax({
+                                url: '/Admin/CloneExam',
+                                type: 'POST',
+                                contentType: 'application/json',
+                                data: JSON.stringify(result.value),
+                                success: function(r) {
+                                    if(r.success) {
+                                        Swal.fire({ icon: 'success', title: 'Exam Cloned', text: 'New Exam ID: ' + r.newExamId, timer: 1500, showConfirmButton: false });
+                                        setTimeout(() => location.reload(), 1500);
+                                    } else {
+                                        Swal.fire({ icon: 'error', title: 'Error', text: r.message });
+                                    }
+                                },
+                                error: function() {
+                                    Swal.fire({ icon: 'error', title: 'Error', text: 'Network request failed' });
+                                }
+                            });
+                        }
+                    });
+                } catch(e) {
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to fetch batches data.' });
+                }
+            });
+            // --- EXCEL IMPORT LOGIC ---
+            let currentExamIdForImport = 0;
+
+            $(document).on('click', '.import-questions-btn', function() {
+                currentExamIdForImport = $(this).data('examid');
+                
+                Swal.fire({
+                    title: '<span class="text-xl font-black text-slate-800 dark:text-white tracking-tight uppercase">Excel Import Guide</span>',
+                    html: `
+                        <div class="text-left text-xs font-bold space-y-3 mb-2 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 p-4 rounded-2xl border border-slate-200 dark:border-slate-800" style="direction: ltr;">
+                            <p class="text-rose-600 font-black uppercase text-[10px] mb-2 tracking-widest border-b border-rose-100 dark:border-rose-900 pb-2"><i class="fas fa-exclamation-triangle"></i> Mandatory Column Structure</p>
+                            <ul class="list-disc list-inside space-y-1 ml-1 text-[11px]">
+                                <li><b>Col 1:</b> Question Text</li>
+                                <li><b>Col 2:</b> Category ID (Number)</li>
+                                <li><b>Col 3:</b> Points (Number)</li>
+                                <li><b>Col 4:</b> Difficulty (1=Easy, 2=Mid, 3=Hard)</li>
+                                <li><b>Col 5 & 6:</b> Choice A Text &nbsp;|&nbsp; IsCorrect (TRUE/FALSE)</li>
+                                <li><b>Col 7 & 8:</b> Choice B Text &nbsp;|&nbsp; IsCorrect (TRUE/FALSE)</li>
+                                <li><b>Col 9 & 10:</b> Choice C Text &nbsp;|&nbsp; IsCorrect (TRUE/FALSE)</li>
+                                <li><b>Col 11 & 12:</b> Choice D Text &nbsp;|&nbsp; IsCorrect (TRUE/FALSE)</li>
+                                <li><b>Col 13:</b> Topic ID (Optional Number)</li>
+                            </ul>
+                            <div class="mt-3 bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 p-3 rounded-lg text-[10px]">
+                                <b>Note:</b> The first row is treated as a header and will be skipped. Only 4 choices are evaluated.
+                            </div>
+                        </div>
+                    `,
+                    icon: 'info',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fas fa-upload mr-1"></i> Selection Override',
+                    cancelButtonText: 'Cancel',
+                    customClass: {
+                        confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg',
+                        cancelButton: 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 px-6 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                        popup: 'bg-white dark:bg-slate-950 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-2xl'
+                    },
+                    buttonsStyling: false
+                }).then((r) => {
+                    if(r.isConfirmed) $('#excelQuestionInput').click();
+                });
+            });
+
+            $('#excelQuestionInput').on('change', function() {
+                const file = this.files[0];
+                if (!file || currentExamIdForImport === 0) return;
+
+                const formData = new FormData();
+                formData.append('examId', currentExamIdForImport);
+                formData.append('excelFile', file);
+
+                Swal.fire({
+                    title: 'Importing Questions',
+                    text: 'Please wait while we process the Excel file...',
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                $.ajax({
+                    url: '/Admin/ImportQuestionsFromExcel',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(r) {
+                        if (r.success) {
+                            Swal.fire({ icon: 'success', title: 'Import Successful', text: r.message });
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Import Failed', text: r.message });
+                        }
+                        $('#excelQuestionInput').val(''); // Reset input
+                    },
+                    error: function() {
+                        Swal.fire({ icon: 'error', title: 'Network Error', text: 'Failed to communicate with server.' });
+                        $('#excelQuestionInput').val('');
+                    }
+                });
+            });
+        });
+    </script>
+}

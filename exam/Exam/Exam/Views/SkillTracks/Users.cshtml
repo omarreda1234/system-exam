@@ -1,0 +1,51 @@
+@model IEnumerable<dynamic>
+@{ 
+    ViewBag.Title = "Manage Users - " + ViewBag.Track.TrackName; 
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+<div class="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-9xl mx-auto">
+    <div class="sm:flex sm:justify-between sm:items-center mb-8">
+        <div>
+            <h1 class="text-2xl md:text-3xl text-slate-800 font-bold">@ViewBag.Track.TrackName - Enrolled Users</h1>
+        </div>
+        <div>
+            <form action="@Url.Action("ImportUsers")" method="post" enctype="multipart/form-data" class="flex items-center gap-2">
+                <input type="hidden" name="trackId" value="@ViewBag.Track.Id" />
+                <input type="file" name="excelFile" class="form-input text-xs" accept=".xlsx,.xls" required />
+                <button type="submit" class="btn bg-brand-500 hover:bg-brand-600 text-white p-2 px-4 rounded-xl text-xs"><i class="fas fa-file-excel mr-2"></i> Import by UserCode</button>
+            </form>
+        </div>
+    </div>
+    <div class="bg-white shadow-lg rounded-xl border border-slate-200">
+        <div class="overflow-x-auto">
+            <table class="table-auto w-full">
+                <thead class="text-xs font-semibold uppercase text-slate-500 bg-slate-50 border-t border-b border-slate-200">
+                    <tr>
+                        <th class="px-4 py-3 text-left">User Code</th>
+                        <th class="px-4 py-3 text-left">Full Name</th>
+                        <th class="px-4 py-3 text-left">Branch</th>
+                        <th class="px-4 py-3 text-center">Enrolled On</th>
+                        <th class="px-4 py-3 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm divide-y divide-slate-200">
+                    @foreach(var user in Model) {
+                        <tr>
+                            <td class="px-4 py-3 font-medium text-slate-800">@user.UserCode</td>
+                            <td class="px-4 py-3">@user.UserName</td>
+                            <td class="px-4 py-3 text-slate-500">@user.BranchName</td>
+                            <td class="px-4 py-3 text-center text-slate-500">@user.JoinDate?.ToString("MMM dd, yyyy")</td>
+                            <td class="px-4 py-3 text-center">
+                                <form action="@Url.Action("RemoveUser")" method="post" onsubmit="return confirm('Remove user?');">
+                                    <input type="hidden" name="linkId" value="@user.LinkId" />
+                                    <input type="hidden" name="trackId" value="@ViewBag.Track.Id" />
+                                    <button type="submit" class="text-rose-500 hover:text-rose-600"><i class="fas fa-times-circle"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

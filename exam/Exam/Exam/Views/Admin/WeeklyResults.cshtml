@@ -1,0 +1,268 @@
+@model IEnumerable<Exam.DTOs.ExamResultRowDto>
+@{
+    ViewData["Title"] = "Weekly Evaluation Matrix";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var exams = ViewBag.Exams as IEnumerable<Exam.DTOs.ExamDropdownDto> ?? Enumerable.Empty<Exam.DTOs.ExamDropdownDto>();
+    var selectedExamId = ViewBag.SelectedExamId as int? ?? 0;
+}
+
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div>
+            <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Performance Filter</h2>
+            <div class="flex items-center gap-3">
+                <p class="text-xl font-bold">Weekly Evaluation Matrix</p>
+            </div>
+        </div>
+        
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Exam Type</label>
+                    <select id="typeFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold min-w-[150px]">
+                        <option value="0">All Types</option>
+                        @foreach (var type in (IEnumerable<Exam.DTOs.ExamTypeDto>)ViewBag.ExamTypes)
+                        {
+                            <option value="@type.Id" selected="@(ViewBag.SelectedTypeId == type.Id ? "selected" : null)">@type.TypeName.ToUpper()</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Year</label>
+                    <select id="yearFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold w-[100px]">
+                        <option value="0">Year</option>
+                        @for (int y = DateTime.Now.Year; y >= 2024; y--)
+                        {
+                            <option value="@y" selected="@(ViewBag.SelectedYear == y ? "selected" : null)">@y</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Month</label>
+                    <select id="monthFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold w-[120px]">
+                        <option value="0">Month</option>
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m" selected="@(ViewBag.SelectedMonth == m ? "selected" : null)">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m)</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Selected Module</label>
+                    <select id="examFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3 text-sm font-bold min-w-[280px]">
+                        @{
+                            var groupedExams = exams.GroupBy(e => e.TypeName).OrderByDescending(g => g.Key);
+                            foreach (var group in groupedExams)
+                            {
+                                <optgroup label="@(group.Key?.ToUpper() ?? "OTHER")">
+                                    @foreach (var e in group)
+                                    {
+                                        <option value="@e.Id" selected="@(e.Id == selectedExamId ? "selected" : null)">
+                                            @e.Title.ToUpper() @(!string.IsNullOrEmpty(e.WaveName) ? $"- {e.WaveName.ToUpper()}" : "") (@e.StartTime.ToString("MMM yyyy"))
+                                        </option>
+                                    }
+                                </optgroup>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2 mt-auto">
+                    <button id="btnExport" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2">
+                        <i class="fas fa-file-excel"></i> Export Report
+                    </button>
+                </div>
+            </div>
+    </div>
+</div>
+
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 overflow-hidden shadow-sm">
+    <div class="overflow-x-auto">
+        <table class="datatable saas-table">
+            <thead>
+                <tr>
+                    <th class="min-w-[280px]">Personnel Node</th>
+                    <th>Email Address</th>
+                    <th>Branch</th>
+                    <th>Status</th>
+                    <th>Start Time</th>
+                    <th>Finish Time</th>
+                    <th>Time (M)</th>
+                    <th>Score</th>
+                    <th>User Code</th>
+                    <th class="text-right px-8">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in Model) {
+                    var statusClass = s.Status.StartsWith("Completed") ? "bg-emerald-500" : "bg-slate-400";
+                    <tr class="student-row">
+                        <td>
+                            <div class="flex items-center gap-3 px-4 py-3 flex-nowrap">
+                                <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase">@s.StudentName.Substring(0,1)</div>
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-slate-900 dark:text-white leading-tight">@s.StudentName</span>
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase">@s.ExamType.ToUpper()</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="text-xs font-medium text-slate-500">@s.StudentEmail</span></td>
+                        <td><span class="text-[10px] font-black text-slate-400 uppercase">@s.BranchName</span></td>
+                        <td>
+                             <div class="flex items-center gap-1.5 px-3 py-1 rounded-full @(statusClass.Replace("bg-", "bg-opacity-10 text-")) w-fit">
+                                <span class="text-[10px] font-black uppercase">@s.Status.ToUpper()</span>
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <div class="flex flex-col">
+                                <span class="text-[9px] text-slate-400 font-bold mb-0.5">@(s.ActualStartTime.HasValue ? s.ActualStartTime.Value.ToString("dd/MM/yyyy") : "")</span>
+                                <span class="text-[10px] font-bold text-slate-500 uppercase">@(s.ActualStartTime.HasValue ? s.ActualStartTime.Value.ToString("hh:mm tt") : "--")</span>
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <div class="flex flex-col">
+                                <span class="text-[9px] text-slate-400 font-bold mb-0.5">@(s.ActualEndTime.HasValue ? s.ActualEndTime.Value.ToString("dd/MM/yyyy") : "")</span>
+                                <span class="text-[10px] font-bold text-slate-500 uppercase">@(s.ActualEndTime.HasValue ? s.ActualEndTime.Value.ToString("hh:mm tt") : "--")</span>
+                            </div>
+                        </td>
+                        <td class="text-xs font-bold text-slate-500">
+                            @(s.DurationInMinutes > 0 ? s.DurationInMinutes + " min" : "--")
+                        </td>
+                        <td class="font-mono font-bold text-slate-700 dark:text-slate-300">
+                            <div class="flex flex-col">
+                                <span class="text-brand-600 dark:text-brand-400 text-sm">@s.FinalScore.ToString("0") / @s.TotalScoreAvailable.ToString("0")</span>
+                                <span class="text-[9px] text-slate-400 uppercase tracking-widest">@s.Score.ToString("0.0")% Achievement</span>
+                            </div>
+                        </td>
+                        <td class="text-[10px] font-bold text-slate-500 uppercase">@s.UserCode</td>
+                        <td class="text-right px-8">
+                             <div class="flex items-center justify-end gap-2">
+                                <button class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 dark:bg-slate-800 rounded-xl view-review" data-student-id="@s.Id" title="View Review">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                @if (User.IsInRole("Admin"))
+                                {
+                                    <button class="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 dark:bg-slate-800 rounded-xl wipe-data" data-student-id="@s.Id" data-student-name="@s.StudentName" title="Wipe Data & Reset">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                }
+                             </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function updateExamList() {
+            const type = $('#typeFilter').val();
+            const year = $('#yearFilter').val();
+            const month = $('#monthFilter').val();
+
+            $.get('/Admin/GetFilteredExams', { typeId: type, month: month, year: year }, function (data) {
+                const $examFilter = $('#examFilter');
+                $examFilter.empty();
+
+                if (data.length === 0) {
+                    $examFilter.append('<option value="0">No exams found</option>');
+                    return;
+                }
+
+                // Group by typeName
+                const grouped = {};
+                data.forEach(e => {
+                    if (!grouped[e.typeName]) grouped[e.typeName] = [];
+                    grouped[e.typeName].push(e);
+                });
+
+                Object.keys(grouped).sort().reverse().forEach(type => {
+                    const $group = $('<optgroup>').attr('label', type.toUpperCase());
+                    grouped[type].forEach(e => {
+                        $group.append($('<option>').val(e.id).text(e.title));
+                    });
+                    $examFilter.append($group);
+                });
+            });
+        }
+
+        $('#typeFilter, #yearFilter, #monthFilter').change(updateExamList);
+
+        $('#examFilter').change(function () { 
+            const type = $('#typeFilter').val();
+            const year = $('#yearFilter').val();
+            const month = $('#monthFilter').val();
+            let newUrl = '/Admin/WeeklyResults?examId=' + $(this).val() + '&typeId=' + type + '&year=' + year + '&month=' + month; 
+            if (window.location.search.includes('iframe=true')) newUrl += '&iframe=true';
+            window.location = newUrl;
+        });
+
+        $('#btnExport').on('click', function () { window.location = '/Admin/ExportStudentsToExcel?examId=' + $('#examFilter').val(); });
+
+        $(document).on('click', '.view-review', function() {
+            var id = $(this).data('student-id');
+            var examId = $('#examFilter').val();
+            Swal.fire({
+                title: 'Professional Review Analysis',
+                width: '80%',
+                showConfirmButton: false,
+                showCloseButton: true,
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+                html: '<div id="swalRev" style="text-align:left; max-height: 70vh; overflow-y: auto;"><div class="py-10 text-center"><i class="fas fa-sync fa-spin text-3xl text-brand-500"></i></div></div>',
+                didOpen: () => { 
+                    $.get('/Admin/GetStudentExamReview', { examId: examId, studentId: id })
+                     .done(h => $('#swalRev').html(h))
+                     .fail(() => $('#swalRev').html('<div class="p-8 text-rose-500">Failed to load data.</div>'));
+                }
+            });
+        });
+
+        $(document).on('click', '.wipe-data', function() {
+            const studentId = $(this).data('student-id');
+            const studentName = $(this).data('student-name');
+            const examId = $('#examFilter').val();
+
+            Swal.fire({
+                title: 'Are you absolutely sure?',
+                text: `This will PERMANENTLY delete all answers and attempts for ${studentName}. They will need to be re-assigned to take the exam again.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Wipe Everything!',
+                cancelButtonText: 'Cancel',
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Wiping Data...',
+                        allowOutsideClick: false,
+                        didOpen: () => { Swal.showLoading(); }
+                    });
+
+                    $.post('/Admin/WipeStudentData', { examId: examId, studentId: studentId }, function(res) {
+                        if (res.success) {
+                            Swal.fire({
+                                title: 'Success!',
+                                text: res.message,
+                                icon: 'success',
+                                timer: 2000,
+                                showConfirmButton: false
+                            }).then(() => {
+                                window.location.reload();
+                            });
+                        } else {
+                            Swal.fire('Error', res.message, 'error');
+                        }
+                    });
+                }
+            });
+        });
+    </script>
+}

@@ -1,0 +1,177 @@
+@{
+    ViewData["Title"] = "Lecture Topics & Syllabus";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var categories = ViewBag.Categories as IEnumerable<Exam.DTOs.CategoryDto> ?? new List<Exam.DTOs.CategoryDto>();
+}
+
+<div class="space-y-8">
+    <!-- Header Area -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+                <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Hierarchy Management</h2>
+                <p class="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">Lecture & Topic Registry</p>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <div class="flex flex-col gap-1">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">Primary Classification</label>
+                    <select id="categoryFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs font-bold focus:ring-4 focus:ring-brand-500/10 outline-none transition-all min-w-[200px]">
+                        @foreach(var cat in categories)
+                        {
+                            <option value="@cat.Id">@cat.CategoryName.ToUpper() @(!string.IsNullOrEmpty(cat.ExamTypeName) ? " (" + cat.ExamTypeName.ToUpper() + ")" : "")</option>
+                        }
+                    </select>
+                </div>
+                
+                <button onclick="openCreateTopicModal()" class="mt-4 bg-brand-600 hover:bg-brand-700 text-white px-8 py-3.5 rounded-2xl transition-all text-xs font-bold uppercase shadow-xl shadow-brand-500/20 flex items-center gap-3">
+                    <i class="fas fa-layer-group text-lg"></i>
+                    Register New Topic
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Table Area -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+            <table id="topicsTable" class="saas-table">
+                <thead>
+                    <tr>
+                        <th class="pl-8 !w-24 text-center">ID</th>
+                        <th>Topic / Lecture Title</th>
+                        <th>Parent Category</th>
+                        <th class="text-right pr-8">Operational Control</th>
+                    </tr>
+                </thead>
+                <tbody id="topicsTbody">
+                    <tr>
+                        <td colspan="4" class="p-20 text-center text-slate-300 font-bold uppercase tracking-widest">
+                            <i class="fas fa-spinner fa-spin text-4xl mb-4 block"></i>
+                            Fetching Synchronized Data...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function() {
+            // Initial Load
+            loadTopics();
+
+            // Refresh on Category Change
+            $('#categoryFilter').on('change', function() {
+                loadTopics();
+            });
+        });
+
+        async function loadTopics() {
+            const categoryId = $('#categoryFilter').val();
+            const $tbody = $('#topicsTbody');
+            
+            $tbody.html('<tr><td colspan="4" class="p-20 text-center text-slate-300 font-bold uppercase tracking-widest"><i class="fas fa-spinner fa-spin text-4xl mb-4 block"></i>Loading Modules...</td></tr>');
+
+            try {
+                const response = await $.get(`/Admin/GetTopicsByCategoryId?categoryId=${categoryId}`);
+                const catName = $('#categoryFilter option:selected').text();
+                
+                if(!response || response.length === 0) {
+                    $tbody.html('<tr><td colspan="4" class="p-20 text-center text-slate-400 font-bold uppercase tracking-widest">No modules registered in this classification</td></tr>');
+                    return;
+                }
+
+                $tbody.empty();
+                response.forEach(topic => {
+                    $tbody.append(`
+                        <tr class="group">
+                            <td class="pl-8 text-center">
+                                <span class="font-mono text-[10px] font-bold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">#${topic.id}</span>
+                            </td>
+                            <td>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                        <i class="fas fa-bookmark text-xs"></i>
+                                    </div>
+                                    <span class="font-bold text-slate-700 dark:text-slate-200">${topic.topicName}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded text-[9px] font-black tracking-widest">PARENT: ${catName}</span>
+                            </td>
+                            <td class="pr-8 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <button onclick="deleteTopic(${topic.id})" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-rose-500 hover:text-white transition-all shadow-sm">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `);
+                });
+            } catch (err) {
+                $tbody.html('<tr><td colspan="4" class="p-20 text-center text-rose-400 font-bold uppercase tracking-widest">Network Error: Failed to synchronize modules</td></tr>');
+            }
+        }
+
+        function openCreateTopicModal() {
+            const categoryId = $('#categoryFilter').val();
+            const categoryName = $('#categoryFilter option:selected').text();
+
+            Swal.fire({
+                title: 'Register New Topic',
+                html: `<div class="text-left"><p class="text-[10px] font-bold text-slate-400 uppercase mb-4 text-center">Adding to: <span class="text-brand-600">${categoryName}</span></p></div>`,
+                input: 'text',
+                inputPlaceholder: 'Lecture Title (e.g. Skin Anatomy, Pharmacology 101...)',
+                showCancelButton: true,
+                confirmButtonText: 'Deploy Topic',
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+                customClass: {
+                    input: 'rounded-2xl border-slate-200 dark:border-slate-800 dark:bg-slate-900 text-sm focus:ring-4 focus:ring-brand-500/10 outline-none',
+                    confirmButton: 'bg-brand-600 text-white px-8 py-3 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl shadow-brand-500/20'
+                }
+            }).then((result) => {
+                if (result.isConfirmed && result.value) {
+                    executeTopicAction('/Admin/CreateTopic', { topicName: result.value, categoryId: categoryId });
+                }
+            });
+        }
+
+        function deleteTopic(id) {
+            Swal.fire({
+                title: 'Decommission Module?',
+                text: "Deleting this topic will break links to historical blueprint data.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f43f5e',
+                confirmButtonText: 'Yes, Delete',
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    executeTopicAction('/Admin/DeleteTopic', { topicId: id });
+                }
+            });
+        }
+
+        async function executeTopicAction(url, data) {
+            Swal.fire({ title: 'Syncing Registry...', didOpen: () => Swal.showLoading() });
+
+            try {
+                const response = await $.post(url, data);
+                if (response.success) {
+                    Swal.fire({ icon: 'success', title: 'Registry Updated', timer: 800, showConfirmButton: false });
+                    loadTopics();
+                } else {
+                    Swal.fire('Error', response.message, 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Communication failure', 'error');
+            }
+        }
+    </script>
+}

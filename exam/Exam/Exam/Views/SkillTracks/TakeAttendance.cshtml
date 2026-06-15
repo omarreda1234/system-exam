@@ -1,0 +1,346 @@
+@model IEnumerable<dynamic>
+@{
+    var session = ViewBag.Session;
+    var title = session.CompanyName != null ? $"{session.CompanyName} - {session.SessionName}" : $"{session.WaveName} - {session.SessionName}";
+    ViewData["Title"] = $"Take Attendance - {session.SessionName}";
+    var branches = Model.Select(u => (string)u.BranchName).Where(b => !string.IsNullOrEmpty(b)).Distinct().OrderBy(b => b).ToList();
+}
+
+<script>
+    // Force light theme strictly for this attendance view
+    document.documentElement.classList.remove('dark');
+</script>
+
+<div class="min-h-screen bg-slate-50 pb-20">
+    <!-- Header -->
+    <div class="bg-white border-b border-slate-200 pt-24 pb-12">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div class="flex items-center gap-4">
+                    <a href="@(User.IsInRole("Reception") ? Url.Action("Index", "Attendance") : Url.Action("Index", "SkillTracks"))" class="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-all shrink-0">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-[9px] font-black bg-brand-600 text-white px-2 py-0.5 rounded-full uppercase tracking-widest">
+                                @(session.TrackName)
+                            </span>
+                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                                @session.SessionDate.ToString("dd MMMM yyyy")
+                            </span>
+                        </div>
+                        <h1 class="text-2xl font-black text-slate-900 tracking-tight uppercase">@session.SessionName</h1>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col lg:flex-row lg:items-center gap-4 w-full lg:w-auto">
+                    <!-- Search Input -->
+                    <div class="relative group w-full lg:w-80">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-600 transition-colors"></i>
+                        <input type="text" id="attendanceSearch" placeholder="Search by name or code..." 
+                               class="w-full pl-12 pr-6 py-3 bg-slate-100 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:bg-white focus:border-brand-500 transition-all text-slate-900" />
+                    </div>
+
+                    <!-- Branch Filter Dropdown -->
+                    <div class="relative group w-full lg:w-60">
+                        <i class="fas fa-map-marker-alt absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-600 transition-colors"></i>
+                        <select id="branchFilter" class="w-full pl-12 pr-10 py-3 bg-slate-100 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:bg-white focus:border-brand-500 transition-all text-slate-900 appearance-none cursor-pointer">
+                            <option value="">All Branches / جميع الفروع</option>
+                            @foreach (var b in branches)
+                            {
+                                <option value="@b">@b</option>
+                            }
+                            @if (Model.Any(u => string.IsNullOrEmpty(u.BranchName)))
+                            {
+                                <option value="No Branch">No Branch / بدون فرع</option>
+                            }
+                        </select>
+                        <i class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[10px]"></i>
+                    </div>
+
+                    @{
+                        int presentCount = Model.Count(u => u.IsPresent);
+                        int absentCount = Model.Count() - presentCount;
+                    }
+                    <div class="bg-slate-100 rounded-2xl p-1 flex gap-1 border border-slate-200 overflow-x-auto no-scrollbar">
+                        <button id="filterAll" class="whitespace-nowrap px-4 py-2 class-filter-btn rounded-xl bg-white text-slate-900 shadow-sm transition-all text-[10px] font-black uppercase tracking-widest">All (@Model.Count())</button>
+                        <button id="filterPresent" class="whitespace-nowrap px-4 py-2 class-filter-btn rounded-xl text-slate-500 hover:text-slate-900 transition-all text-[10px] font-black uppercase tracking-widest">Present (@presentCount)</button>
+                        <button id="filterAbsent" class="whitespace-nowrap px-4 py-2 class-filter-btn rounded-xl text-slate-500 hover:text-slate-900 transition-all text-[10px] font-black uppercase tracking-widest">Absent (@absentCount)</button>
+                    </div>
+
+                    <a href="@Url.Action("ExportSessionAttendance", "SkillTracks", new { sessionId = session.Id })" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white px-5 py-3 rounded-2xl font-bold text-xs transition-colors flex items-center justify-center gap-2 border border-indigo-100 whitespace-nowrap">
+                        <i class="fas fa-file-excel"></i> Export
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Sheet -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 mt-8">
+        <div class="hidden md:block bg-white border border-slate-200 rounded-t-[32px] overflow-hidden shadow-sm">
+             <div class="grid grid-cols-12 bg-slate-50/50 border-b border-slate-100 px-8 py-4">
+                 <div class="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Trainee / المتدرب</div>
+                 <div class="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Code / الكود</div>
+                 <div class="col-span-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Attendance / الحضور والانصراف</div>
+             </div>
+        </div>
+
+        <div class="flex flex-col gap-3 md:gap-0 shadow-sm rounded-b-[32px] overflow-hidden">
+             @foreach (var user in Model)
+            {
+                <div class="user-row bg-white border border-slate-200 md:border-0 md:border-b md:border-slate-100 p-5 md:p-0 transition-all hover:bg-slate-50/30" 
+                     data-present="@user.IsPresent.ToString().ToLower()"
+                     data-branch="@(user.BranchName ?? "No Branch")">
+                    <div class="grid grid-cols-1 md:grid-cols-12 items-center gap-4 md:px-8 md:py-5">
+                        <!-- Trainee Info -->
+                        <div class="md:col-span-4 flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-400 text-xs uppercase shrink-0">
+                                @(user.UserName?[0].ToString() ?? "U")
+                            </div>
+                            <div class="min-w-0">
+                                <h4 class="text-sm font-black text-slate-900 uppercase truncate">@user.UserName</h4>
+                                <div class="flex flex-wrap items-center gap-2 mt-0.5">
+                                    <p class="text-[10px] font-bold text-slate-400 lowercase truncate">@user.Email</p>
+                                    <span class="text-[9px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200/50 uppercase tracking-wider shrink-0 flex items-center gap-1">
+                                        <i class="fas fa-map-marker-alt text-[8px] text-brand-500"></i>@(user.BranchName ?? "No Branch / بدون فرع")
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="md:col-span-2 flex md:justify-center"><div class="flex items-center gap-2 md:block">
+                                <span class="md:hidden text-[9px] font-black text-slate-400 uppercase">Code:</span>
+                                <span class="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg border border-slate-200/50">
+                                    @user.UserCode
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Check-In / الحضور -->
+                        <div class="md:col-span-6 flex flex-wrap items-center justify-end gap-6 pt-4 md:pt-0 border-t md:border-0 border-slate-50">
+                            <!-- Arrival (حضور) -->
+                            <div class="flex items-center gap-2">
+                                <label class="flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl transition-all hover:bg-emerald-50 @(!User.IsInRole("Admin") && user.IsPresent ? "opacity-60 cursor-not-allowed pointer-events-none" : "")">
+                                    <input type="checkbox" id="checkin-chk-@user.Id" 
+                                           onchange="onCheckInToggle('@user.Id')"
+                                           class="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 focus:ring-2"
+                                           @(user.IsPresent ? "checked" : "")
+                                           @(!User.IsInRole("Admin") && user.IsPresent ? "disabled" : "") />
+                                    <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Arrived / حضور</span>
+                                </label>
+                                <input type="text" id="checkin-time-@user.Id" 
+                                       placeholder="--:--" 
+                                       value="@user.CheckInTime"
+                                       @(User.IsInRole("Admin") ? "" : "readonly")
+                                       onchange="saveDetailedAttendance('@user.Id')"
+                                       class="w-20 px-2 py-1.5 text-[10px] font-bold text-center rounded-lg focus:outline-none @(User.IsInRole("Admin") ? "bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500" : "bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none")" />
+                            </div>
+
+                            <!-- Departure (انصراف) -->
+                            <div class="flex items-center gap-2">
+                                <label class="flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl transition-all hover:bg-rose-50 @(!User.IsInRole("Admin") && !string.IsNullOrEmpty(user.CheckOutTime) ? "opacity-60 cursor-not-allowed pointer-events-none" : "")">
+                                    <input type="checkbox" id="checkout-chk-@user.Id" 
+                                           onchange="onCheckOutToggle('@user.Id')"
+                                           class="w-4 h-4 text-rose-600 border-slate-300 rounded focus:ring-rose-500 focus:ring-2"
+                                           @(!string.IsNullOrEmpty(user.CheckOutTime) ? "checked" : "")
+                                           @(!User.IsInRole("Admin") && !string.IsNullOrEmpty(user.CheckOutTime) ? "disabled" : "") />
+                                    <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Left / انصراف</span>
+                                </label>
+                                <input type="text" id="checkout-time-@user.Id" 
+                                       placeholder="--:--" 
+                                       value="@user.CheckOutTime"
+                                       @(User.IsInRole("Admin") ? "" : "readonly")
+                                       onchange="saveDetailedAttendance('@user.Id')"
+                                       class="w-20 px-2 py-1.5 text-[10px] font-bold text-center rounded-lg focus:outline-none @(User.IsInRole("Admin") ? "bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500" : "bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none")" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Double-check dark mode is cleared on load
+        document.documentElement.classList.remove('dark');
+
+        function getFormattedTime() {
+            const now = new Date();
+            let hours = now.getHours();
+            let minutes = now.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // the hour '0' should be '12'
+            minutes = minutes < 10 ? '0' + minutes : minutes;
+            return hours + ':' + minutes + ' ' + ampm;
+        }
+
+        function onCheckInToggle(userId) {
+            const chk = document.getElementById(`checkin-chk-${userId}`);
+            const timeInput = document.getElementById(`checkin-time-${userId}`);
+
+            if (chk.checked) {
+                if (!timeInput.value.trim()) {
+                    timeInput.value = getFormattedTime();
+                }
+            } else {
+                timeInput.value = '';
+            }
+
+            saveDetailedAttendance(userId);
+        }
+
+        function onCheckOutToggle(userId) {
+            const chk = document.getElementById(`checkout-chk-${userId}`);
+            const timeInput = document.getElementById(`checkout-time-${userId}`);
+
+            if (chk.checked) {
+                if (!timeInput.value.trim()) {
+                    timeInput.value = getFormattedTime();
+                }
+            } else {
+                timeInput.value = '';
+            }
+
+            saveDetailedAttendance(userId);
+        }
+
+        const isAdmin = @(User.IsInRole("Admin").ToString().ToLower());
+
+        function saveDetailedAttendance(userId) {
+            const isPresent = document.getElementById(`checkin-chk-${userId}`).checked;
+            const checkInTime = document.getElementById(`checkin-time-${userId}`).value.trim();
+            const checkOutTime = document.getElementById(`checkout-time-${userId}`).value.trim();
+            const sessionId = '@session.Id';
+
+            // Visually fade the row to indicate saving
+            $(`#checkin-chk-${userId}, #checkout-chk-${userId}`).prop('disabled', true);
+
+            $.post('@Url.Action("UpdateDetailedAttendance", "SkillTracks")', {
+                sessionId: sessionId,
+                userId: userId,
+                isPresent: isPresent,
+                checkInTime: checkInTime,
+                checkOutTime: checkOutTime
+            }, function(res) {
+                if (res.success) {
+                    // Update visual state attribute
+                    $(`#checkin-chk-${userId}`).closest('.user-row').attr('data-present', isPresent.toString());
+                    updateCounters();
+
+                    if (!isAdmin) {
+                        // For reception: lock checked states permanently
+                        if (isPresent) {
+                            $(`#checkin-chk-${userId}`).prop('disabled', true).closest('label').addClass('opacity-60 cursor-not-allowed pointer-events-none');
+                        } else {
+                            $(`#checkin-chk-${userId}`).prop('disabled', false).closest('label').removeClass('opacity-60 cursor-not-allowed pointer-events-none');
+                        }
+
+                        if (checkOutTime) {
+                            $(`#checkout-chk-${userId}`).prop('disabled', true).closest('label').addClass('opacity-60 cursor-not-allowed pointer-events-none');
+                        } else {
+                            $(`#checkout-chk-${userId}`).prop('disabled', false).closest('label').removeClass('opacity-60 cursor-not-allowed pointer-events-none');
+                        }
+                    } else {
+                        // Admin: always re-enable everything
+                        $(`#checkin-chk-${userId}, #checkout-chk-${userId}`).prop('disabled', false);
+                    }
+                } else {
+                    // On error, restore
+                    if (!isAdmin) {
+                        $(`#checkin-chk-${userId}`).prop('disabled', isPresent);
+                        $(`#checkout-chk-${userId}`).prop('disabled', !!checkOutTime);
+                    } else {
+                        $(`#checkin-chk-${userId}, #checkout-chk-${userId}`).prop('disabled', false);
+                    }
+                    Swal.fire({ icon: 'error', title: 'Failed to Save', text: res.message || 'Please check your connection.' });
+                }
+            }).fail(function(xhr) {
+                Swal.fire({ icon: 'error', title: 'Server Error', text: xhr.responseText || 'Failed to communicate with the server.' });
+            });
+        }
+
+        function updateCounters() {
+            const total = $('.user-row').length;
+            const present = $('.user-row[data-present="true"]').length;
+            const absent = total - present;
+
+            $('#filterAll').text(`All (${total})`);
+            $('#filterPresent').text(`Present (${present})`);
+            $('#filterAbsent').text(`Absent (${absent})`);
+        }
+
+        let activeStatusFilter = 'all'; // 'all', 'present', 'absent'
+
+        function applyFilters() {
+            const searchVal = $('#attendanceSearch').val().toLowerCase().trim();
+            const branchVal = $('#branchFilter').val();
+
+            $('.user-row').each(function() {
+                const $row = $(this);
+                const rowText = $row.text().toLowerCase();
+                const isPresent = $row.attr('data-present') === 'true';
+                const rowBranch = $row.attr('data-branch');
+
+                // 1. Check Search Match
+                const matchesSearch = !searchVal || rowText.includes(searchVal);
+
+                // 2. Check Status Match
+                let matchesStatus = true;
+                if (activeStatusFilter === 'present') {
+                    matchesStatus = isPresent;
+                } else if (activeStatusFilter === 'absent') {
+                    matchesStatus = !isPresent;
+                }
+
+                // 3. Check Branch Match
+                let matchesBranch = true;
+                if (branchVal) {
+                    matchesBranch = (rowBranch === branchVal);
+                }
+
+                // Show/Hide based on all criteria
+                if (matchesSearch && matchesStatus && matchesBranch) {
+                    $row.show();
+                } else {
+                    $row.hide();
+                }
+            });
+        }
+
+        // Search Logic
+        $('#attendanceSearch').on('input keyup', function() {
+            applyFilters();
+        });
+
+        // Branch filter change
+        $(document).on('change', '#branchFilter', function() {
+            applyFilters();
+        });
+
+        // Filtering
+        $('#filterAll').click(function() {
+            activeStatusFilter = 'all';
+            updateFilterBtns(this);
+            applyFilters();
+        });
+        $('#filterPresent').click(function() {
+            activeStatusFilter = 'present';
+            updateFilterBtns(this);
+            applyFilters();
+        });
+        $('#filterAbsent').click(function() {
+            activeStatusFilter = 'absent';
+            updateFilterBtns(this);
+            applyFilters();
+        });
+
+        function updateFilterBtns(activeBtn) {
+            $('.class-filter-btn').removeClass('bg-white text-slate-900 shadow-sm').addClass('text-slate-500 hover:text-slate-900');
+            $(activeBtn).addClass('bg-white text-slate-900 shadow-sm').removeClass('text-slate-500');
+        }
+    </script>
+}
+

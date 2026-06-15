@@ -1,0 +1,193 @@
+@model IEnumerable<Exam.Models.UserDto>
+@{
+    var wave = ViewBag.Wave as Exam.DTOs.WaveDto;
+    ViewData["Title"] = wave?.WaveName ?? "Wave Details";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var usersList = Model?.ToList() ?? new List<Exam.Models.UserDto>();
+    var waveId = wave?.Id ?? 0;
+}
+
+<!-- Back Button + Header -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div class="flex items-center gap-5">
+            <a href="@Url.Action("Waves", "Admin")" class="w-12 h-12 bg-slate-100 dark:bg-slate-800 hover:bg-brand-600 hover:text-white text-slate-400 rounded-2xl flex items-center justify-center transition-all group">
+                <i class="fas fa-arrow-left text-sm group-hover:scale-110 transition-transform"></i>
+            </a>
+            <div>
+                <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Batch Overview</h2>
+                <p class="text-2xl font-black uppercase text-slate-900 dark:text-white">@wave?.WaveName</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Wave Info Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <!-- Batch Name Card -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[24px] p-6 shadow-sm">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-brand-50 dark:bg-brand-500/10 rounded-2xl flex items-center justify-center">
+                <i class="fas fa-water text-brand-600 dark:text-brand-400"></i>
+            </div>
+            <div>
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Batch Name</p>
+                <p class="text-lg font-black text-slate-900 dark:text-white uppercase">@wave?.WaveName</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Date Card -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[24px] p-6 shadow-sm">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-amber-50 dark:bg-amber-500/10 rounded-2xl flex items-center justify-center">
+                <i class="fas fa-calendar-alt text-amber-600 dark:text-amber-400"></i>
+            </div>
+            <div>
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Start Date</p>
+                <p class="text-lg font-black text-slate-900 dark:text-white">@(wave?.StartDate?.ToString("MMMM dd, yyyy") ?? "Not Set")</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Users Card -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[24px] p-6 shadow-sm">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl flex items-center justify-center">
+                <i class="fas fa-users text-emerald-600 dark:text-emerald-400"></i>
+            </div>
+            <div>
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Enrolled Users</p>
+                <p class="text-lg font-black text-slate-900 dark:text-white">@usersList.Count</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Users Table -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+    <div class="p-6 border-b border-slate-100 dark:border-slate-800">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400">
+                <i class="fas fa-list"></i>
+            </div>
+            <div>
+                <h3 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Enrolled Personnel</h3>
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">All users assigned to this batch</p>
+            </div>
+        </div>
+    </div>
+    <div class="overflow-x-auto">
+        <table id="waveUsersTable" class="saas-table">
+            <thead>
+                <tr>
+                    <th class="pl-8">User</th>
+                    <th>Code</th>
+                    <th>Role</th>
+                    <th>Branch</th>
+                    <th>Join Date</th>
+                    <th class="text-right pr-8">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in usersList)
+                {
+                    <tr data-userid="@u.Id">
+                        <td class="pl-8">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center font-bold text-slate-400">
+                                    @(string.IsNullOrEmpty(u.UserName) ? "?" : u.UserName.Substring(0, 1).ToUpper())
+                                </div>
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-slate-900 dark:text-white">@u.UserName</span>
+                                    <span class="text-[10px] text-slate-400 font-medium">@u.Email</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="font-mono font-bold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded text-xs">@(u.UserCode ?? "—")</span></td>
+                        <td>
+                            <span class="text-[9px] font-bold text-white bg-slate-900 dark:bg-brand-500/20 dark:text-brand-400 px-2.5 py-1 rounded-full uppercase tracking-widest">
+                                @(string.IsNullOrWhiteSpace(u.RoleName) ? "USER" : u.RoleName.ToUpper())
+                            </span>
+                        </td>
+                        <td>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                                @(u.BranchName ?? "N/A")
+                            </span>
+                        </td>
+                        <td>
+                            <span class="text-xs font-medium text-slate-500">
+                                @(u.JoinDate?.ToString("MMM dd, yyyy") ?? "—")
+                            </span>
+                        </td>
+                        <td class="text-right pr-8">
+                            <button class="remove-wave-btn bg-rose-50 hover:bg-rose-600 text-rose-500 hover:text-white px-4 py-2 rounded-xl transition-all border border-rose-100 hover:border-rose-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 ml-auto"
+                                    data-userid="@u.Id" data-username="@u.UserName">
+                                <i class="fas fa-user-minus text-xs"></i>
+                                Remove
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            var table = $('#waveUsersTable').DataTable({
+                pageLength: 15,
+                language: { search: "", searchPlaceholder: "Search users..." },
+                columnDefs: [{ orderable: false, targets: -1 }]
+            });
+            $('.dataTables_filter input').addClass('bg-slate-50 border-slate-200 rounded-xl px-4 py-2 text-xs focus:ring-0 outline-none mb-4');
+
+            // Remove user from wave
+            $(document).on('click', '.remove-wave-btn', function () {
+                var userId = $(this).data('userid');
+                var userName = $(this).data('username');
+                var waveId = @waveId;
+
+                Swal.fire({
+                    title: 'Remove from Batch?',
+                    html: `Are you sure you want to remove <br><b class="text-rose-600">${userName}</b><br> from this batch?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, Remove',
+                    cancelButtonText: 'Cancel',
+                    customClass: {
+                        confirmButton: 'bg-rose-600 hover:bg-rose-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                        cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                    },
+                    buttonsStyling: false,
+                    reverseButtons: true
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Swal.fire({ title: 'Removing...', didOpen: () => Swal.showLoading(), allowOutsideClick: false, showConfirmButton: false });
+
+                        $.ajax({
+                            url: '/Admin/RemoveUserFromWave',
+                            type: 'POST',
+                            data: { waveId: waveId, userId: userId },
+                            success: function (r) {
+                                if (r.success) {
+                                    Swal.fire({ icon: 'success', title: 'Removed!', text: r.message || 'User has been removed from this batch.', timer: 1500, showConfirmButton: false });
+                                    // Remove the row from DataTable
+                                    var row = table.row($('tr[data-userid="' + userId + '"]'));
+                                    row.remove().draw();
+                                } else {
+                                    Swal.fire({ icon: 'error', title: 'Error', text: r.message || 'Could not remove user.' });
+                                }
+                            },
+                            error: function () {
+                                Swal.fire({ icon: 'error', title: 'Error', text: 'Network request failed.' });
+                            }
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+}

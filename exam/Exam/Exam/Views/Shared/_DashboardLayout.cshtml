@@ -1,0 +1,1593 @@
+@using Microsoft.AspNetCore.Identity
+@{
+    Layout = null;
+    bool isIframe = Context.Request.Query.ContainsKey("iframe");
+}
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth @(isIframe ? "iframe-mode bg-slate-50 dark:bg-slate-950" : "")" translate="no">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="google" content="notranslate">
+    <title>@ViewBag.Title - Eltarshoubi Control</title>
+    <link rel="icon" type="image/png" href="~/images/logo.jpeg" />
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons & Styling -->
+    <link rel="stylesheet" href="~/lib/font-awesome/css/all.min.css" />
+    <script src="~/lib/tailwind/tailwindcss.js"></script>
+    <script src="~/lib/sortablejs/Sortable.min.js"></script>
+    <link rel="stylesheet" href="~/lib/datatables/css/jquery.dataTables.min.css" />
+    
+    <script>
+        // Theme Helper - Running immediately to avoid FOUC
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
+        // Iframe Detection - Add class immediately to avoid layout flashing
+        if (window.self !== window.top) {
+            document.documentElement.classList.add('iframe-mode');
+        }
+
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#edf4f3',
+                            100: '#d1e4e2',
+                            200: '#a8cdca',
+                            300: '#75b0ab',
+                            400: '#48918a',
+                            500: '#2a766f',
+                            600: '#01443c',
+                            700: '#013831',
+                            800: '#012c27',
+                            900: '#011f1c',
+                            950: '#00120f',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Mobile Sidebar */
+        #sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 45; backdrop-filter: blur(2px); }
+        @@media (max-width: 767px) {
+            #main-sidebar { transform: translateX(-100%); transition: transform 0.3s ease; }
+            body.sidebar-open #main-sidebar { transform: translateX(0) !important; }
+            body.sidebar-open #sidebar-overlay { display: block !important; }
+        }
+
+        /* DataTables Custom Polish */
+        .dataTables_wrapper .dataTables_length {
+            @@apply mb-4 sm:mb-0;
+        }
+        .dataTables_wrapper .dataTables_filter {
+            @@apply w-full sm:w-auto mb-4 sm:mb-0 relative;
+        }
+        .dataTables_wrapper .dataTables_filter label {
+            @@apply w-full block relative;
+        }
+        .dataTables_wrapper .dataTables_filter input {
+            @@apply w-full sm:w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3 pl-10 text-sm outline-none transition-all focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 !important;
+        }
+        /* Add search icon via CSS for all DataTables */
+        .dataTables_filter label::before {
+            content: "\f002";
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            @@apply absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs z-10;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            @@apply border-0 bg-transparent text-slate-600 dark:text-slate-400 font-semibold px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 !important;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+            @@apply bg-brand-500 text-white !important;
+        }
+        
+        table.dataTable.no-footer { border-bottom: 0 !important; }
+
+        /* SaaS Table Style */
+        .saas-table { width: 100% !important; min-width: 1000px !important; border-collapse: separate !important; border-spacing: 0 !important; }
+        .saas-table thead th { 
+            @@apply bg-slate-50 dark:bg-slate-900/80 text-slate-500 dark:text-slate-400 font-bold text-[11px] uppercase tracking-wider py-4 px-6 border-b border-slate-200 dark:border-slate-800 text-left;
+        }
+        .saas-table tbody td { 
+            @@apply py-4 px-6 border-b border-slate-100 dark:border-slate-800/50 text-sm text-slate-700 dark:text-slate-300 transition-colors;
+        }
+        .dark .saas-table tbody tr { background-color: transparent !important; }
+        .dark .saas-table tbody td { background-color: transparent !important; }
+        .saas-table tbody tr:hover td { 
+            @@apply bg-slate-50/50 dark:bg-slate-800/30;
+        }
+        .saas-table tbody tr:last-child td { border-bottom: 0; }
+
+        /* DataTables Dark Sync */
+        .dark .dataTables_wrapper .dataTables_length, 
+        .dark .dataTables_wrapper .dataTables_filter, 
+        .dark .dataTables_wrapper .dataTables_info, 
+        .dark .dataTables_wrapper .dataTables_processing, 
+        .dark .dataTables_wrapper .dataTables_paginate {
+            @@apply text-slate-400;
+        }
+        .dark .dataTables_wrapper .dataTables_paginate .paginate_button {
+            @@apply text-slate-400 !important;
+        }
+        .dark .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+            @@apply bg-slate-800 border-slate-700 text-white !important;
+        }
+        .dark table.dataTable { background-color: transparent !important; }
+        .dark .dataTables_wrapper { background-color: transparent !important; }
+        /* Iframe Tabs Styles */
+        .tab-btn.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 2px; background-color: #2a766f; }
+        .tab-pane { display: none; width: 100%; height: 100%; }
+        .tab-pane.active { display: block; }
+        .iframe-pane { width: 100%; height: 100%; border: none; background: transparent; }
+        
+        html.iframe-mode body { background: transparent !important; }
+        
+        /* Auto Iframe Detection & Layout Correction */
+        html.iframe-mode #main-sidebar { display: none !important; }
+        html.iframe-mode header { display: none !important; }
+        html.iframe-mode #mTabsContainer { display: none !important; }
+        html.iframe-mode main { margin-left: 0 !important; }
+        html.iframe-mode #tab-pane-home { padding: 0 !important; }
+        html.iframe-mode footer { display: none !important; }
+        html.iframe-mode #aiChatBtn { display: none !important; }
+        html.iframe-mode #aiChatPanel { display: none !important; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased transition-colors duration-300 overflow-x-hidden">
+
+@if (isIframe) {
+    <!-- Iframe Content Only -->
+    <div class="w-full h-full min-h-screen overflow-auto">
+        <div class="p-4 md:p-8">
+            @RenderBody()
+        </div>
+    </div>
+} else {
+    <!-- Full Shell -->
+    <!-- Sidebar Backdrop (mobile) -->
+    <div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+    <div class="h-screen flex overflow-hidden">
+        <!-- Sidebar -->
+        <aside id="main-sidebar" class="fixed inset-y-0 left-0 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50 transition-all duration-300">
+            <div class="flex flex-col h-full">
+                <!-- Logo Area -->
+                <div class="h-20 flex items-center px-8 border-b border-slate-100 dark:border-slate-800/50">
+                    <div class="w-10 h-10 bg-white rounded-xl overflow-hidden flex items-center justify-center text-white shadow-lg border border-slate-100 shadow-brand-500/20 mr-3 p-1">
+                        <img src="~/images/logo.jpeg" alt="Eltarshoubi Logo" class="w-full h-full object-contain" />
+                    </div>
+                    <div>
+                        <span class="text-xl font-black tracking-tighter block leading-none">ELTARSHOUBI</span>
+                        <span class="text-[10px] font-bold text-brand-600 dark:text-brand-400 tracking-[0.2em] uppercase">Control Center</span>
+                    </div>
+                </div>
+
+                <!-- Nav -->
+                <nav class="flex-1 px-4 py-8 space-y-1.5 overflow-y-auto">
+                    @{
+                        var currentController = (ViewContext.RouteData.Values["controller"]?.ToString() ?? "").ToLowerInvariant();
+                        var currentAction = (ViewContext.RouteData.Values["action"]?.ToString() ?? "").ToLowerInvariant();
+                        
+                        string linkClass(bool active) => active 
+                            ? "flex items-center gap-3 px-4 py-3 rounded-xl bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold transition-all"
+                            : "flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium transition-all";
+                    }
+
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-6">Main Operations</div>
+                        
+                        <a href="@Url.Action("Index", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "index")">
+                            <i class="fas fa-chart-line w-5"></i>
+                            <span>LMS Overview</span>
+                        </a>
+                        
+                        <div class="relative">
+                            <button type="button" onclick="document.getElementById('matrix-submenu').classList.toggle('hidden'); this.querySelector('.chevron-icon').classList.toggle('rotate-180');" 
+                                    class="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium transition-all @((currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams") ? "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold" : "")">
+                                <div class="flex items-center gap-3">
+                                    <i class="fas fa-file-invoice w-5"></i>
+                                    <span>Exam Matrix</span>
+                                </div>
+                                <i class="fas fa-chevron-down text-[10px] chevron-icon transition-transform duration-200 @((currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams") ? "rotate-180" : "")"></i>
+                            </button>
+                            <div id="matrix-submenu" class="pl-11 pr-4 py-2 space-y-1 @((currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams") ? "" : "hidden")">
+                                <a href="@Url.Action("WeeklyExams", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "weeklyexams" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
+                                    <i class="fas fa-calendar-week mr-2 text-[10px]"></i> <span>Weekly Exams</span>
+                                </a>
+                                <a href="@Url.Action("WaveExams", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "waveexams" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
+                                    <i class="fas fa-water mr-2 text-[10px]"></i> <span>Wave Exams</span>
+                                </a>
+                            </div>
+                        </div>
+                    }
+
+                    @if (User.IsInRole("Admin") || User.IsInRole("Branch Manager") || User.IsInRole("HR") || User.IsInRole("Human Resources") || User.IsInRole("Reception"))
+                    {
+                        <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-8">Personnel Data</div>
+                    }
+
+                    @if (User.IsInRole("Admin") || User.IsInRole("Branch Manager"))
+                    {
+                        <div class="relative">
+                            <button type="button" onclick="document.getElementById('analytics-submenu').classList.toggle('hidden'); this.querySelector('.chevron-icon').classList.toggle('rotate-180');" 
+                                    class="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium transition-all @((currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students") ? "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold" : "")">
+                                <div class="flex items-center gap-3">
+                                    <i class="fas fa-chart-pie w-5"></i>
+                                    <span>Exam Analytics</span>
+                                </div>
+                                <i class="fas fa-chevron-down text-[10px] chevron-icon transition-transform duration-200 @((currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students") ? "rotate-180" : "")"></i>
+                            </button>
+                            <div id="analytics-submenu" class="pl-11 pr-4 py-2 space-y-1 @((currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students") ? "" : "hidden")">
+                                <a href="@Url.Action("WeeklyResults", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "weeklyresults" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
+                                    <i class="fas fa-calendar-week mr-2 text-[10px]"></i> <span>Weekly Analytics</span>
+                                </a>
+                                <a href="@Url.Action("WaveyResults", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "waveyresults" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
+                                    <i class="fas fa-water mr-2 text-[10px]"></i> <span>Wave Analytics</span>
+                                </a>
+                                <a href="@Url.Action("Students", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "students" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
+                                    <i class="fas fa-globe mr-2 text-[10px]"></i> <span>General Analytics</span>
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <a href="@Url.Action("Certificates", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "certificates")">
+                            <i class="fas fa-certificate w-5"></i>
+                            <span>Certificates</span>
+                        </a>
+                    }
+                    
+                    @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources"))
+                    {
+                        <a href="@Url.Action("PendingRequests", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "pendingrequests")">
+                            <i class="fas fa-user-clock w-5"></i>
+                            <span>New Come</span>
+                        </a>
+                        
+                        <a href="@Url.Action("AllUsers", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "allusers")">
+                            <i class="fas fa-users w-5"></i>
+                            <span>Personnel Registry</span>
+                        </a>
+
+                        <a href="@Url.Action("DeactivatedUsers", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "deactivatedusers")">
+                            <i class="fas fa-user-slash w-5"></i>
+                            <span>Deactivated</span>
+                        </a>
+                    }
+                    
+                    @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources"))
+                    {
+                        <a href="@Url.Action("Waves", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "waves")">
+                            <i class="fas fa-water w-5"></i>
+                            <span>Batch Cycles</span>
+                        </a>
+
+                        <a href="@Url.Action("Companies", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "companies")">
+                            <i class="fas fa-building w-5"></i>
+                            <span>Companies</span>
+                        </a>
+
+                        <a href="@Url.Action("Branches", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "branches")">
+                            <i class="fas fa-code-branch w-5"></i>
+                            <span>Branches</span>
+                        </a>
+                    }
+                    
+                    @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources") || User.IsInRole("Reception"))
+                    {
+                        <a href="@Url.Action("Analytics", "Attendance")" class="@linkClass(currentController == "attendance" && currentAction == "analytics")">
+                            <i class="fas fa-calendar-check w-5"></i>
+                            <span>Attendance Trends</span>
+                        </a>
+                    }
+
+                    @if (User.IsInRole("Admin") || User.IsInRole("SoftSkills Specialist") || User.IsInRole("Reception"))
+                    {
+                        <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-8">Corporate Skills</div>
+                        <a href="@Url.Action("Index", "SkillTracks")" class="@linkClass(currentController == "skilltracks" && currentAction == "index")">
+                            <i class="fas fa-users-cog w-5"></i>
+                            <span>Skill Tracks</span>
+                        </a>
+                        @if (User.IsInRole("Admin"))
+                        {
+                            <a href="@Url.Action("Analytics", "SkillTracks")" class="@linkClass(currentController == "skilltracks" && currentAction == "analytics")">
+                                <i class="fas fa-chart-line w-5"></i>
+                                <span>Attendance Trends</span>
+                            </a>
+                        }
+                    }
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-8">Configuration</div>
+
+                        <a href="@Url.Action("Roles", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "roles")">
+                            <i class="fas fa-shield-alt w-5"></i>
+                            <span>System Roles</span>
+                        </a>
+                        <a href="@Url.Action("getallcategories", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "getallcategories")">
+                            <i class="fas fa-tags w-5"></i>
+                            <span>Question Categories</span>
+                        </a>
+                        <a href="@Url.Action("getallexamtypes", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "getallexamtypes")">
+                            <i class="fas fa-layer-group w-5"></i>
+                            <span>Exam Varieties</span>
+                        </a>
+                        <a href="@Url.Action("Structure", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "structure")">
+                            <i class="fas fa-sitemap w-5"></i>
+                            <span>Course Structure</span>
+                        </a>
+                        <a href="@Url.Action("ManageInstructions", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "manageinstructions")">
+                            <i class="fas fa-info-circle w-5"></i>
+                            <span>Exam Instructions</span>
+                        </a>
+                    }
+                </nav>
+
+                <!-- Profile Small -->
+                <div class="p-4 mt-auto">
+                    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 flex items-center gap-3 border border-slate-100 dark:border-slate-800/50">
+                        <div class="w-10 h-10 rounded-xl bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-brand-600 dark:text-brand-400 font-bold">
+                            @User.Identity.Name?.Substring(0,1).ToUpper()
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-xs font-bold truncate">@User.Identity.Name</p>
+                            @{
+                                var roleClaim = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value;
+                                string sidebarRole = !string.IsNullOrEmpty(roleClaim) ? roleClaim : "Trainee";
+                            }
+                            <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold truncate" title="@sidebarRole">@sidebarRole</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="flex-1 md:ml-72 h-screen flex flex-col transition-all duration-300 max-w-full overflow-hidden">
+            <!-- Top Navigation -->
+            <header class="h-16 md:h-20 sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 z-40 px-4 md:px-8 flex items-center justify-between transition-colors duration-300">
+                <div class="flex items-center gap-3 md:gap-4">
+                    <!-- Mobile Hamburger -->
+                    <button id="sidebarToggleBtn" onclick="toggleSidebar()" class="md:hidden p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Toggle sidebar">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    </button>
+                    <h1 class="text-sm md:text-lg font-bold truncate max-w-[150px] sm:max-w-none">@ViewBag.Title</h1>
+                    <div class="hidden sm:block h-5 w-[1px] bg-slate-200 dark:bg-slate-800"></div>
+                    <div class="hidden sm:flex items-center gap-2">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Network Active</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-6">
+                    <!-- Home Link -->
+                    <a href="@Url.Action("Index", "Home")" class="text-slate-500 hover:text-brand-600 transition-colors tooltip" title="Portal Home">
+                        <i class="fas fa-home text-lg"></i>
+                    </a>
+
+                    <!-- Theme Toggle -->
+                    <button id="theme-toggle" type="button" class="text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-200 dark:focus:ring-slate-700 rounded-lg text-sm p-2.5 transition-all">
+                        <i id="theme-toggle-dark-icon" class="hidden fas fa-moon"></i>
+                        <i id="theme-toggle-light-icon" class="hidden fas fa-sun"></i>
+                    </button>
+
+                    <div class="h-8 w-[1px] bg-slate-200 dark:bg-slate-800"></div>
+
+
+                </div>
+            </header>
+
+            <!-- Tab Bar -->
+            <div id="mTabsContainer" class="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 flex items-center px-4 pt-2 gap-1 overflow-x-auto shadow-sm z-10 hidden" style="min-height: 48px;">
+                <!-- Home Tab (Fixed) -->
+                <div class="tab-btn active flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all cursor-pointer shadow-sm min-w-max relative overflow-hidden group bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 border-b-0 border border-brand-200 dark:border-brand-800" onclick="switchTab('home')" id="tab-btn-home" data-fixed="true">
+                    <i class="fas fa-home"></i> <span>Dashboard</span>
+                    <div class="tab-reload w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-brand-500 transition-colors ml-2 opacity-50 group-hover:opacity-100" onclick="refreshTab(event, 'home')" title="Refresh Tab"><i class="fas fa-sync-alt text-[10px]"></i></div>
+                </div>
+            </div>
+
+            <!-- Workspace Body -->
+            <div id="mainWorkspace" class="flex-1 relative flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950">
+                <!-- Default Home Tab Content -->
+                <div id="tab-pane-home" class="tab-pane active h-full overflow-auto">
+                    <div class="p-4 md:p-8 min-h-full flex flex-col">
+                        <div class="flex-1">
+                            @RenderBody()
+                        </div>
+                        <footer class="mt-auto py-8 text-center text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest">
+                            LMS Control Board v3.0 // Unified Dashboard Console
+                        </footer>
+                    </div>
+                </div>
+                <!-- Iframes will be appended here -->
+            </div>
+        </main>
+    </div>
+}
+    <script>
+        function toggleSidebar() {
+            document.body.classList.toggle('sidebar-open');
+        }
+
+        function closeSidebar() {
+            document.body.classList.remove('sidebar-open');
+        }
+
+        // Theme Toggle Logic
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const darkIcon = document.getElementById('theme-toggle-dark-icon');
+        const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+        // Sync icons on load
+        if (document.documentElement.classList.contains('dark')) {
+            lightIcon.classList.remove('hidden');
+        } else {
+            darkIcon.classList.remove('hidden');
+        }
+
+        themeToggleBtn.addEventListener('click', function() {
+            darkIcon.classList.toggle('hidden');
+            lightIcon.classList.toggle('hidden');
+
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('color-theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('color-theme', 'dark');
+            }
+        });
+    </script>
+
+    <!-- Scripts at Bottom (Old Way - Most Stable) -->
+    <script src="~/lib/jquery-3.7.1/jquery.min.js"></script>
+    <script src="~/lib/datatables/js/jquery.dataTables.min.js"></script>
+    <script src="~/lib/sweetalert2/sweetalert2.all.min.js"></script>
+    <script src="~/lib/font-awesome/js/all.min.js"></script>
+    <script src="~/lib/chartjs/chart.umd.js"></script>
+    <script src="~/lib/signalr/signalr.min.js"></script>
+
+    <script>
+        $(document).ready(function() {
+            $('.datatable').each(function () {
+                if ($.fn.DataTable.isDataTable(this)) return;
+                var table = $(this).DataTable({
+                    deferRender: true,
+                    processing: true,
+                    autoWidth: false,
+                    orderClasses: false,
+                    stateSave: true,
+                    pageLength: 10,
+                    lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
+                    dom: '<"flex flex-col sm:flex-row justify-between items-center mb-4"lf>rt<"flex flex-col sm:flex-row justify-between items-center mt-4"ip>',
+                    language: {
+                        search: "",
+                        searchPlaceholder: "Search records...",
+                        processing: '<div class="flex items-center gap-2 text-brand-600 font-bold"><i class="fas fa-circle-notch animate-spin text-lg"></i> Loading Matrix...</div>'
+                    }
+                });
+
+                // Auto-adjust columns once initialized to prevent alignment bugs
+                setTimeout(function() {
+                    table.columns.adjust().draw();
+                }, 150);
+            });
+
+            // Adjust all tables on window resize
+            $(window).on('resize', function () {
+                $('.datatable').each(function() {
+                    if ($.fn.DataTable.isDataTable(this)) {
+                        $(this).DataTable().columns.adjust();
+                    }
+                });
+            });
+
+            // Notifications
+            var msg = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["SuccessMessage"] ?? ""));
+            var err = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["ErrorMessage"] ?? ""));
+            if (msg) Swal.fire({ icon: 'success', title: msg, timer: 2000, showConfirmButton: false, background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff', color: document.documentElement.classList.contains('dark') ? '#fff' : '#000' });
+            if (err) Swal.fire({ icon: 'error', title: 'System Error', html: err.replace(/\n/g, '<br/>'), background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff', color: document.documentElement.classList.contains('dark') ? '#fff' : '#000' });
+            if (typeof loadGlobalAIChat === 'function') loadGlobalAIChat();
+
+            // If we are inside an iframe, automatically append iframe=true to all links and forms
+            if (window.self !== window.top) {
+                $(document).on('click', 'a', function(e) {
+                    var href = $(this).attr('href');
+                    if (href && href !== '#' && !href.startsWith('javascript:') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
+                        // Avoid double appending
+                        if (href.indexOf('iframe=true') === -1) {
+                            e.preventDefault();
+                            var separator = href.indexOf('?') !== -1 ? '&' : '?';
+                            window.location.href = href + separator + 'iframe=true';
+                        }
+                    }
+                });
+
+                $(document).on('submit', 'form', function(e) {
+                    var action = $(this).attr('action') || window.location.pathname;
+                    if (action.indexOf('iframe=true') === -1) {
+                        var separator = action.indexOf('?') !== -1 ? '&' : '?';
+                        $(this).attr('action', action + separator + 'iframe=true');
+                    }
+                });
+            }
+        });
+    </script>
+    
+@if (!isIframe) {
+    <!-- AI CHAT FLOATING INTERFACE -->
+    <!-- Trigger Button -->
+    <div class="fixed bottom-6 right-6 z-[60]">
+        <button onclick="toggleAIChat()" class="w-14 h-14 bg-gradient-to-tr from-brand-600 to-brand-400 text-white rounded-full flex items-center justify-center shadow-2xl hover:shadow-brand-600/30 transition-all transform hover:-translate-y-1 active:translate-y-0 duration-300 relative group" id="aiChatBtn">
+            <span class="absolute inset-0 rounded-full bg-brand-500 animate-ping opacity-25 group-hover:opacity-0"></span>
+            <i class="fas fa-brain text-xl"></i>
+            <!-- Small Notification Badge -->
+            <span class="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center text-[8px] font-black text-white">1</span>
+        </button>
+    </div>
+
+    <!-- Slide-Out Glass Chat Panel -->
+    <div id="aiChatPanel" class="fixed bottom-24 right-6 w-[380px] sm:w-[420px] h-[550px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 rounded-[32px] shadow-2xl flex flex-col overflow-hidden z-[60] scale-95 opacity-0 pointer-events-none transition-all duration-300 transform origin-bottom-right">
+        
+        <!-- Slide-In Sessions Drawer -->
+        <div id="aiSessionsDrawer" class="absolute inset-y-0 left-0 w-64 bg-slate-950 text-white z-50 transform -translate-x-full transition-transform duration-300 flex flex-col border-r border-slate-800/50">
+            <!-- Drawer Header -->
+            <div class="p-4 border-b border-slate-800/50 flex items-center justify-between">
+                <span class="text-xs font-black tracking-widest uppercase text-slate-400">Chat History</span>
+                <button onclick="toggleSessionsDrawer()" class="w-7 h-7 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+                    <i class="fas fa-times text-xs"></i>
+                </button>
+            </div>
+            <!-- New Chat Button -->
+            <div class="p-3">
+                <button onclick="createNewSession(); toggleSessionsDrawer();" class="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-600/20">
+                    <i class="fas fa-plus text-[10px]"></i>
+                    <span>New Chat</span>
+                </button>
+            </div>
+            <!-- Sessions List -->
+            <div id="sessionsList" class="flex-1 overflow-y-auto px-2 pb-4 space-y-1">
+                <!-- Session items will be dynamically rendered here -->
+            </div>
+        </div>
+
+        <!-- Panel Header -->
+        <div class="p-6 bg-gradient-to-r from-brand-600 to-brand-500 text-white flex items-center justify-between relative overflow-hidden">
+            <div class="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-xl"></div>
+            <div class="flex items-center gap-3 relative z-10">
+                <button onclick="toggleSessionsDrawer()" class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors" title="Chat History">
+                    <i class="fas fa-history text-xs"></i>
+                </button>
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-xs">
+                        <i class="fas fa-robot text-brand-100"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="text-[10px] font-black tracking-wider uppercase">El-Tarshoubi AI</h3>
+                        <div class="flex items-center gap-1.5 mt-0.5 max-w-[120px] sm:max-w-[150px]">
+                            <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full flex-shrink-0 animate-pulse"></span>
+                            <span class="text-[9px] font-bold text-brand-100 uppercase tracking-widest truncate" id="activeSessionTitle">New Session</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 relative z-10">
+                <button onclick="createNewSession()" class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors" title="New Chat Session">
+                    <i class="fas fa-plus text-xs"></i>
+                </button>
+                <button onclick="toggleAIChat()" class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors">
+                    <i class="fas fa-times text-xs"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Messages Container -->
+        <div id="aiChatMessages" class="flex-1 p-6 overflow-y-auto space-y-4 bg-slate-50/50 dark:bg-slate-950/20">
+            <!-- Messages are loaded dynamically based on session -->
+        </div>
+
+        <!-- Image Upload Preview Bar -->
+        <div id="imagePreviewBar" class="px-6 py-2 bg-slate-100 dark:bg-slate-950 border-t border-slate-200/50 dark:border-slate-800/50 hidden items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <div class="w-10 h-10 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 relative">
+                    <img id="imagePreviewThumbnail" src="" class="w-full h-full object-cover" />
+                </div>
+                <span class="text-[10px] font-bold text-slate-500 truncate max-w-[200px]" id="imagePreviewName">Image Selected</span>
+            </div>
+            <button onclick="removeSelectedImage()" class="text-red-500 hover:text-red-700 text-xs">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+
+        <!-- Input Section -->
+        <div class="p-6 bg-white dark:bg-slate-900 border-t border-slate-200/50 dark:border-slate-800/50 flex flex-col gap-3">
+            <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-4 py-2">
+                <!-- Text Area Input -->
+                <textarea id="aiChatInput" rows="1" onkeydown="handleChatSubmit(event)" placeholder="Ask El-Tarshoubi AI..." class="flex-1 bg-transparent border-0 outline-none text-xs text-slate-800 dark:text-white resize-none max-h-20 py-2" style="scrollbar-width: none;"></textarea>
+                
+                <!-- File Attachment Input -->
+                <input type="file" id="aiImageInput" accept="image/*" class="hidden" onchange="previewImageInput(this)" />
+                
+                <button onclick="document.getElementById('aiImageInput').click()" class="w-8 h-8 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors" title="Upload clinical image">
+                    <i class="fas fa-camera text-base"></i>
+                </button>
+                
+                <!-- Voice input microphone -->
+                <button id="aiMicBtn" onclick="toggleVoiceRecognition()" class="w-8 h-8 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors" title="Speak to AI (Arabic/English supported)">
+                    <i class="fas fa-microphone text-base"></i>
+                </button>
+            </div>
+            
+            <div class="flex justify-between items-center">
+                <span class="text-[9px] font-bold text-slate-400">Supported: Speech Transcription + Image Analysis</span>
+                <button onclick="sendAIChat()" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5">
+                    <span>Send</span>
+                    <i class="fas fa-paper-plane text-[10px]"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Styles & JS Scripts -->
+    <style>
+        #aiChatPanel.active {
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            transform: scale(1) !important;
+        }
+        @@media (max-width: 639px) {
+            #aiChatPanel {
+                width: 100% !important;
+                height: 100% !important;
+                bottom: 0 !important;
+                right: 0 !important;
+                border-radius: 0 !important;
+            }
+        }
+        /* Typing animation dots */
+        .typing-dot {
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @@keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+    </style>
+
+    <script>
+        let isChatOpen = false;
+        let selectedImageBase64 = null;
+        let selectedImageName = "";
+        let voiceRecognitionInstance = null;
+
+        // Session Management Structure
+        let aiSessions = [];
+        let activeSessionId = null;
+
+        function toggleAIChat() {
+            const panel = document.getElementById('aiChatPanel');
+            const adminPanel = document.getElementById('adminChatPanel');
+            isChatOpen = !isChatOpen;
+            if (isChatOpen) {
+                panel.classList.remove('hidden');
+                setTimeout(() => { panel.classList.add('active'); }, 50);
+                // Clear notification badge
+                const badge = document.querySelector('#aiChatBtn span.bg-amber-500');
+                if (badge) badge.remove();
+                
+                // Initialize sessions
+                initSessions();
+
+                // Side-by-side logic
+                if (typeof adminChatOpen !== 'undefined' && adminChatOpen && adminPanel) {
+                    adminPanel.style.right = '440px';
+                }
+            } else {
+                panel.classList.remove('active');
+
+                // Restore side-by-side logic
+                if (typeof adminChatOpen !== 'undefined' && adminPanel) {
+                    adminPanel.style.right = '92px';
+                }
+            }
+        }
+
+        // Sessions Drawer Controls
+        function toggleSessionsDrawer() {
+            const drawer = document.getElementById('aiSessionsDrawer');
+            if (drawer.classList.contains('-translate-x-full')) {
+                drawer.classList.remove('-translate-x-full');
+                renderSessionsList();
+            } else {
+                drawer.classList.add('-translate-x-full');
+            }
+        }
+
+        function initSessions() {
+            const stored = localStorage.getItem('ai_chat_sessions');
+            const storedActive = localStorage.getItem('active_ai_session_id');
+            
+            if (stored) {
+                try {
+                    aiSessions = JSON.parse(stored);
+                } catch(e) {
+                    aiSessions = [];
+                }
+            }
+            
+            if (!aiSessions || aiSessions.length === 0) {
+                aiSessions = [];
+                createNewSession(true); // Create default session silently
+            } else {
+                activeSessionId = storedActive || aiSessions[0].id;
+                // Verify activeSessionId exists
+                if (!aiSessions.find(s => s.id === activeSessionId)) {
+                    activeSessionId = aiSessions[0].id;
+                }
+                loadSession(activeSessionId);
+            }
+        }
+
+        function createNewSession(isSilent = false) {
+            const newId = 'session_' + Date.now();
+            const newSession = {
+                id: newId,
+                title: 'New Chat Session',
+                messages: [
+                    {
+                        isUser: false,
+                        text: "Welcome Doctor / Assistant! ðŸ‘‹\n\nI am your academic research assistant. You can speak to me, upload clinical diagrams/images, or ask questions about safety standards, formulas, or course structures! How can I help you study today?"
+                    }
+                ]
+            };
+            
+            aiSessions.unshift(newSession);
+            saveSessionsToStorage();
+            
+            activeSessionId = newId;
+            localStorage.setItem('active_ai_session_id', newId);
+            
+            if (!isSilent) {
+                loadSession(newId);
+                Swal.fire({
+                    title: 'New Chat Created',
+                    text: 'A fresh study session has been started.',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false,
+                    background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                    color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+                });
+            }
+        }
+
+        function saveSessionsToStorage() {
+            localStorage.setItem('ai_chat_sessions', JSON.stringify(aiSessions));
+        }
+
+        function loadSession(sessionId) {
+            activeSessionId = sessionId;
+            localStorage.setItem('active_ai_session_id', sessionId);
+            
+            const session = aiSessions.find(s => s.id === sessionId);
+            if (!session) return;
+            
+            // Set active title in header
+            document.getElementById('activeSessionTitle').innerText = session.title;
+            
+            // Render Messages
+            const msgContainer = document.getElementById('aiChatMessages');
+            msgContainer.innerHTML = '';
+            
+            session.messages.forEach(msg => {
+                let msgHtml = '';
+                if (msg.isUser) {
+                    msgHtml = `
+                        <div class="flex items-start justify-end gap-3">
+                            <div class="bg-brand-600 text-white rounded-2xl rounded-tr-none p-4 shadow-sm text-xs leading-relaxed max-w-[80%] text-left">
+                    `;
+                    if (msg.imageBase64) {
+                        msgHtml += `
+                            <div class="mb-2 max-w-[150px] rounded-lg overflow-hidden border border-white/20">
+                                <img src="${msg.imageBase64}" class="w-full object-cover" />
+                            </div>
+                        `;
+                    }
+                    if (msg.text) {
+                        msgHtml += `<p>${msg.text}</p>`;
+                    }
+                    msgHtml += `
+                            </div>
+                            <div class="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center text-xs flex-shrink-0 font-bold">
+                                U
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    msgHtml = `
+                        <div class="flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-xl bg-brand-100 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xs flex-shrink-0">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="bg-white dark:bg-slate-800 rounded-2xl rounded-tl-none p-4 shadow-sm border border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-w-[80%] whitespace-pre-line">
+                                ${msg.text}
+                            </div>
+                        </div>
+                    `;
+                }
+                msgContainer.insertAdjacentHTML('beforeend', msgHtml);
+            });
+            
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+
+        function deleteSession(sessionId, event) {
+            if (event) event.stopPropagation(); // Avoid loading session when clicking delete
+            
+            Swal.fire({
+                title: 'Delete this chat?',
+                text: "This specific session's history will be permanently deleted.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#01443c',
+                confirmButtonText: 'Yes, delete it',
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    aiSessions = aiSessions.filter(s => s.id !== sessionId);
+                    saveSessionsToStorage();
+                    
+                    if (aiSessions.length === 0) {
+                        createNewSession(true);
+                    } else if (activeSessionId === sessionId) {
+                        loadSession(aiSessions[0].id);
+                    }
+                    
+                    renderSessionsList();
+                    
+                    Swal.fire({
+                        title: 'Deleted!',
+                        text: 'Session has been removed.',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false,
+                        background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                        color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+                    });
+                }
+            });
+        }
+
+        function renderSessionsList() {
+            const list = document.getElementById('sessionsList');
+            list.innerHTML = '';
+            
+            aiSessions.forEach(s => {
+                const isActive = s.id === activeSessionId;
+                const activeClasses = isActive 
+                    ? 'bg-brand-600/20 text-brand-400 border border-brand-500/30' 
+                    : 'hover:bg-slate-800/50 text-slate-300 border border-transparent';
+                
+                const itemHtml = `
+                    <div onclick="loadSession('${s.id}'); toggleSessionsDrawer();" class="group flex items-center justify-between px-3 py-3 rounded-xl cursor-pointer transition-all ${activeClasses}">
+                        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                            <i class="fas fa-comments text-xs text-slate-500 group-hover:text-brand-400"></i>
+                            <span class="text-xs font-semibold truncate select-none">${s.title}</span>
+                        </div>
+                        <button onclick="deleteSession('${s.id}', event)" class="w-6 h-6 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-800 flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100" title="Delete chat">
+                            <i class="fas fa-trash-alt text-[10px]"></i>
+                        </button>
+                    </div>
+                `;
+                list.insertAdjacentHTML('beforeend', itemHtml);
+            });
+        }
+
+        function previewImageInput(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                selectedImageName = file.name;
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    selectedImageBase64 = e.target.result;
+                    document.getElementById('imagePreviewThumbnail').src = selectedImageBase64;
+                    document.getElementById('imagePreviewName').innerText = selectedImageName;
+                    document.getElementById('imagePreviewBar').classList.remove('hidden');
+                    document.getElementById('imagePreviewBar').classList.add('flex');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function removeSelectedImage() {
+            selectedImageBase64 = null;
+            selectedImageName = "";
+            document.getElementById('aiImageInput').value = "";
+            document.getElementById('imagePreviewBar').classList.remove('flex');
+            document.getElementById('imagePreviewBar').classList.add('hidden');
+        }
+
+        function toggleVoiceRecognition() {
+            const micBtn = document.getElementById('aiMicBtn');
+            const chatInput = document.getElementById('aiChatInput');
+
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechReq = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!voiceRecognitionInstance) {
+                    voiceRecognitionInstance = new SpeechReq();
+                    voiceRecognitionInstance.continuous = false;
+                    voiceRecognitionInstance.lang = 'ar-EG';
+                    voiceRecognitionInstance.interimResults = false;
+
+                    voiceRecognitionInstance.onstart = function() {
+                        micBtn.innerHTML = '<i class="fas fa-circle-notch animate-spin text-red-500 text-lg"></i>';
+                        micBtn.classList.add('bg-red-50', 'dark:bg-red-950/20');
+                    };
+
+                    voiceRecognitionInstance.onresult = function(event) {
+                        const transcript = event.results[0][0].transcript;
+                        chatInput.value = (chatInput.value + " " + transcript).trim();
+                    };
+
+                    voiceRecognitionInstance.onend = function() {
+                        micBtn.innerHTML = '<i class="fas fa-microphone text-base text-slate-400"></i>';
+                        micBtn.classList.remove('bg-red-50', 'dark:bg-red-950/20');
+                        voiceRecognitionInstance = null;
+                    };
+
+                    voiceRecognitionInstance.onerror = function() {
+                        micBtn.innerHTML = '<i class="fas fa-microphone text-base text-slate-400"></i>';
+                        micBtn.classList.remove('bg-red-50', 'dark:bg-red-950/20');
+                        voiceRecognitionInstance = null;
+                    };
+
+                    voiceRecognitionInstance.start();
+                } else {
+                    voiceRecognitionInstance.stop();
+                }
+            } else {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Browser Compatibility',
+                    text: 'Speech Recognition is not supported in this browser. Try Google Chrome or Safari!'
+                });
+            }
+        }
+
+        function handleChatSubmit(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendAIChat();
+            }
+        }
+
+        function sendAIChat() {
+            const input = document.getElementById('aiChatInput');
+            const text = input.value.trim();
+            if (!text && !selectedImageBase64) return;
+
+            const msgContainer = document.getElementById('aiChatMessages');
+            const currentImg = selectedImageBase64;
+            
+            // Append User Message
+            let userMsgHtml = `
+                <div class="flex items-start justify-end gap-3">
+                    <div class="bg-brand-600 text-white rounded-2xl rounded-tr-none p-4 shadow-sm text-xs leading-relaxed max-w-[80%] text-left">
+            `;
+            
+            if (currentImg) {
+                userMsgHtml += `
+                    <div class="mb-2 max-w-[150px] rounded-lg overflow-hidden border border-white/20">
+                        <img src="${currentImg}" class="w-full object-cover" />
+                    </div>
+                `;
+            }
+            
+            if (text) {
+                userMsgHtml += `<p>${text}</p>`;
+            }
+            
+            userMsgHtml += `
+                    </div>
+                    <div class="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center text-xs flex-shrink-0 font-bold">
+                        U
+                    </div>
+                </div>
+            `;
+
+            msgContainer.insertAdjacentHTML('beforeend', userMsgHtml);
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+
+            // Update Active Session Object
+            const session = aiSessions.find(s => s.id === activeSessionId);
+            if (session) {
+                session.messages.push({
+                    isUser: true,
+                    text: text,
+                    imageBase64: currentImg
+                });
+                
+                if (session.title === 'New Chat Session' && text) {
+                    session.title = text.length > 25 ? text.substring(0, 22) + '...' : text;
+                    document.getElementById('activeSessionTitle').innerText = session.title;
+                }
+                saveSessionsToStorage();
+            }
+
+            // Reset Inputs immediately
+            input.value = "";
+            removeSelectedImage();
+
+            // Typing indicator
+            const typingId = "ai-typing-" + Date.now();
+            const typingHtml = `
+                <div class="flex items-start gap-3" id="${typingId}">
+                    <div class="w-8 h-8 rounded-xl bg-brand-100 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xs flex-shrink-0">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl rounded-tl-none p-4 shadow-sm border border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-w-[80%] flex items-center gap-1.5">
+                        <span class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                        <span class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style="animation-delay: -0.32s"></span>
+                        <span class="typing-dot w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style="animation-delay: -0.16s"></span>
+                    </div>
+                </div>
+            `;
+            msgContainer.insertAdjacentHTML('beforeend', typingHtml);
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+
+            // Prepare history for context
+            const requestHistory = [];
+            if (session && session.messages) {
+                const historySource = session.messages.slice(0, -1);
+                const recentHistory = historySource.slice(Math.max(0, historySource.length - 8));
+                recentHistory.forEach(h => {
+                    requestHistory.push({
+                        isUser: h.isUser,
+                        text: h.text
+                    });
+                });
+            }
+
+            // AJAX call to real backend API endpoint
+            $.ajax({
+                url: '/api/ai/chat',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    message: text,
+                    imageBase64: currentImg,
+                    history: requestHistory
+                }),
+                success: function(res) {
+                    const typingIndicator = document.getElementById(typingId);
+                    if (typingIndicator) typingIndicator.remove();
+
+                    const aiResponse = res.reply || res.message;
+                    
+                    const aiMsgHtml = `
+                        <div class="flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-xl bg-brand-100 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xs flex-shrink-0">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="bg-white dark:bg-slate-800 rounded-2xl rounded-tl-none p-4 shadow-sm border border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-w-[80%] whitespace-pre-line">
+                                ${aiResponse}
+                            </div>
+                        </div>
+                    `;
+                    msgContainer.insertAdjacentHTML('beforeend', aiMsgHtml);
+                    msgContainer.scrollTop = msgContainer.scrollHeight;
+
+                    // Save AI Message to session
+                    if (session) {
+                        session.messages.push({
+                            isUser: false,
+                            text: aiResponse
+                        });
+                        saveSessionsToStorage();
+                    }
+                },
+                error: function() {
+                    const typingIndicator = document.getElementById(typingId);
+                    if (typingIndicator) typingIndicator.remove();
+
+                    const errText = "âŒ **AI Connection Error:** Could not contact the study assistant server. Please check your internet connection or server logs.";
+                    const aiMsgHtml = `
+                        <div class="flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-xl bg-brand-100 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xs flex-shrink-0">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="bg-white dark:bg-slate-800 rounded-2xl rounded-tl-none p-4 shadow-sm border border-slate-100 dark:border-slate-800 text-xs text-red-500 leading-relaxed max-w-[80%]">
+                                ${errText}
+                            </div>
+                        </div>
+                    `;
+                    msgContainer.insertAdjacentHTML('beforeend', aiMsgHtml);
+                    msgContainer.scrollTop = msgContainer.scrollHeight;
+                }
+            });
+        }
+    </script>
+    @if (User.IsInRole("Admin"))
+    {
+        <!-- ADMIN CHAT FLOATING INTERFACE -->
+        <div class="fixed bottom-[92px] right-6 z-[60]">
+            <button onclick="toggleAdminChat()" class="w-14 h-14 bg-gradient-to-tr from-slate-800 to-slate-600 text-white rounded-full flex items-center justify-center shadow-2xl hover:shadow-slate-600/30 transition-all transform hover:-translate-y-1 active:translate-y-0 duration-300 relative group" id="adminChatBtn">
+                <i class="fas fa-comments text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Slide-Out Admin Chat Panel -->
+        <div id="adminChatPanel" class="fixed bottom-[92px] right-[92px] w-[380px] sm:w-[420px] h-[550px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 rounded-[32px] shadow-2xl flex flex-col overflow-hidden z-[60] scale-95 opacity-0 pointer-events-none transition-all duration-300 transform origin-bottom-right">
+            <!-- Header -->
+            <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-slate-600 to-slate-400 p-[2px] shadow-lg">
+                        <div class="w-full h-full bg-white dark:bg-slate-900 rounded-[14px] flex items-center justify-center">
+                            <i class="fas fa-users text-slate-600 dark:text-slate-400"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="font-black text-slate-800 dark:text-white tracking-tight leading-tight">Admin Hub</h3>
+                        <p class="text-[10px] font-bold text-slate-400 tracking-wider uppercase">Internal Staff Chat</p>
+                    </div>
+                </div>
+                <button onclick="toggleAdminChat()" class="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Messages Area -->
+            <div id="adminChatMessages" class="flex-1 overflow-y-auto p-5 space-y-4 scroll-smooth">
+                <!-- Messages will be appended here -->
+            </div>
+
+            <!-- Input Area -->
+            <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+                <div class="relative flex items-end gap-2">
+                    <input type="file" id="adminChatFileInput" class="hidden" onchange="uploadAdminFile(this)" />
+                    <button type="button" onclick="document.getElementById('adminChatFileInput').click()" class="w-10 h-10 shrink-0 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors shadow-sm">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    <button type="button" id="adminVoiceBtn" onclick="toggleAdminVoiceRecording()" class="w-10 h-10 shrink-0 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors shadow-sm">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                    <div class="flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-1 shadow-sm flex items-center focus-within:ring-2 focus-within:ring-slate-500/20 focus-within:border-slate-400 transition-all">
+                        <textarea id="adminChatInput" rows="1" class="w-full bg-transparent border-none focus:ring-0 text-sm px-3 py-2 text-slate-700 dark:text-slate-200 placeholder-slate-400 resize-none max-h-32" placeholder="Note to admins..."></textarea>
+                        <button onclick="sendAdminMessage()" class="w-8 h-8 shrink-0 rounded-xl bg-slate-800 text-white flex items-center justify-center hover:bg-slate-700 transition-colors ml-1">
+                            <i class="fas fa-paper-plane text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let adminChatOpen = false;
+            let adminChatPolling = null;
+            let isAdminRecording = false;
+            let adminMediaRecorder;
+            let adminAudioChunks = [];
+            let adminLastMsgCount = localStorage.getItem('adminChatCount');
+            const currentUser = '@(User.Identity?.Name ?? "Admin")';
+
+            async function checkAdminNotifications() {
+                if(adminChatOpen) return;
+                try {
+                    const res = await fetch('/AdminChat/GetMessages');
+                    const data = await res.json();
+                    if(data.success) {
+                        const totalMessages = data.messages.length;
+                        
+                        // First time opening the page on this browser -> set count and return
+                        if(adminLastMsgCount === null) {
+                            adminLastMsgCount = totalMessages;
+                            localStorage.setItem('adminChatCount', totalMessages);
+                            return;
+                        }
+
+                        const currentCount = parseInt(adminLastMsgCount);
+                        if(totalMessages > currentCount) {
+                            const diff = totalMessages - currentCount;
+                            let badge = document.getElementById('adminChatBadge');
+                            if(!badge) {
+                                badge = document.createElement('span');
+                                badge.id = 'adminChatBadge';
+                                // Removed animate-bounce, kept it static and professional
+                                badge.className = 'absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center text-[9px] font-black text-white shadow-lg shadow-rose-500/40 z-10';
+                                document.getElementById('adminChatBtn').appendChild(badge);
+                            }
+                            badge.innerText = diff > 9 ? '9+' : diff;
+                        }
+                    }
+                } catch(e) {}
+            }
+
+            setInterval(checkAdminNotifications, 10000); // Check every 10 seconds
+            setTimeout(checkAdminNotifications, 2000);   // Check on initial load
+
+            function toggleAdminChat() {
+                const panel = document.getElementById('adminChatPanel');
+                adminChatOpen = !adminChatOpen;
+                
+                if (adminChatOpen) {
+                    // Side-by-side logic
+                    if (typeof isChatOpen !== 'undefined' && isChatOpen) {
+                        panel.style.right = '440px';
+                    } else {
+                        panel.style.right = '92px';
+                    }
+
+                    panel.classList.remove('scale-95', 'opacity-0', 'pointer-events-none');
+                    panel.classList.add('scale-100', 'opacity-100', 'pointer-events-auto');
+                    loadAdminMessages();
+                    adminChatPolling = setInterval(loadAdminMessages, 3000);
+                } else {
+                    panel.classList.remove('scale-100', 'opacity-100', 'pointer-events-auto');
+                    panel.classList.add('scale-95', 'opacity-0', 'pointer-events-none');
+                    if (adminChatPolling) clearInterval(adminChatPolling);
+                }
+            }
+
+            async function loadAdminMessages() {
+                try {
+                    const res = await fetch('/AdminChat/GetMessages');
+                    const data = await res.json();
+                    if(data.success) {
+                        renderAdminMessages(data.messages);
+
+                        adminLastMsgCount = data.messages.length;
+                        localStorage.setItem('adminChatCount', adminLastMsgCount);
+                        
+                        const badge = document.getElementById('adminChatBadge');
+                        if(badge) badge.remove();
+                    }
+                } catch(e) {}
+            }
+
+            function renderAdminMessages(messages) {
+                const container = document.getElementById('adminChatMessages');
+                const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
+
+                container.innerHTML = '';
+                messages.forEach(msg => {
+                    const isMe = msg.SenderName === currentUser;
+                    const timeStr = new Date(msg.CreatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    
+                    let contentHtml = '';
+                    if(msg.FilePath) {
+                        if(msg.FileType === 'audio') {
+                            contentHtml = `<audio controls src="${msg.FilePath}" class="h-10 mt-1"></audio>`;
+                        } else if(msg.FilePath.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                            contentHtml = `<a href="${msg.FilePath}" target="_blank"><img src="${msg.FilePath}" class="max-w-[200px] rounded-xl cursor-pointer mt-1 border border-slate-700" /></a>`;
+                        } else {
+                            contentHtml = `<a href="${msg.FilePath}" target="_blank" class="flex items-center gap-2 text-white bg-black/20 p-2 rounded-lg hover:bg-black/30 mt-1"><i class="fas fa-file"></i> Open File</a>`;
+                        }
+                    } else {
+                        contentHtml = `<p class="text-[13px] leading-relaxed whitespace-pre-wrap">${msg.Message}</p>`;
+                    }
+
+                    const bubble = `
+                        <div class="flex ${isMe ? 'justify-end' : 'justify-start'} w-full">
+                            <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[85%]">
+                                <span class="text-[10px] font-bold text-slate-400 mb-1 px-1">${msg.SenderName}</span>
+                                <div class="${isMe ? 'bg-slate-800 text-white rounded-[20px] rounded-br-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white border border-slate-200 dark:border-slate-700 rounded-[20px] rounded-bl-sm'} p-3 shadow-sm">
+                                    ${contentHtml}
+                                </div>
+                                <span class="text-[9px] font-bold text-slate-400 mt-1 px-1">${timeStr}</span>
+                            </div>
+                        </div>
+                    `;
+                    container.insertAdjacentHTML('beforeend', bubble);
+                });
+
+                if(isScrolledToBottom) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+
+            async function sendAdminMessage() {
+                const input = document.getElementById('adminChatInput');
+                const text = input.value.trim();
+                if(!text) return;
+
+                input.value = '';
+                
+                try {
+                    await fetch('/AdminChat/SendMessage', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'message=' + encodeURIComponent(text)
+                    });
+                    loadAdminMessages();
+                } catch(e) {}
+            }
+
+            async function uploadAdminFile(input) {
+                if(!input.files || input.files.length === 0) return;
+                
+                const file = input.files[0];
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('fileType', 'file');
+
+                input.value = '';
+
+                try {
+                    await fetch('/AdminChat/UploadFile', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    loadAdminMessages();
+                } catch(e) {}
+            }
+
+            async function toggleAdminVoiceRecording() {
+                const btn = document.getElementById('adminVoiceBtn');
+                if(!isAdminRecording) {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        adminMediaRecorder = new MediaRecorder(stream);
+                        adminAudioChunks = [];
+
+                        adminMediaRecorder.ondataavailable = e => {
+                            if(e.data.size > 0) adminAudioChunks.push(e.data);
+                        };
+
+                        adminMediaRecorder.onstop = async () => {
+                            const audioBlob = new Blob(adminAudioChunks, { type: 'audio/webm' });
+                            const formData = new FormData();
+                            formData.append('file', audioBlob, 'voice_record.webm');
+                            formData.append('fileType', 'audio');
+
+                            try {
+                                await fetch('/AdminChat/UploadFile', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+                                loadAdminMessages();
+                            } catch(e) {}
+                        };
+
+                        adminMediaRecorder.start();
+                        isAdminRecording = true;
+                        btn.classList.add('bg-rose-500', 'text-white', 'animate-pulse');
+                        btn.classList.remove('bg-white', 'dark:bg-slate-800', 'text-slate-400');
+                    } catch(e) {
+                        alert('Could not access microphone.');
+                    }
+                } else {
+                    adminMediaRecorder.stop();
+                    adminMediaRecorder.stream.getTracks().forEach(t => t.stop());
+                    isAdminRecording = false;
+                    btn.classList.remove('bg-rose-500', 'text-white', 'animate-pulse');
+                    btn.classList.add('bg-white', 'dark:bg-slate-800', 'text-slate-400');
+                }
+            }
+
+            const adminChatInput = document.getElementById('adminChatInput');
+            if (adminChatInput) {
+                adminChatInput.addEventListener('keydown', function(e) {
+                    if(e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendAdminMessage();
+                    }
+                });
+
+                adminChatInput.addEventListener('paste', function(e) {
+                    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                    for (let index in items) {
+                        const item = items[index];
+                        if (item.kind === 'file') {
+                            const blob = item.getAsFile();
+                            if (blob) {
+                                e.preventDefault(); // Prevent pasting file path text
+                                
+                                const formData = new FormData();
+                                formData.append('file', blob, 'pasted_image.png');
+                                formData.append('fileType', 'file');
+
+                                // Visual feedback
+                                adminChatInput.placeholder = 'Uploading image...';
+                                adminChatInput.disabled = true;
+
+                                fetch('/AdminChat/UploadFile', {
+                                    method: 'POST',
+                                    body: formData
+                                }).then(() => {
+                                    loadAdminMessages();
+                                }).catch(err => {
+                                    console.error("Upload failed", err);
+                                }).finally(() => {
+                                    adminChatInput.placeholder = 'Note to admins...';
+                                    adminChatInput.disabled = false;
+                                    adminChatInput.focus();
+                                });
+                                break; // Only upload the first file to prevent spam
+                            }
+                        }
+                    }
+                });
+            }
+        </script>
+    }
+}
+
+@if (!isIframe) {
+<script>
+    // Tab Management Logic
+    let tabCounter = 0;
+    
+    $(document).ready(function() {
+        if(typeof Sortable !== 'undefined') {
+            new Sortable(document.getElementById('mTabsContainer'), {
+                animation: 150,
+                filter: '[data-fixed="true"]', // Disable dragging for the fixed home tab
+                onMove: function(evt) {
+                    return evt.related.dataset.fixed !== "true"; // Prevent dragging others before the fixed home tab
+                }
+            });
+        }
+    });
+    
+    $(document).on('click', '#main-sidebar a', function(e) {
+        var href = $(this).attr('href');
+        // Ignore dummy links or logout
+        if (!href || href === '#' || href.startsWith('javascript:')) return;
+        if ($(this).closest('form').length > 0) return; // Ignore links inside forms (like logout)
+
+        e.preventDefault();
+        
+        var title = $(this).find('span').text().trim() || 'New Tab';
+        var icon = $(this).find('i').attr('class') || 'fas fa-file';
+        
+        openNewTab(title, icon, href);
+        
+        // Close sidebar on mobile
+        if (window.innerWidth < 768) {
+            closeSidebar();
+        }
+    });
+
+    function openNewTab(title, iconClass, url) {
+        // Unhide tab container if it's hidden
+        $('#mTabsContainer').removeClass('hidden');
+
+        // Check if a tab with this URL already exists
+        var existingTabId = null;
+        $('.iframe-pane').each(function() {
+            var iframeUrl = $(this).attr('src').split('?')[0]; // compare without query params
+            var targetUrl = url.split('?')[0];
+            if (iframeUrl === targetUrl) {
+                existingTabId = $(this).parent().attr('id').replace('tab-pane-', '');
+            }
+        });
+
+        if (existingTabId) {
+            switchTab(existingTabId);
+            return;
+        }
+
+        // Create new tab
+        tabCounter++;
+        var tabId = 'tab_' + tabCounter;
+        
+        // Append iframe param
+        var iframeUrl = url + (url.indexOf('?') > -1 ? '&' : '?') + 'iframe=true';
+
+        // Add Tab Button
+        var tabBtnHtml = `
+            <div class="tab-btn flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-t-xl text-xs font-bold text-slate-500 hover:text-brand-600 transition-all cursor-pointer shadow-sm min-w-max relative overflow-hidden group" id="tab-btn-${tabId}" onclick="switchTab('${tabId}')">
+                <i class="${iconClass}"></i> <span>${title}</span>
+                <div class="flex items-center ml-2 opacity-50 group-hover:opacity-100 transition-opacity">
+                    <div class="tab-reload w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-brand-500 transition-colors" onclick="refreshTab(event, '${tabId}')" title="Refresh Tab"><i class="fas fa-sync-alt text-[10px]"></i></div>
+                    <div class="tab-close w-5 h-5 flex items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-rose-500 transition-colors ml-1" onclick="closeTab(event, '${tabId}')" title="Close Tab"><i class="fas fa-times text-[10px]"></i></div>
+                </div>
+            </div>
+        `;
+        $('#mTabsContainer').append(tabBtnHtml);
+
+        // Add Iframe Pane
+        var iframeHtml = `
+            <div id="tab-pane-${tabId}" class="tab-pane">
+                <div class="w-full h-full flex items-center justify-center absolute inset-0 z-0 text-slate-400" id="loader-${tabId}">
+                    <i class="fas fa-circle-notch animate-spin text-3xl"></i>
+                </div>
+                <iframe src="${iframeUrl}" class="iframe-pane relative z-10" onload="document.getElementById('loader-${tabId}').style.display='none'"></iframe>
+            </div>
+        `;
+        $('#mainWorkspace').append(iframeHtml);
+
+        switchTab(tabId);
+    }
+
+    function switchTab(tabId) {
+        $('.tab-btn').removeClass('active bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 border-brand-200 dark:border-brand-800 border-b-0')
+                     .addClass('bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500');
+                     
+        $('.tab-pane').removeClass('active');
+        
+        $('#tab-btn-' + tabId).addClass('active bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 border-brand-200 dark:border-brand-800 border-b-0')
+                              .removeClass('bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500');
+                              
+        $('#tab-pane-' + tabId).addClass('active');
+    }
+
+    function refreshTab(event, tabId) {
+        event.stopPropagation();
+        var $pane = $('#tab-pane-' + tabId);
+        
+        if (tabId === 'home') {
+            location.reload(); // If it's the home tab, reload the whole dashboard
+            return;
+        }
+
+        var $iframe = $pane.find('iframe.iframe-pane');
+        var $loader = $pane.find('#loader-' + tabId);
+        
+        if ($iframe.length) {
+            $loader.show();
+            var currentSrc = $iframe.attr('src');
+            $iframe.attr('src', currentSrc); // Trigger reload
+        }
+    }
+
+    function closeTab(event, tabId) {
+        event.stopPropagation(); // prevent triggering switchTab
+        
+        var $btn = $('#tab-btn-' + tabId);
+        var $pane = $('#tab-pane-' + tabId);
+        
+        var wasActive = $btn.hasClass('active');
+        
+        $btn.remove();
+        $pane.remove();
+        
+        if (wasActive) {
+            // Switch to the last available tab
+            var lastTabId = $('.tab-btn').last().attr('id').replace('tab-btn-', '');
+            switchTab(lastTabId);
+        }
+        
+        // Hide container if only Home is left
+        if ($('.tab-btn').length <= 1) {
+            $('#mTabsContainer').addClass('hidden');
+        }
+    }
+</script>
+}
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>

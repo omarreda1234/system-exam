@@ -1,0 +1,970 @@
+@model IEnumerable<Exam.DTOs.UserWithRoleDto>
+@{
+    ViewData["Title"] = "Global Node Registry";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var roles = ViewBag.Roles as IEnumerable<Exam.DTOs.RoleDto> ?? Enumerable.Empty<Exam.DTOs.RoleDto>();
+    var shifts = ViewBag.Shifts as IEnumerable<Exam.DTOs.ShiftDto> ?? Enumerable.Empty<Exam.DTOs.ShiftDto>();
+}
+
+<!-- Fullscreen Import Overlay -->
+<div id="importOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:20px;">
+    <div style="width:72px;height:72px;position:relative;">
+        <svg viewBox="0 0 72 72" style="width:100%;height:100%;animation:spin 1.2s linear infinite;">
+            <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="5"/>
+            <circle cx="36" cy="36" r="30" fill="none" stroke="#06b6d4" stroke-width="5" stroke-linecap="round" stroke-dasharray="80 120"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+            <i class="fas fa-file-import" style="color:#06b6d4;font-size:22px;"></i>
+        </div>
+    </div>
+    <div style="text-align:center;">
+        <p style="color:white;font-size:13px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin:0;">Processing Ingestion</p>
+        <p style="color:rgba(255,255,255,0.5);font-size:10px;font-weight:600;margin:6px 0 0;">Please wait, do not close this page...</p>
+    </div>
+    <style>@@keyframes spin{to{transform:rotate(360deg)}}</style>
+</div>
+
+<!-- Ingestion Area -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+        <div>
+            <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Node Registry Management</h2>
+            <p class="text-xl font-bold">Personnel Infrastructure Ingress</p>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-4">
+            <button type="button" onclick="openManualAddModal()" class="bg-brand-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg shadow-brand-600/20 flex items-center gap-3 hover:bg-brand-700">
+                <i class="fas fa-user-plus"></i>
+                Add Personnel Manually
+            </button>
+
+            <button type="button" id="btnGoogleSync" class="bg-emerald-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg shadow-emerald-600/20 flex items-center gap-3 hover:bg-emerald-700">
+                <i class="fab fa-google"></i>
+                Sync from Google Sheets
+            </button>
+
+            <form id="importForm" asp-action="ImportUsersFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
+                @Html.AntiForgeryToken()
+                <div class="flex-1 min-w-[300px] space-y-2">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Personnel Payload (.xlsx)</label>
+                    <input id="excelFile" type="file" name="excelFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-slate-900 dark:file:bg-brand-500 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-white dark:bg-slate-950 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
+                </div>
+                <label class="flex items-center gap-2 cursor-pointer select-none text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    <input type="checkbox" name="sendWelcomeEmails" value="true" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                    Send welcome emails
+                </label>
+                <button type="submit" id="btnImport" class="bg-slate-900 dark:bg-brand-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg flex items-center gap-3 hover:opacity-90" style="min-width:180px;justify-content:center;">
+                    <span id="btnImportInner" style="display:flex;align-items:center;gap:10px;">
+                        <i class="fas fa-file-import"></i>
+                        Execute Ingestion
+                    </span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Progress Notification -->
+    <div id="progressBox" class="hidden mt-8 p-6 bg-slate-50 dark:bg-slate-950 border border-brand-500/20 rounded-2xl shadow-inner">
+        <div class="flex justify-between items-center mb-3">
+            <span class="text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest" id="statusLabel">Deciphering Payload...</span>
+            <span class="text-[10px] font-bold" id="percentLabel">0%</span>
+        </div>
+        <div class="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+            <div id="progressBar" class="bg-brand-500 h-full w-0 transition-all duration-300 shadow-[0_0_10px_rgba(6,182,212,0.5)]"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Users Table -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+    <!-- Filters -->
+    <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-6 bg-slate-50/50 dark:bg-slate-800/20">
+        <div class="flex items-center gap-3">
+            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest"><i class="fas fa-filter mr-1"></i> Classification</label>
+            <select id="filterClassification" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all min-w-[180px] shadow-sm">
+                <option value="">All Classifications</option>
+                @foreach (var r in roles) {
+                    <option value="@r.RoleName.ToUpper()">@r.RoleName.ToUpper()</option>
+                }
+            </select>
+        </div>
+        <div class="flex items-center gap-3">
+            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest"><i class="fas fa-code-branch mr-1"></i> Branch</label>
+            <select id="filterBranch" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all min-w-[180px] shadow-sm">
+                <option value="">All Branches</option>
+                <option value="GLOBAL">GLOBAL</option>
+                @if (ViewBag.Branches != null) {
+                    foreach (var b in ViewBag.Branches as IEnumerable<Exam.DTOs.BranchDto>) {
+                        <option value="@b.BranchName.ToUpper()">@b.BranchName.ToUpper()</option>
+                    }
+                }
+            </select>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="datatable saas-table">
+            <thead>
+                <tr>
+                    <th class="pl-8">User Name</th>
+                    <th class="hidden lg:table-cell">E-Mail</th>
+                    <th class="hidden sm:table-cell">Branch</th>
+                    <th class="hidden md:table-cell">Security Code</th>
+                    <th class="text-center">Classification</th>
+                    <th class="hidden xl:table-cell">Shift Window</th>
+                    <th class="text-right pr-8">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in Model ?? Enumerable.Empty<Exam.DTOs.UserWithRoleDto>()) {
+                    var currentRoleName = u.RoleName ?? "User";
+                    <tr data-user-id="@u.Id" data-email="@u.Email" data-username="@u.UserName" data-usercode="@(u.Code ?? "")" data-branch-id="@(u.BranchId?.ToString() ?? "")">
+                        <td class="pl-8">
+                            <div class="flex items-center gap-3">
+                                <div class="js-user-avatar w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center font-bold text-slate-400">@((u.UserName ?? "?").Trim().Substring(0,1).ToUpper())</div>
+                                <div class="flex flex-col">
+                                    <span class="js-user-display font-bold text-slate-900 dark:text-white">@(u.UserName?.Replace("_", " "))</span>
+                                    <span class="js-user-sub text-[9px] font-bold text-slate-400 uppercase">@(string.IsNullOrWhiteSpace(u.Code) ? ("SYS-" + u.Id.Substring(0, Math.Min(8, u.Id.Length)).ToUpper()) : u.Code)</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="hidden lg:table-cell"><span class="js-user-email text-xs font-medium text-slate-500">@u.Email</span></td>
+                        <td class="hidden sm:table-cell">
+                             <span class="js-user-branch-name text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest bg-brand-50 dark:bg-brand-500/10 px-2 py-1 rounded">@(u.BranchName ?? "GLOBAL")</span>
+                             @if(u.IsActive == false) {
+                                 <span class="ml-2 text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-1 rounded border border-rose-100 dark:border-rose-800 uppercase">Inactive</span>
+                             }
+                        </td>
+                        <td class="hidden md:table-cell"><span class="js-user-code font-mono font-bold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">@u.Code</span></td>
+                        <td class="text-center">
+                            <span class="text-[9px] font-bold text-white bg-slate-900 dark:bg-brand-500/20 dark:text-brand-400 px-2.5 py-1 rounded-full uppercase tracking-widest">@currentRoleName.ToUpper()</span>
+                        </td>
+                        <td class="hidden xl:table-cell">
+                            @if (!string.IsNullOrWhiteSpace(u.ShiftName)) {
+                                <div class="flex flex-col">
+                                    <span class="text-[10px] font-bold italic uppercase">@u.ShiftName</span>
+                                    <span class="text-[8px] font-bold text-slate-400">@(u.StartTime?.ToString(@"hh\:mm")) — @(u.EndTime?.ToString(@"hh\:mm"))</span>
+                                </div>
+                            } else {
+                                <span class="text-[9px] font-bold text-rose-500/50 uppercase">Unassigned</span>
+                            }
+                        </td>
+                        <td class="pr-8">
+                            <div class="flex flex-col gap-2 min-w-[220px]">
+                                <div class="flex gap-1">
+                                    <button type="button" class="js-edit-personnel flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase hover:bg-brand-50 dark:hover:bg-brand-900/20">
+                                        <i class="fas fa-pen"></i> Edit
+                                    </button>
+                                    <button type="button" onclick="deleteUser('@u.Id')" class="flex-1 bg-white dark:bg-slate-900 text-slate-500 hover:text-rose-600 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase">
+                                        <i class="fas fa-trash-alt"></i> Delete
+                                    </button>
+                                </div>
+                                <button type="button" onclick="openSendMailModal('@u.Id', '@(u.FullName ?? u.UserName)')" class="w-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 p-1.5 rounded-xl border border-brand-100 dark:border-brand-800 text-[9px] font-bold uppercase hover:bg-brand-600 hover:text-white transition-all flex items-center justify-center gap-2">
+                                    <i class="fas fa-paper-plane"></i> Send Custom Message
+                                </button>
+                                <form asp-action="UpdateUserRole" asp-controller="Admin" method="post" class="flex gap-2 ajax-update-form" data-type="role">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="userId" value="@u.Id" />
+                                    <select name="roleId" onchange="$(this).closest('form').submit();" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-brand-500 outline-none flex-1 transition-all">
+                                        @foreach (var r in roles) {
+                                            <option value="@r.RoleId" selected="@(string.Equals(r.RoleName, currentRoleName, StringComparison.OrdinalIgnoreCase))">@r.RoleName.ToUpper()</option>
+                                        }
+                                    </select>
+                                </form>
+                                <form asp-action="UpdateUserShift" asp-controller="Admin" method="post" class="flex gap-2 ajax-update-form" data-type="shift">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="userId" value="@u.Id" />
+                                    <select name="newShiftId" onchange="$(this).closest('form').submit();" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-amber-500 outline-none flex-1 transition-all">
+                                        <option value="0">-- SYNC SHIFT --</option>
+                                        @foreach (var s in shifts) {
+                                            <option value="@s.Id" data-name="@s.ShiftName.ToUpper()" data-time="@s.StartTime.ToString(@"hh\:mm") — @s.EndTime.ToString(@"hh\:mm")" selected="@(string.Equals(u.ShiftName, s.ShiftName, StringComparison.OrdinalIgnoreCase))">@s.ShiftName.ToUpper() (@s.StartTime.ToString(@"hh\:mm"))</option>
+                                        }
+                                    </select>
+                                </form>
+                                @if (u.IsActive != false)
+                                {
+                                    <button type="button" onclick="deactivateUser('@u.Id')" class="w-full bg-white dark:bg-slate-900 text-rose-500 hover:bg-rose-500 hover:text-white p-1.5 rounded-xl transition-all border border-rose-100 dark:border-rose-900/50 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm">
+                                        <i class="fas fa-ban"></i> Deactivate
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" onclick="activateUser('@u.Id')" class="w-full bg-white dark:bg-slate-900 text-emerald-500 hover:bg-emerald-500 hover:text-white p-1.5 rounded-xl transition-all border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm">
+                                        <i class="fas fa-check-circle"></i> Activate
+                                    </button>
+                                }
+                                <button type="button" onclick="resetPassword('@u.Id')" class="w-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white p-1.5 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm">
+                                    <i class="fas fa-key"></i> Reset Password
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
+    <script>
+        const rolesData = @Html.Raw(Json.Serialize(roles));
+        const shiftsData = @Html.Raw(Json.Serialize(shifts));
+        const branchesData = @Html.Raw(Json.Serialize(ViewBag.Branches ?? new List<Exam.DTOs.BranchDto>()));
+
+        $(document).ready(function() {
+            // Wait a bit for the global DataTable to initialize
+            setTimeout(function() {
+                var table = $('table.datatable').DataTable();
+                
+                $.fn.dataTable.ext.search.push(
+                    function(settings, data, dataIndex) {
+                        var selectedClass = $('#filterClassification').val();
+                        var selectedBranch = $('#filterBranch').val();
+                        
+                        var branch = data[2] || "";
+                        var classification = data[4] || "";
+                        
+                        if (selectedClass && !classification.toUpperCase().includes(selectedClass.toUpperCase())) {
+                            return false;
+                        }
+                        if (selectedBranch && !branch.toUpperCase().includes(selectedBranch.toUpperCase())) {
+                            return false;
+                        }
+                        return true;
+                    }
+                );
+
+                $('#filterClassification, #filterBranch').on('change', function() {
+                    table.draw();
+                });
+            }, 300);
+        });
+
+        function openManualAddModal() {
+            try {
+                const getVal = (obj, prop) => {
+                    if (!obj) return "";
+                    return obj[prop.charAt(0).toLowerCase() + prop.slice(1)] || obj[prop] || "";
+                };
+                
+                const formatTime = (t) => {
+                    if (typeof t === 'string') return t.substring(0, 5);
+                    if (t && typeof t === 'object' && t.hours !== undefined) return `${String(t.hours).padStart(2,'0')}:${String(t.minutes).padStart(2,'0')}`;
+                    return "00:00";
+                };
+
+                let roleOptions = rolesData.map(r => {
+                    let name = getVal(r, 'RoleName');
+                    return `<option value="${name}">${name.toUpperCase()}</option>`;
+                }).join('');
+
+                let shiftOptions = shiftsData.map(s => {
+                    let name = getVal(s, 'ShiftName');
+                    let sid = getVal(s, 'Id');
+                    let time = formatTime(getVal(s, 'StartTime'));
+                    return `<option value="${sid}">${name.toUpperCase()} (${time})</option>`;
+                }).join('');
+
+                let branchOptions = branchesData.map(b => {
+                    let name = getVal(b, 'BranchName');
+                    let bid = getVal(b, 'Id');
+                    return `<option value="${bid}">${name.toUpperCase()}</option>`;
+                }).join('');
+
+                Swal.fire({
+                    title: 'Register New Personnel',
+                    html: `
+                        <form id="manualAddForm" action="/Admin/AddUser" method="POST" class="text-left space-y-4 p-2">
+                            @Html.AntiForgeryToken()
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">User Name</label>
+                                    <input name="UserName" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" placeholder="e.g. Ahmed Ali" />
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Email</label>
+                                    <input name="Email" type="email" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" placeholder="user@example.com" />
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Password</label>
+                                    <input name="Password" type="password" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" placeholder="••••••••" />
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Phone</label>
+                                    <input name="Phone" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" placeholder="01xxxxxxxxx" />
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">User Code</label>
+                                    <input name="UserCode" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" placeholder="USR-001" />
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Certificate Code</label>
+                                    <input name="CertificateCode" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" placeholder="CERT-XXXX" />
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Classification (Role)</label>
+                                <select name="RoleName" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">
+                                    ${roleOptions}
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Branch</label>
+                                    <select name="BranchId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">
+                                        ${branchOptions}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Shift</label>
+                                    <select name="ShiftId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">
+                                        ${shiftOptions}
+                                    </select>
+                                </div>
+                            </div>
+                        </form>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Register Personnel',
+                    confirmButtonColor: '#0284c7',
+                    cancelButtonText: 'Discard',
+                    width: '600px',
+                    preConfirm: async () => {
+                        const form = document.getElementById('manualAddForm');
+                        if (!form.checkValidity()) {
+                            Swal.showValidationMessage('Please fill all required fields correctly');
+                            return false;
+                        }
+                        
+                        const fd = new FormData(form);
+                        try {
+                            const response = await fetch('/Admin/AddUser', {
+                                method: 'POST',
+                                body: fd,
+                                headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
+                            });
+                            const result = await response.json();
+                            if (!result.success) {
+                                Swal.showValidationMessage(result.message || 'Registration failed');
+                                return false;
+                            }
+                            return result.user;
+                        } catch (e) {
+                            Swal.showValidationMessage('Network communication error');
+                            return false;
+                        }
+                    }
+                }).then(result => {
+                    if (result.isConfirmed && result.value) {
+                        appendNewUserToTable(result.value);
+                        Swal.fire({ icon: 'success', title: 'Personnel Registered', text: 'New node added to registry.', timer: 2000, showConfirmButton: false });
+                    }
+                });
+            } catch (err) {
+                console.error("Manual add modal error:", err);
+                Swal.fire('Error', 'Could not open form: ' + err.message, 'error');
+            }
+        }
+
+        function appendNewUserToTable(u) {
+            const $table = $('table.datatable');
+            if (!$table.length) return;
+
+            const roleName = (u.roleName || 'User').toUpperCase();
+            const branchName = (u.branchName || 'GLOBAL').toUpperCase();
+            const avatar = u.userName ? u.userName.charAt(0).toUpperCase() : '?';
+            const sysCode = u.code ? u.code : ('SYS-' + u.id.substring(0, 8).toUpperCase());
+            
+            const roleOpts = rolesData.map(r => `<option value="${r.roleId}" ${r.roleName.toLowerCase() === (u.roleName||'').toLowerCase() ? 'selected' : ''}>${r.roleName.toUpperCase()}</option>`).join('');
+            const shiftOpts = shiftsData.map(s => `<option value="${s.id}" ${s.shiftName.toLowerCase() === (u.shiftName||'').toLowerCase() ? 'selected' : ''}>${s.shiftName.toUpperCase()} (${s.startTime ? s.startTime.substring(0,5) : ''})</option>`).join('');
+
+            const rowHtml = `
+                <tr data-user-id="${u.id}" data-email="${u.email}" data-username="${u.userName}" data-usercode="${u.code || ''}" data-branch-id="${u.branchId || ''}">
+                    <td class="pl-8">
+                        <div class="flex items-center gap-3">
+                            <div class="js-user-avatar w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center font-bold text-slate-400">${avatar}</div>
+                            <div class="flex flex-col">
+                                <span class="js-user-display font-bold text-slate-900 dark:text-white">${u.userName}</span>
+                                <span class="js-user-sub text-[9px] font-bold text-slate-400 uppercase">${sysCode}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="js-user-email text-xs font-medium text-slate-500">${u.email}</span></td>
+                    <td>
+                        <span class="js-user-branch-name text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest bg-brand-50 dark:bg-brand-500/10 px-2 py-1 rounded">${branchName}</span>
+                    </td>
+                    <td><span class="js-user-code font-mono font-bold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">${u.code || ''}</span></td>
+                    <td class="text-center">
+                        <span class="text-[9px] font-bold text-white bg-slate-900 dark:bg-brand-500/20 dark:text-brand-400 px-2.5 py-1 rounded-full uppercase tracking-widest">${roleName}</span>
+                    </td>
+                    <td>
+                        ${u.shiftName ? `
+                            <div class="flex flex-col">
+                                <span class="text-[10px] font-bold italic uppercase">${u.shiftName}</span>
+                                <span class="text-[8px] font-bold text-slate-400">${u.startTime} — ${u.endTime}</span>
+                            </div>
+                        ` : `<span class="text-[9px] font-bold text-rose-500/50 uppercase">Unassigned</span>`}
+                    </td>
+                    <td class="pr-8">
+                        <div class="flex flex-col gap-2 min-w-[220px]">
+                            <div class="flex gap-1">
+                                <button type="button" class="js-edit-personnel flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase hover:bg-brand-50 dark:hover:bg-brand-900/20">
+                                    <i class="fas fa-pen"></i> Edit
+                                </button>
+                                <button type="button" onclick="deleteUser('${u.id}')" class="flex-1 bg-white dark:bg-slate-900 text-slate-500 hover:text-rose-600 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase">
+                                    <i class="fas fa-trash-alt"></i> Delete
+                                </button>
+                            </div>
+                            <button type="button" onclick="openSendMailModal('${u.id}', '${u.userName}')" class="w-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 p-1.5 rounded-xl border border-brand-100 dark:border-brand-800 text-[9px] font-bold uppercase hover:bg-brand-600 hover:text-white transition-all flex items-center justify-center gap-2">
+                                <i class="fas fa-paper-plane"></i> Send Custom Message
+                            </button>
+                            <form action="/Admin/UpdateUserRole" method="post" class="flex gap-2 ajax-update-form" data-type="role">
+                                <input type="hidden" name="userId" value="${u.id}" />
+                                <select name="roleId" onchange="$(this).closest('form').submit();" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-brand-500 outline-none flex-1 transition-all">
+                                    ${roleOpts}
+                                </select>
+                            </form>
+                             <form action="/Admin/UpdateUserShift" method="post" class="flex gap-2 ajax-update-form" data-type="shift">
+                                <input type="hidden" name="userId" value="${u.id}" />
+                                <select name="newShiftId" onchange="$(this).closest('form').submit();" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-amber-500 outline-none flex-1 transition-all">
+                                    <option value="0">-- SYNC SHIFT --</option>
+                                    ${shiftOpts}
+                                </select>
+                            </form>
+                            <button type="button" onclick="deactivateUser('${u.id}')" class="w-full bg-white dark:bg-slate-900 text-rose-500 hover:bg-rose-500 hover:text-white p-1.5 rounded-xl transition-all border border-rose-100 dark:border-rose-900/50 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm">
+                                <i class="fas fa-ban"></i> Deactivate
+                            </button>
+                            <button type="button" onclick="resetPassword('${u.id}')" class="w-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white p-1.5 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm">
+                                <i class="fas fa-key"></i> Reset Password
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+
+            if ($.fn.DataTable.isDataTable($table[0])) {
+                $table.DataTable().row.add($(rowHtml)).draw(false);
+            } else {
+                $table.find('tbody').prepend(rowHtml);
+            }
+        }
+
+        const conn = new signalR.HubConnectionBuilder().withUrl("/importHub").withAutomaticReconnect().build();
+        let cid = "";
+        async function start() { try { await conn.start(); cid = conn.connectionId; } catch (e) { setTimeout(start, 5000); } }
+        start();
+        conn.on("ReceiveProgress", p => { $('#progressBox').removeClass('hidden'); $('#progressBar').width(p+'%'); $('#percentLabel').text(p+'%'); });
+
+        $(document).on('submit', '.ajax-update-form', async function(e) {
+            e.preventDefault();
+            const $form = $(this);
+            const $select = $form.find('select');
+            const type = $form.data('type');
+            const fd = new FormData(this);
+            
+            $select.prop('disabled', true).addClass('opacity-50 cursor-wait');
+            
+            try {
+                const r = await fetch(this.action, { 
+                    method: 'POST', 
+                    body: fd, 
+                    headers: { 'RequestVerificationToken': $form.find('input[name="__RequestVerificationToken"]').val() } 
+                });
+                const res = await r.json();
+                
+                if(res.success) {
+                    Swal.fire({ 
+                        icon: 'success', 
+                        title: 'Updated', 
+                        toast: true, 
+                        position: 'top-end', 
+                        showConfirmButton: false, 
+                        timer: 3000,
+                        background: '#f8fafc'
+                    });
+                    
+                    // Update UI labels without refresh
+                    const $row = $form.closest('tr');
+                    if(type === 'role') {
+                        const newRole = $form.find('select option:selected').text();
+                        $row.find('td:nth-child(5) span').text(newRole);
+                    } else if(type === 'shift') {
+                        const $opt = $form.find('select option:selected');
+                        const name = $opt.data('name');
+                        const time = $opt.data('time');
+                        
+                        let html = '';
+                        if(name) {
+                            html = `<div class="flex flex-col">
+                                        <span class="text-[10px] font-bold italic uppercase">${name}</span>
+                                        <span class="text-[8px] font-bold text-slate-400">${time}</span>
+                                    </div>`;
+                        } else {
+                            html = `<span class="text-[9px] font-bold text-rose-500/50 uppercase">Unassigned</span>`;
+                        }
+                        $row.find('td:nth-child(6)').html(html);
+                    }
+                } else {
+                    Swal.fire('Error', res.message, 'error');
+                }
+            } catch(e) {
+                Swal.fire('Error', 'Update communication failed', 'error');
+            } finally {
+                $select.prop('disabled', false).removeClass('opacity-50 cursor-wait');
+            }
+        });
+
+        function hideImportOverlay() {
+            const el = document.getElementById('importOverlay');
+            if (el) el.style.display = 'none';
+            $('#progressBox').addClass('hidden');
+            $('#btnImport').prop('disabled', false).css('opacity', 1);
+        }
+
+        // $('#importForm').on('submit', async function(e) {
+        //     e.preventDefault();
+        //     if(!cid) return Swal.fire('Error', 'Neural link not established.', 'error');
+        //     const fd = new FormData(this);
+        //     document.getElementById('importOverlay').style.display = 'flex';
+        //     $('#btnImport').prop('disabled', true).css('opacity', 0.6);
+        //     try {
+        //         const r = await fetch(this.action+'?connectionId='+cid, { method: 'POST', body: fd, headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() } });
+        //         const res = await r.json();
+        //         if(res.success) {
+        //             if (res.errors && res.errors.length > 0) {
+        //                 let errHtml = '<ul class="text-left text-xs text-rose-500 overflow-y-auto max-h-48 mt-4 list-disc pl-4">';
+        //                 res.errors.forEach(e => { errHtml += `<li>${String(e).replace(/</g,'&lt;')}</li>`; });
+        //                 errHtml += '</ul>';
+        //                 Swal.fire({ icon: 'warning', title: 'Imported with Errors', width: '640px', html: `<p class="text-sm font-bold">${res.message}</p>${errHtml}` })
+        //                 .then(() => location.reload());
+        //             } else {
+        //                 Swal.fire({ icon: 'success', title: 'Ingestion Complete', timer: 2000 }).then(() => location.reload());
+        //             }
+        //         }
+        //         else {
+        //             Swal.fire('Error', res.message || 'Import failed', 'error');
+        //         }
+        //     } catch(err) {
+        //         Swal.fire('Error', 'Import request failed: ' + (err && err.message ? err.message : 'network'), 'error');
+        //     } finally {
+        //         hideImportOverlay();
+        //     }
+        // });
+                $('#importForm').on('submit', async function(e) {
+            e.preventDefault();
+            if(!cid) return Swal.fire('Error', 'Neural link not established.', 'error');
+
+            const fd = new FormData(this);
+            // إظهار الـ Overlay
+            document.getElementById('importOverlay').style.display = 'flex';
+            $('#btnImport').prop('disabled', true).css('opacity', 0.6);
+
+            try {
+                const response = await fetch(this.action + '?connectionId=' + cid, {
+                    method: 'POST',
+                    body: fd,
+                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
+                });
+
+                // تأكد إن الرد JSON قبل التحويل
+                const contentType = response.headers.get("content-type");
+                if (!response.ok || !contentType || !contentType.includes("application/json")) {
+                    const errorText = await response.text();
+                    throw new Error("Server returned non-json response or error status.");
+                }
+
+                const res = await response.json();
+
+                // إخفاء السبينر فوراً قبل إظهار أي Alert
+                hideImportOverlay();
+
+                if(res.success) {
+                    if (res.errors && res.errors.length > 0) {
+                        let errHtml = '<ul class="text-left text-xs text-rose-500 overflow-y-auto max-h-48 mt-4 list-disc pl-4">';
+                        res.errors.forEach(e => { errHtml += `<li>${String(e).replace(/</g,'&lt;')}</li>`; });
+                        errHtml += '</ul>';
+
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Imported with Errors',
+                            width: '640px',
+                            html: `<p class="text-sm font-bold">${res.message}</p>${errHtml}`
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({ icon: 'success', title: 'Ingestion Complete', timer: 2000 })
+                            .then(() => location.reload());
+                    }
+                } else {
+                    Swal.fire('Error', res.message || 'Import failed', 'error');
+                }
+
+            } catch(err) {
+                console.error("Import Error:", err);
+                hideImportOverlay(); // تأكيد الإخفاء في حالة الـ Catch
+                Swal.fire('Error', 'Import request failed: ' + (err.message || 'Network error'), 'error');
+            }
+            // شلنا الـ finally وحطينا الإخفاء يدوي في كل مسار لضمان الدقة
+        });
+        function deactivateUser(userId) {
+            Swal.fire({
+                title: 'Deactivate Personnel?',
+                text: "This user will lose access to the system. This action cannot be easily undone from this interface.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Deactivate',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '/Admin/DeactivateUser',
+                        type: 'POST',
+                        data: { userId: userId },
+                        headers: {
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        success: function (res) {
+                            if (res.success) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Deactivated!',
+                                    text: 'The personnel node has been deactivated.',
+                                    timer: 2000,
+                                    showConfirmButton: false
+                                }).then(() => location.reload());
+                            } else {
+                                Swal.fire('Error', res.message, 'error');
+                            }
+                        },
+                        error: function () {
+                            Swal.fire('Error', 'An error occurred while communicating with the server.', 'error');
+                        }
+                    });
+                }
+            });
+        }
+
+        function activateUser(userId) {
+            Swal.fire({
+                title: 'Activate Personnel?',
+                text: "This user will regain access to the system.",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Activate',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '/Admin/ActivateUser',
+                        type: 'POST',
+                        data: { userId: userId },
+                        headers: {
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        success: function (res) {
+                            if (res.success) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Activated!',
+                                    text: 'The personnel node has been activated.',
+                                    timer: 2000,
+                                    showConfirmButton: false
+                                }).then(() => location.reload());
+                            } else {
+                                Swal.fire('Error', res.message, 'error');
+                            }
+                        },
+                        error: function () {
+                            Swal.fire('Error', 'An error occurred while communicating with the server.', 'error');
+                        }
+                    });
+                }
+            });
+        }
+
+        function applyPersonnelRowFromServer(userId, res) {
+            const $tr = $('tr[data-user-id]').filter(function () { return $(this).attr('data-user-id') === userId; });
+            if (!$tr.length) return;
+            $tr.attr('data-email', res.email || '');
+            $tr.attr('data-username', res.fullName || res.userName || '');
+            $tr.attr('data-usercode', res.userCode || '');
+            $tr.attr('data-branch-id', res.branchId == null ? '' : String(res.branchId));
+            const un = res.fullName || res.userName || '';
+            $tr.find('.js-user-display').text(un.replace(/_/g, ' '));
+            $tr.find('.js-user-avatar').text(un ? un.charAt(0).toUpperCase() : '?');
+            const sub = res.userCode ? res.userCode : ('SYS-' + userId.substring(0, 8).toUpperCase());
+            $tr.find('.js-user-sub').text(sub);
+            $tr.find('.js-user-email').text(res.email || '');
+            $tr.find('.js-user-branch-name').text((res.branchName || 'GLOBAL').toUpperCase());
+            $tr.find('.js-user-code').text(res.userCode || '');
+            const $tbl = $tr.closest('table.datatable');
+            if ($tbl.length && $.fn.DataTable.isDataTable($tbl[0])) {
+                try { $tbl.DataTable().row($tr).invalidate('dom').draw(false); } catch (e) { /* ignore */ }
+            }
+        }
+
+        function openEditUserModal(userId, email, userName, userCode, branchId) {
+            const getVal = (obj, prop) => {
+                if (!obj) return "";
+                return obj[prop.charAt(0).toLowerCase() + prop.slice(1)] || obj[prop] || "";
+            };
+            const oldBranchKey = (branchId == null || branchId === '') ? '' : String(branchId);
+            let branchOptions = '<option value="">-- NO BRANCH --</option>';
+            branchesData.forEach(b => {
+                let name = getVal(b, 'BranchName');
+                let bid = getVal(b, 'Id');
+                let sel = (oldBranchKey !== '' && String(bid) === oldBranchKey) ? ' selected' : '';
+                branchOptions += `<option value="${bid}"${sel}>${(name || '').toUpperCase()}</option>`;
+            });
+            Swal.fire({
+                title: 'Edit Personnel',
+                html: `
+                    <div class="text-left space-y-3 p-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Email</label>
+                            <input id="editEmail" type="email" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">User name</label>
+                            <input id="editUserName" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">User code</label>
+                            <input id="editUserCode" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Branch</label>
+                            <select id="editBranchId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">${branchOptions}</select>
+                        </div>
+                    </div>`,
+                showCancelButton: true,
+                confirmButtonText: 'Save',
+                confirmButtonColor: '#0284c7',
+                cancelButtonText: 'Cancel',
+                width: '520px',
+                didOpen: () => {
+                    document.getElementById('editEmail').value = email || '';
+                    document.getElementById('editUserName').value = (userName || '').replace(/_/g, ' ');
+                    document.getElementById('editUserCode').value = userCode || '';
+                    const sel = document.getElementById('editBranchId');
+                    sel.value = oldBranchKey;
+                    if (oldBranchKey && sel.value !== oldBranchKey) {
+                        const opt = Array.from(sel.options).find(o => String(o.value) === oldBranchKey);
+                        if (opt) opt.selected = true;
+                    }
+                },
+                preConfirm: async () => {
+                    const fd = new FormData();
+                    fd.append('userId', userId);
+                    fd.append('email', document.getElementById('editEmail').value.trim());
+                    fd.append('userName', document.getElementById('editUserName').value.trim());
+                    fd.append('userCode', document.getElementById('editUserCode').value.trim());
+                    const newBr = document.getElementById('editBranchId').value || '';
+                    if (newBr !== oldBranchKey)
+                        fd.append('branchId', newBr);
+                    const r = await fetch('/Admin/UpdateUserProfile', {
+                        method: 'POST',
+                        body: fd,
+                        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
+                    });
+                    const res = await r.json();
+                    if (!res.success) {
+                        Swal.showValidationMessage(res.message || 'Update failed');
+                        return false;
+                    }
+                    return res;
+                }
+            }).then((result) => {
+                if (result.isConfirmed && result.value) {
+                    applyPersonnelRowFromServer(userId, result.value);
+                    Swal.fire({ icon: 'success', title: 'Saved', toast: true, position: 'top-end', timer: 2000, showConfirmButton: false });
+                }
+            });
+        }
+
+        $(document).on('click', '.js-edit-personnel', function () {
+            const $tr = $(this).closest('tr[data-user-id]');
+            const bid = $tr.attr('data-branch-id');
+            openEditUserModal(
+                $tr.attr('data-user-id'),
+                $tr.attr('data-email'),
+                $tr.attr('data-username'),
+                $tr.attr('data-usercode'),
+                bid === '' || bid === undefined ? null : bid
+            );
+        });
+
+        function deleteUser(userId) {
+            Swal.fire({
+                title: 'Delete permanently?',
+                html: '<p class="text-sm text-slate-600">This removes the account, exam attempts, assignments, and wave links for this user.</p>',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#b91c1c',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Delete',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+                const fd = new FormData();
+                fd.append('userId', userId);
+                fetch('/Admin/DeleteUser', {
+                    method: 'POST',
+                    body: fd,
+                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
+                }).then(r => r.json()).then(res => {
+                    if (res.success) {
+                        const $tr = $('tr[data-user-id="' + userId + '"]');
+                        const $tbl = $tr.closest('table.datatable');
+                        if ($tbl.length && $.fn.DataTable.isDataTable($tbl[0])) {
+                            $tbl.DataTable().row($tr).remove().draw(false);
+                        } else {
+                            $tr.remove();
+                        }
+                        Swal.fire({ 
+                            icon: 'success', 
+                            title: 'Deleted Successfully', 
+                            toast: true, 
+                            position: 'top-end', 
+                            showConfirmButton: false, 
+                            timer: 3000,
+                            background: '#f8fafc'
+                        });
+                    }
+                    else Swal.fire('Error', res.message, 'error');
+                }).catch(() => Swal.fire('Error', 'Request failed', 'error'));
+            });
+        }
+
+        $('#btnGoogleSync').on('click', function() {
+            Swal.fire({
+                title: 'Synchronizing Nodes',
+                html: 'Accessing Google Cloud Platform...<br/>Fetching personnel infrastructure data.',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            $.ajax({
+                url: '/Admin/SyncUsersFromGoogleSheets',
+                type: 'GET',
+                success: function(res) {
+                    if (res.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Sync Successful',
+                            html: res.message,
+                            confirmButtonText: 'RELOAD REGISTRY'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Sync Failed',
+                            html: res.message
+                        });
+                    }
+                },
+                error: function() {
+                    Swal.fire('Error', 'Network request failed or server error.', 'error');
+                }
+            });
+        });
+
+        function openSendMailModal(userId, userName) {
+            Swal.fire({
+                title: `<span class="text-slate-900 dark:text-white">Send Message to <span class="text-brand-600">${userName}</span></span>`,
+                html: `
+                    <div class="text-left space-y-4 p-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-widest">Message Subject</label>
+                            <input id="mailSubject" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-500 dark:text-white transition-all" placeholder="e.g. Schedule Update" value="Important Message from Academy" />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-widest">Message Content</label>
+                            <textarea id="mailMessage" rows="5" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-500 dark:text-white transition-all resize-none" placeholder="Type your message here..."></textarea>
+                        </div>
+                    </div>`,
+                showCancelButton: true,
+                confirmButtonText: 'Dispatch Email',
+                confirmButtonColor: '#4f46e5',
+                cancelButtonText: 'Cancel',
+                width: '520px',
+                showLoaderOnConfirm: true,
+                preConfirm: async () => {
+                    const subject = document.getElementById('mailSubject').value.trim();
+                    const message = document.getElementById('mailMessage').value.trim();
+                    
+                    if (!message) {
+                        Swal.showValidationMessage('Message content cannot be empty');
+                        return false;
+                    }
+
+                    try {
+                        const fd = new FormData();
+                        fd.append('userId', userId);
+                        fd.append('subject', subject);
+                        fd.append('message', message);
+
+                        const response = await fetch('/Admin/SendCustomEmail', {
+                            method: 'POST',
+                            body: fd,
+                            headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
+                        });
+                        const res = await response.json();
+                        if (!res.success) throw new Error(res.message);
+                        return res;
+                    } catch (error) {
+                        Swal.showValidationMessage(`Error: ${error.message}`);
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Email Dispatched',
+                        text: 'Your custom message has been sent successfully.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                }
+            });
+        }
+
+        function resetPassword(userId) {
+            Swal.fire({
+                title: 'Reset Password?',
+                text: "The user's password will be set to 'TempPass@123' and they will receive an email notification.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f59e0b',
+                confirmButtonText: 'Yes, Reset and Email',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '/Admin/ResetUserPassword',
+                        type: 'POST',
+                        data: { userId: userId },
+                        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
+                        success: function (res) {
+                            if (res.success) {
+                                Swal.fire('Reset Successful!', res.message, 'success');
+                            } else {
+                                Swal.fire('Error', res.message, 'error');
+                            }
+                        }
+                    });
+                }
+            });
+        }
+    </script>
+}

@@ -1,0 +1,583 @@
+@model IEnumerable<Exam.DTOs.WaveDto>
+@{
+    ViewData["Title"] = "Training Batches";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+
+@Html.AntiForgeryToken()
+
+<!-- Header -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+            <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Batch Management</h2>
+            <p class="text-xl font-bold">Training Cycles</p>
+        </div>
+        
+        @if (User.IsInRole("Admin"))
+        {
+            <button id="createWaveButton" class="bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 rounded-2xl transition-all shadow-lg font-bold uppercase text-xs tracking-widest flex items-center gap-3 active:scale-95 group">
+                <i class="fas fa-plus group-hover:rotate-90 transition-transform"></i>
+                Create New Batch
+            </button>
+        }
+    </div>
+</div>
+
+<!-- Table -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+    <div class="overflow-x-auto">
+        <table id="wavesTable" class="saas-table datatable">
+            <thead>
+                <tr>
+                    <th class="pl-8">Batch Name</th>
+                    <th>Start Date</th>
+                    <th class="text-right pr-8">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var wave in Model) {
+                    <tr data-waveid="@wave.Id" class="cursor-pointer" title="Double-click to view details">
+                        <td class="pl-8">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"><i class="fas fa-water"></i></div>
+                                <span class="font-bold text-slate-900 dark:text-white">@wave.WaveName</span>
+                            </div>
+                        </td>
+                        <td><span class="text-xs font-medium text-slate-500 uppercase">@wave.StartDate?.ToString("MMMM dd, yyyy")</span></td>
+                        <td class="text-right pr-8">
+                            <div class="flex items-center justify-end gap-2">
+                                @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources"))
+                                {
+                                    <button onclick="openAssignModal(@wave.Id, '@wave.WaveName')" class="bg-slate-100 dark:bg-slate-800 hover:bg-brand-600 text-slate-500 hover:text-white px-6 py-2.5 rounded-xl transition-all border border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
+                                        <i class="fas fa-user-plus text-xs"></i>
+                                        Assign User
+                                    </button>
+                                    <button onclick="openImportExcelModal(@wave.Id, '@wave.WaveName')" class="bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-600 text-emerald-600 hover:text-white px-6 py-2.5 rounded-xl transition-all border border-emerald-100 dark:border-emerald-900/30 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
+                                        <i class="fas fa-file-excel text-xs"></i>
+                                        Import Excel
+                                    </button>
+                                }
+                                @if (User.IsInRole("Admin"))
+                                {
+                                    <button onclick="cloneWave(@wave.Id, '@wave.WaveName')" class="bg-indigo-50 hover:bg-indigo-600 text-indigo-500 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-indigo-100 hover:border-indigo-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
+                                        <i class="fas fa-copy text-xs"></i>
+                                        Clone
+                                    </button>
+                                    <button onclick="deleteWave(@wave.Id, '@wave.WaveName')" class="bg-red-50 hover:bg-red-600 text-red-500 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-red-100 hover:border-red-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
+                                        <i class="fas fa-trash-alt text-xs"></i>
+                                        Delete
+                                    </button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+    <script>
+        const isAdmin = @(User.IsInRole("Admin").ToString().ToLower());
+
+        async function cloneWave(wid, wname) {
+            event.stopPropagation(); // prevent row double click
+            const { value: formValues } = await Swal.fire({
+                title: 'Clone Batch',
+                html:
+                    '<div class="text-left space-y-4">' +
+                    '<div class="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-800 dark:text-indigo-300 p-4 rounded-xl text-xs font-medium mb-4"><i class="fas fa-info-circle mr-2"></i>This will duplicate the batch and all its underlying exams with new IDs, preserving the generation rules.</div>' +
+                    `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">New Batch Name</label><input id="clone-sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold" value="${wname} - Copy"></div>` +
+                    '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">New Start Date</label><input id="clone-sw-date" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold"></div>' +
+                    '</div>',
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-copy mr-2"></i> Clone Batch',
+                cancelButtonText: 'Cancel',
+                preConfirm: () => {
+                    return {
+                        name: document.getElementById('clone-sw-name').value,
+                        date: document.getElementById('clone-sw-date').value
+                    }
+                },
+                customClass: {
+                    confirmButton: 'bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false
+            });
+
+            if (formValues && formValues.name) {
+                Swal.fire({ title: 'Cloning Batch...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+                const res = await fetch('/Admin/CloneWave', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, 
+                    body: `waveId=${wid}&newWaveName=${encodeURIComponent(formValues.name)}&newStartDate=${formValues.date || ''}`
+                });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'Success', text: 'Batch cloned successfully.', timer: 1500, showConfirmButton: false });
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    Swal.fire('Error', data.message || 'Could not clone batch', 'error');
+                }
+            }
+        }
+
+        async function deleteWave(wid, wname) {
+            const result = await Swal.fire({
+                title: 'Are you sure?',
+                html: `You are about to delete <b class="text-red-500">${wname}</b>.<br>This will set related records to NULL and cannot be undone!`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, delete it!',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    confirmButton: 'bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false,
+                reverseButtons: true
+            });
+
+            if (result.isConfirmed) {
+                // إظهار حالة التحميل
+                Swal.fire({
+                    title: 'Deleting...',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false,
+                    showConfirmButton: false
+                });
+
+                try {
+                    const response = await fetch(`/Admin/DeleteWave?waveid=${wid}`, {
+                        method: 'DELETE', // تأكد أن الـ Action يقبل HttpDelete
+                        headers: {
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() // لو مفعل الـ Anti-Forgery
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'Deleted!',
+                            text: data.message || 'The wave has been deleted.',
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+                        location.reload(); // إعادة تحميل الصفحة لتحديث الجدول
+                    } else {
+                        Swal.fire('Error!', data.message || 'Something went wrong.', 'error');
+                    }
+                } catch (error) {
+                    Swal.fire('Error!', 'Failed to connect to the server.', 'error');
+                }
+            }
+        }
+        async function openAssignModal(wid, wname) {
+            Swal.fire({ title: 'Loading Personnel...', didOpen: () => Swal.showLoading() });
+            
+            const [usersRes, assignedRes] = await Promise.all([
+                fetch('/Admin/GetUsersWithoutCertificate'),
+                fetch(`/Admin/GetWaveUserIds?waveId=${wid}`)
+            ]);
+
+            const allUsers = await usersRes.json();
+            const assignedIds = await assignedRes.json();
+            const assignedSet = new Set(assignedIds);
+
+            // Filter users to show only Pharmacists and Assistants
+            const users = allUsers.filter(u => {
+                const role = (u.roleName || u.RoleName || '').toLowerCase();
+                return role === 'pharmacist' || role === 'assistant' || role === 'صيدلي' || role === 'مساعد صيدلي';
+            }).map(u => ({
+                ...u,
+                isAssigned: assignedSet.has(u.id)
+            }));
+            
+            Swal.fire({
+                title: `<div class="text-left border-b border-slate-100 pb-4"><p class="text-[10px] font-bold text-brand-600 uppercase tracking-[0.2em] mb-1">Assigning to</p><p class="text-2xl font-black italic uppercase text-slate-900">${wname}</p></div>`,
+                html: `
+                    <div class="mt-8 text-left">
+                        <div class="mb-4 flex items-center gap-4">
+                            <div class="flex items-center gap-2 bg-amber-50 dark:bg-amber-500/10 p-3 rounded-xl border border-amber-100 dark:border-amber-500/20 w-fit">
+                                <input type="checkbox" id="filterNoCert" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+                                <label for="filterNoCert" class="text-[10px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-widest cursor-pointer select-none">Without Cert Code</label>
+                            </div>
+                            <div class="flex items-center gap-2 bg-brand-50 dark:bg-brand-500/10 p-3 rounded-xl border border-brand-100 dark:border-brand-500/20 w-fit">
+                                <input type="checkbox" id="filterNotAssigned" class="w-4 h-4 accent-brand-500 rounded cursor-pointer">
+                                <label for="filterNotAssigned" class="text-[10px] font-bold text-brand-600 dark:text-brand-500 uppercase tracking-widest cursor-pointer select-none">Not Assigned to Wave</label>
+                            </div>
+                        </div>
+                        <table id="swalUserTable" class="saas-table display nowrap w-full text-xs">
+                            <thead>
+                                    <tr class="bg-slate-50">
+                                        <th class="w-10"><input type="checkbox" id="selectAllSwal" class="w-4 h-4 accent-brand-500"></th>
+                                        <th>User</th>
+                                        <th>Code</th>
+                                        <th>Branch</th>
+                                        <th>Role</th>
+                                        <th>Cert Code</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${users.map(u => `
+                                        <tr class="cursor-pointer border-b border-slate-50 hover:bg-slate-50 transition-colors ${u.isAssigned ? 'opacity-50 grayscale-[0.5]' : ''}" 
+                                            data-has-cert="${u.certificateCode ? 'true' : 'false'}"
+                                            data-is-assigned="${u.isAssigned}">
+                                            <td><input type="checkbox" class="user-cb w-4 h-4 accent-brand-500" value="${u.id}" ${u.isAssigned ? 'disabled' : ''}></td>
+                                            <td>
+                                                <div class="flex flex-col">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="font-bold text-slate-900">${u.userName}</span>
+                                                        ${u.isAssigned ? '<span class="text-[7px] bg-slate-200 text-slate-500 px-1 rounded uppercase font-black">Enrolled</span>' : ''}
+                                                    </div>
+                                                    <span class="text-[9px] text-slate-500 uppercase">${u.email}</span>
+                                                </div>
+                                            </td>
+                                            <td class="font-bold text-slate-500">${u.userCode || u.UserCode || '--'}</td>
+                                            <td class="font-bold text-slate-500">${(u.branchName || 'GLOBAL').toUpperCase()}</td>
+                                            <td><span class="text-[8px] font-bold px-2 py-0.5 bg-slate-100 rounded-full text-slate-600 uppercase">${u.roleName || 'USER'}</span></td>
+                                            <td class="font-mono text-[9px] text-brand-600">${u.certificateCode || '<span class="text-slate-300">--</span>'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                    </div>
+                `,
+                width: '1000px',
+                showCancelButton: true,
+                confirmButtonText: 'Assign Wave',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false,
+                didOpen: () => {
+                    window._waveFilterFn = function(settings, data, dataIndex) {
+                        if (settings.nTable.id !== 'swalUserTable') return true;
+                        
+                        const certChecked = $('#filterNoCert').is(':checked');
+                        const assignChecked = $('#filterNotAssigned').is(':checked');
+                        const row = settings.aoData[dataIndex].nTr;
+                        
+                        if (certChecked) {
+                            if ($(row).attr('data-has-cert') !== 'false') return false;
+                        }
+                        
+                        if (assignChecked) {
+                            if ($(row).attr('data-is-assigned') !== 'false') return false;
+                        }
+                        
+                        return true;
+                    };
+                    $.fn.dataTable.ext.search.push(window._waveFilterFn);
+
+                    const table = $('#swalUserTable').DataTable({
+                        pageLength: 5,
+                        lengthMenu: [5, 10, 25, 50],
+                        language: { search: "", searchPlaceholder: "Search User..." },
+                        columnDefs: [{ orderable: false, targets: 0 }]
+                    });
+                    
+                    $('#filterNoCert, #filterNotAssigned').on('change', function() {
+                        table.draw();
+                    });
+
+                    $('#selectAllSwal').on('change', function() {
+                        const rows = table.rows({ search: 'applied' }).nodes();
+                        $('input.user-cb:not(:disabled)', rows).prop('checked', this.checked);
+                    });
+
+                    $('#swalUserTable tbody').on('click', 'tr', function(e) {
+                        if ($(e.target).is('input[type="checkbox"]')) return;
+                        const cb = $(this).find('input.user-cb');
+                        if(cb.length && !cb.is(':disabled')) {
+                            cb.prop('checked', !cb.prop('checked'));
+                        }
+                    });
+
+                    $('.dataTables_filter input').addClass('bg-slate-50 border-slate-200 rounded-xl px-4 py-2 text-xs focus:ring-0 outline-none mb-4');
+                },
+                didClose: () => {
+                    if (window._waveFilterFn) {
+                        const idx = $.fn.dataTable.ext.search.indexOf(window._waveFilterFn);
+                        if (idx !== -1) $.fn.dataTable.ext.search.splice(idx, 1);
+                        window._waveFilterFn = null;
+                    }
+                },
+                preConfirm: () => {
+                   const ids = [];
+                   $('#swalUserTable').DataTable().$('input.user-cb:checked').each(function() {
+                       ids.push($(this).val());
+                   });
+                   if(!ids.length) { Swal.showValidationMessage('Please select at least one User.'); return false; }
+                   return ids;
+                }
+            }).then(async (result) => {
+                if(result.isConfirmed) {
+                    Swal.fire({ title: 'Deploying...', didOpen: () => Swal.showLoading() });
+                    const r = await fetch(`/Admin/AssignUsersToWave?waveId=${wid}`, { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify(result.value) 
+                    });
+                    if(r.ok) Swal.fire({ icon: 'success', title: 'Deployed', text: 'Personnel successfully assigned.', timer: 1500, showConfirmButton: false });
+                }
+            });
+        }
+
+        async function openImportExcelModal(wid, wname) {
+            const { value: file } = await Swal.fire({
+                title: 'Import Batch to Wave',
+                html: `
+                    <div class="text-left space-y-4">
+                        <div class="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-2xl p-4 flex gap-3 text-amber-800 dark:text-amber-300">
+                            <i class="fas fa-info-circle text-lg shrink-0 mt-0.5"></i>
+                            <div class="text-xs space-y-1">
+                                <p class="font-black uppercase tracking-wide">Excel Sheet Requirements / متطلبات شيت الإكسيل</p>
+                                <p class="font-medium text-amber-700 dark:text-amber-400">
+                                    The sheet must contain the following columns (row 1 can be headers):
+                                </p>
+                                <ul class="list-disc pl-4 space-y-1 mt-1 font-bold">
+                                    <li>First Column / العمود الأول: <span class="text-slate-900 dark:text-white">User Name (الاسم)</span></li>
+                                    <li>Second Column / العمود الثاني: <span class="text-slate-900 dark:text-white">User Code (كود المستخدم)</span></li>
+                                </ul>
+                                <p class="text-[10px] text-amber-600 dark:text-amber-500 mt-2 font-medium italic">
+                                    * Note: The system matches and assigns users by their unique <b>User Code</b>. Make sure codes match existing accounts!
+                                </p>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 font-medium">
+                            Select an Excel file (.xlsx) containing the list of employees/trainees you wish to enroll into <b>\${wname}</b>.
+                        </p>
+                        <div class="mt-4">
+                            <label class="w-full flex items-center justify-center gap-2 px-4 py-6 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 cursor-pointer transition-colors bg-slate-50 dark:bg-slate-800/50">
+                                <i class="fas fa-cloud-upload-alt text-2xl text-slate-400"></i>
+                                <span class="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider" id="modalExcelFileName">Choose Excel File</span>
+                                <input type="file" id="modalExcelFile" class="hidden" accept=".xlsx" onchange="document.getElementById('modalExcelFileName').textContent = this.files[0] ? this.files[0].name : 'Choose Excel File'" />
+                            </label>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Upload & Enroll',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    confirmButton: 'bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false,
+                preConfirm: () => {
+                    const fileInput = document.getElementById('modalExcelFile');
+                    if (!fileInput.files.length) {
+                        Swal.showValidationMessage('Please select an Excel file.');
+                        return false;
+                    }
+                    return fileInput.files[0];
+                }
+            });
+
+            if (file) {
+                Swal.fire({ title: 'Enrolling users...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+                const formData = new FormData();
+                formData.append('waveId', wid);
+                formData.append('excelFile', file);
+                formData.append('__RequestVerificationToken', $('input[name="__RequestVerificationToken"]').val());
+
+                try {
+                    const response = await fetch('/Admin/ImportUsersToWaveFromExcel', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Enrolled Successfully',
+                            text: result.message
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Enrollment Failed',
+                            text: result.message
+                        });
+                    }
+                } catch (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Upload Error',
+                        text: 'Failed to communicate with the enrollment server.'
+                    });
+                }
+            }
+        }
+
+        $(function () {
+            $('#createWaveButton').on('click', async function () {
+                const { value: formValues } = await Swal.fire({
+                    title: 'Create New Batch',
+                    html:
+                        '<div class="text-left space-y-4">' +
+                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Batch Name</label><input id="sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold"></div>' +
+                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Start Date</label><input id="sw-date" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold"></div>' +
+                        '</div>',
+                    focusConfirm: false,
+                    showCancelButton: true,
+                    confirmButtonText: 'Create Batch',
+                    cancelButtonText: 'Cancel',
+                    preConfirm: () => {
+                        return {
+                            name: document.getElementById('sw-name').value,
+                            date: document.getElementById('sw-date').value
+                        }
+                    },
+                    customClass: {
+                        confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                        cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                    },
+                    buttonsStyling: false
+                });
+
+                if (formValues && formValues.name) {
+                    const res = await fetch('/Admin/CreateWave', { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify({ WaveName: formValues.name, StartDate: formValues.date || null }) 
+                    });
+                    if(res.ok) {
+                        Swal.fire({ icon: 'success', title: 'Success', text: 'Batch created successfully.', timer: 1500, showConfirmButton: false });
+                        setTimeout(() => location.reload(), 1500);
+                    }
+                }
+            });
+
+            // No-op for old event handlers
+
+            // Double-click on row navigates to Wave details
+            $('#wavesTable tbody').on('dblclick', 'tr', function() {
+                const wid = $(this).data('waveid');
+                const wname = $(this).find('span.font-bold').text();
+                if (wid) {
+                    viewWavePersonnel(wid, wname);
+                }
+            });
+
+            async function viewWavePersonnel(wid, wname) {
+                Swal.fire({ title: 'Loading Personnel...', didOpen: () => Swal.showLoading() });
+                
+                try {
+                    const res = await fetch(`/Admin/GetUsersByWaveId?waveId=${wid}`);
+                    const users = await res.json();
+
+                    Swal.fire({
+                        title: `<div class="text-left border-b border-slate-100 pb-4"><p class="text-[10px] font-bold text-brand-600 uppercase tracking-[0.2em] mb-1">Enrolled Personnel in</p><p class="text-2xl font-black italic uppercase text-slate-900">${wname}</p></div>`,
+                        html: `
+                            <div class="mt-8 text-left">
+                                <table id="swalWaveDetailsTable" class="saas-table display nowrap w-full text-xs">
+                                    <thead>
+                                        <tr class="bg-slate-50">
+                                            <th>User</th>
+                                            <th>Code</th>
+                                            <th>Role</th>
+                                            <th>Branch</th>
+                                            <th class="text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${users.map(u => `
+                                            <tr class="border-b border-slate-50">
+                                                <td>
+                                                    <div class="flex flex-col">
+                                                        <span class="font-bold text-slate-900">${u.userName ?? u.UserName}</span>
+                                                        <span class="text-[10px] text-slate-400 font-medium">${u.email ?? u.Email}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="font-bold text-slate-500">${u.userCode ?? u.UserCode ?? '--'}</td>
+                                                <td>
+                                                    <span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                                                        ${u.roleName ?? u.RoleName ?? 'User'}
+                                                    </span>
+                                                </td>
+                                                <td class="font-bold text-slate-400 text-[10px] uppercase">${u.branchName ?? u.BranchName ?? 'N/A'}</td>
+                                                <td class="text-right">
+                                                    ${isAdmin ? `
+                                                        <button class="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg remove-user-btn" 
+                                                                data-waveid="${wid}" 
+                                                                data-userid="${u.id ?? u.Id}"
+                                                                data-username="${u.userName ?? u.UserName}">
+                                                            <i class="fas fa-user-minus"></i>
+                                                        </button>
+                                                    ` : '--'}
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                                ${users.length === 0 ? '<div class="p-12 text-center text-slate-400 font-bold uppercase tracking-widest">No personnel enrolled in this batch</div>' : ''}
+                            </div>
+                        `,
+                        width: '900px',
+                        showConfirmButton: false,
+                        showCloseButton: true,
+                        didOpen: () => {
+                            const table = $('#swalWaveDetailsTable').DataTable({
+                                pageLength: 5,
+                                lengthMenu: [5, 10, 25],
+                                language: { search: "", searchPlaceholder: "Filter personnel..." }
+                            });
+                            $('.dataTables_filter input').addClass('bg-slate-50 border-slate-200 rounded-xl px-4 py-2 text-xs focus:ring-0 outline-none mb-4');
+                            
+                            // Remove logic
+                            $(document).off('click', '.remove-user-btn').on('click', '.remove-user-btn', function() {
+                                const uid = $(this).data('userid');
+                                const uname = $(this).data('username');
+                                const waveId = $(this).data('waveid');
+                                
+                                Swal.fire({
+                                    title: 'Remove User?',
+                                    text: `Remove ${uname} from this batch?`,
+                                    icon: 'warning',
+                                    showCancelButton: true,
+                                    confirmButtonText: 'Yes, Remove',
+                                    customClass: {
+                                        confirmButton: 'bg-rose-600 text-white px-6 py-2 rounded-lg font-bold mr-2',
+                                        cancelButton: 'bg-slate-200 text-slate-700 px-6 py-2 rounded-lg font-bold'
+                                    },
+                                    buttonsStyling: false
+                                }).then(async (r) => {
+                                    if(r.isConfirmed) {
+                                        const res = await fetch('/Admin/RemoveUserFromWave', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                            body: `waveId=${waveId}&userId=${uid}`
+                                        });
+                                        const data = await res.json();
+                                        if(data.success) {
+                                            table.row($(`button[data-userid="${uid}"]`).parents('tr')).remove().draw();
+                                            Swal.fire({ icon: 'success', title: 'Removed', timer: 1000, showConfirmButton: false });
+                                        }
+                                    }
+                                });
+                            });
+                        }
+                    });
+                } catch (err) {
+                    Swal.fire('Error', 'Failed to load wave personnel', 'error');
+                }
+            }
+        });
+    </script>
+}

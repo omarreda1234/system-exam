@@ -1,0 +1,134 @@
+@page
+@model Exam.Pages.Admin.Exams.CreateModel
+@{
+    ViewData["Title"] = "Create Exam";
+    Layout = "_Base";
+}
+
+<h2>Create New Exam</h2>
+
+<form method="post" id="examForm">
+    <div class="mb-3">
+        <label asp-for="Input.Title" class="form-label">Title</label>
+        <input asp-for="Input.Title" class="form-control" />
+        <span asp-validation-for="Input.Title" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Input.Description" class="form-label">Description</label>
+        <textarea asp-for="Input.Description" class="form-control"></textarea>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label asp-for="Input.StartTime" class="form-label">Start Time</label>
+            <input asp-for="Input.StartTime" type="datetime-local" class="form-control" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="Input.EndTime" class="form-label">End Time</label>
+            <input asp-for="Input.EndTime" type="datetime-local" class="form-control" />
+        </div>
+        <div class="col-md-4 mb-3">
+            <label asp-for="Input.Duration" class="form-label">Duration (minutes)</label>
+            <input asp-for="Input.Duration" class="form-control" />
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label asp-for="Input.PassPercentage" class="form-label">Pass Percentage</label>
+            <input asp-for="Input.PassPercentage" class="form-control" />
+        </div>
+        <div class="col-md-4 mb-3 form-check mt-4">
+            <input asp-for="Input.IsActive" class="form-check-input" />
+            <label asp-for="Input.IsActive" class="form-check-label">Is Active</label>
+        </div>
+    </div>
+
+    <hr />
+
+    <h4>Questions</h4>
+    <div id="questionsContainer"></div>
+    <button type="button" id="addQuestionBtn" class="btn btn-link">+ Add question</button>
+
+    <div class="mt-4">
+        <button type="submit" class="btn btn-primary">Save Exam</button>
+        <a asp-page="/Index" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            let qIndex = 0;
+
+            function createChoiceHtml(qIdx, cIdx) {
+                return `
+                <div class="input-group mb-2 choice-row">
+                    <div class="input-group-text">
+                        <input type="checkbox" name="Input.Questions[${qIdx}].Choices[${cIdx}].IsCorrect" />
+                    </div>
+                    <input type="text" name="Input.Questions[${qIdx}].Choices[${cIdx}].ChoiceText" class="form-control" placeholder="Type answer here" />
+                    <button type="button" class="btn btn-link text-danger remove-choice">Delete answer</button>
+                </div>`;
+            }
+
+            function createQuestionHtml(idx) {
+                return `
+                <div class="card mb-3 question-panel" data-qidx="${idx}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <h5>Question</h5>
+                            <button type="button" class="btn btn-link text-danger remove-question">Delete question</button>
+                        </div>
+                        <input type="text" name="Input.Questions[${idx}].QuestionText" class="form-control mb-2" placeholder="Type question here" />
+                        <input type="number" name="Input.Questions[${idx}].Points" class="form-control mb-2" placeholder="Points" value="1" />
+
+                        <div class="choices" id="choices-${idx}">
+                            ${createChoiceHtml(idx, 0)}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-link add-choice">+ Add answer</button>
+                    </div>
+                </div>`;
+            }
+
+            function addQuestion() {
+                const html = createQuestionHtml(qIndex);
+                $('#questionsContainer').append(html);
+                qIndex++;
+            }
+
+            function reindexChoices(qElem) {
+                const qIdx = $(qElem).data('qidx');
+                $(qElem).find('.choice-row').each(function (cIdx) {
+                    $(this).find('input[type=text]').attr('name', `Input.Questions[${qIdx}].Choices[${cIdx}].ChoiceText`);
+                    $(this).find('input[type=checkbox]').attr('name', `Input.Questions[${qIdx}].Choices[${cIdx}].IsCorrect`);
+                });
+            }
+
+            $('#addQuestionBtn').on('click', function () {
+                addQuestion();
+            });
+
+            $('#questionsContainer').on('click', '.remove-question', function () {
+                $(this).closest('.question-panel').remove();
+            });
+
+            $('#questionsContainer').on('click', '.add-choice', function () {
+                const qElem = $(this).closest('.question-panel');
+                const qIdx = qElem.data('qidx');
+                const choicesDiv = qElem.find('.choices');
+                const cIdx = choicesDiv.find('.choice-row').length;
+                choicesDiv.append(createChoiceHtml(qIdx, cIdx));
+            });
+
+            $('#questionsContainer').on('click', '.remove-choice', function () {
+                $(this).closest('.choice-row').remove();
+            });
+
+            // initial one question
+            addQuestion();
+        })();
+    </script>
+}

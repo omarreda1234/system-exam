@@ -1,0 +1,796 @@
+@model IEnumerable<dynamic>
+@{
+    ViewData["Title"] = "Company Training Portfolios";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+
+@Html.AntiForgeryToken()
+
+<div class="min-h-screen pb-20 bg-slate-50/50 dark:bg-slate-950/20">
+    <!-- Main Premium Header -->
+    <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 pt-24 pb-12">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                    <h1 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-3">
+                        <i class="fas fa-building text-brand-600"></i>
+                        <span>Company Portfolios / تدريب الشركات</span>
+                    </h1>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Manage partner companies, import custom staff, and configure specialized attendance</p>
+                </div>
+                @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources"))
+                {
+                    <div class="flex items-center gap-3">
+                        <button onclick="openAddCompanyModal()" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-brand-600/20 flex items-center gap-2 group">
+                            <i class="fas fa-plus text-xs group-hover:rotate-90 transition-transform"></i>
+                            Register Partner Company
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-6 mt-8">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Active Companies List</span>
+            </div>
+            
+            <div class="overflow-x-auto w-full">
+                <table class="saas-table datatable">
+                <thead>
+                    <tr>
+                        <th>Company Details</th>
+                        <th>Description</th>
+                        <th>Enrolled Trainees</th>
+                        <th>Created Date</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var comp in Model)
+                    {
+                        <tr id="row-@comp.Id">
+                            <td>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-950/30 flex items-center justify-center font-black text-brand-600 text-xs uppercase">
+                                        @(comp.Name?[0].ToString() ?? "C")
+                                    </div>
+                                    <div>
+                                        <p class="font-black text-slate-900 dark:text-white uppercase text-xs">@comp.Name</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <p class="text-xs font-bold text-slate-500 dark:text-slate-400">@(string.IsNullOrEmpty(comp.Description) ? "No description provided." : comp.Description)</p>
+                            </td>
+                            <td>
+                                <span id="company-trainee-count-@comp.Id" class="bg-brand-50 text-brand-600 dark:bg-brand-950/30 dark:text-brand-400 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-brand-100 dark:border-brand-900/30">
+                                    @comp.TraineeCount Members
+                                </span>
+                            </td>
+                            <td class="whitespace-nowrap">
+                                <span class="text-xs font-medium text-slate-500 uppercase">@comp.CreatedAt.ToString("MMM dd, yyyy")</span>
+                            </td>
+                            <td class="text-right">
+                                <div class="flex flex-wrap md:flex-nowrap items-center justify-end gap-2">
+                                    <button onclick="viewTrainees(@comp.Id, '@comp.Name')" class="bg-slate-100 dark:bg-slate-800 hover:bg-brand-600 text-slate-500 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-slate-200 dark:border-slate-700 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group shrink-0">
+                                        <i class="fas fa-users text-xs"></i>
+                                        Trainees
+                                    </button>
+                                    
+                                    <button onclick="openImportExcelModal(@comp.Id, '@comp.Name')" class="bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-600 text-emerald-600 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-emerald-100 dark:border-emerald-900/30 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group shrink-0">
+                                        <i class="fas fa-file-excel text-xs"></i>
+                                        Import Excel
+                                    </button>
+
+                                    <button onclick="openAddTraineeModal(@comp.Id, '@comp.Name')" class="bg-violet-50 dark:bg-violet-950/20 hover:bg-violet-600 text-violet-600 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-violet-100 dark:border-violet-900/30 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group shrink-0">
+                                        <i class="fas fa-user-plus text-xs"></i>
+                                        Add Trainee
+                                    </button>
+
+                                    <a href="@Url.Action("ManageSessions", "Attendance", new { companyId = comp.Id })" class="bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-600 text-blue-600 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-blue-100 dark:border-blue-900/30 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group shrink-0">
+                                        <i class="fas fa-calendar-alt text-xs"></i>
+                                        Sessions
+                                    </a>
+
+                                    @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources"))
+                                    {
+                                        <button onclick="editCompany(@comp.Id, '@comp.Name', '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(comp.Description ?? ""))')" class="bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 border border-amber-100 dark:border-amber-900/30">
+                                            <i class="fas fa-edit mr-1"></i> Edit
+                                        </button>
+                                        <button onclick="deleteCompany(@comp.Id, '@comp.Name')" class="bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 border border-rose-100 dark:border-rose-900/30">
+                                            <i class="fas fa-trash-alt mr-1"></i> Delete
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+            @if (!Model.Any())
+            {
+                <div class="p-20 text-center">
+                    <div class="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300">
+                        <i class="fas fa-building text-3xl"></i>
+                    </div>
+                    <p class="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No company portfolios registered currently.</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        async function openAddCompanyModal() {
+            const { value: formValues } = await Swal.fire({
+                title: 'Register Partner Company',
+                html: `
+                    <div class="text-left space-y-4">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Company Name</label>
+                            <input type="text" id="swalCompName" placeholder="e.g. Novartis, GSK..." class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-xs font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-brand-500/20 text-slate-900 dark:text-white mt-1" />
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</label>
+                            <textarea id="swalCompDesc" placeholder="Product details, branch launches, QA trainings details..." class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-xs font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-brand-500/20 text-slate-900 dark:text-white mt-1 h-24"></textarea>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Register Company',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false,
+                preConfirm: () => {
+                    const name = document.getElementById('swalCompName').value.trim();
+                    const desc = document.getElementById('swalCompDesc').value.trim();
+                    if (!name) {
+                        Swal.showValidationMessage('Company Name is required.');
+                        return false;
+                    }
+                    return { name, description: desc };
+                }
+            });
+
+            if (formValues) {
+                Swal.fire({ title: 'Registering...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+                $.ajax({
+                    url: '@Url.Action("AddCompany", "Admin")',
+                    type: 'POST',
+                    data: {
+                        name: formValues.name,
+                        description: formValues.description,
+                        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    success: function(res) {
+                        if (res.success) {
+                            Swal.fire({ icon: 'success', title: 'Registered', text: res.message }).then(() => location.reload());
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Failed', text: res.message });
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong: ' + (xhr.statusText || error || 'Server Error') });
+                    }
+                });
+            }
+        }
+
+        async function editCompany(id, currentName, currentDesc) {
+            const { value: formValues } = await Swal.fire({
+                title: 'Edit Company',
+                html: `
+                    <div class="text-left space-y-4">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Company Name</label>
+                            <input type="text" id="swalEditCompName" value="${currentName}" placeholder="e.g. Novartis, GSK..." class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-xs font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-900 dark:text-white mt-1" />
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</label>
+                            <textarea id="swalEditCompDesc" placeholder="Product details, branch launches..." class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-xs font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-900 dark:text-white mt-1 h-24">${currentDesc}</textarea>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Save Changes',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    confirmButton: 'bg-amber-500 hover:bg-amber-600 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false,
+                preConfirm: () => {
+                    const name = document.getElementById('swalEditCompName').value.trim();
+                    const desc = document.getElementById('swalEditCompDesc').value.trim();
+                    if (!name) {
+                        Swal.showValidationMessage('Company Name is required.');
+                        return false;
+                    }
+                    return { id: id, name: name, description: desc };
+                }
+            });
+
+            if (formValues) {
+                Swal.fire({ title: 'Saving...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+                $.ajax({
+                    url: '@Url.Action("EditCompany", "Admin")',
+                    type: 'POST',
+                    data: {
+                        id: formValues.id,
+                        name: formValues.name,
+                        description: formValues.description,
+                        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    success: function(res) {
+                        if (res.success) {
+                            Swal.fire({ icon: 'success', title: 'Updated', text: res.message }).then(() => location.reload());
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Failed', text: res.message });
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong: ' + (xhr.statusText || error || 'Server Error') });
+                    }
+                });
+            }
+        }
+
+        async function openImportExcelModal(cid, cname) {
+            const { value: file } = await Swal.fire({
+                title: 'Import Trainees to Company',
+                width: '850px',
+                html: `
+                    <div class="text-left space-y-4">
+                        <div class="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-2xl p-6 flex flex-col sm:flex-row gap-4 items-start text-amber-800 dark:text-amber-300">
+                            <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400">
+                                <i class="fas fa-file-excel text-xl"></i>
+                            </div>
+                            <div class="text-xs space-y-2 w-full">
+                                <p class="font-black uppercase tracking-wide text-slate-900 dark:text-white">Excel Sheet Requirements / متطلبات شيت الإكسيل</p>
+                                <p class="font-semibold text-slate-600 dark:text-slate-300">
+                                    The Excel sheet (.xlsx) must contain the following columns in order (starting from row 2):
+                                </p>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 mt-3">
+                                    <div class="bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-amber-200/60 dark:border-slate-700/50">
+                                        <span class="block text-[8px] font-bold text-slate-400 uppercase">Column 1</span>
+                                        <span class="font-black text-slate-900 dark:text-white text-[10px] block">Full Name</span>
+                                        <span class="block text-[8px] text-slate-400 mt-0.5">الاسم بالكامل</span>
+                                    </div>
+                                    <div class="bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-amber-200/60 dark:border-slate-700/50">
+                                        <span class="block text-[8px] font-bold text-slate-400 uppercase">Column 2 *Req</span>
+                                        <span class="font-black text-slate-900 dark:text-white text-[10px] block">User Code</span>
+                                        <span class="block text-[8px] text-rose-500 font-bold mt-0.5">كود الموظف</span>
+                                    </div>
+                                    <div class="bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-amber-200/60 dark:border-slate-700/50">
+                                        <span class="block text-[8px] font-bold text-slate-400 uppercase">Column 3 *Req</span>
+                                        <span class="font-black text-slate-900 dark:text-white text-[10px] block">Job Title</span>
+                                        <span class="block text-[8px] text-rose-500 font-bold mt-0.5">الوظيفة</span>
+                                    </div>
+                                    <div class="bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-amber-200/60 dark:border-slate-700/50">
+                                        <span class="block text-[8px] font-bold text-slate-400 uppercase">Column 4</span>
+                                        <span class="font-black text-slate-900 dark:text-white text-[10px] block">Branch</span>
+                                        <span class="block text-[8px] text-slate-400 mt-0.5">الفرع</span>
+                                    </div>
+                                    <div class="bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-amber-200/60 dark:border-slate-700/50">
+                                        <span class="block text-[8px] font-bold text-slate-400 uppercase">Column 5</span>
+                                        <span class="font-black text-slate-900 dark:text-white text-[10px] block">Email</span>
+                                        <span class="block text-[8px] text-slate-400 mt-0.5">الإيميل</span>
+                                    </div>
+                                    <div class="bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-amber-200/60 dark:border-slate-700/50">
+                                        <span class="block text-[8px] font-bold text-slate-400 uppercase">Column 6</span>
+                                        <span class="font-black text-slate-900 dark:text-white text-[10px] block">Phone</span>
+                                        <span class="block text-[8px] text-slate-400 mt-0.5">الموبايل</span>
+                                    </div>
+                                </div>
+                                <p class="text-[9px] text-amber-600 dark:text-amber-500 mt-2 font-medium italic">
+                                    * Note: If a user code does not exist in the system, a new account will be created dynamically with their role and a default password: <b>Trshoob@12345</b>.
+                                </p>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 font-medium">
+                            Select the Excel sheet (.xlsx) containing the personnel to enroll in the training for <b>\${cname}</b>.
+                        </p>
+                        <div class="mt-4">
+                            <label class="w-full flex items-center justify-center gap-2 px-4 py-6 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 cursor-pointer transition-colors bg-slate-50 dark:bg-slate-800/50">
+                                <i class="fas fa-cloud-upload-alt text-2xl text-slate-400"></i>
+                                <span class="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider" id="modalExcelFileName">Choose Excel File</span>
+                                <input type="file" id="modalExcelFile" class="hidden" accept=".xlsx" onchange="document.getElementById('modalExcelFileName').textContent = this.files[0] ? this.files[0].name : 'Choose Excel File'" />
+                            </label>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Upload & Enroll',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    confirmButton: 'bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false,
+                preConfirm: () => {
+                    const fileInput = document.getElementById('modalExcelFile');
+                    if (!fileInput.files.length) {
+                        Swal.showValidationMessage('Please select an Excel file.');
+                        return false;
+                    }
+                    return fileInput.files[0];
+                }
+            });
+
+            if (file) {
+                Swal.fire({ title: 'Processing Trainees & Roles...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+                const formData = new FormData();
+                formData.append('companyId', cid);
+                formData.append('excelFile', file);
+                formData.append('__RequestVerificationToken', $('input[name="__RequestVerificationToken"]').val());
+
+                try {
+                    const response = await fetch('/Admin/ImportCompanyTraineesFromExcel', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Trainees Imported',
+                            text: result.message
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Import Failed',
+                            text: result.message
+                        });
+                    }
+                } catch (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Upload Error',
+                        text: 'Failed to communicate with server.'
+                    });
+                }
+            }
+        }
+
+        async function openAddTraineeModal(cid, cname) {
+            const { value: formValues } = await Swal.fire({
+                title: `Add Trainee Manually to ${cname}`,
+                width: '600px',
+                html: `
+                    <div class="text-left space-y-4 px-2">
+                        <div class="bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-900/30 rounded-2xl p-4 flex gap-3 text-violet-800 dark:text-violet-300 mb-2">
+                            <i class="fas fa-info-circle text-lg shrink-0 mt-0.5"></i>
+                            <p class="text-xs font-semibold leading-relaxed">
+                                Enter the trainee's info below. If the User Code exists, the employee will be linked. If it does not exist, a new account will be created with their Job Title as their role (Default Password: <b>Trshoob@12345</b>).
+                            </p>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Full Name / الاسم بالكامل</label>
+                                <input type="text" id="manualFullName" placeholder="e.g. Mohamed Ali" 
+                                       class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white" />
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">User Code / كود الموظف <span class="text-rose-500">*</span></label>
+                                <input type="text" id="manualUserCode" placeholder="e.g. 10452" 
+                                       class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white" />
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Job Title / الوظيفة <span class="text-rose-500">*</span></label>
+                                <input type="text" id="manualJobTitle" placeholder="e.g. QA, Procurement, Customer Service" 
+                                       class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white" />
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Branch / الفرع</label>
+                                <input type="text" id="manualBranchName" placeholder="e.g. الادارة" 
+                                       class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white" />
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Email / البريد الإلكتروني</label>
+                                <input type="email" id="manualEmail" placeholder="e.g. trainee@el-tarshouby.com" 
+                                       class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Phone Number / رقم الهاتف</label>
+                            <input type="text" id="manualPhone" placeholder="e.g. 01012345678" 
+                                   class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-violet-500 transition-all text-slate-900 dark:text-white" />
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Enroll Trainee',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    confirmButton: 'bg-violet-600 hover:bg-violet-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false,
+                didOpen: () => {
+                    const allInputs = [
+                        document.getElementById('manualFullName'),
+                        document.getElementById('manualUserCode'),
+                        document.getElementById('manualJobTitle'),
+                        document.getElementById('manualBranchName'),
+                        document.getElementById('manualEmail'),
+                        document.getElementById('manualPhone')
+                    ];
+
+                    allInputs.forEach(input => {
+                        if (input) {
+                            input.addEventListener('keydown', async function(e) {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+
+                                    if (this.id === 'manualUserCode') {
+                                        const code = this.value.trim();
+                                        if (code) {
+                                            try {
+                                                const response = await fetch(`/Admin/GetTraineeDetailsByCode?code=${encodeURIComponent(code)}`);
+                                                const data = await response.json();
+                                                if (data.exists) {
+                                                    // Auto-populate
+                                                    document.getElementById('manualFullName').value = data.fullName;
+                                                    document.getElementById('manualJobTitle').value = data.jobTitle;
+                                                    document.getElementById('manualEmail').value = data.email;
+                                                    document.getElementById('manualPhone').value = data.phone;
+                                                    if(document.getElementById('manualBranchName')) document.getElementById('manualBranchName').value = data.branchName || '';
+
+                                                    // Briefly highlight inputs in a beautiful purple accent to indicate auto-population
+                                                    $('#manualFullName, #manualJobTitle, #manualEmail, #manualPhone, #manualBranchName')
+                                                        .addClass('ring-2 ring-violet-500 bg-violet-50/20')
+                                                        .delay(800)
+                                                        .queue(function(next) {
+                                                            $(this).removeClass('ring-2 ring-violet-500 bg-violet-50/20');
+                                                            next();
+                                                        });
+
+                                                    showProfessionalToast('fas fa-check-circle', 'Employee loaded / تم تحميل بيانات الموظف', 'success');
+                                                } else {
+                                                    // Clear fields to prevent residual data
+                                                    document.getElementById('manualFullName').value = '';
+                                                    document.getElementById('manualJobTitle').value = '';
+                                                    if(document.getElementById('manualBranchName')) document.getElementById('manualBranchName').value = '';
+                                                    document.getElementById('manualEmail').value = '';
+                                                    document.getElementById('manualPhone').value = '';
+
+                                                    showProfessionalToast('fas fa-exclamation-circle', 'Employee not found / الموظف غير مسجل مسبقاً', 'error');
+                                                }
+                                            } catch (err) { /* ignore */ }
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    });
+                },
+                preConfirm: () => {
+                    const fullName = document.getElementById('manualFullName').value.trim();
+                    const userCode = document.getElementById('manualUserCode').value.trim();
+                    const jobTitle = document.getElementById('manualJobTitle').value.trim();
+                    const branchName = document.getElementById('manualBranchName').value.trim();
+                    const email = document.getElementById('manualEmail').value.trim();
+                    const phone = document.getElementById('manualPhone').value.trim();
+
+                    if (!userCode) {
+                        Swal.showValidationMessage('User Code is required / كود الموظف مطلوب');
+                        return false;
+                    }
+                    if (!jobTitle) {
+                        Swal.showValidationMessage('Job Title is required / الوظيفة مطلوبة');
+                        return false;
+                    }
+
+                    return { fullName, userCode, jobTitle, branchName, email, phone };
+                }
+            });
+
+            if (formValues) {
+                Swal.fire({ title: 'Enrolling Trainee...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+                $.ajax({
+                    url: '/Admin/AddCompanyTraineeManually',
+                    type: 'POST',
+                    data: {
+                        companyId: cid,
+                        fullName: formValues.fullName,
+                        userCode: formValues.userCode,
+                        jobTitle: formValues.jobTitle,
+                        branchName: formValues.branchName,
+                        email: formValues.email,
+                        phone: formValues.phone,
+                        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    success: function (res) {
+                        if (res.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Trainee Enrolled',
+                                text: res.message
+                            }).then(() => location.reload());
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Failed to Enroll',
+                                text: res.message
+                            });
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Something went wrong: ' + (xhr.statusText || error || 'Server Error')
+                        });
+                    }
+                });
+            }
+        }
+
+        function deleteCompany(cid, cname) {
+            Swal.fire({
+                title: 'Delete Company?',
+                text: `Are you sure you want to remove ${cname}? This will delete all company sessions and trainee associations.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Delete!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '@Url.Action("DeleteCompany", "Admin")',
+                        type: 'POST',
+                        data: {
+                            id: cid,
+                            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        success: function(res) {
+                            if (res.success) {
+                                Swal.fire({ icon: 'success', title: 'Deleted', text: res.message }).then(() => {
+                                    $(`#row-${cid}`).fadeOut(300, function() { $(this).remove(); });
+                                });
+                            } else {
+                                Swal.fire({ icon: 'error', title: 'Failed', text: res.message });
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong: ' + (xhr.statusText || error || 'Server Error') });
+                        }
+                    });
+                }
+            });
+        }
+
+        function clearCompanyTrainees(cid, cname) {
+            Swal.fire({
+                title: 'Clear All Trainees?',
+                text: `Are you sure you want to remove ALL enrolled trainees from ${cname}? This will also remove their attendance records for this company.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f59e0b',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Clear All!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '@Url.Action("ClearCompanyTrainees", "Admin")',
+                        type: 'POST',
+                        data: {
+                            companyId: cid,
+                            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        success: function(res) {
+                            if (res.success) {
+                                Swal.fire({ icon: 'success', title: 'Cleared', text: res.message }).then(() => {
+                                    location.reload();
+                                });
+                            } else {
+                                Swal.fire({ icon: 'error', title: 'Failed', text: res.message });
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong: ' + (xhr.statusText || error || 'Server Error') });
+                        }
+                    });
+                }
+            });
+        }
+
+        function viewTrainees(cid, cname) {
+            Swal.fire({ title: 'Loading Trainees...', didOpen: () => Swal.showLoading() });
+            $.ajax({
+                url: `@Url.Action("GetCompanyTrainees", "Admin")?companyId=${cid}`,
+                type: 'GET',
+                success: function(res) {
+                    Swal.close();
+                    if (res.success) {
+                        let html = `
+                            <div class="mb-4">
+                                <div class="relative">
+                                    <i class="fas fa-search absolute left-4 top-3 text-slate-400"></i>
+                                    <input type="text" id="traineeSearchInput" placeholder="Search by name or code..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:border-brand-500 transition-all text-slate-900 dark:text-white" onkeyup="filterTrainees()">
+                                </div>
+                            </div>
+                            <div class="text-left max-h-96 overflow-y-auto space-y-2 pr-2" id="traineesListContainer">
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Total Members: <span id="traineeCount">${res.data.length}</span></span>
+                        `;
+                        if (!res.data.length) {
+                            html += `<p class="text-xs text-slate-500 font-bold uppercase py-10 text-center">No trainees registered under this company training yet.</p>`;
+                        } else {
+                            res.data.forEach(t => {
+                                html += `
+                                    <div class="trainee-card flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800" data-name="${(t.UserName || '').toLowerCase()}" data-code="${(t.UserCode || '').toLowerCase()}">
+                                        <div class="flex-1">
+                                            <p class="text-xs font-black text-slate-900 dark:text-white uppercase">${t.UserName}</p>
+                                            <p class="text-[9px] font-bold text-slate-400 lowercase">${t.BranchName || '-'}</p>
+                                        </div>
+                                        <div class="text-right mr-3">
+                                            <span class="bg-brand-50 text-brand-600 dark:bg-brand-950/20 dark:text-brand-400 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-brand-100 dark:border-brand-900/30">
+                                                ${t.RoleName || 'Trainee'}
+                                            </span>
+                                            <p class="text-[9px] font-mono font-bold text-slate-500 mt-1">Code: ${t.UserCode}</p>
+                                        </div>
+                                        <button onclick="deleteTrainee(${t.Id}, this, ${cid})" class="w-8 h-8 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-all shrink-0 group" title="Remove Trainee">
+                                            <i class="fas fa-times text-xs group-hover:scale-110 transition-transform"></i>
+                                        </button>
+                                    </div>
+                                `;
+                            });
+                        }
+                        html += '</div>';
+
+                        Swal.fire({
+                            title: `Trainees enrolled in ${cname}`,
+                            html: html,
+                            showDenyButton: res.data.length > 0,
+                            denyButtonText: '<i class="fas fa-broom mr-1"></i> Clear All',
+                            confirmButtonText: 'Close',
+                            customClass: {
+                                confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                                denyButton: 'bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200/50 px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest ml-2 transition-all'
+                            },
+                            buttonsStyling: false
+                        }).then((result) => {
+                            if (result.isDenied) {
+                                clearCompanyTrainees(cid, cname);
+                            }
+                        });
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Failed', text: res.message });
+                    }
+                },
+                error: function(xhr, status, error) {
+                    Swal.close();
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong: ' + (xhr.statusText || error || 'Server Error') });
+                }
+            });
+        }
+
+        function filterTrainees() {
+            let input = document.getElementById('traineeSearchInput').value.toLowerCase();
+            let cards = document.querySelectorAll('.trainee-card');
+            let count = 0;
+            cards.forEach(card => {
+                if (card.dataset.name.includes(input) || card.dataset.code.includes(input)) {
+                    card.style.display = 'flex';
+                    count++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            document.getElementById('traineeCount').innerText = count;
+        }
+
+        function deleteTrainee(id, btn, cid) {
+            Swal.fire({
+                title: 'Remove Trainee?',
+                text: 'This will remove the trainee and their attendance records for this company.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Remove'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '@Url.Action("DeleteCompanyTrainee", "Admin")',
+                        type: 'POST',
+                        data: {
+                            id: id,
+                            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        success: function(res) {
+                            if (res.success) {
+                                $(btn).closest('.trainee-card').fadeOut(300, function() { 
+                                    $(this).remove(); 
+                                    let newCount = document.querySelectorAll('.trainee-card').length;
+                                    document.getElementById('traineeCount').innerText = newCount;
+
+                                    // Update main page count
+                                    let mainCountEl = document.getElementById('company-trainee-count-' + cid);
+                                    if (mainCountEl) {
+                                        mainCountEl.innerText = newCount + ' MEMBERS';
+                                    }
+                                });
+                                showProfessionalToast('fas fa-check-circle', res.message, 'success');
+                            } else {
+                                Swal.fire({ icon: 'error', title: 'Failed', text: res.message });
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        function showProfessionalToast(icon, message, type = 'info') {
+            let container = document.getElementById('custom-toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'custom-toast-container';
+                container.style.position = 'fixed';
+                container.style.top = '30px';
+                container.style.right = '30px';
+                container.style.zIndex = '9999999';
+                container.style.display = 'flex';
+                container.style.flexDirection = 'column';
+                container.style.gap = '12px';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.style.background = type === 'success' ? '#10b981' : (type === 'error' ? '#f43f5e' : '#6366f1');
+            toast.style.color = '#fff';
+            toast.style.padding = '14px 28px';
+            toast.style.borderRadius = '16px';
+            toast.style.boxShadow = '0 20px 25px -5px rgba(0,0,0,0.15), 0 10px 10px -5px rgba(0,0,0,0.1)';
+            toast.style.fontSize = '13px';
+            toast.style.fontWeight = 'bold';
+            toast.style.display = 'flex';
+            toast.style.alignItems = 'center';
+            toast.style.gap = '10px';
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100px)';
+            toast.style.transition = 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+
+            toast.innerHTML = `<i class="${icon} text-base"></i> <span style="letter-spacing: 0.5px;">${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translateX(0)';
+            }, 20);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100px)';
+                setTimeout(() => {
+                    toast.remove();
+                }, 400);
+            }, 3500);
+        }
+    </script>
+}

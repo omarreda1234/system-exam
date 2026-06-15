@@ -1,0 +1,190 @@
+@{
+    ViewData["Title"] = "System Roles Management";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+
+<div class="space-y-8">
+    <!-- Header Area -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+                <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Access Control Management</h2>
+                <p class="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">System Roles Registry</p>
+            </div>
+            
+            <button onclick="openCreateRoleModal()" class="bg-brand-600 hover:bg-brand-700 text-white px-8 py-3.5 rounded-2xl transition-all text-xs font-bold uppercase shadow-xl shadow-brand-500/20 flex items-center gap-3">
+                <i class="fas fa-shield-alt text-lg"></i>
+                Define New Role
+            </button>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm overflow-hidden relative">
+        <div class="overflow-x-auto">
+            <table id="rolesTable" class="saas-table display w-full text-xs">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="text-left font-bold text-slate-400 uppercase tracking-widest p-4">Identifier (ID)</th>
+                        <th class="text-left font-bold text-slate-400 uppercase tracking-widest p-4">Role Designation</th>
+                        <th class="text-right font-bold text-slate-400 uppercase tracking-widest p-4">Administrative Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="rolesTbody">
+                    <!-- Populated via AJAX -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let rolesTable;
+
+        $(document).ready(function () {
+            loadRoles();
+        });
+
+        function loadRoles() {
+            $.getJSON('@Url.Action("GetRolesList", "Admin")', function (data) {
+                const rowsHtml = data.map(role => {
+                    const id = role.id || role.Id;
+                    const name = role.name || role.Name;
+                    return `
+                        <tr class="border-b border-slate-50 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <td class="p-4 font-mono text-[10px] text-slate-400">${id}</td>
+                            <td class="p-4"><span class="px-3 py-1 bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 rounded-lg text-xs font-bold uppercase tracking-widest">${name}</span></td>
+                            <td class="p-4 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <button class="p-2.5 text-slate-400 hover:text-brand-600 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl" onclick="openEditRoleModal('${id}', '${name}')" title="Edit Role">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="p-2.5 text-slate-400 hover:text-rose-600 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl" onclick="deleteRole('${id}', '${name}')" title="Delete Role">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                if (rolesTable) {
+                    rolesTable.destroy();
+                }
+                $('#rolesTbody').html(rowsHtml);
+                rolesTable = $('#rolesTable').DataTable({
+                    pageLength: 10,
+                    deferRender: true,
+                    language: { search: "", searchPlaceholder: "Filter roles..." },
+                    columnDefs: [
+                        { targets: -1, orderable: false, searchable: false }
+                    ]
+                });
+                $('.dataTables_filter input').addClass('bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs focus:ring-0 outline-none mb-4');
+            });
+        }
+
+        window.openCreateRoleModal = function() {
+            Swal.fire({
+                title: '<span class="text-lg font-black uppercase tracking-widest text-slate-800 dark:text-white">Define New Role</span>',
+                html: `
+                    <div class="mt-4 text-left">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2 block mb-2">Role Name (Designation)</label>
+                        <input type="text" id="newRoleName" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-sm font-bold focus:border-brand-500 outline-none transition-colors" placeholder="e.g., Administrator, Pharmacist..." autocomplete="off">
+                        <p class="text-[10px] text-slate-400 mt-2 pl-2">* Role names should be strictly in English to ensure cross-system compatibility.</p>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Register Role',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    popup: 'rounded-[32px] dark:bg-slate-950 border border-slate-200 dark:border-slate-800',
+                    confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-8 py-3.5 rounded-2xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false,
+                preConfirm: () => {
+                    const name = $('#newRoleName').val().trim();
+                    if (!name) Swal.showValidationMessage("Role name is required");
+                    return { name };
+                }
+            }).then(result => {
+                if (result.isConfirmed) {
+                    $.post('@Url.Action("AddRole", "Admin")', { roleName: result.value.name }, function(res) {
+                        if (res.success) {
+                            Swal.fire({ icon: 'success', title: 'Registered', text: res.message, timer: 1500, showConfirmButton: false });
+                            loadRoles();
+                        } else {
+                            Swal.fire('Error', res.message, 'error');
+                        }
+                    });
+                }
+            });
+        };
+
+        window.openEditRoleModal = function(id, currentName) {
+            Swal.fire({
+                title: '<span class="text-lg font-black uppercase tracking-widest text-slate-800 dark:text-white">Modify Role Designation</span>',
+                html: `
+                    <div class="mt-4 text-left">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2 block mb-2">Role Name (Designation)</label>
+                        <input type="text" id="editRoleName" value="${currentName}" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-sm font-bold focus:border-brand-500 outline-none transition-colors" autocomplete="off">
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Save Modifications',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    popup: 'rounded-[32px] dark:bg-slate-950 border border-slate-200 dark:border-slate-800',
+                    confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-8 py-3.5 rounded-2xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false,
+                preConfirm: () => {
+                    const name = $('#editRoleName').val().trim();
+                    if (!name) Swal.showValidationMessage("Role name is required");
+                    return { name };
+                }
+            }).then(result => {
+                if (result.isConfirmed) {
+                    $.post('@Url.Action("UpdateRole", "Admin")', { roleId: id, newRoleName: result.value.name }, function(res) {
+                        if (res.success) {
+                            Swal.fire({ icon: 'success', title: 'Updated', text: res.message, timer: 1500, showConfirmButton: false });
+                            loadRoles();
+                        } else {
+                            Swal.fire('Error', res.message, 'error');
+                        }
+                    });
+                }
+            });
+        };
+
+        window.deleteRole = function(id, name) {
+            Swal.fire({
+                title: 'Terminate Role?',
+                html: `You are about to delete <br><b class="text-rose-600">${name}</b><br>This action cannot be reversed!`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, Delete it!',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    confirmButton: 'bg-rose-600 hover:bg-rose-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('@Url.Action("DeleteRole", "Admin")', { roleId: id }, function(res) {
+                        if (res.success) {
+                            Swal.fire({ icon: 'success', title: 'Deleted!', text: res.message, timer: 1500, showConfirmButton: false });
+                            loadRoles();
+                        } else {
+                            Swal.fire('Error', res.message, 'error');
+                        }
+                    });
+                }
+            });
+        };
+    </script>
+}

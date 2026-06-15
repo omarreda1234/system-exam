@@ -1,0 +1,472 @@
+@model IEnumerable<dynamic>
+@{ 
+    ViewBag.Title = "Soft Skills Sessions"; 
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    
+    // Serialize all sessions for JS
+    var allSessions = Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(ViewBag.AllSessions));
+}
+<div class="px-4 sm:px-6 lg:px-8 py-8 w-full max-w-9xl mx-auto">
+    <div class="sm:flex sm:justify-between sm:items-center mb-8">
+        <div>
+            <h1 class="text-2xl md:text-3xl text-slate-800 font-bold">@ViewBag.Track.TrackName</h1>
+            <p class="text-sm text-slate-500 mt-2">Manage sessions and track attendance for soft skills training.</p>
+        </div>
+    </div>
+
+    @if (!User.IsInRole("Reception"))
+    {
+        <!-- Create Session Form -->
+        <div class="bg-white shadow-lg rounded-xl border border-slate-200 mb-8 p-6">
+            <h2 class="text-lg font-bold text-slate-800 mb-4"><i class="fas fa-plus-circle text-brand-500 mr-2"></i>Create New Session</h2>
+            <form id="createSessionForm" onsubmit="submitCreateSession(event)" class="flex flex-col sm:flex-row gap-4">
+                <div class="flex-1">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Session Name</label>
+                    <input type="text" id="createSessionName" name="sessionName" class="form-input w-full rounded-xl border-slate-200" required placeholder="e.g. Communication Skills Part 1" />
+                </div>
+                <div class="flex-1">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Session Date</label>
+                    <input type="date" id="createSessionDate" name="sessionDate" class="form-input w-full rounded-xl border-slate-200" required value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" id="createSessionBtn" class="btn bg-brand-500 hover:bg-brand-600 text-white p-2.5 px-6 rounded-xl w-full sm:w-auto shadow-md shadow-brand-500/20 font-bold transition-all">
+                        Create Session
+                    </button>
+                </div>
+            </form>
+        </div>
+    }
+
+    <!-- Sessions List -->
+    <div class="bg-white shadow-lg rounded-xl border border-slate-200">
+        <div class="overflow-x-auto">
+            <table class="table-auto w-full">
+                <thead class="text-xs font-semibold uppercase text-slate-500 bg-slate-50 border-b border-slate-200">
+                    <tr>
+                        <th class="px-4 py-4 text-left">Session Name</th>
+                        <th class="px-4 py-4 text-left">Date</th>
+                        <th class="px-4 py-4 text-center">Enrolled</th>
+                        <th class="px-4 py-4 text-center">Attendees</th>
+                        <th class="px-4 py-4 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm divide-y divide-slate-200">
+                    @foreach(var session in Model) {
+                        <tr>
+                            <td class="px-4 py-4 font-bold text-slate-800">@session.SessionName</td>
+                            <td class="px-4 py-4 font-medium text-slate-600">@session.SessionDate.ToString("MMM dd, yyyy")</td>
+                            <td class="px-4 py-4 text-center">
+                                <span class="bg-slate-100 text-slate-600 font-bold px-3 py-1 rounded-full text-xs">@session.EnrolledCount</span>
+                            </td>
+                            <td class="px-4 py-4 text-center">
+                                <span class="bg-brand-50 text-brand-600 font-bold px-3 py-1 rounded-full text-xs">@session.PresentCount</span>
+                            </td>
+                            <td class="px-4 py-4 text-center">
+                                <div class="flex items-center justify-center gap-2 flex-wrap">
+                                    @if (!User.IsInRole("Reception"))
+                                    {
+                                        <button onclick="openManageTrainees(@session.Id, '@session.SessionName')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
+                                            <i class="fas fa-users mr-1"></i> Trainees
+                                        </button>
+                                    }
+                                    <a href="@Url.Action("TakeAttendance", new { sessionId = session.Id })" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
+                                        <i class="fas fa-clipboard-check mr-1 text-brand-500"></i> Attendance
+                                    </a>
+                                    <a href="@Url.Action("ExportSessionAttendance", new { sessionId = session.Id })" class="bg-green-50 hover:bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors" title="Export to Excel">
+                                        <i class="fas fa-file-excel"></i>
+                                    </a>
+                                    @if (!User.IsInRole("Reception"))
+                                    {
+                                        <button onclick="deleteSession(@session.Id, this)" class="text-rose-500 hover:text-rose-600 p-1.5 bg-rose-50 rounded-lg transition-colors"><i class="fas fa-trash"></i></button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const allSessions = @allSessions;
+
+    function submitCreateSession(e) {
+        e.preventDefault();
+        const btn = document.getElementById('createSessionBtn');
+        const sessionName = document.getElementById('createSessionName').value;
+        const sessionDate = document.getElementById('createSessionDate').value;
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        $.post('@Url.Action("CreateSession")', { sessionName: sessionName, sessionDate: sessionDate }, function (res) {
+            if (res.success) {
+                Swal.fire({ icon: 'success', title: 'Session Created', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 }).then(() => location.reload());
+            } else {
+                Swal.fire('Error', res.message || 'Error creating session', 'error');
+                btn.disabled = false;
+                btn.innerText = 'Create Session';
+            }
+        });
+    }
+
+    function deleteSession(sessionId, btn) {
+        Swal.fire({
+            title: 'Delete Session?',
+            text: "This will remove the session and all its attendance records.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#e3342f',
+            confirmButtonText: 'Yes, delete it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.post('@Url.Action("DeleteSession")', { sessionId: sessionId }, function (res) {
+                    if (res.success) {
+                        Swal.fire({ icon: 'success', title: 'Deleted!', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                        $(btn).closest('tr').fadeOut(400, function() { $(this).remove(); });
+                    } else {
+                        Swal.fire('Error', res.message || 'Error deleting session', 'error');
+                    }
+                });
+            }
+        });
+    }
+
+    function openManageTrainees(sessionId, sessionName) {
+        Swal.fire({
+            title: 'Loading Trainees...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        $.get('@Url.Action("GetSessionTrainees")', { sessionId: sessionId }, function (res) {
+            let html = `
+                <div class="text-left">
+                    <div class="flex flex-wrap gap-2 mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <button onclick="loadManagers(${sessionId})" class="btn bg-brand-50 text-brand-600 hover:bg-brand-100 text-xs px-3 py-1.5 rounded-lg shadow-sm font-bold"><i class="fas fa-user-tie mr-1"></i>Load Managers</button>
+                        <button onclick="cloneTrainees(${sessionId})" class="btn bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs px-3 py-1.5 rounded-lg shadow-sm font-bold"><i class="fas fa-copy mr-1"></i>Clone from Session</button>
+                        <button onclick="openImportExcelModal(${sessionId})" class="btn bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-xs px-3 py-1.5 rounded-lg shadow-sm font-bold"><i class="fas fa-file-excel mr-1"></i>Import Excel</button>
+                        <button onclick="addManualTrainee(${sessionId}, '${sessionName}')" class="btn bg-emerald-50 text-emerald-600 hover:bg-emerald-100 text-xs px-3 py-1.5 rounded-lg shadow-sm font-bold ml-auto"><i class="fas fa-plus mr-1"></i>Add Manual</button>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <input type="text" id="swalTraineeSearch" placeholder="Search trainees..." class="form-input w-full rounded-xl border-slate-200" onkeyup="filterSwalTrainees()" />
+                    </div>
+                    
+                    <div class="max-h-80 overflow-y-auto border border-slate-200 rounded-xl">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-slate-50 text-xs text-slate-500 uppercase sticky top-0">
+                                <tr>
+                                    <th class="px-4 py-2">Code</th>
+                                    <th class="px-4 py-2">Name</th>
+                                    <th class="px-4 py-2">Branch</th>
+                                    <th class="px-4 py-2 text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="swalTraineesTableBody" class="divide-y divide-slate-100">
+            `;
+
+            if(res.length === 0) {
+                html += `<tr><td colspan="4" class="text-center py-4 text-slate-500">No trainees enrolled in this session.</td></tr>`;
+            } else {
+                res.forEach(t => {
+                    html += `
+                        <tr class="swal-trainee-row hover:bg-slate-50">
+                            <td class="px-4 py-2 font-mono text-xs searchable">${t.UserCode || ''}</td>
+                            <td class="px-4 py-2 font-bold text-slate-800 searchable">${t.UserName || ''}</td>
+                            <td class="px-4 py-2 searchable text-slate-500 text-xs">${t.BranchName || 'No Branch'}</td>
+                            <td class="px-4 py-2 text-center">
+                                <button onclick="removeTrainee(${t.LinkId}, ${sessionId}, '${sessionName}', this)" class="text-rose-500 hover:text-rose-600 bg-rose-50 p-1.5 rounded-lg transition-colors"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            }
+
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            Swal.fire({
+                title: `<span class="text-xl">Trainees: <span class="text-brand-600">${sessionName}</span></span>`,
+                html: html,
+                width: '800px',
+                showCloseButton: true,
+                showConfirmButton: false
+            });
+        }).fail(function() {
+            Swal.fire('Error', 'Failed to load trainees', 'error');
+        });
+    }
+
+    function filterSwalTrainees() {
+        const term = document.getElementById('swalTraineeSearch').value.toLowerCase();
+        const rows = document.querySelectorAll('.swal-trainee-row');
+        rows.forEach(r => {
+            const text = Array.from(r.querySelectorAll('.searchable')).map(td => td.innerText.toLowerCase()).join(' ');
+            if(text.includes(term)) r.style.display = '';
+            else r.style.display = 'none';
+        });
+    }
+
+    function removeTrainee(linkId, sessionId, sessionName, btn) {
+        Swal.fire({
+            title: 'Remove trainee?',
+            text: "They will be removed from this session.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#e3342f',
+            confirmButtonText: 'Remove'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.post('@Url.Action("RemoveSessionTrainee")', { linkId: linkId }, function(res) {
+                    if(res.success) {
+                        Swal.fire({ icon: 'success', title: 'Removed successfully', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                        $(btn).closest('tr').fadeOut(300, function() { $(this).remove(); });
+                        // Update enrolled count dynamically without reload
+                        const row = $(`button[onclick="openManageTrainees(${sessionId}, '${sessionName}')"]`).closest('tr');
+                        const countSpan = row.find('td:nth-child(3) span');
+                        if (countSpan.length) {
+                            countSpan.text(parseInt(countSpan.text()) - 1);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    function loadManagers(sessionId) {
+        Swal.fire({ title: 'Loading...', didOpen: () => Swal.showLoading() });
+        $.post('@Url.Action("LoadManagersAndHR")', { sessionId: sessionId }, function(res) {
+            if(res.success) {
+                Swal.fire('Success', `Loaded ${res.count} managers.`, 'success').then(() => location.reload());
+            }
+        });
+    }
+
+    function cloneTrainees(sessionId) {
+        let options = '<option value="">Select a session to clone from...</option>';
+        allSessions.forEach(s => {
+            if(s.Id !== sessionId) {
+                let d = new Date(s.SessionDate);
+                options += `<option value="${s.Id}">${s.SessionName} (${d.toDateString()})</option>`;
+            }
+        });
+
+        Swal.fire({
+            title: 'Clone Trainees',
+            html: `
+                <div class="text-left mt-4 space-y-4">
+                    <p class="text-sm text-slate-600">Select another session to copy all its enrolled trainees into this session.</p>
+                    <select id="cloneSourceId" class="form-input w-full rounded-xl border-slate-200 p-2 text-sm">${options}</select>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Clone',
+            confirmButtonColor: '#2a766f',
+            preConfirm: () => {
+                const sid = document.getElementById('cloneSourceId').value;
+                if (!sid) {
+                    Swal.showValidationMessage('Please select a session');
+                    return false;
+                }
+                return sid;
+            }
+        }).then((res) => {
+            if(res.isConfirmed) {
+                Swal.fire({ title: 'Cloning...', didOpen: () => Swal.showLoading() });
+                $.post('@Url.Action("CloneTrainees")', { targetSessionId: sessionId, sourceSessionId: res.value }, function(data) {
+                    if(data.success) {
+                        Swal.fire('Success', `Cloned ${data.count} trainees.`, 'success').then(() => location.reload());
+                    }
+                });
+            }
+        });
+    }
+
+    function openImportExcelModal(sessionId) {
+        Swal.fire({
+            title: 'Import Users',
+            html: `
+                <div class="text-left mt-4 space-y-4">
+                    <p class="text-sm text-slate-600">Upload an Excel file containing a single column with user codes starting from A2 (A1 as header).</p>
+                    <form id="importForm" action="@Url.Action("ImportUsersToSession")" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="sessionId" value="${sessionId}" />
+                        <input type="file" name="excelFile" class="form-input w-full text-sm border-slate-200 rounded-xl p-2" accept=".xlsx,.xls" required />
+                    </form>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Import',
+            confirmButtonColor: '#2a766f',
+            preConfirm: () => {
+                const form = document.getElementById('importForm');
+                if (!form.excelFile.value) {
+                    Swal.showValidationMessage('Please select a file');
+                    return false;
+                }
+                
+                return new Promise((resolve) => {
+                    const formData = new FormData(form);
+                    Swal.fire({ title: 'Importing...', didOpen: () => Swal.showLoading() });
+                    
+                    fetch(form.action, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if(data.success) {
+                            Swal.fire({ icon: 'success', title: `Imported ${data.count} users successfully`, toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                            
+                            // Update enrolled count dynamically without reload
+                            // We don't have sessionName easily available here, so we will select it using session Id
+                            const row = document.querySelector(`a[href*="TakeAttendance?sessionId=${sessionId}"]`).closest('tr');
+                            if (row) {
+                                const countSpan = row.querySelector('td:nth-child(3) span');
+                                if (countSpan) {
+                                    countSpan.innerText = parseInt(countSpan.innerText) + data.count;
+                                }
+                            }
+                            resolve();
+                        } else {
+                            Swal.fire('Error', data.message || 'Import failed', 'error');
+                            resolve(false);
+                        }
+                    })
+                    .catch(error => {
+                        Swal.fire('Error', 'An error occurred during import', 'error');
+                        resolve(false);
+                    });
+                });
+            }
+        });
+    }
+
+    function addManualTrainee(sessionId, sessionName) {
+        Swal.fire({
+            title: 'Add Trainee Manually',
+            html: `
+                <div class="text-left mt-2 space-y-4">
+                    <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-4">
+                        <p class="text-xs text-indigo-600 font-medium">
+                            <i class="fas fa-info-circle mr-1"></i> Enter User Code to automatically load employee data. If it does not exist, a new account will be created (Default Password: Trshoob@12345).
+                        </p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">User Code <span class="text-rose-500">*</span></label>
+                            <input type="text" id="manual_UserCode" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all outline-none" placeholder="e.g. 10452" />
+                        </div>
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Full Name <span class="text-rose-500">*</span></label>
+                            <input type="text" id="manual_FullName" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all outline-none" placeholder="e.g. Mohamed Ali" />
+                        </div>
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Job Title <span class="text-rose-500">*</span></label>
+                            <input type="text" id="manual_JobTitle" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all outline-none" placeholder="e.g. HR Manager" />
+                        </div>
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Branch</label>
+                            <input type="text" id="manual_Branch" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all outline-none" placeholder="e.g. Ø§Ù„Ø¥Ø¯Ø§Ø±Ø©" />
+                        </div>
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Email</label>
+                            <input type="email" id="manual_Email" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all outline-none" placeholder="e.g. trainee@domain.com" />
+                        </div>
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Phone Number</label>
+                            <input type="text" id="manual_Phone" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all outline-none" placeholder="e.g. 01012345678" />
+                        </div>
+                    </div>
+                </div>
+            `,
+            width: '600px',
+            showCancelButton: true,
+            confirmButtonText: 'Enroll Trainee',
+            confirmButtonColor: '#6366f1',
+            customClass: { confirmButton: 'font-black uppercase tracking-widest text-[10px] px-6 py-2 rounded-xl' },
+            didOpen: () => {
+                const codeInput = document.getElementById('manual_UserCode');
+                const debounce = (func, wait) => {
+                    let timeout;
+                    return function(...args) {
+                        clearTimeout(timeout);
+                        timeout = setTimeout(() => func.apply(this, args), wait);
+                    };
+                };
+
+                codeInput.addEventListener('input', debounce(async function() {
+                    const code = this.value.trim();
+                    if(code.length > 2) {
+                        try {
+                            const response = await fetch(`/SkillTracks/GetTraineeDetailsByCode?code=${encodeURIComponent(code)}`);
+                            const data = await response.json();
+                            if(data.exists && data.data) {
+                                document.getElementById('manual_FullName').value = data.data.FullName || data.data.UserName || '';
+                                document.getElementById('manual_Email').value = data.data.Email || '';
+                                document.getElementById('manual_Phone').value = data.data.PhoneNumber || '';
+                                document.getElementById('manual_Branch').value = data.data.BranchName || '';
+                                document.getElementById('manual_JobTitle').value = data.data.RoleName || '';
+                                document.getElementById('manual_FullName').classList.add('bg-emerald-50', 'border-emerald-200');
+                                setTimeout(() => document.getElementById('manual_FullName').classList.remove('bg-emerald-50', 'border-emerald-200'), 1500);
+                            }
+                        } catch(e) { console.error('Fetch error', e); }
+                    }
+                }, 500));
+            },
+            preConfirm: () => {
+                const formValues = {
+                    userCode: document.getElementById('manual_UserCode').value.trim(),
+                    fullName: document.getElementById('manual_FullName').value.trim(),
+                    jobTitle: document.getElementById('manual_JobTitle').value.trim(),
+                    branchName: document.getElementById('manual_Branch').value.trim(),
+                    email: document.getElementById('manual_Email').value.trim(),
+                    phone: document.getElementById('manual_Phone').value.trim()
+                };
+
+                if (!formValues.userCode || !formValues.fullName || !formValues.jobTitle) {
+                    Swal.showValidationMessage('User Code, Full Name, and Job Title are required');
+                    return false;
+                }
+                return formValues;
+            }
+        }).then((res) => {
+            if (res.isConfirmed && res.value) {
+                Swal.fire({ title: 'Enrolling Trainee...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+                $.post('@Url.Action("AddTraineeToSession")', {
+                    sessionId: sessionId,
+                    fullName: res.value.fullName,
+                    userCode: res.value.userCode,
+                    jobTitle: res.value.jobTitle,
+                    branchName: res.value.branchName,
+                    email: res.value.email,
+                    phone: res.value.phone
+                }, function (apiRes) {
+                    if (apiRes.success) {
+                        Swal.fire({ icon: 'success', title: 'Trainee Enrolled', text: apiRes.message, toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                        
+                        // Dynamically update the count in the background table
+                        const row = $(`button[onclick="openManageTrainees(${sessionId}, '${sessionName}')"]`).closest('tr');
+                        const countSpan = row.find('td:nth-child(3) span');
+                        if (countSpan.length) {
+                            countSpan.text(parseInt(countSpan.text()) + 1);
+                        }
+                        
+                        // Close modal and reopen manage trainees
+                        openManageTrainees(sessionId, sessionName);
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Oops', text: apiRes.message || 'Something went wrong.' });
+                    }
+                });
+            }
+        });
+    }
+</script>
+
+

@@ -1,0 +1,216 @@
+@model IEnumerable<dynamic>
+@{
+    ViewData["Title"] = "Attendance Management";
+    var companies = ViewBag.Companies as IEnumerable<dynamic> ?? new List<dynamic>();
+}
+
+<div class="min-h-screen bg-slate-50/50 pb-20 dark:bg-slate-950/20">
+    <!-- Premium Header -->
+    <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 pt-24 pb-12">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-brand-50 dark:bg-brand-950/30 rounded-2xl flex items-center justify-center text-brand-600">
+                        <i class="fas fa-calendar-check text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Attendance Hub / نظام الحضور والانصراف</h1>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Select a Wave or Partner Company to manage attendance sessions</p>
+                    </div>
+                </div>
+            </div>
+
+                        <!-- Sleek Premium Tabs -->
+            <div class="flex gap-2 mt-8 border-b border-slate-100 dark:border-slate-800 pb-px">
+                @if (!User.IsInRole("SoftSkills Specialist") || User.IsInRole("Admin") || User.IsInRole("Reception"))
+                {
+                    <button onclick="switchTab('waves')" id="tabBtn-waves" class="px-6 py-3.5 text-xs font-black uppercase tracking-widest border-b-2 @(User.IsInRole("SoftSkills Specialist") && !User.IsInRole("Admin") && !User.IsInRole("Reception") ? "border-transparent text-slate-400" : "border-brand-600 text-brand-600") hover:text-slate-600 transition-all flex items-center gap-2">
+                        <i class="fas fa-graduation-cap"></i>
+                        Wave Training / تدريب الـ Waves
+                    </button>
+                    <button onclick="switchTab('companies')" id="tabBtn-companies" class="px-6 py-3.5 text-xs font-black uppercase tracking-widest border-b-2 border-transparent text-slate-400 hover:text-slate-600 transition-all flex items-center gap-2">
+                        <i class="fas fa-building"></i>
+                        Company Training / تدريب الشركات
+                    </button>
+                }
+                @if (User.IsInRole("SoftSkills Specialist") || User.IsInRole("Admin") || User.IsInRole("Reception"))
+                {
+                    <button onclick="switchTab('softskills')" id="tabBtn-softskills" class="px-6 py-3.5 text-xs font-black uppercase tracking-widest border-b-2 @(User.IsInRole("SoftSkills Specialist") && !User.IsInRole("Admin") && !User.IsInRole("Reception") ? "border-brand-600 text-brand-600" : "border-transparent text-slate-400") hover:text-slate-600 transition-all flex items-center gap-2">
+                        <i class="fas fa-users-cog"></i>
+                        Soft Skills / مهارات شخصية
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Content -->
+    <div class="max-w-7xl mx-auto px-6 mt-8">
+        <!-- Waves Content -->
+        @if (!User.IsInRole("SoftSkills Specialist") || User.IsInRole("Admin") || User.IsInRole("Reception"))
+        {
+        <div id="tabContent-waves" class="tab-pane @(User.IsInRole("SoftSkills Specialist") && !User.IsInRole("Admin") && !User.IsInRole("Reception") ? "hidden" : "active")">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                @foreach (var wave in Model)
+                {
+                    <a href="@Url.Action("ManageSessions", new { waveId = wave.Id })" class="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm hover:shadow-xl hover:border-brand-500/30 transition-all duration-500">
+                        <div class="flex flex-col h-full">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-14 h-14 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 dark:text-slate-500 group-hover:bg-brand-50 group-hover:text-brand-600 dark:group-hover:bg-brand-950/30 transition-colors">
+                                    <i class="fas fa-users-rectangle text-xl"></i>
+                                </div>
+                                <span class="bg-brand-50 text-brand-600 dark:bg-brand-950/30 dark:text-brand-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">Active Wave</span>
+                            </div>
+                            
+                            <h3 class="text-lg font-black text-slate-900 dark:text-white group-hover:text-brand-600 transition-colors mb-2">@wave.WaveName</h3>
+                            <p class="text-xs font-bold text-slate-400 leading-relaxed mb-8 uppercase tracking-wide">Standard training cycle wave attendance schedule</p>
+                            
+                            <div class="mt-auto pt-6 border-t border-slate-50 dark:border-slate-800/50 flex items-center justify-between">
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-brand-600 transition-colors">Manage Sessions</span>
+                                <i class="fas fa-arrow-right text-slate-300 group-hover:text-brand-600 group-hover:translate-x-2 transition-all"></i>
+                            </div>
+                        </div>
+                    </a>
+                }
+            </div>
+
+            @if (!Model.Any())
+            {
+                <div class="bg-white dark:bg-slate-900 rounded-[32px] p-20 text-center border-2 border-dashed border-slate-200 dark:border-slate-800">
+                    <div class="w-20 h-20 bg-slate-50 dark:bg-slate-850 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300">
+                        <i class="fas fa-folder-open text-3xl"></i>
+                    </div>
+                    <h3 class="text-lg font-black text-slate-950 dark:text-white uppercase mb-2">No Active Waves Found</h3>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">No active waves available for attendance tracking.</p>
+                </div>
+            }
+        </div>
+
+        
+        <!-- Companies Content -->
+        <div id="tabContent-companies" class="tab-pane hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                @foreach (var comp in companies)
+                {
+                    <a href="@Url.Action("ManageSessions", new { companyId = comp.Id })" class="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm hover:shadow-xl hover:border-emerald-500/30 transition-all duration-500">
+                        <div class="flex flex-col h-full">
+                            <div class="flex justify-between items-start mb-6">
+                                <div class="w-14 h-14 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 dark:text-slate-500 group-hover:bg-emerald-50 group-hover:text-emerald-600 dark:group-hover:bg-emerald-950/30 transition-colors">
+                                    <i class="fas fa-building text-xl"></i>
+                                </div>
+                                <span class="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">Company Training</span>
+                            </div>
+                            
+                            <h3 class="text-lg font-black text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors mb-2">@comp.Name</h3>
+                            <p class="text-xs font-bold text-slate-400 leading-relaxed mb-8 uppercase tracking-wide">External and specialized product launch trainee attendances</p>
+                            
+                            <div class="mt-auto pt-6 border-t border-slate-50 dark:border-slate-800/50 flex items-center justify-between">
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-emerald-600 transition-colors">Manage Sessions</span>
+                                <i class="fas fa-arrow-right text-slate-300 group-hover:text-brand-600 group-hover:translate-x-2 transition-all"></i>
+                            </div>
+                        </div>
+                    </a>
+                }
+            </div>
+
+            @if (!companies.Any())
+            {
+                <div class="bg-white dark:bg-slate-900 rounded-[32px] p-20 text-center border-2 border-dashed border-slate-200 dark:border-slate-800">
+                    <div class="w-20 h-20 bg-slate-50 dark:bg-slate-850 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300">
+                        <i class="fas fa-building text-3xl"></i>
+                    </div>
+                    <h3 class="text-lg font-black text-slate-950 dark:text-white uppercase mb-2">No Active Companies Registered</h3>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Please register a partner company first from the Configuration menu.</p>
+                </div>
+            }
+        </div>
+
+        
+        }
+        @if (User.IsInRole("SoftSkills Specialist") || User.IsInRole("Admin") || User.IsInRole("Reception"))
+        {
+            <div id="tabContent-softskills" class="tab-pane @(User.IsInRole("SoftSkills Specialist") && !User.IsInRole("Admin") && !User.IsInRole("Reception") ? "active" : "hidden")">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    @if (User.IsInRole("Reception") && ViewBag.SoftSkillSessions != null)
+                    {
+                        foreach (var session in ViewBag.SoftSkillSessions)
+                        {
+                            <div class="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm hover:shadow-xl hover:border-indigo-500/30 transition-all duration-500 flex flex-col h-full relative">
+                                <a href="@Url.Action("TakeAttendance", "SkillTracks", new { sessionId = session.Id })" class="absolute inset-0 z-0"></a>
+                                
+                                <div class="flex-1 flex flex-col relative z-10 pointer-events-none">
+                                    <div class="flex justify-between items-start mb-6">
+                                        <div class="w-14 h-14 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 dark:text-slate-500 group-hover:bg-indigo-50 group-hover:text-indigo-600 dark:group-hover:bg-indigo-950/30 transition-colors">
+                                            <i class="fas fa-calendar-check text-xl"></i>
+                                        </div>
+                                        <span class="bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">Session</span>
+                                    </div>
+                                    
+                                    <h3 class="text-lg font-black text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors mb-2">@session.SessionName</h3>
+                                    <p class="text-xs font-bold text-slate-400 leading-relaxed mb-6 uppercase tracking-wide">@session.SessionDate.ToString("MMM dd, yyyy")</p>
+                                    
+                                    <div class="flex gap-4 mb-6">
+                                        <div class="flex-1 text-center bg-slate-50 dark:bg-slate-800/50 rounded-xl py-3">
+                                            <span class="block text-lg font-black text-slate-800 dark:text-white mb-1">@session.EnrolledCount</span>
+                                            <span class="block text-[9px] font-black text-slate-400 uppercase tracking-widest">Enrolled</span>
+                                        </div>
+                                        <div class="flex-1 text-center bg-indigo-50 dark:bg-indigo-900/20 rounded-xl py-3">
+                                            <span class="block text-lg font-black text-indigo-600 dark:text-indigo-400 mb-1">@session.PresentCount</span>
+                                            <span class="block text-[9px] font-black text-indigo-500 uppercase tracking-widest">Present</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-auto pt-6 border-t border-slate-50 dark:border-slate-800/50 flex items-center justify-between relative z-10">
+                                    <a href="@Url.Action("TakeAttendance", "SkillTracks", new { sessionId = session.Id })" class="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors flex items-center gap-2">
+                                        Take Attendance <i class="fas fa-arrow-right"></i>
+                                    </a>
+                                    <a href="@Url.Action("ExportSessionAttendance", "SkillTracks", new { sessionId = session.Id })" class="w-8 h-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center hover:bg-green-600 hover:text-white transition-colors" title="Export to Excel">
+                                        <i class="fas fa-file-excel"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <a href="@Url.Action("Index", "SkillTracks")" class="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm hover:shadow-xl hover:border-indigo-500/30 transition-all duration-500">
+                            <div class="flex flex-col h-full">
+                                <div class="flex justify-between items-start mb-6">
+                                    <div class="w-14 h-14 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 dark:text-slate-500 group-hover:bg-indigo-50 group-hover:text-indigo-600 dark:group-hover:bg-indigo-950/30 transition-colors">
+                                        <i class="fas fa-users-cog text-xl"></i>
+                                    </div>
+                                    <span class="bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">Skill Track</span>
+                                </div>
+                                
+                                <h3 class="text-lg font-black text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors mb-2">SoftSkills Track</h3>
+                                <p class="text-xs font-bold text-slate-400 leading-relaxed mb-8 uppercase tracking-wide">Manage sessions and track attendance for soft skills training</p>
+                                
+                                <div class="mt-auto pt-6 border-t border-slate-50 dark:border-slate-800/50 flex items-center justify-between">
+                                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-600 transition-colors">Manage Sessions</span>
+                                    <i class="fas fa-arrow-right text-slate-300 group-hover:text-brand-600 group-hover:translate-x-2 transition-all"></i>
+                                </div>
+                            </div>
+                        </a>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function switchTab(tabId) {
+            $('.tab-pane').addClass('hidden').removeClass('active');
+            $(`#tabContent-${tabId}`).removeClass('hidden').addClass('active');
+
+            $('#tabBtn-waves, #tabBtn-companies, #tabBtn-softskills').removeClass('border-brand-600 text-brand-600').addClass('border-transparent text-slate-400 hover:text-slate-600');
+            $(`#tabBtn-${tabId}`).addClass('border-brand-600 text-brand-600').removeClass('border-transparent text-slate-400 hover:text-slate-600');
+        }
+    </script>
+}
+
+
+
+

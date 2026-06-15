@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Exam System - @ViewBag.Title</title>
+    <link rel="icon" type="image/png" href="~/images/logo.jpeg" />
+    <script src="~/lib/tailwind/tailwindcss.js"></script>
+    <link rel="stylesheet" href="~/lib/datatables-1.13.8/css/jquery.dataTables.min.css" />
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            600: '#16a34a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+    @if (ViewData["HideNavbar"] == null)
+    {
+        <nav class="bg-white/80 backdrop-blur-xl border-b border-slate-200 sticky top-0 z-40 transition-all">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6">
+                <div class="flex h-16 items-center justify-between">
+                    <!-- Logo -->
+                    <a asp-page="/Index" class="flex items-center gap-2.5 group shrink-0">
+                        <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-lg border border-slate-200 overflow-hidden transition-shadow group-hover:shadow-brand-500/40 p-1">
+                            <img src="~/images/logo.jpeg" alt="Eltarshoubi" class="w-full h-full object-contain" />
+                        </div>
+                        <div class="hidden xs:block">
+                            <span class="text-base font-black text-slate-900 tracking-tight leading-none group-hover:text-brand-600 transition-colors">Eltarshoubi</span>
+                            <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mt-0.5">Training Academy</p>
+                        </div>
+                    </a>
+
+                    <!-- Desktop Nav Links -->
+                    <div class="hidden md:flex ml-6 gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200/50">
+                        <a class="rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-white hover:shadow-sm transition-all uppercase tracking-widest"
+                           asp-action="Index" asp-controller="Home">Home</a>
+
+                        @if (User.Identity.IsAuthenticated)
+                        {
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <a class="rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-white hover:shadow-sm transition-all uppercase tracking-widest"
+                                   asp-controller="Admin" asp-action="Index">Dashboard</a>
+                            }
+                            @if (User.IsInRole("pharmacist") || User.IsInRole("assistant") || User.IsInRole("صيدلي") || User.IsInRole("مساعد صيدلي"))
+                            {
+                                <a class="rounded-lg bg-white shadow-sm px-3 py-2 text-xs font-bold text-brand-600 transition-all uppercase tracking-widest"
+                                   asp-controller="Home" asp-action="StudentExams">My Exams</a>
+                            }
+                        }
+                    </div>
+
+                    <!-- Right Side Actions -->
+                    <div class="flex items-center gap-2 sm:gap-3">
+                        @if (User?.Identity?.IsAuthenticated ?? false)
+                        {
+
+                            <!-- User Avatar (desktop) -->
+                            <div class="hidden sm:flex items-center gap-2">
+                                <div class="w-8 h-8 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 font-black text-sm uppercase">
+                                    @(User.Identity.Name?.Substring(0, 1) ?? "U")
+                                </div>
+                                <span class="hidden lg:block text-sm font-black text-slate-800 max-w-[120px] truncate">@User.Identity.Name</span>
+                            </div>
+
+                            <!-- Logout (desktop) -->
+                            <form asp-controller="Auth" asp-action="Logout" method="post" class="hidden sm:block">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold uppercase tracking-widest text-slate-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 transition-all shadow-sm">Logout</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <a class="hidden sm:block rounded-xl bg-brand-600 px-5 py-2.5 text-xs font-black uppercase tracking-widest text-white hover:bg-brand-700 transition-all shadow-lg shadow-brand-500/30"
+                               asp-action="Login" asp-controller="Auth">Login</a>
+                        }
+
+                        <!-- Mobile Hamburger -->
+                        <button id="mobileMenuBtn" type="button" class="md:hidden rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors" aria-label="Open menu">
+                            <svg id="hamburgerIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                            <svg id="closeIcon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile Dropdown Menu -->
+            <div id="mobileMenu" class="hidden md:hidden border-t border-slate-100 bg-white/95 backdrop-blur-xl px-4 pb-4 pt-2 space-y-1">
+                <a class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all"
+                   asp-action="Index" asp-controller="Home">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                    Home
+                </a>
+
+                @if (User.Identity.IsAuthenticated)
+                {
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <a class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all"
+                           asp-controller="Admin" asp-action="Index">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                            Admin Dashboard
+                        </a>
+                    }
+                    @if (User.IsInRole("pharmacist") || User.IsInRole("assistant") || User.IsInRole("صيدلي") || User.IsInRole("مساعد صيدلي"))
+                    {
+                        <a class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 transition-all"
+                           asp-controller="Home" asp-action="StudentExams">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            My Exams
+                        </a>
+                    }
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <a class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all"
+                           asp-action="Register" asp-controller="Auth">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+                            Add User
+                        </a>
+                    }
+
+                    <!-- User info + Logout -->
+                    <div class="pt-2 mt-2 border-t border-slate-100">
+                        <div class="flex items-center gap-3 px-4 py-2 mb-2">
+                            <div class="w-9 h-9 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 font-black text-sm uppercase">
+                                @(User.Identity.Name?.Substring(0, 1) ?? "U")
+                            </div>
+                            <div>
+                                <p class="text-sm font-black text-slate-800">@User.Identity.Name</p>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Authorized User</p>
+                            </div>
+                        </div>
+                        <form asp-controller="Auth" asp-action="Logout" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="w-full rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold uppercase tracking-widest text-rose-600 hover:bg-rose-100 transition-all">Logout</button>
+                        </form>
+                    </div>
+                }
+                else
+                {
+                    <a class="block rounded-xl bg-brand-600 px-4 py-3 text-sm font-black uppercase tracking-widest text-white hover:bg-brand-700 transition-all text-center"
+                       asp-action="Login" asp-controller="Auth">Login Securely</a>
+                }
+            </div>
+        </nav>
+    }
+
+    <main class="min-h-[calc(100vh-64px)] bg-slate-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+            @RenderBody()
+        </div>
+    </main>
+
+    <script src="~/lib/jquery-3.6.0/jquery.min.js"></script>
+    <script src="~/lib/datatables-1.13.8/js/jquery.dataTables.min.js"></script>
+    <script src="~/lib/jquery-validation/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    <script src="~/lib/sweetalert2-11/sweetalert2.all.min.js"></script>
+
+    <script>
+        $(function () {
+            // Mobile Menu Toggle
+            $('#mobileMenuBtn').on('click', function() {
+                $('#mobileMenu').toggleClass('hidden');
+                $('#hamburgerIcon').toggleClass('hidden');
+                $('#closeIcon').toggleClass('hidden');
+            });
+
+            // Close mobile menu on outside click
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#mobileMenu').length && !$(e.target).closest('#mobileMenuBtn').length) {
+                    $('#mobileMenu').addClass('hidden');
+                    $('#hamburgerIcon').removeClass('hidden');
+                    $('#closeIcon').addClass('hidden');
+                }
+            });
+
+
+            // Welcome Alert
+            var showWelcome = '@(TempData["ShowWelcome"] ?? "")';
+            var welcomeUser = '@(TempData["WelcomeUser"] ?? "")';
+            if (showWelcome && showWelcome.toLowerCase() === 'true') {
+                Swal.fire({
+                    title: 'Welcome',
+                    text: 'Welcome ' + (welcomeUser || 'user') + '! You\'re logged in.',
+                    icon: 'success',
+                    confirmButtonText: 'OK',
+                    customClass: { confirmButton: 'bg-brand-600 text-white px-4 py-2 rounded-lg' }
+                });
+            }
+        });
+    </script>
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>

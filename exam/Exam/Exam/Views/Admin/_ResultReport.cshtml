@@ -1,0 +1,30 @@
+@model IEnumerable<Exam.DTOs.ResultDetailDto>
+
+<div class="w-full space-y-6">
+    @foreach (var d in Model)
+    {
+        <div class="bg-slate-950/40 border-l-4 @(d.IsCorrect ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.1)]" : "border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.1)]") rounded-2xl p-6 transition-all hover:translate-x-1">
+            <div class="flex flex-col gap-4">
+                <div class="flex justify-between items-start">
+                    <span class="text-[9px] font-mono font-bold @(d.IsCorrect ? "text-emerald-500" : "text-rose-500") uppercase tracking-[0.2em]">
+                        @(d.IsCorrect ? "Vector Validated" : "Data Corruption Detected")
+                    </span>
+                    <span class="text-[8px] font-black text-slate-500 uppercase tracking-tighter">NODE: 0x@(d.GetHashCode().ToString("X4"))</span>
+                </div>
+                
+                <h4 class="text-sm font-black text-white italic uppercase tracking-tight">@d.QuestionText</h4>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                    <div class="bg-white/5 rounded-xl p-4 border border-white/5">
+                        <span class="text-[8px] font-mono font-bold text-slate-500 uppercase tracking-widest block mb-2">Personnel Response</span>
+                        <span class="text-xs font-bold @(d.IsCorrect ? "text-emerald-400" : "text-rose-400")">@(string.IsNullOrEmpty(d.StudentChoice) ? "NO SIGNAL" : d.StudentChoice.ToUpper())</span>
+                    </div>
+                    <div class="bg-brand-500/5 rounded-xl p-4 border border-brand-500/10">
+                        <span class="text-[8px] font-mono font-bold text-brand-500/50 uppercase tracking-widest block mb-2">Validated Protocol</span>
+                        <span class="text-xs font-bold text-brand-500">@d.CorrectChoice.ToUpper()</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>

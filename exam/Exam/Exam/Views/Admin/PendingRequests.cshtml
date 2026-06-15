@@ -1,0 +1,200 @@
+@model IEnumerable<dynamic>
+@{
+    ViewData["Title"] = "New Come - Registration Requests";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+
+<div class="min-h-screen pb-20">
+    <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 pt-24 pb-12">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                    <h1 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">New Come Requests</h1>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Manage Pending User Registrations</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="bg-brand-50 text-brand-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-brand-100">
+                        @Model.Count() Pending Requests
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-6 mt-8">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+            <table class="saas-table datatable">
+                <thead>
+                    <tr>
+                        <th>Trainee Details</th>
+                        <th>Credentials</th>
+                        <th>Job / Shift</th>
+                        <th>Branch</th>
+                        <th>Request Date</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var req in Model)
+                    {
+                        <tr>
+                            <td>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center font-black text-slate-400 text-xs">
+                                        @req.FullName[0]
+                                    </div>
+                                    <div>
+                                        <p class="font-black text-slate-900 dark:text-white uppercase text-xs">@req.FullName</p>
+                                        <p class="text-[10px] text-slate-400 font-bold">@req.PhoneNumber</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <p class="text-xs font-bold text-slate-700 dark:text-slate-300">@req.Email</p>
+                                <p class="text-[10px] font-mono text-brand-600">Code: @req.UserCode</p>
+                            </td>
+                            <td>
+                                <div class="flex flex-col gap-1">
+                                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">@req.JobTitle</span>
+                                    <span class="bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded text-[9px] font-bold w-fit">
+                                        @{
+                                            string shiftName = req.Shift == "2" ? "صباحي" : (req.Shift == "3" ? "وسط" : (req.Shift == "4" ? "مسائي" : "غير محدد"));
+                                        }
+                                        @shiftName
+                                    </span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="text-xs font-black text-slate-600 dark:text-slate-400 uppercase">@req.BranchName</span>
+                            </td>
+                            <td>
+                                <p class="text-[10px] font-bold text-slate-400">@req.RequestDate.ToString("dd MMM yyyy")</p>
+                                <p class="text-[9px] text-slate-400">@req.RequestDate.ToString("hh:mm tt")</p>
+                            </td>
+                            <td class="text-right">
+                                <div class="flex justify-end gap-2">
+                                    <button onclick="scanUser('@req.Email', '@req.UserCode')" class="bg-blue-500 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-blue-500/20">
+                                        <i class="fas fa-search mr-1"></i> Scan
+                                    </button>
+                                    <button onclick="approveUser(@req.Id, '@req.FullName')" class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20">
+                                        <i class="fas fa-check-circle mr-1"></i> Approve
+                                    </button>
+                                    <button onclick="rejectUser(@req.Id, '@req.FullName')" class="bg-rose-500 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20">
+                                        <i class="fas fa-times-circle mr-1"></i> Reject
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            
+            @if (!Model.Any())
+            {
+                <div class="p-20 text-center">
+                    <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300">
+                        <i class="fas fa-user-clock text-3xl"></i>
+                    </div>
+                    <p class="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No pending registration requests at the moment.</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function approveUser(id, name) {
+            Swal.fire({
+                title: 'Approve Registration?',
+                text: `You are about to approve ${name}. An account will be created and a welcome email will be sent.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#059669',
+                confirmButtonText: 'Yes, Approve',
+                showLoaderOnConfirm: true,
+                preConfirm: () => {
+                    return $.post('@Url.Action("ApproveRequest")', { requestId: id })
+                        .then(response => {
+                            if (!response.success) {
+                                throw new Error(response.message);
+                            }
+                            return response;
+                        })
+                        .catch(error => {
+                            let msg = "Request failed";
+                            if (error.responseJSON && error.responseJSON.message) msg = error.responseJSON.message;
+                            else if (error.responseText) msg = error.responseText;
+                            else msg = error.statusText || error;
+                            Swal.showValidationMessage(`Request failed: ${msg}`);
+                        });
+                },
+                allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Approved!',
+                        text: 'User account created and email sent successfully.',
+                        icon: 'success'
+                    }).then(() => {
+                        location.reload();
+                    });
+                }
+            });
+        }
+
+        function scanUser(email, code) {
+            Swal.fire({
+                title: 'جاري الفحص...',
+                text: 'يرجى الانتظار بينما نتأكد من صحة البيانات.',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            $.get('/Admin/CheckExistence', { email: email, code: code }, function (res) {
+                if (res.exists) {
+                    Swal.fire({
+                        title: 'تنبيه! مستخدم موجود',
+                        text: res.message,
+                        icon: 'warning',
+                        confirmButtonText: 'حسناً'
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'مستخدم جديد',
+                        text: res.message,
+                        icon: 'success',
+                        confirmButtonText: 'ممتاز'
+                    });
+                }
+            });
+        }
+
+        function rejectUser(id, name) {
+            Swal.fire({
+                title: 'هل انت متأكد؟',
+                text: `هل تريد رفض طلب انضمام "${name}"؟ سيتم إرسال بريد إلكتروني بالرفض.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'نعم، ارفض الطلب',
+                cancelButtonText: 'إلغاء'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('/Admin/RejectRequest', { requestId: id }, function (res) {
+                        if (res.success) {
+                            Swal.fire('تم الرفض!', 'تم رفض الطلب بنجاح.', 'success').then(() => {
+                                location.reload();
+                            });
+                        } else {
+                            Swal.fire('خطأ!', res.message, 'error');
+                        }
+                    });
+                }
+            });
+        }
+    </script>
+}

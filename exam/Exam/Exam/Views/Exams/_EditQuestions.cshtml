@@ -1,0 +1,508 @@
+@model Exam.DTOs.ExamDetailsDto
+
+<div class="p-2 custom-scrollbar">
+    <div class="flex flex-wrap items-center justify-between gap-4 mb-10 pb-6 border-b border-slate-200 dark:border-slate-800">
+        <div>
+            <h5 class="text-2xl font-black text-slate-900 dark:text-white italic tracking-tighter uppercase mb-1">Questions Library</h5>
+            <p class="text-[10px] font-bold text-brand-500 uppercase tracking-[0.3em]">Exam: @Model.Title.ToUpper()</p>
+        </div>
+
+        <!-- Floating Add Button -->
+        <button type="button" id="addQuestionBtnInModal" class="fixed bottom-10 right-10 z-[9999] w-16 h-16 bg-brand-600 hover:bg-brand-700 text-white rounded-full shadow-2xl shadow-brand-500/40 flex items-center justify-center transition-all hover:scale-110 active:scale-95 group border-4 border-white dark:border-slate-900">
+            <i class="fas fa-plus text-xl transition-transform group-hover:rotate-90"></i>
+            <span class="absolute right-full mr-4 bg-slate-900/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-[0.2em] px-4 py-2 rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all translate-x-2 group-hover:translate-x-0 whitespace-nowrap shadow-xl">
+                Add Question
+            </span>
+        </button>
+
+        <div class="flex items-center gap-3">
+            <div class="relative hidden md:block">
+                <select id="categoryFilter" class="pr-8 pl-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none transition-all appearance-none cursor-pointer min-w-[160px]">
+                    <option value="">ALL CATEGORIES</option>
+                    @if (ViewBag.Categories != null)
+                    {
+                        foreach (var cat in (IEnumerable<Exam.DTOs.CategoryDto>)ViewBag.Categories)
+                        {
+                            <option value="@cat.Id">@cat.CategoryName.ToUpper()</option>
+                        }
+                    }
+                </select>
+                <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
+            </div>
+            <div class="relative">
+                <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="questionSearch" placeholder="Search questions..." class="pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none w-48 md:w-64 transition-all" />
+            </div>
+            @if (Model.Questions.Any())
+            {
+                <button type="button" id="deleteAllQuestionsBtn" class="bg-rose-50 hover:bg-rose-500 text-rose-500 hover:text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm border border-rose-100 flex items-center gap-2">
+                    <i class="fas fa-trash-alt"></i> Delete All
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (!Model.Questions.Any())
+    {
+        <div class="text-center py-20 bg-slate-50 dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[32px] mx-4">
+            <div class="w-16 h-16 bg-white dark:bg-slate-950 rounded-full shadow-sm flex items-center justify-center mx-auto mb-6">
+                <i class="fas fa-layer-group text-slate-400 text-2xl"></i>
+            </div>
+            <p class="text-slate-500 text-xs font-bold uppercase tracking-widest">No questions found for this exam.</p>
+        </div>
+    }
+
+    <div class="space-y-8 px-4 pb-8">
+        @foreach (var q in Model.Questions)
+        {
+            <div class="question-panel bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden group/q hover:border-brand-500/30 transition-all">
+                <div class="p-8">
+                    <form class="update-question-form relative">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="examId" value="@Model.ExamId" />
+                        <input type="hidden" name="questionId" value="@q.QuestionId" />
+
+                        <div class="flex items-center justify-between mb-8">
+                            <div class="flex items-center gap-3">
+                                <div class="w-2 h-2 rounded-full bg-brand-500 shadow-sm shadow-brand-500/50"></div>
+                                <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Question ID: @q.QuestionId</span>
+                            </div>
+                            <button type="button" class="text-[9px] font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 px-4 py-2 rounded-xl transition-colors uppercase tracking-widest delete-question" data-question-id="@q.QuestionId">
+                                <i class="fas fa-trash-alt mr-1"></i> Delete Question
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-12 gap-8 mb-8">
+                            <div class="col-span-12 lg:col-span-12">
+                                <label class="block text-[9px] font-bold text-brand-500 uppercase tracking-widest mb-3 px-1">Question Text</label>
+                                <textarea name="questionText" rows="3" class="block w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[24px] p-6 text-xl font-black text-slate-900 dark:text-white focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all outline-none resize-y min-h-[120px]" oninput="this.style.height = ''; this.style.height = (this.scrollHeight + 10) + 'px'">@q.QuestionText</textarea>
+                            </div>
+                            <div class="col-span-12 md:col-span-4">
+                                <label class="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 px-1">Category</label>
+                                <select name="categoryId" class="cat-selector block w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[20px] px-5 py-4 text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none transition-all" data-current-topic="@(q.TopicId.HasValue ? q.TopicId.Value.ToString() : "")">
+                                     @if (ViewBag.Categories != null)
+                                     {
+                                         foreach (var cat in (IEnumerable<Exam.DTOs.CategoryDto>)ViewBag.Categories)
+                                         {
+                                             <option value="@cat.Id" selected="@(cat.Id == q.CategoryId)">@cat.CategoryName.ToUpper()</option>
+                                         }
+                                     }
+                                 </select>
+                            </div>
+                            <div class="col-span-12 md:col-span-5">
+                                <label class="block text-[9px] font-bold text-emerald-500 uppercase tracking-widest mb-3 px-1">Topic / Lecture</label>
+                                <select name="topicId" class="topic-selector block w-full bg-slate-50 dark:bg-slate-950 border border-emerald-500/20 rounded-[20px] px-5 py-4 text-[10px] font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none transition-all">
+                                    <option value="">ALL TOPICS</option>
+                                </select>
+                            </div>
+                            <div class="col-span-12 md:col-span-3">
+                                <label class="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3 px-1">Points</label>
+                                <input type="number" name="points" value="@q.Points" class="block w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[20px] px-5 py-4 text-xs font-black text-brand-600 focus:border-brand-500 outline-none" />
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-wrap items-center justify-between gap-6">
+                            <div class="flex items-center gap-1.5 p-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl w-fit">
+                                @foreach (var lvl in new[] { (1, "Easy", "E"), (2, "Medium", "M"), (3, "Hard", "H") }) {
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="difficulty" value="@lvl.Item1" class="peer hidden" @(q.Difficulty == lvl.Item1 || (lvl.Item1 == 1 && q.Difficulty == 0) ? "checked" : "") />
+                                        <span class="px-6 py-2 rounded-xl text-[10px] font-black italic peer-checked:bg-white dark:peer-checked:bg-slate-800 peer-checked:shadow-sm peer-checked:text-brand-600 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-all block uppercase tracking-tighter">@lvl.Item2</span>
+                                    </label>
+                                }
+                            </div>
+                            <button type="button" class="bg-brand-50 dark:bg-brand-500/10 hover:bg-brand-600 border border-brand-500/10 text-brand-600 hover:text-white px-8 py-3.5 rounded-2xl font-black italic uppercase text-[10px] tracking-widest transition-all save-question shadow-sm">
+                                Save Question
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="mt-8 mb-6 h-[1px] bg-slate-100 dark:bg-slate-800"></div>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <h6 class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Answer Choices</h6>
+                            <button type="button" class="text-[9px] font-bold text-brand-600 dark:text-brand-400 hover:text-brand-700 transition-colors add-choice px-3 py-1.5 bg-brand-50 dark:bg-brand-500/10 rounded-lg" data-question-id="@q.QuestionId">
+                                + Add Choice
+                            </button>
+                        </div>
+
+                        <div class="choices grid grid-cols-1 md:grid-cols-2 gap-4">
+                            @foreach (var c in q.Choices)
+                            {
+                                <form class="update-choice-form flex items-center gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-brand-500/30 transition-all group/choice shadow-sm">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="choiceId" value="@c.ChoiceId" />
+                                    <input type="hidden" name="questionId" value="@q.QuestionId" />
+
+                                    <label class="relative flex items-center cursor-pointer">
+                                        <input type="checkbox" name="isCorrect" value="true" class="peer hidden" @(c.IsCorrect ? "checked" : "") />
+                                        <div class="w-6 h-6 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-xl flex items-center justify-center peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all shadow-sm">
+                                            <i class="fas fa-check text-[10px] text-white opacity-0 peer-checked:opacity-100 transition-opacity"></i>
+                                        </div>
+                                    </label>
+
+                                    <input type="text" name="choiceText" value="@c.ChoiceText" class="block flex-1 bg-transparent border-0 text-base font-black text-slate-900 dark:text-white focus:ring-0 outline-none w-full" />
+
+                                    <div class="flex items-center gap-1 opacity-50 group-hover/choice:opacity-100 transition-opacity">
+                                        <button type="button" class="p-2 text-brand-500 bg-brand-50 dark:bg-brand-500/10 hover:bg-brand-600 hover:text-white rounded-lg transition-all save-choice" title="Save Choice">
+                                            <i class="fas fa-save text-xs"></i>
+                                        </button>
+                                        <button type="button" class="p-2 text-rose-500 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-600 hover:text-white rounded-lg transition-all delete-choice" data-choice-id="@c.ChoiceId" title="Delete Choice">
+                                            <i class="fas fa-trash text-xs"></i>
+                                        </button>
+                                    </div>
+                                </form>
+                            }
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<script>
+    (function () {
+        var examId = @Model.ExamId;
+        $(document).off('focusin.bs.modal');
+
+        const topicCache = {};
+        const pendingTopicRequests = {};
+
+        async function loadTopicsForSelector($catSelector, $topicSelector, selectedTopicId) {
+            const catId = $catSelector.val();
+            if (!catId) return;
+
+            $topicSelector.prop('disabled', true);
+            try {
+                let topics;
+                if (topicCache[catId]) {
+                    topics = topicCache[catId];
+                } else {
+                    if (!pendingTopicRequests[catId]) {
+                        pendingTopicRequests[catId] = $.get(`/Admin/GetTopicsByCategoryId?categoryId=${catId}`);
+                    }
+                    topics = await pendingTopicRequests[catId];
+                    topicCache[catId] = topics;
+                }
+
+                $topicSelector.empty().append('<option value="">ALL TOPICS</option>');
+                
+                if (topics && Array.isArray(topics)) {
+                    topics.forEach(t => {
+                        const tId = t.id !== undefined ? t.id : t.Id;
+                        const tName = t.topicName || t.TopicName || "Unnamed Topic";
+                        if (tId !== undefined) {
+                            $topicSelector.append($('<option></option>').val(tId).text(tName.toUpperCase()));
+                        }
+                    });
+                }
+
+                if (selectedTopicId) {
+                    // Convert to string for reliable comparison
+                    const targetId = selectedTopicId.toString();
+                    $topicSelector.val(targetId);
+                    
+                    // Double check and force if .val() failed
+                    if ($topicSelector.val() != targetId) {
+                        $topicSelector.find(`option[value="${targetId}"]`).prop('selected', true);
+                    }
+                }
+            } catch (err) { 
+                console.error("Topic load failed", err); 
+            } finally {
+                $topicSelector.prop('disabled', false);
+            }
+        }
+
+        // Initialize existing question topics efficiently
+        const catGroups = {};
+        $('.cat-selector').each(function() {
+            const catId = $(this).val();
+            if (catId) {
+                if (!catGroups[catId]) catGroups[catId] = [];
+                catGroups[catId].push(this);
+            }
+        });
+
+        for (const catId in catGroups) {
+            $.get(`/Admin/GetTopicsByCategoryId?categoryId=${catId}`).then(topics => {
+                let optionsHtml = '<option value="">ALL TOPICS</option>';
+                if (topics && Array.isArray(topics)) {
+                    topics.forEach(t => {
+                        const tId = t.id !== undefined ? t.id : t.Id;
+                        const tName = t.topicName || t.TopicName || "Unnamed Topic";
+                        optionsHtml += `<option value="${tId}">${tName.toUpperCase()}</option>`;
+                    });
+                }
+                
+                catGroups[catId].forEach(catEl => {
+                    const topEl = catEl.closest('.grid').querySelector('.topic-selector');
+                    const currentTopic = catEl.getAttribute('data-current-topic');
+                    if (topEl) {
+                        topEl.innerHTML = optionsHtml;
+                        if (currentTopic) {
+                            topEl.value = currentTopic;
+                        }
+                    }
+                });
+            }).catch(err => console.error("Failed to batch load topics", err));
+        }
+
+        // Handle category change for existing questions
+        $(document).on('change', '.cat-selector', function() {
+            const $cat = $(this);
+            const $top = $cat.closest('.grid').find('.topic-selector');
+            loadTopicsForSelector($cat, $top, null);
+        });
+
+        function antiForgery() { return $('input[name="__RequestVerificationToken"]').first().val(); }
+        function triggerRefresh(scrollToBottom) {
+            var $body = $('#qModalBody');
+            var scrollPos = $body.scrollTop();
+            
+            $.ajax({
+                url: '@Url.Action("GetDetails", "Exams", new { id = Model.ExamId })',
+                method: 'GET',
+                success: function(response) {
+                    $body.html(response);
+                    if (scrollToBottom === true) {
+                        $body.animate({ scrollTop: $body[0].scrollHeight }, 500);
+                    } else {
+                        $body.scrollTop(scrollPos);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    Swal.fire('Refresh Failed', 'Error: ' + (error || status), 'error');
+                }
+            });
+        }
+
+        $('.save-question').on('click', function () {
+            var form = $(this).closest('form');
+            $.post('@Url.Action("UpdateQuestion", "Exams")', form.serialize())
+                .done(function () { 
+                    Swal.fire({ 
+                        icon: 'success', 
+                        title: 'Question Saved', 
+                        toast: true, 
+                        position: 'top-end', 
+                        timer: 2000, 
+                        showConfirmButton: false 
+                    }); 
+                    triggerRefresh(); 
+                })
+                .fail(function(xhr) { 
+                    var msg = xhr.responseJSON ? xhr.responseJSON.message : "Database update failed";
+                    Swal.fire({ icon: 'error', title: 'Save Failed', text: msg }); 
+                });
+        });
+
+        // Textarea height initialization skipped for performance on large exams
+
+        $('.save-choice').on('click', function () {
+            var form = $(this).closest('form');
+            var isChecked = form.find('input[name="isCorrect"]').is(':checked');
+            var data = form.serializeArray();
+            data = data.filter(function(item) { return item.name !== 'isCorrect'; });
+            data.push({ name: 'isCorrect', value: isChecked });
+            $.post('@Url.Action("UpdateChoice", "Exams")', data)
+                .done(function () { 
+                    Swal.fire({ 
+                        icon: 'success', 
+                        title: 'Choice Saved', 
+                        toast: true, 
+                        position: 'top-end', 
+                        timer: 1500, 
+                        showConfirmButton: false 
+                    }); 
+                    triggerRefresh();
+                })
+                .fail(function(xhr) {
+                    var msg = xhr.responseJSON ? xhr.responseJSON.message : "Choice update failed";
+                    Swal.fire({ icon: 'error', title: 'Error', text: msg });
+                });
+        });
+
+        $('.delete-choice').on('click', function () {
+            var cId = $(this).data('choice-id');
+            $.post('@Url.Action("DeleteChoice", "Exams")', { choiceId: cId, __RequestVerificationToken: antiForgery() }).done(function() { triggerRefresh(); });
+        });
+
+        $(document).on('click', '.delete-question', function () {
+            var qId = $(this).data('question-id');
+            var $panel = $(this).closest('.question-panel');
+            Swal.fire({
+                title: 'Delete Question?',
+                text: "This question and all its choices will be permanently removed.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Confirm Deletion',
+                confirmButtonColor: '#e11d48',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('@Url.Action("DeleteQuestion", "Exams")', { questionId: qId, __RequestVerificationToken: antiForgery() })
+                        .done(function() {
+                            $panel.fadeOut(300, function() { $(this).remove(); });
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Question Deleted',
+                                toast: true,
+                                position: 'top-end',
+                                timer: 2000,
+                                showConfirmButton: false,
+                                timerProgressBar: true
+                            });
+                        })
+                        .fail(function() {
+                            Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to delete question.' });
+                        });
+                }
+            });
+        });
+
+        $('.add-choice').on('click', function () {
+            var qId = $(this).data('question-id');
+            Swal.fire({
+                title: 'New Choice',
+                input: 'text',
+                inputPlaceholder: 'Enter choice text...',
+                showCancelButton: true,
+                confirmButtonText: 'Add Choice',
+            }).then((result) => { if (result.value) $.post('@Url.Action("AddChoice", "Exams")', { questionId: qId, choiceText: result.value, isCorrect: false, __RequestVerificationToken: antiForgery() }).done(function() { triggerRefresh(); }); });
+        });
+
+        $('#addQuestionBtnInModal').on('click', function () {
+            let optionsHtml = '';
+            @if (ViewBag.Categories != null) { foreach (var cat in (IEnumerable<Exam.DTOs.CategoryDto>)ViewBag.Categories) { <text>optionsHtml += `<option value="@cat.Id">@cat.CategoryName.ToUpper()</option>`;</text> } }
+
+            Swal.fire({
+                title: '<span class="text-slate-900 dark:text-white font-black uppercase tracking-tight">Add New Question</span>',
+                html: `
+                    <div class="text-left space-y-4 px-1">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Question Category</label>
+                            <select id="q-type" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-brand-500 transition-all shadow-sm">${optionsHtml}</select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-2">Topic / Lecture</label>
+                            <select id="q-topic" class="w-full bg-slate-50 dark:bg-slate-950 border border-emerald-500/30 rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-brand-500 transition-all shadow-sm">
+                                <option value="">ALL TOPICS (Default)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Question Text</label>
+                            <input id="q-text" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-brand-500 transition-all shadow-sm" placeholder="Enter question description...">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Points</label>
+                                <input id="q-points" type="number" value="1" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-sm font-black text-brand-600 dark:text-brand-400 outline-none focus:border-brand-500 transition-all shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Difficulty</label>
+                                <div class="flex h-[54px] bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-1 gap-1 shadow-sm" id="difficulty-group">
+                                    <button type="button" data-val="1" class="diff-btn flex-1 rounded-xl text-[10px] font-black italic transition-all">Easy</button>
+                                    <button type="button" data-val="2" class="diff-btn flex-1 rounded-xl text-[10px] font-black italic transition-all">Mid</button>
+                                    <button type="button" data-val="3" class="diff-btn flex-1 rounded-xl text-[10px] font-black italic transition-all">Hard</button>
+                                </div>
+                                <input type="hidden" id="q-difficulty" value="1" />
+                            </div>
+                        </div>
+                    </div>`,
+                customClass: {
+                    popup: 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] shadow-sm',
+                    confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 rounded-2xl font-black italic uppercase text-xs tracking-widest shadow-xl flex-1 md:flex-none text-center',
+                    cancelButton: 'text-slate-500 hover:bg-slate-100 hover:dark:bg-slate-800 px-8 py-3 rounded-2xl font-black uppercase text-xs tracking-widest flex-1 md:flex-none text-center',
+                    actions: 'flex flex-row flex-wrap gap-3 w-full justify-center mt-6'
+                },
+                buttonsStyling: false,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Add Question',
+                didOpen: () => {
+                    const btns = document.querySelectorAll('.diff-btn');
+                    function setDiff(b) {
+                        const v = b.dataset.val;
+                        btns.forEach(x => x.classList.remove('bg-brand-500', 'text-white'));
+                        b.classList.add('bg-brand-500', 'text-white');
+                        document.getElementById('q-difficulty').value = v;
+                    }
+                    setDiff(btns[0]);
+                    btns.forEach(b => b.onclick = () => setDiff(b));
+
+                    // Topic Sync in Modal
+                    const $qType = $('#q-type');
+                    const $qTopic = $('#q-topic');
+                    $qType.on('change', () => loadTopicsForSelector($qType, $qTopic, null));
+                    loadTopicsForSelector($qType, $qTopic, null);
+                },
+                preConfirm: () => {
+                    const tid = document.getElementById('q-type').value;
+                    const txt = document.getElementById('q-text').value;
+                    const topicId = document.getElementById('q-topic').value;
+                    if (!tid || !txt) { Swal.showValidationMessage('Incomplete parameters detected.'); return false; }
+                    return { tid, txt, pts: document.getElementById('q-points').value, diff: document.getElementById('q-difficulty').value, topicId: topicId };
+                }
+            }).then((r) => { if (r.isConfirmed) $.post('@Url.Action("AddQuestion", "Exams")', { examId: examId, questionText: r.value.txt, points: r.value.pts, questionTypeId: r.value.tid, difficulty: r.value.diff, topicId: r.value.topicId, __RequestVerificationToken: antiForgery() }).done(function() { triggerRefresh(true); }); });
+        });
+
+        // Search & Filter Logic
+        function filterQuestions() {
+            var term = $('#questionSearch').val().toLowerCase();
+            var selectedCat = $('#categoryFilter').val();
+
+            $('.question-panel').each(function() {
+                var $panel = $(this);
+                var qText = $panel.find('textarea[name="questionText"]').val().toLowerCase();
+                var cText = $panel.find('.choices input[name="choiceText"]').map(function(){ return $(this).val().toLowerCase(); }).get().join(" ");
+                var qIdText = $panel.find('.delete-question').data('question-id').toString();
+                var qCat = $panel.find('select[name="categoryId"]').val();
+                
+                var textMatch = qText.includes(term) || cText.includes(term) || qIdText.includes(term);
+                var catMatch = !selectedCat || qCat === selectedCat;
+
+                if (textMatch && catMatch) {
+                    $panel.show();
+                } else {
+                    $panel.hide();
+                }
+            });
+        }
+
+        $('#questionSearch').on('input', filterQuestions);
+        $('#categoryFilter').on('change', filterQuestions);
+
+        // Delete All Logic
+        $('#deleteAllQuestionsBtn').on('click', function() {
+            Swal.fire({
+                title: 'Are you absolutely sure?',
+                text: "This will wipe ALL questions and choices from this exam permanently!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#334155',
+                confirmButtonText: '<i class="fas fa-trash-alt mr-2"></i> Yes, DELETE ALL',
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('@Url.Action("DeleteAllQuestions", "Exams")', {
+                        examId: examId,
+                        __RequestVerificationToken: antiForgery()
+                    }).done(function (res) {
+                        if(res.success) {
+                            Swal.fire({ icon: 'success', title: 'Wiped', text: 'All questions have been deleted.', timer: 2000, showConfirmButton: false });
+                            triggerRefresh();
+                        } else {
+                            Swal.fire('Error', res.message || 'Failed to delete all questions.', 'error');
+                        }
+                    }).fail(function () { 
+                        Swal.fire('Error', 'Network or Server error occurred.', 'error'); 
+                    });
+                }
+            });
+        });
+    })();
+</script>

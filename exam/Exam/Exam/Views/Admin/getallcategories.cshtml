@@ -1,0 +1,201 @@
+@model IEnumerable<Exam.DTOs.CategoryDto>
+@{
+    ViewData["Title"] = "Category Ecosystem";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+
+<div class="space-y-8">
+    <!-- Header Area -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+                <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Taxonomy Management</h2>
+                <p class="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400 bg-clip-text text-transparent">Question Category Ecosystem</p>
+            </div>
+            <button onclick="openCreateModal()" class="bg-slate-900 dark:bg-brand-600 text-white px-8 py-3.5 rounded-2xl transition-all text-xs font-bold uppercase shadow-xl shadow-brand-500/10 flex items-center gap-3 hover:-translate-y-0.5 active:translate-y-0">
+                <i class="fas fa-plus-circle text-lg"></i>
+                Define New Category
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Table Area -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="datatable saas-table">
+                <thead>
+                    <tr>
+                        <th class="pl-8 !w-24">UUID</th>
+                        <th>Classification Name</th>
+                        <th>Exam Type</th>
+                        <th class="text-right pr-8">Operational Control</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model ?? Enumerable.Empty<Exam.DTOs.CategoryDto>())
+                    {
+                        <tr class="group">
+                            <td class="pl-8">
+                                <span class="font-mono text-[10px] font-bold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">#@item.Id</span>
+                            </td>
+                            <td>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-lg bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center text-brand-600 dark:text-brand-400">
+                                        <i class="fas fa-tag text-xs"></i>
+                                    </div>
+                                    <span class="font-bold text-slate-700 dark:text-slate-200">@item.CategoryName</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="font-bold text-slate-700 dark:text-slate-200 text-xs">@(item.ExamTypeName ?? "Global")</span>
+                            </td>
+                            <td class="pr-8 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <button onclick="openEditModal(@item.Id, '@item.CategoryName', @(item.ExamTypeId ?? 0))" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-brand-500 hover:text-white transition-all">
+                                        <i class="fas fa-pen-nib"></i>
+                                    </button>
+                                    <button onclick="deleteCategory(@item.Id)" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-rose-500 hover:text-white transition-all">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const examTypes = @Html.Raw(Json.Serialize(ViewBag.ExamTypes));
+        
+        function openCreateModal() {
+            let options = '<option value="">GLOBAL (ALL TYPES)</option>';
+            examTypes.forEach(t => {
+                options += `<option value="${t.id}">${t.typeName.toUpperCase()}</option>`;
+            });
+
+            Swal.fire({
+                title: 'Define New Category',
+                html: `
+                    <div class="text-left space-y-4 p-2">
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Classification Name</label>
+                            <input id="swal-cat-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-4 focus:ring-brand-500/10">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Exam Variety Association</label>
+                            <select id="swal-cat-type" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none">
+                                ${options}
+                            </select>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Create Identity',
+                confirmButtonColor: '#06b6d4',
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+                preConfirm: () => {
+                    const name = document.getElementById('swal-cat-name').value;
+                    const typeId = document.getElementById('swal-cat-type').value;
+                    if (!name) {
+                        Swal.showValidationMessage('Category name is mandatory');
+                        return false;
+                    }
+                    return { name: name, examTypeId: typeId };
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    executeAction('@Url.Action("createcategory", "Admin")', { catname: result.value.name, examTypeId: result.value.examTypeId });
+                }
+            });
+        }
+
+        function openEditModal(id, currentName, currentTypeId) {
+            let options = '<option value="">GLOBAL (ALL TYPES)</option>';
+            examTypes.forEach(t => {
+                options += `<option value="${t.id}" ${t.id == currentTypeId ? 'selected' : ''}>${t.typeName.toUpperCase()}</option>`;
+            });
+
+            Swal.fire({
+                title: 'Refactor Category',
+                html: `
+                    <div class="text-left space-y-4 p-2">
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Classification Name</label>
+                            <input id="swal-edit-name" value="${currentName}" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Exam Variety Association</label>
+                            <select id="swal-edit-type" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold outline-none">
+                                ${options}
+                            </select>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Update Registry',
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+                preConfirm: () => {
+                    const name = document.getElementById('swal-edit-name').value;
+                    const typeId = document.getElementById('swal-edit-type').value;
+                    if (!name) {
+                        Swal.showValidationMessage('Category name cannot be empty');
+                        return false;
+                    }
+                    return { name: name, examTypeId: typeId };
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    executeAction('@Url.Action("updatecategory", "Admin")', { id: id, name: result.value.name, examTypeId: result.value.examTypeId });
+                }
+            });
+        }
+
+        function deleteCategory(id) {
+            Swal.fire({
+                title: 'Decommission Category?',
+                text: "Warning: Questions linked to this classification may become unindexed.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f43f5e',
+                confirmButtonText: 'Confirm Deletetion',
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    executeAction('@Url.Action("deletecategory", "Admin")', { id: id });
+                }
+            });
+        }
+
+        async function executeAction(url, data) {
+            Swal.fire({
+                title: 'Syncing Registry...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            try {
+                const response = await $.post(url, data);
+                if (response.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Synchronized',
+                        text: response.message,
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => location.reload());
+                } else {
+                    Swal.fire('Error', response.message, 'error');
+                }
+            } catch (err) {
+                Swal.fire('Critical Error', 'Network synchronization failed.', 'error');
+            }
+        }
+    </script>
+}

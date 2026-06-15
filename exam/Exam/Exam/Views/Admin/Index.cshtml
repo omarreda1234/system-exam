@@ -1,0 +1,456 @@
+@model Exam.DTOs.DashboardDto
+@{
+    ViewData["Title"] = "LMS Performance Dashboard";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+
+<div class="space-y-8 animate-in fade-in duration-700">
+    <!-- Data Integrity Alerts -->
+    @if (Model.MismatchedQuestions != null && Model.MismatchedQuestions.Any())
+    {
+        <div class="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-[32px] p-8 animate-pulse">
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-12 h-12 bg-rose-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-rose-500/20">
+                    <i class="fas fa-triangle-exclamation text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-black text-rose-900 dark:text-rose-100 tracking-tight">Data Integrity Alerts</h3>
+                    <p class="text-sm text-rose-600 dark:text-rose-400 font-medium">Found @Model.MismatchedQuestions.Count questions with mismatched category/topic data.</p>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                @foreach (var alert in Model.MismatchedQuestions)
+                {
+                    <div class="bg-white/80 dark:bg-slate-900/80 p-5 rounded-2xl border border-rose-100 dark:border-rose-900/30 shadow-sm">
+                        <div class="flex items-start justify-between gap-4 mb-2">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Question #@alert.QuestionId</span>
+                        </div>
+                        <p class="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-2 mb-3">@alert.QuestionText</p>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="text-[9px] font-black bg-rose-100 dark:bg-rose-900/40 text-rose-600 px-2 py-1 rounded-md uppercase">Current: @alert.CategoryName</span>
+                            <span class="text-[9px] font-black bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 px-2 py-1 rounded-md uppercase">Expected: @alert.ExpectedCategory</span>
+                            <span class="text-[9px] font-black bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-1 rounded-md uppercase">Topic: @alert.TopicName</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Stat Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Personnel Card -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[24px] p-6 shadow-sm hover:shadow-xl transition-all duration-300 group">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400">
+                    <i class="fas fa-users-rectangle text-xl"></i>
+                </div>
+                <div class="flex flex-col items-end">
+                    @{
+                        var asstRatio = Model.TotalPharmacists > 0 ? (double)Model.TotalAssistants / Model.TotalPharmacists * 100 : 0;
+                    }
+                    <span class="text-[10px] font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 rounded-lg uppercase tracking-wider">
+                        Ratio: @Math.Round(asstRatio, 1)%
+                    </span>
+                </div>
+            </div>
+            <div>
+                <p class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Academy Composition</p>
+                <div class="flex items-baseline gap-2">
+                    <span class="text-3xl font-black tracking-tighter">@Model.TotalPharmacists</span>
+                    <span class="text-xs font-semibold text-slate-400">Pharmacists</span>
+                    <span class="text-slate-200 dark:text-slate-800 font-light mx-1">/</span>
+                    <span class="text-3xl font-black tracking-tighter text-brand-600">@Model.TotalAssistants</span>
+                    <span class="text-xs font-semibold text-slate-400">Assistants</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Operations Card -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[24px] p-6 shadow-sm hover:shadow-xl transition-all duration-300">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <i class="fas fa-microchip text-xl"></i>
+                </div>
+                <span class="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            </div>
+            <div>
+                <p class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Active Examinations</p>
+                <div class="flex items-baseline gap-2">
+                    <span class="text-4xl font-black tracking-tighter italic">@Model.ActiveExamsCount</span>
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Ongoing Exams</span>
+                </div>
+                <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-2 font-medium">@Model.AssignedAssistantsCount Proctors currently monitoring</p>
+            </div>
+        </div>
+
+        <!-- Training Waves Card -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[24px] p-6 shadow-sm hover:shadow-xl transition-all duration-300">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                    <i class="fas fa-water text-xl"></i>
+                </div>
+                <i class="fas fa-arrow-trend-up text-slate-300 dark:text-slate-700"></i>
+            </div>
+            <div>
+                <p class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Academic Batches</p>
+                <div class="flex items-baseline gap-2">
+                    <span class="text-4xl font-black tracking-tighter">@Model.TotalWavesCount</span>
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Active Waves</span>
+                </div>
+                <div class="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mt-4 overflow-hidden">
+                    <div class="h-full bg-brand-500 rounded-full" style="width: 75%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Card -->
+        <div class="bg-brand-600 border border-brand-500 rounded-[24px] p-6 shadow-xl shadow-brand-500/20 text-white group overflow-hidden relative">
+            <div class="absolute -right-4 -bottom-4 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-1000"></div>
+            <div class="flex items-center justify-between mb-4 relative z-10">
+                <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-white">
+                    <i class="fas fa-bullseye text-xl"></i>
+                </div>
+                <i class="fas fa-shield-halved text-white/50"></i>
+            </div>
+            <div class="relative z-10">
+                <p class="text-[11px] font-bold text-white/70 uppercase tracking-[0.2em] mb-1">Global Success Rate</p>
+                <div class="flex items-baseline gap-1">
+                    <span class="text-4xl font-black tracking-tighter italic">@Math.Round(Model.OverallPassRate)%</span>
+                    <span class="text-[10px] font-bold uppercase tracking-widest opacity-60">Passed Total</span>
+                </div>
+                <p class="text-[10px] text-white/60 mt-3 font-bold uppercase tracking-wider">LMS Standard Compliant</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Container -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Branch List -->
+        <div class="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm flex flex-col h-[450px]">
+            <div class="p-8 pb-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/20">
+                <div>
+                    <h3 class="font-black text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Branch Analytics</h3>
+                    <p class="text-xl font-bold mt-1">Branch Performance Overview</p>
+                </div>
+                <div class="relative max-w-[200px] w-full hidden md:block">
+                    <input type="text" id="branchSearch" placeholder="Search branch..." class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs focus:border-brand-500 outline-none transition-all pl-10" />
+                    <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto custom-scrollbar relative">
+                <table class="w-full text-left" id="branchTable">
+                    <thead class="sticky top-0 bg-white/95 backdrop-blur-md dark:bg-slate-900/95 z-10 border-b border-slate-100 dark:border-slate-800 shadow-sm">
+                        <tr>
+                            <th class="py-3 px-8 text-[9px] font-black uppercase tracking-widest text-slate-400">Branch Name</th>
+                            <th class="py-3 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Personnel</th>
+                            <th class="py-3 text-[9px] font-black uppercase tracking-widest text-emerald-500 text-center">Passed</th>
+                            <th class="py-3 pr-8 text-[9px] font-black uppercase tracking-widest text-rose-500 text-right">Failed</th>
+                        </tr>
+                    </thead>
+                    <tbody id="branchListBody" class="divide-y divide-slate-50 dark:divide-slate-800/50">
+                        <!-- Populated via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Outcome Pie -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm flex flex-col items-center">
+            <h3 class="w-full font-black text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-6 flex justify-between items-center">
+                <span id="outcomeLogTitle">Global Outcome</span>
+                <button id="resetBranchBtn" class="hidden text-[9px] bg-slate-100 dark:bg-slate-800 hover:bg-brand-500 hover:text-white px-3 py-1.5 rounded-lg transition-all text-slate-500 uppercase font-bold focus:outline-none focus:ring-2 ring-brand-500/50">View Global</button>
+            </h3>
+            <div class="flex-1 flex flex-col items-center justify-center relative w-full">
+                <div class="relative w-full max-w-[200px]">
+                    <canvas id="resultsDoughnut"></canvas>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mb-1">
+                        <span id="doughnutPercentage" class="text-3xl font-black tracking-tighter italic">@Math.Round(Model.OverallPassRate)%</span>
+                        <span class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Success Rate</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-8 grid grid-cols-2 gap-3 w-full">
+                <div class="bg-emerald-50 dark:bg-emerald-500/5 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-500/10 text-center relative overflow-hidden group">
+                    <div class="absolute inset-0 bg-emerald-500/10 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+                    <p class="text-[10px] font-bold text-emerald-600 uppercase mb-1 relative z-10">Success</p>
+                    <p id="lblPassed" class="text-xl font-black text-emerald-700 dark:text-emerald-400 relative z-10 duration-500 transition-all">@Model.PassedAttempts</p>
+                </div>
+                <div class="bg-rose-50 dark:bg-rose-500/5 p-4 rounded-2xl border border-rose-100 dark:border-rose-500/10 text-center relative overflow-hidden group">
+                    <div class="absolute inset-0 bg-rose-500/10 translate-y-full group-hover:translate-y-0 transition-transform"></div>
+                    <p class="text-[10px] font-bold text-rose-600 uppercase mb-1 relative z-10">Failure</p>
+                    <p id="lblFailed" class="text-xl font-black text-rose-700 dark:text-rose-400 relative z-10 duration-500 transition-all">@Model.FailedAttempts</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trend Chart -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm">
+        <div class="flex items-center justify-between mb-8">
+            <h3 class="font-black text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Enrollment Telemetry</h3>
+            <div class="flex items-center gap-4 text-[10px] font-bold uppercase text-slate-400 tracking-widest">
+                <div class="flex items-center gap-2 italic">
+                    <span class="w-2 h-2 rounded-full bg-brand-500"></span>
+                    <span>Student Registration Curve</span>
+                </div>
+            </div>
+        </div>
+        <div class="h-[250px] relative">
+            <canvas id="trendChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Question Bank Inventory -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+        <div class="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/20">
+            <div>
+                <h3 class="font-black text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Inventory Telemetry</h3>
+                <p class="text-xl font-bold mt-1">Global Question Bank Overview</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="px-4 py-2 bg-brand-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-brand-500/20">
+                    <i class="fas fa-database mr-2"></i> @Model.TotalQuestionsCount Questions Total
+                </span>
+            </div>
+        </div>
+        
+        <div class="p-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                @foreach (var cat in Model.QuestionsPerCategory)
+                {
+                    <div class="bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 hover:shadow-lg transition-all border-l-4 border-l-brand-500">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider truncate mr-2">@cat.CategoryName</h4>
+                            <span class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] font-black px-2.5 py-1 rounded-xl text-slate-600 dark:text-slate-400">@cat.Count Qs</span>
+                        </div>
+                        <div class="space-y-2">
+                            @foreach (var top in cat.Topics.Take(5))
+                            {
+                                <div class="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-500 font-bold">
+                                    <span class="flex items-center gap-1.5 truncate">
+                                        <i class="fas fa-caret-right text-[8px] text-brand-500/50"></i>
+                                        @top.TopicName
+                                    </span>
+                                    <span class="text-slate-400 font-mono">@top.Count</span>
+                                </div>
+                            }
+                            @if (cat.Topics.Count > 5)
+                            {
+                                <p class="text-[9px] text-slate-400 italic mt-2">+ @(cat.Topics.Count - 5) more topics...</p>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Performers Table -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+        <div class="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 class="font-black text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Top Performing Personnel</h3>
+            <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                 <i class="fas fa-award text-amber-500"></i>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="saas-table">
+                <thead>
+                    <tr>
+                        <th>Personnel Name</th>
+                        <th>Classification</th>
+                        <th class="text-center">Most Recent Exam</th>
+                        <th class="text-center">High Score</th>
+                        <th class="text-right">Academic Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var doc in Model.TopPerformingPharmacists) {
+                        <tr>
+                            <td>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-slate-500 text-xs">@doc.Name.Substring(0,1)</div>
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-slate-900 dark:text-white">@doc.Name</span>
+                                        <span class="text-[9px] font-bold text-slate-400 uppercase">@(doc.UserCode ?? "SYS-ID")</span>
+                                    </div>
+                                </div>
+                            <td>
+                                <div class="px-3 py-1 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-bold uppercase tracking-widest inline-block select-none">MEDICAL_STAFF</div>
+                            </td>
+                            <td class="text-center italic font-semibold text-slate-500">@doc.ExamTitle</td>
+                            <td class="text-center">
+                                <span class="font-mono font-bold text-brand-600 bg-brand-50 dark:bg-brand-500/10 px-3 py-1 rounded-lg">@doc.Score</span>
+                            </td>
+                            <td class="text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <div class="h-1.5 w-16 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-500" style="width: @Math.Min(100, doc.Score)%"></div>
+                                    </div>
+                                    <span class="text-[10px] font-bold text-emerald-500">QUALIFIED</span>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            const isDark = document.documentElement.classList.contains('dark');
+            const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+            const textColor = isDark ? '#94a3b8' : '#64748b';
+
+            // Chart Defaults
+            Chart.defaults.font.family = "'Inter', sans-serif";
+            Chart.defaults.font.weight = "600";
+            Chart.defaults.font.size = 11;
+            Chart.defaults.color = textColor;
+
+            // 1. Branch Data Table + Doughnut update logic
+            const allBranches = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.PharmacistsPerBranch));
+            const globalPassed = @Model.PassedAttempts;
+            const globalFailed = @Model.FailedAttempts;
+            let currentChart = null;
+
+            function renderDoughnut(passed, failed, title) {
+                const total = passed + failed;
+                const percentage = total === 0 ? 0 : Math.round((passed / total) * 100);
+                
+                // Animation logic for numbers
+                $({ countNum: parseInt($('#doughnutPercentage').text()) || 0 }).animate({ countNum: percentage }, {
+                    duration: 600, easing: 'swing',
+                    step: function() { $('#doughnutPercentage').text(Math.floor(this.countNum) + '%'); },
+                    complete: function() { $('#doughnutPercentage').text(this.countNum + '%'); }
+                });
+
+                $('#lblPassed').text(passed);
+                $('#lblFailed').text(failed);
+                $('#outcomeLogTitle').text(title);
+
+                const ctxRes = document.getElementById('resultsDoughnut')?.getContext('2d');
+                if(!ctxRes) return;
+                
+                if (currentChart) {
+                    currentChart.data.datasets[0].data = [passed, failed];
+                    currentChart.update();
+                } else {
+                    currentChart = new Chart(ctxRes, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Success', 'Failure'],
+                            datasets: [{
+                                data: [passed, failed],
+                                backgroundColor: ['#10b981', '#f43f5e'],
+                                borderWidth: 0,
+                                spacing: 4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            cutout: '80%',
+                            plugins: { legend: { display: false } },
+                            animation: { duration: 800, easing: 'easeOutQuart' }
+                        }
+                    });
+                }
+            }
+
+            // Init global chart
+            renderDoughnut(globalPassed, globalFailed, "Global Outcome");
+
+            function renderTable(data) {
+                const tbody = $('#branchListBody');
+                tbody.empty();
+                data.forEach((b) => {
+                    // find original index to allow clicking properly even when filtered
+                    const originalIdx = allBranches.indexOf(b);
+                    const rowHtml = `
+                        <tr class="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group" onclick="selectBranch(${originalIdx})">
+                            <td class="py-4 px-8 font-bold text-slate-900 dark:text-white text-[11px] whitespace-nowrap">
+                                <i class="fas fa-building text-brand-500/50 mr-2 group-hover:text-brand-500 transition-colors"></i>${b.BranchName}
+                            </td>
+                            <td class="py-4 text-center">
+                                <span class="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md text-[10px] font-bold text-slate-500">${b.UserCount}</span>
+                            </td>
+                            <td class="py-4 text-center text-emerald-500 font-black text-xs">${b.Passed}</td>
+                            <td class="py-4 pr-8 text-right text-rose-500 font-black text-xs">${b.Failed}</td>
+                        </tr>
+                    `;
+                    tbody.append(rowHtml);
+                });
+            }
+
+            renderTable(allBranches);
+
+            window.selectBranch = function(idx) {
+                const b = allBranches[idx];
+                renderDoughnut(b.Passed, b.Failed, window.innerWidth > 768 ? b.BranchName + " Outcome" : b.BranchName);
+                $('#resetBranchBtn').removeClass('hidden');
+                
+                // Highlight row
+                $('#branchListBody tr').removeClass('bg-brand-50/50 dark:bg-brand-900/20');
+                const rowObj = $('#branchListBody tr').filter(function() {
+                    return $(this).attr('onclick').includes(`(${idx})`);
+                });
+                rowObj.addClass('bg-brand-50/50 dark:bg-brand-900/20');
+            };
+
+            $('#resetBranchBtn').on('click', function() {
+                renderDoughnut(globalPassed, globalFailed, "Global Outcome");
+                $(this).addClass('hidden');
+                $('#branchListBody tr').removeClass('bg-brand-50/50 dark:bg-brand-900/20');
+            });
+
+            $('#branchSearch').on('input', function() {
+                const val = $(this).val().toLowerCase();
+                const filtered = allBranches.filter(b => b.BranchName.toLowerCase().includes(val));
+                renderTable(filtered);
+            });
+
+            // 3. Growth
+            const ctxTrend = document.getElementById('trendChart')?.getContext('2d');
+            if (ctxTrend) {
+                const gradient = ctxTrend.createLinearGradient(0, 0, 0, 250);
+                gradient.addColorStop(0, 'rgba(6, 182, 212, 0.2)');
+                gradient.addColorStop(1, 'rgba(6, 182, 212, 0)');
+
+                new Chart(ctxTrend, {
+                    type: 'line',
+                    data: {
+                        labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WaveEnrollmentTrend.Select(x => x.Month))),
+                        datasets: [{
+                            data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WaveEnrollmentTrend.Select(x => x.EnrollmentCount))),
+                            borderColor: '#06b6d4',
+                            backgroundColor: gradient,
+                            fill: true,
+                            tension: 0.4,
+                            borderWidth: 3,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#06b6d4',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { grid: { color: gridColor, drawBorder: false } },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+}

@@ -1,0 +1,81 @@
+@page
+@model Exam.Pages.Admin.WavesModel
+@{
+    ViewData["Title"] = "Waves";
+}
+
+<h1 class="text-2xl font-bold mb-4">Waves</h1>
+
+<div class="mb-4">
+    <button class="bg-brand-600 text-white px-4 py-2 rounded" id="createWaveButton">Create New Wave</button>
+</div>
+
+<table class="datatable w-full">
+    <thead>
+        <tr>
+            <th>Wave Name</th>
+            <th>Start Date</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody id="wavesTableBody">
+        <!-- Rows will be dynamically populated -->
+    </tbody>
+</table>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        fetch('/Admin/GetWaves')
+            .then(response => response.json())
+            .then(data => {
+                const tableBody = document.getElementById('wavesTableBody');
+                data.forEach(wave => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${wave.waveName}</td>
+                        <td>${new Date(wave.startDate).toLocaleDateString()}</td>
+                        <td>
+                            <button class="bg-blue-500 text-white px-2 py-1 rounded" onclick="assignPharmacists(${wave.id})">Assign to Pharmacists</button>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            });
+
+        document.getElementById('createWaveButton').addEventListener('click', function () {
+            const waveName = prompt('Enter Wave Name:');
+            const startDate = prompt('Enter Start Date (YYYY-MM-DD):');
+
+            if (waveName) {
+                fetch('/Admin/CreateWave', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ waveName, startDate })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(`Wave created with ID: ${data.newWaveId}`);
+                    location.reload();
+                });
+            }
+        });
+    });
+
+    function assignPharmacists(waveId) {
+        const selectedUserIds = getSelectedUserIds(); // Implement this function to get selected user IDs
+        if (selectedUserIds.length === 0) {
+            alert('No users selected.');
+            return;
+        }
+
+        fetch(`/Admin/AssignUsersToWave?waveId=${waveId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(selectedUserIds)
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(`${data.assignedCount} pharmacists assigned to wave.`);
+        });
+    }
+</script>
