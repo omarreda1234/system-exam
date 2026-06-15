@@ -3112,12 +3112,36 @@ namespace Exam.Controllers
                 var colEmail = GetCol("Ø§Ù„Ø¨Ø±ÙŠØ¯", "Ø§ÙŠÙ…ÙŠÙ„", "Ø¥ÙŠÙ…ÙŠÙ„", "Email", "E-mail", "Mail");
                 var colPhone = GetCol("Ø§Ù„ØªÙ„ÙŠÙÙˆÙ†", "ØªÙ„ÙŠÙÙˆÙ†", "Ù…ÙˆØ¨Ø§ÙŠÙ„", "Ø§Ù„Ù‡Ø§ØªÙ", "Ø±Ù‚Ù…", "Phone", "PhoneNumber", "Phone Number", "Mobile");
 
-                int nameColIndex = colFullName ?? 1;
-                int codeColIndex = colUserCode ?? 2;
-                int jobColIndex = colJobTitle ?? 3;
-                int branchColIndex = colBranchName ?? 4;
-                int emailColIndex = colEmail ?? 5;
-                int phoneColIndex = colPhone ?? 6;
+                var missingColumns = new List<string>();
+                if (colFullName == null) missingColumns.Add("FullName (الاسم)");
+                if (colUserCode == null) missingColumns.Add("UserCode (الكود)");
+                if (colBranchName == null) missingColumns.Add("BranchName (الفرع/المنطقة)");
+                if (colJobTitle == null) missingColumns.Add("JobTitle (الوظيفة/Role)");
+                if (colEmail == null) missingColumns.Add("Email (البريد)");
+                if (colPhone == null) missingColumns.Add("Phone (التليفون/الموبايل)");
+
+                if (missingColumns.Any())
+                {
+                    var missingStr = string.Join(", ", missingColumns);
+                    return Json(new { 
+                        success = false, 
+                        message = $"الملف المرفوع تنقصه الأعمدة التالية أو لم يتم التعرف عليها: <br/><strong class='text-rose-600'>{missingStr}</strong>.<br/><br/>" +
+                                  "الأعمدة المطلوبة والمسميات المقبولة في ملف المتدربين هي:<br/>" +
+                                  "1. <b>الاسم</b> (Name أو Full Name أو الاسم)<br/>" +
+                                  "2. <b>الكود</b> (Code أو UserCode أو الكود)<br/>" +
+                                  "3. <b>الفرع/المنطقة</b> (Branch أو Location أو الفرع أو المنطقة)<br/>" +
+                                  "4. <b>الوظيفة</b> (JobTitle أو Role أو الوظيفة)<br/>" +
+                                  "5. <b>البريد</b> (Email أو البريد)<br/>" +
+                                  "6. <b>التليفون</b> (Phone أو Mobile أو التليفون أو رقم)"
+                    });
+                }
+
+                int nameColIndex = colFullName.Value;
+                int codeColIndex = colUserCode.Value;
+                int jobColIndex = colJobTitle.Value;
+                int branchColIndex = colBranchName.Value;
+                int emailColIndex = colEmail.Value;
+                int phoneColIndex = colPhone.Value;
 
                 var initSql = @"
                     IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'CompanyTrainees')
