@@ -49,7 +49,6 @@ builder.Services.AddTransient<IAuthService, AuthService>();
 builder.Services.AddSingleton<Exam.Services.IEmailSender, Exam.Services.SmtpEmailSender>();
 // exam service
 builder.Services.AddScoped<IExamService, ExamService>();
-builder.Services.AddScoped<GoogleSheetSyncService>();
 // SignalR
 builder.Services.AddSignalR();
 

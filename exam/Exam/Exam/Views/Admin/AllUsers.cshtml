@@ -38,11 +38,6 @@
                 Add Personnel Manually
             </button>
 
-            <button type="button" id="btnGoogleSync" class="bg-emerald-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg shadow-emerald-600/20 flex items-center gap-3 hover:bg-emerald-700">
-                <i class="fab fa-google"></i>
-                Sync from Google Sheets
-            </button>
-
             <form id="importForm" asp-action="ImportUsersFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
                 @Html.AntiForgeryToken()
                 <div class="flex-1 min-w-[300px] space-y-2">
@@ -844,40 +839,7 @@
             });
         }
 
-        $('#btnGoogleSync').on('click', function() {
-            Swal.fire({
-                title: 'Synchronizing Nodes',
-                html: 'Accessing Google Cloud Platform...<br/>Fetching personnel infrastructure data.',
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
 
-            $.ajax({
-                url: '/Admin/SyncUsersFromGoogleSheets',
-                type: 'GET',
-                success: function(res) {
-                    if (res.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Sync Successful',
-                            html: res.message,
-                            confirmButtonText: 'RELOAD REGISTRY'
-                        }).then(() => location.reload());
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Sync Failed',
-                            html: res.message
-                        });
-                    }
-                },
-                error: function() {
-                    Swal.fire('Error', 'Network request failed or server error.', 'error');
-                }
-            });
-        });
 
         function openSendMailModal(userId, userName) {
             Swal.fire({

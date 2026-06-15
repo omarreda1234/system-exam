@@ -32,7 +32,6 @@ namespace Exam.Controllers
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly string _connectionString;
         private readonly IHubContext<ImportHub> _hub2Context;
-        private readonly GoogleSheetSyncService _googleSync;
         private readonly IAuthService _authService;
 
         public AdminController(
@@ -42,7 +41,6 @@ namespace Exam.Controllers
             Microsoft.AspNetCore.SignalR.IHubContext<Exam.Hubs.ImportHub> hub2Context,
             UserManager<ApplicationUser> userManager,
             RoleManager<IdentityRole> roleManager,
-            GoogleSheetSyncService googleSync,
             IAuthService authService,
             IConfiguration configuration)
         {
@@ -52,7 +50,6 @@ namespace Exam.Controllers
             _hub2Context = hub2Context;
             _userManager = userManager;
             _roleManager = roleManager;
-            _googleSync = googleSync;
             _authService = authService;
             _connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
         }
@@ -71,7 +68,6 @@ namespace Exam.Controllers
                     "CheckExistence",
                     "DeactivateUser", 
                     "ActivateUser", 
-                    "SyncUsersFromGoogleSheets", 
                     "SendCustomEmail", 
                     "ResetUserPassword", 
                     "GetUsersWithoutCertificate", 
@@ -1206,16 +1202,7 @@ namespace Exam.Controllers
             public DateTime EndTime { get; set; }
         }
 
-        [HttpGet]
-        public async Task<IActionResult> SyncUsersFromGoogleSheets()
-        {
-            var (added, updated, errors) = await _googleSync.SyncUsersAsync();
-            if (errors.Any())
-            {
-                return Json(new { success = false, message = string.Join("<br/>", errors), added, updated });
-            }
-            return Json(new { success = true, message = $"Sync completed successfully!<br/>Added: {added}<br/>Updated: {updated}", added, updated });
-        }
+
 
         public async Task<IActionResult> AllUsers()
         {
@@ -1343,7 +1330,35 @@ namespace Exam.Controllers
                 var colCertificateCode = GetCol("CertificateCode", "Certificate");
                 var colshiftid = GetCol("ShiftId", "ShieftId", "ShieftId", "Shieft-Id", "Shift Window");
 
-                if (colEmail == null) return Json(new { success = false, message = "Excel must have an 'Email' column." });
+                var missingColumns = new List<string>();
+                if (colUserName == null) missingColumns.Add("UserName (أو Name)");
+                if (colEmail == null) missingColumns.Add("Email");
+                if (colPassword == null) missingColumns.Add("Password (أو Pass)");
+                if (colPhone == null) missingColumns.Add("Phone (أو PhoneNumber أو Mobile)");
+                if (colRoleName == null) missingColumns.Add("RoleName (أو Role)");
+                if (colUserCode == null) missingColumns.Add("UserCode (أو Code)");
+                if (colBranchName == null) missingColumns.Add("BranchName (أو Branch أو Location أو الفرع)");
+                if (colCertificateCode == null) missingColumns.Add("CertificateCode (أو Certificate)");
+                if (colshiftid == null) missingColumns.Add("ShiftId (أو Shift Window)");
+
+                if (missingColumns.Any())
+                {
+                    var missingStr = string.Join(", ", missingColumns);
+                    return Json(new { 
+                        success = false, 
+                        message = $"الملف المرفوع تنقصه الأعمدة التالية أو لم يتم التعرف عليها: <br/><strong class='text-rose-600'>{missingStr}</strong>.<br/><br/>" +
+                                  "الأعمدة المطلوبة والمسميات المقبولة هي:<br/>" +
+                                  "1. <b>UserName</b> (أو Name)<br/>" +
+                                  "2. <b>Email</b> (أو Mail)<br/>" +
+                                  "3. <b>Password</b> (أو Pass)<br/>" +
+                                  "4. <b>Phone</b> (أو Mobile)<br/>" +
+                                  "5. <b>RoleName</b> (أو Role)<br/>" +
+                                  "6. <b>UserCode</b> (أو Code)<br/>" +
+                                  "7. <b>BranchName</b> (أو Branch أو الفرع)<br/>" +
+                                  "8. <b>CertificateCode</b> (أو Certificate)<br/>" +
+                                  "9. <b>ShiftId</b> (أو Shift Window)"
+                    });
+                }
 
                 var branchList = (await _examService.GetAllBranchesAsync())
                     .Select(b => (
