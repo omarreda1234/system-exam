@@ -231,7 +231,7 @@
                         <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-8">Personnel Data</div>
                     }
 
-                    @if (User.IsInRole("Admin") || User.IsInRole("Branch Manager"))
+                    @if (User.IsInRole("Admin"))
                     {
                         <div class="relative">
                             <button type="button" onclick="document.getElementById('analytics-submenu').classList.toggle('hidden'); this.querySelector('.chevron-icon').classList.toggle('rotate-180');" 
@@ -258,6 +258,13 @@
                         <a href="@Url.Action("Certificates", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "certificates")">
                             <i class="fas fa-certificate w-5"></i>
                             <span>Certificates</span>
+                        </a>
+                    }
+                    else if (User.IsInRole("Branch Manager"))
+                    {
+                        <a href="@Url.Action("WeeklyResults", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "weeklyresults")">
+                            <i class="fas fa-calendar-week w-5"></i>
+                            <span>Weekly Analytics</span>
                         </a>
                     }
                     
