@@ -1,0 +1,9 @@
+TABLE_NAME                                                                                                                       COLUMN_NAME                                                                                                                     
+-------------------------------------------------------------------------------------------------------------------------------- --------------------------------------------------------------------------------------------------------------------------------
+StudentQuestionDetails                                                                                                           Id                                                                                                                              
+StudentQuestionDetails                                                                                                           StudentAnswerId                                                                                                                 
+StudentQuestionDetails                                                                                                           QuestionId                                                                                                                      
+StudentQuestionDetails                                                                                                           SelectedChoiceId                                                                                                                
+StudentQuestionDetails                                                                                                           IsCorrect                                                                                                                       
+
+(5 rows affected)

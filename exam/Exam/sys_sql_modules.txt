@@ -1,0 +1,11 @@
+                                                                                                                                
+--------------------------------------------------------------------------------------------------------------------------------
+sp_Admin_GetExamResultsByExamId                                                                                                 
+sp_GetStudentExamReviews                                                                                                        
+sp_Admin_GetAllExamResults                                                                                                      
+sp_Student_SubmitFinaltest                                                                                                      
+sp_CalculateFinalResult                                                                                                         
+sp_GetAllExams                                                                                                                  
+sp_GetStudentExamsByStudentId                                                                                                   
+
+(7 rows affected)

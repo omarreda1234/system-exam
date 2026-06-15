@@ -1,0 +1,10 @@
+COLUMN_NAME                                                                                                                     
+--------------------------------------------------------------------------------------------------------------------------------
+Id                                                                                                                              
+QuestionText                                                                                                                    
+Points                                                                                                                          
+Difficulty                                                                                                                      
+IsActive                                                                                                                        
+CategoryId                                                                                                                      
+
+(6 rows affected)

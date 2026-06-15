@@ -1,0 +1,348 @@
+Text                                                                                                                                                                                                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+                                                                                                                                                                                                                                                             
+CREATE PROCEDURE [dbo].[sp_Admin_GetExamResultsByExamId]
+                                                                                                                                                                                                     
+    @ExamId INT
+                                                                                                                                                                                                                                              
+AS
+                                                                                                                                                                                                                                                           
+BEGIN
+                                                                                                                                                                                                                                                        
+    SET NOCOUNT ON;
+                                                                                                                                                                                                                                          
+
+                                                                                                                                                                                                                                                             
+    SELECT 
+                                                                                                                                                                                                                                                  
+	    U.Id,
+                                                                                                                                                                                                                                                   
+        U.UserName AS StudentName,
+                                                                                                                                                                                                                           
+        U.Email AS StudentEmail,
+                                                                                                                                                                                                                             
+        ISNULL(SA.[Status], 'Not Started') AS [Status],
+                                                                                                                                                                                                      
+        ISNULL(SA.TotalScore, 0) AS Score,
+                                                                                                                                                                                                                   
+        ISNULL(SA.IsPassed, 0) AS IsPassed,
+                                                                                                                                                                                                                  
+        SA.Status AS CompletionDate
+                                                                                                                                                                                                                          
+    FROM dbo.ExamAssignments EA
+                                                                                                                                                                                                                              
+    INNER JOIN dbo.AspNetUsers U ON EA.StudentId = U.Id
+                                                                                                                                                                                                      
+    LEFT JOIN dbo.StudentAnswers SA ON EA.ExamId = SA.ExamId AND EA.StudentId = SA.StudentId
+                                                                                                                                                                 
+    WHERE EA.ExamId = @ExamId
+                                                                                                                                                                                                                                
+    ORDER BY Score DESC, StudentName ASC;
+                                                                                                                                                                                                                    
+END
+                                                                                                                                                                                                                                                          
+Text                                                                                                                                                                                                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+                                                                                                                                                                                                                                                             
+CREATE PROCEDURE sp_GetStudentExamReviews
+                                                                                                                                                                                                                    
+    @ExamId INT,
+                                                                                                                                                                                                                                             
+    @StudentId NVARCHAR(450)
+                                                                                                                                                                                                                                 
+AS
+                                                                                                                                                                                                                                                           
+BEGIN
+                                                                                                                                                                                                                                                        
+    DECLARE @AttemptId INT;
+                                                                                                                                                                                                                                  
+    SELECT TOP 1 @AttemptId = Id 
+                                                                                                                                                                                                                            
+    FROM StudentAnswers 
+                                                                                                                                                                                                                                     
+    WHERE ExamId = @ExamId AND StudentId = @StudentId;
+                                                                                                                                                                                                       
+
+                                                                                                                                                                                                                                                             
+    SELECT 
+                                                                                                                                                                                                                                                  
+        q.Id AS QuestionId,
+                                                                                                                                                                                                                                  
+        q.QuestionText,
+                                                                                                                                                                                                                                      
+        qt.TypeName AS QuestionType, -- ??? ?????? (MCQ, True/False, etc.)
+                                                                                                                                                                                   
+        q.Points,
+                                                                                                                                                                                                                                            
+        c.Id AS ChoiceId,
+                                                                                                                                                                                                                                    
+        c.ChoiceText,
+                                                                                                                                                                                                                                        
+        c.IsCorrect AS IsRightAnswer, -- ?? ?? ??????? ???? ?? ???????
+                                                                                                                                                                                       
+        CASE 
+                                                                                                                                                                                                                                                
+            WHEN sqd.SelectedChoiceId = c.Id THEN 1 
+                                                                                                                                                                                                         
+            ELSE 0 
+                                                                                                                                                                                                                                          
+        END AS IsStudentSelection -- ?? ?????? ????? ??????? ???
+                                                                                                                                                                                             
+    FROM Questions q
+                                                                                                                                                                                                                                         
+    INNER JOIN QuestionTypes qt ON q.QuestionTypeId = qt.Id
+                                                                                                                                                                                                  
+    INNER JOIN Choices c ON q.Id = c.QuestionId
+                                                                                                                                                                                                              
+    LEFT JOIN StudentQuestionDetails sqd ON q.Id = sqd.QuestionId AND sqd.StudentAnswerId = @AttemptId
+                                                                                                                                                       
+    WHERE q.ExamId = @ExamId
+                                                                                                                                                                                                                                 
+    ORDER BY q.Id, c.Id;
+                                                                                                                                                                                                                                     
+END
+                                                                                                                                                                                                                                                          
+Text                                                                                                                                                                                                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+                                                                                                                                                                                                                                                             
+CREATE PROCEDURE [dbo].[sp_Admin_GetAllExamResults]
+                                                                                                                                                                                                          
+AS
+                                                                                                                                                                                                                                                           
+BEGIN
+                                                                                                                                                                                                                                                        
+    SET NOCOUNT ON;
+                                                                                                                                                                                                                                          
+
+                                                                                                                                                                                                                                                             
+    SELECT 
+                                                                                                                                                                                                                                                  
+        E.Title AS ExamName, -- ????? ??? ????????
+                                                                                                                                                                                                           
+        U.Id,
+                                                                                                                                                                                                                                                
+        U.UserName AS StudentName,
+                                                                                                                                                                                                                           
+        U.Email AS StudentEmail,
+                                                                                                                                                                                                                             
+        ISNULL(SA.[Status], 'Not Started') AS [Status],
+                                                                                                                                                                                                      
+        ISNULL(SA.TotalScore, 0) AS Score,
+                                                                                                                                                                                                                   
+        ISNULL(SA.IsPassed, 0) AS IsPassed,
+                                                                                                                                                                                                                  
+        SA.Status AS CompletionDate
+                                                                                                                                                                                                                          
+    FROM dbo.ExamAssignments EA
+                                                                                                                                                                                                                              
+    INNER JOIN dbo.AspNetUsers U ON EA.StudentId = U.Id
+                                                                                                                                                                                                      
+    INNER JOIN dbo.Exams E ON EA.ExamId = E.Id -- ????? ?? ???? ??????????
+                                                                                                                                                                                   
+    LEFT JOIN dbo.StudentAnswers SA ON EA.ExamId = SA.ExamId AND EA.StudentId = SA.StudentId
+                                                                                                                                                                 
+    ORDER BY E.Title ASC, Score DESC; -- ??????? ??? ???????? ?????
+                                                                                                                                                                                          
+END
+                                                                                                                                                                                                                                                          
+Text                                                                                                                                                                                                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+                                                                                                                                                                                                                                                             
+CREATE PROCEDURE [dbo].[sp_CalculateFinalResult]
+                                                                                                                                                                                                             
+    @AttemptId INT
+                                                                                                                                                                                                                                           
+AS
+                                                                                                                                                                                                                                                           
+BEGIN
+                                                                                                                                                                                                                                                        
+    SET NOCOUNT ON;
+                                                                                                                                                                                                                                          
+
+                                                                                                                                                                                                                                                             
+    DECLARE @FinalScore DECIMAL(5,2);
+                                                                                                                                                                                                                        
+    DECLARE @PassPercentage DECIMAL(5,2);
+                                                                                                                                                                                                                    
+    DECLARE @TotalQuestions INT;
+                                                                                                                                                                                                                             
+    DECLARE @CorrectAnswers INT;
+                                                                                                                                                                                                                             
+
+                                                                                                                                                                                                                                                             
+    SELECT 
+                                                                                                                                                                                                                                                  
+        @FinalScore = SUM(CASE WHEN SQD.IsCorrect = 1 THEN Q.Points ELSE 0 END),
+                                                                                                                                                                             
+        @CorrectAnswers = SUM(CASE WHEN SQD.IsCorrect = 1 THEN 1 ELSE 0 END),
+                                                                                                                                                                                
+        @TotalQuestions = COUNT(SQD.Id)
+                                                                                                                                                                                                                      
+    FROM StudentQuestionDetails SQD
+                                                                                                                                                                                                                          
+    JOIN Questions Q ON SQD.QuestionId = Q.Id
+                                                                                                                                                                                                                
+    WHERE SQD.StudentAnswerId = @AttemptId;
+                                                                                                                                                                                                                  
+
+                                                                                                                                                                                                                                                             
+    SELECT @PassPercentage = E.PassPercentage
+                                                                                                                                                                                                                
+    FROM Exams E
+                                                                                                                                                                                                                                             
+    JOIN StudentAnswers SA ON E.Id = SA.ExamId
+                                                                                                                                                                                                               
+    WHERE SA.Id = @AttemptId;
+                                                                                                                                                                                                                                
+
+                                                                                                                                                                                                                                                             
+    UPDATE StudentAnswers
+                                                                                                                                                                                                                                    
+    SET TotalScore = ISNULL(@FinalScore, 0),
+                                                                                                                                                                                                                 
+        CorrectAnswers = ISNULL(@CorrectAnswers, 0),
+                                                                                                                                                                                                         
+        TotalQuestions = ISNULL(@TotalQuestions, 0),
+                                                                                                                                                                                                         
+        EndTime = GETDATE(),
+                                                                                                                                                                                                                                 
+        [Status] = 'Completed',
+                                                                                                                                                                                                                              
+        -- ????? ?????? ?? ?????? ??????
+                                                                                                                                                                                                                     
+        IsPassed = CASE WHEN ISNULL(@FinalScore, 0) >= @PassPercentage THEN 1 ELSE 0 END
+                                                                                                                                                                     
+    WHERE Id = @AttemptId;
+                                                                                                                                                                                                                                   
+
+                                                                                                                                                                                                                                                             
+    SELECT 
+                                                                                                                                                                                                                                                  
+        TotalScore, 
+                                                                                                                                                                                                                                         
+        CorrectAnswers, 
+                                                                                                                                                                                                                                     
+        TotalQuestions, 
+                                                                                                                                                                                                                                     
+        IsPassed, 
+                                                                                                                                                                                                                                           
+        [Status] 
+                                                                                                                                                                                                                                            
+    FROM StudentAnswers 
+                                                                                                                                                                                                                                     
+    WHERE Id = @AttemptId;
+                                                                                                                                                                                                                                   
+END
+                                                                                                                                                                                                                                                          
+Text                                                                                                                                                                                                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+                                                                                                                                                                                                                                                             
+CREATE PROCEDURE [dbo].[sp_GetAllExams]
+                                                                                                                                                                                                                      
+AS
+                                                                                                                                                                                                                                                           
+BEGIN
+                                                                                                                                                                                                                                                        
+    SET NOCOUNT ON;
+                                                                                                                                                                                                                                          
+
+                                                                                                                                                                                                                                                             
+    SELECT 
+                                                                                                                                                                                                                                                  
+        E.[Id], 
+                                                                                                                                                                                                                                             
+        E.[Title], 
+                                                                                                                                                                                                                                          
+        E.[Description], 
+                                                                                                                                                                                                                                    
+        E.[StartTime], 
+                                                                                                                                                                                                                                      
+        E.[EndTime], 
+                                                                                                                                                                                                                                        
+        E.[DurationInMinutes], 
+                                                                                                                                                                                                                              
+        E.[PassPercentage], 
+                                                                                                                                                                                                                                 
+        E.[IsActive],
+                                                                                                                                                                                                                                        
+        E.[ExamTypeId],
+                                                                                                                                                                                                                                      
+        ET.[TypeName] AS [ExamTypeName],
+                                                                                                                                                                                                                     
+        -- ???? ??? ??????? ???????? ????????? ?? ?????? ??????
+                                                                                                                                                                                              
+        (SELECT COUNT(*) FROM [ExamQuestions] EQ WHERE EQ.[ExamId] = E.[Id]) AS [TotalQuestions],
+                                                                                                                                                            
+        -- ???? ??? ????????? ???? ??? ??? ??? ????????
+                                                                                                                                                                                                      
+        (SELECT COUNT(*) FROM [StudentAnswers] SA WHERE SA.[ExamId] = E.[Id]) AS [TotalAttempts]
+                                                                                                                                                             
+    FROM [Exams] E
+                                                                                                                                                                                                                                           
+    LEFT JOIN [ExamTypes] ET ON E.[ExamTypeId] = ET.[Id]
+                                                                                                                                                                                                     
+    ORDER BY E.[StartTime] DESC;
+                                                                                                                                                                                                                             
+END;
+                                                                                                                                                                                                                                                         
+Text                                                                                                                                                                                                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+                                                                                                                                                                                                                                                             
+CREATE PROCEDURE [dbo].[sp_GetStudentExamsByStudentId]
+                                                                                                                                                                                                       
+    @StudentId NVARCHAR(450)
+                                                                                                                                                                                                                                 
+AS
+                                                                                                                                                                                                                                                           
+BEGIN
+                                                                                                                                                                                                                                                        
+    SET NOCOUNT ON;
+                                                                                                                                                                                                                                          
+
+                                                                                                                                                                                                                                                             
+    SELECT 
+                                                                                                                                                                                                                                                  
+        E.Id AS ExamId,
+                                                                                                                                                                                                                                      
+        E.Title AS ExamTitle,
+                                                                                                                                                                                                                                
+        E.Description AS ExamDescription,
+                                                                                                                                                                                                                    
+        E.StartTime AS ExamDate,
+                                                                                                                                                                                                                             
+        E.EndTime,
+                                                                                                                                                                                                                                           
+        E.DurationInMinutes,
+                                                                                                                                                                                                                                 
+        E.PassPercentage,
+                                                                                                                                                                                                                                    
+        ISNULL(SA.[Status], 'Not Started') AS StudentStatus
+                                                                                                                                                                                                  
+    FROM dbo.Exams E
+                                                                                                                                                                                                                                         
+    INNER JOIN dbo.ExamAssignments EA ON E.Id = EA.ExamId
+                                                                                                                                                                                                    
+    LEFT JOIN dbo.StudentAnswers SA ON E.Id = SA.ExamId AND SA.StudentId = @StudentId
+                                                                                                                                                                        
+    WHERE EA.StudentId = @StudentId
+                                                                                                                                                                                                                          
+      AND E.IsActive = 1
+                                                                                                                                                                                                                                     
+      -- ??????? ???: ???? ??? ?????????? ???? ?? ???? ??? (NULL) 
+                                                                                                                                                                                           
+      -- ??????? ?? ???? ???? ??? (Completed, Fail_TabSwitch, Fail_Timeout, ???)
+                                                                                                                                                                             
+      AND (SA.[Status] IS NULL) 
+                                                                                                                                                                                                                             
+      AND E.EndTime >= GETDATE() 
+                                                                                                                                                                                                                            
+    ORDER BY E.StartTime ASC; 
+                                                                                                                                                                                                                               
+END;
+                                                                                                                                                                                                                                                         
