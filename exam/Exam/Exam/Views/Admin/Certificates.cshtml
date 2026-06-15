@@ -2,7 +2,8 @@
 @{
     ViewData["Title"] = "Certificates Management";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
-    var exams = ViewBag.Exams as IEnumerable<Exam.DTOs.ExamDropdownDto> ?? Enumerable.Empty<Exam.DTOs.ExamDropdownDto>();
+    var waves = ViewBag.Waves as IEnumerable<Exam.DTOs.WaveDto> ?? Enumerable.Empty<Exam.DTOs.WaveDto>();
+    var selectedWaveId = ViewBag.SelectedWaveId as int? ?? 0;
     var selectedExamId = ViewBag.SelectedExamId as int? ?? 0;
 }
 
@@ -53,22 +54,16 @@
             </div>
 
             <div class="space-y-2">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Selected Module</label>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Selected Wave</label>
                 <select id="examFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3 text-sm font-bold min-w-[280px]">
-                    @{
-                        var groupedExams = exams.GroupBy(e => e.TypeName).OrderByDescending(g => g.Key);
-                        foreach (var group in groupedExams)
+                    <optgroup label="TRAINING BATCHES">
+                        @foreach (var w in waves)
                         {
-                            <optgroup label="@(group.Key?.ToUpper() ?? "OTHER")">
-                                @foreach (var e in group)
-                                {
-                                    <option value="@e.Id" selected="@(e.Id == selectedExamId ? "selected" : null)">
-                                        @e.Title.ToUpper() @(!string.IsNullOrEmpty(e.WaveName) ? $"- {e.WaveName.ToUpper()}" : "") (@e.StartTime.ToString("MMM yyyy"))
-                                    </option>
-                                }
-                            </optgroup>
+                            <option value="@w.Id" selected="@(w.Id == selectedWaveId ? "selected" : null)">
+                                @w.WaveName.ToUpper() @(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")
+                            </option>
                         }
-                    }
+                    </optgroup>
                 </select>
             </div>
 
@@ -191,7 +186,7 @@
                 $examFilter.empty();
 
                 if (data.length === 0) {
-                    $examFilter.append('<option value="0">No exams found</option>');
+                    $examFilter.append('<option value="0">No waves found</option>');
                     return;
                 }
 
@@ -218,7 +213,7 @@
             const type = $('#typeFilter').val();
             const year = $('#yearFilter').val();
             const month = $('#monthFilter').val();
-            let newUrl = '/Admin/Certificates?examId=' + $(this).val() + '&typeId=' + type + '&year=' + year + '&month=' + month; 
+            let newUrl = '/Admin/Certificates?waveId=' + $(this).val() + '&typeId=' + type + '&year=' + year + '&month=' + month; 
             if (window.location.search.includes('iframe=true')) newUrl += '&iframe=true';
             window.location = newUrl;
         });

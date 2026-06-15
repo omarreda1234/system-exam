@@ -558,6 +558,131 @@ namespace Exam.Services
             return rows;
         }
 
+        /// <summary>
+        /// Aggregate all exam results for every student in a wave.
+        /// For each student we sum up their FinalScore across all completed exams
+        /// in that wave (regardless of how many there are, but the denominator is
+        /// the total TotalPoints of ALL exams in the wave so the percentage is fair).
+        /// Certification thresholds:
+        ///   Pharmacists  – certified ≥ 75% (150/200), pass ≥ 70% (140/200)
+        ///   Assistants   – certified ≥ 75% (75/100),  pass ≥ 70% (70/100)
+        /// </summary>
+        public async Task<IEnumerable<Exam.DTOs.WaveStudentResultDto>> GetWaveAggregateResultsAsync(int waveId)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            // 1. Get wave name
+            var waveName = await conn.QueryFirstOrDefaultAsync<string>(
+                "SELECT WaveName FROM TrainingWaves WHERE Id = @WaveId",
+                new { WaveId = waveId });
+
+            // 2. All exams in this wave with their total points
+            var waveExams = (await conn.QueryAsync<dynamic>(
+                "SELECT Id, TotalPoints FROM Exams WHERE WaveId = @WaveId",
+                new { WaveId = waveId })).ToList();
+
+            int totalExamsInWave = waveExams.Count;
+            decimal totalAvailablePoints = waveExams.Sum(e => (decimal)(e.TotalPoints ?? 0));
+
+            // 3. All students assigned to this wave
+            var students = (await conn.QueryAsync<dynamic>(@"
+                SELECT DISTINCT
+                    u.Id               AS UserId,
+                    ISNULL(u.FullName, u.UserName) AS StudentName,
+                    u.Email            AS StudentEmail,
+                    u.UserCode,
+                    b.BranchName,
+                    r.Name             AS RoleName
+                FROM UserWaves uw
+                INNER JOIN AspNetUsers u  ON u.Id = uw.UserId
+                LEFT  JOIN Branches b     ON b.Id = u.BranchId
+                LEFT  JOIN AspNetUserRoles ur ON ur.UserId = u.Id
+                LEFT  JOIN AspNetRoles r       ON r.Id = ur.RoleId
+                WHERE uw.WaveId = @WaveId
+                  AND (uw.IsDeactivated IS NULL OR uw.IsDeactivated = 0)",
+                new { WaveId = waveId })).ToList();
+
+            // 4. All attempts for all exams in this wave (best attempt per student per exam)
+            var allAttempts = (await conn.QueryAsync<dynamic>(@"
+                SELECT 
+                    uea.UserId,
+                    uea.ExamId,
+                    uea.Status,
+                    ISNULL(uea.FinalScore, 0) AS FinalScore,
+                    uea.CertificateCode,
+                    uea.AttemptNumber,
+                    ROW_NUMBER() OVER (PARTITION BY uea.UserId, uea.ExamId ORDER BY uea.AttemptNumber DESC) AS rn
+                FROM UserExamAttempts uea
+                INNER JOIN Exams e ON e.Id = uea.ExamId
+                WHERE e.WaveId = @WaveId",
+                new { WaveId = waveId })).ToList();
+
+            // Keep only latest attempt per (user, exam)
+            var latestAttempts = allAttempts.Where(a => (int)a.rn == 1).ToList();
+
+            var results = new List<Exam.DTOs.WaveStudentResultDto>();
+
+            foreach (var student in students)
+            {
+                string userId = (string)student.UserId;
+                string roleName = (string)student.RoleName ?? "";
+
+                var studentAttempts = latestAttempts.Where(a => (string)a.UserId == userId).ToList();
+                int examsCompleted = studentAttempts.Count(a => (string)a.Status == "Completed");
+                int examsAssigned  = studentAttempts.Count;
+                decimal totalScore = studentAttempts
+                    .Where(a => (string)a.Status == "Completed")
+                    .Sum(a => (decimal)a.FinalScore);
+
+                // Certificate code from any completed attempt (latest)
+                string certCode = studentAttempts
+                    .Where(a => (string)a.Status == "Completed" && !string.IsNullOrEmpty((string)a.CertificateCode))
+                    .Select(a => (string)a.CertificateCode)
+                    .FirstOrDefault();
+
+                // Determine thresholds based on role
+                bool isPharmacist = roleName.ToLower().Contains("pharmacist") || roleName.Contains("صيدل");
+                double percentage = totalAvailablePoints > 0
+                    ? (double)(totalScore / totalAvailablePoints) * 100
+                    : 0;
+                double certThreshold = 75.0;
+                double passThreshold = 70.0;
+
+                string waveStatus;
+                if (examsCompleted < totalExamsInWave)
+                    waveStatus = "INCOMPLETE";
+                else if (percentage >= certThreshold)
+                    waveStatus = "CERTIFIED";
+                else if (percentage >= passThreshold)
+                    waveStatus = "PASS";
+                else
+                    waveStatus = "FAILED";
+
+                results.Add(new Exam.DTOs.WaveStudentResultDto
+                {
+                    UserId            = userId,
+                    StudentName       = (string)student.StudentName ?? "",
+                    StudentEmail      = (string)student.StudentEmail ?? "",
+                    UserCode          = (string)student.UserCode ?? "",
+                    BranchName        = (string)student.BranchName ?? "",
+                    RoleName          = roleName,
+                    WaveName          = waveName ?? "",
+                    WaveId            = waveId,
+                    TotalExamsInWave  = totalExamsInWave,
+                    ExamsCompleted    = examsCompleted,
+                    ExamsAssigned     = examsAssigned,
+                    TotalScore        = totalScore,
+                    TotalAvailable    = totalAvailablePoints,
+                    WaveStatus        = waveStatus,
+                    CertificateCode   = certCode
+                });
+            }
+
+            return results.OrderBy(r => r.StudentName);
+        }
+
+
         public async Task<IEnumerable<adminExamDto>> GetAllExamsWithDetailsAsync()
         {
             using var conn = new SqlConnection(_connectionString);
@@ -1306,7 +1431,9 @@ WHERE U.Id = @UserId;";
                     row.FinalScore = (decimal)aggregateScore;
                     row.TotalScoreAvailable = (decimal)totalPoints;
                     row.Score = (decimal)((aggregateScore / totalPoints) * 100.0);
-                    row.IsPassed = row.Status == "Completed"; 
+                    
+                    double passThreshold = isPharmacist ? 140.0 : 70.0;
+                    row.IsPassed = row.Status == "Completed" && aggregateScore >= passThreshold; 
                 }
             }
 
@@ -1489,7 +1616,11 @@ WHERE U.Id = @UserId;";
                 UPDATE UserExamAttempts
                 SET FinalScore = CASE WHEN @IsFinalExam = 1 THEN @AbsolutePoints ELSE (CASE WHEN @AchievementPercentage >= @PassPercentage THEN FinalScore ELSE FinalScore END) END,
                     Score = @AchievementPercentage, 
-                    IsPassed = CASE WHEN @WaveId > 0 THEN 1 ELSE (CASE WHEN @AchievementPercentage >= @PassPercentage THEN 1 ELSE 0 END) END
+                    IsPassed = CASE 
+                        WHEN @IsFinalExam = 1 AND @WaveId > 0 THEN (CASE WHEN @AchievementPercentage >= @PassPercentage THEN 1 ELSE 0 END)
+                        WHEN @WaveId > 0 THEN 1 
+                        ELSE (CASE WHEN @AchievementPercentage >= @PassPercentage THEN 1 ELSE 0 END) 
+                    END
                 WHERE Id = @AttemptId;
             ";
 

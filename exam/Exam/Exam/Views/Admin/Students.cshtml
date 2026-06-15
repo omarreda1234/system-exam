@@ -162,13 +162,21 @@
                                 }
                             </td>
                             <td class="hidden xl:table-cell">
-                                 @if(s.Status.StartsWith("Completed") && s.IsPassed == true && !string.IsNullOrEmpty(s.CertificateCode)) {
-                                     <div class="flex flex-col">
-                                         <span class="text-[9px] font-mono text-slate-400">@s.CertificateCode</span>
-                                         <span class="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Issued</span>
-                                     </div>
-                                 } else if(s.Status.StartsWith("Completed") && s.IsPassed == true) {
-                                     <span class="text-[9px] font-black text-rose-400 uppercase tracking-widest">Pending Generation</span>
+                                 @{
+                                     bool isPharmacist = s.RoleName != null && (s.RoleName.ToLower().Contains("pharmacist") || s.RoleName.Contains("صيدل"));
+                                     bool isEligibleForCert = isPharmacist ? s.FinalScore >= 150 : s.FinalScore >= 75;
+                                 }
+                                 @if(s.Status.StartsWith("Completed") && s.IsPassed == true && isEligibleForCert) {
+                                     if (!string.IsNullOrEmpty(s.CertificateCode)) {
+                                         <div class="flex flex-col">
+                                             <span class="text-[9px] font-mono text-slate-400">@s.CertificateCode</span>
+                                             <span class="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Issued</span>
+                                         </div>
+                                     } else {
+                                         <span class="text-[9px] font-black text-rose-400 uppercase tracking-widest">Pending Generation</span>
+                                     }
+                                 } else if(s.Status.StartsWith("Completed") && s.IsPassed == true && !isEligibleForCert) {
+                                     <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">No Certificate</span>
                                  } else if(s.Status.StartsWith("Completed") && s.IsPassed == null) {
                                      <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Not Applicable</span>
                                  } else {
@@ -177,7 +185,7 @@
                              </td>
                             <td class="text-right px-8">
                                 <div class="flex items-center justify-end gap-2">
-                                    @if(s.IsPassed == true) {
+                                    @if(s.IsPassed == true && isEligibleForCert) {
                                         <button class="p-2.5 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-xl transition-all" onclick="sendSelectedCerts(@selectedExamId, ['@s.Id'])" title="Send Certificate">
                                             <i class="fas fa-certificate"></i>
                                         </button>

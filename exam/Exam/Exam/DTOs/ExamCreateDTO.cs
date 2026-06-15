@@ -297,6 +297,36 @@ namespace Exam.DTOs
         public DateTime? StartDate { get; set; }
     }
 
+    // Aggregate result per student for an entire wave (all 12 exams)
+    public class WaveStudentResultDto
+    {
+        public string UserId { get; set; }
+        public string StudentName { get; set; }
+        public string StudentEmail { get; set; }
+        public string UserCode { get; set; }
+        public string BranchName { get; set; }
+        public string RoleName { get; set; }
+        public string WaveName { get; set; }
+        public int WaveId { get; set; }
+
+        // Aggregated exam data
+        public int TotalExamsInWave { get; set; }         // total exams in the wave
+        public int ExamsCompleted { get; set; }           // how many the student completed
+        public int ExamsAssigned { get; set; }            // how many were assigned to them
+
+        public decimal TotalScore { get; set; }           // sum of FinalScore across all completed exams
+        public decimal TotalAvailable { get; set; }       // sum of TotalPoints across all wave exams
+
+        public decimal AggregatePercentage => TotalAvailable > 0 ? (TotalScore / TotalAvailable) * 100 : 0;
+
+        // Derived status
+        public string WaveStatus { get; set; }            // "CERTIFIED" / "PASS" / "FAILED" / "INCOMPLETE"
+        public bool IsFullyCompleted => ExamsCompleted >= TotalExamsInWave;
+
+        public string CertificateCode { get; set; }
+    }
+
+
     public class UserShiftDto
     {
         public int ShiftId { get; set; }

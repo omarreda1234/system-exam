@@ -638,13 +638,56 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> WaveyResults(int? examId, int? typeId = null, int? month = null, int? year = null)
+        public async Task<IActionResult> WaveyResults(int? waveId, int? month = null, int? year = null)
         {
-            return await Students(examId, typeId, month, year, "wavey");
+            var waves = (await _examService.GetAllWavesAsync()).ToList();
+
+            // Apply year/month filters on Wave StartDate if provided
+            if (year.HasValue && year.Value > 0)
+                waves = waves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Year == year.Value).ToList();
+            if (month.HasValue && month.Value > 0)
+                waves = waves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Month == month.Value).ToList();
+
+            ViewBag.Waves = waves;
+            ViewBag.SelectedMonth = month;
+            ViewBag.SelectedYear = year;
+
+            int selectedWaveId = waveId ?? 0;
+            if (selectedWaveId <= 0)
+                selectedWaveId = waves.FirstOrDefault()?.Id ?? 0;
+            ViewBag.SelectedWaveId = selectedWaveId;
+
+            if (selectedWaveId > 0)
+            {
+                var results = (await _examService.GetWaveAggregateResultsAsync(selectedWaveId)).ToList();
+
+                // Branch manager restriction
+                if (User.IsInRole("Branch Manager"))
+                {
+                    var currentUser = await _userManager.GetUserAsync(User);
+                    if (currentUser != null && currentUser.BranchId.HasValue)
+                    {
+                        using var conn = new SqlConnection(_connectionString);
+                        var branchName = await conn.QueryFirstOrDefaultAsync<string>(
+                            "SELECT BranchName FROM Branches WHERE Id = @Id",
+                            new { Id = currentUser.BranchId.Value });
+                        if (!string.IsNullOrEmpty(branchName))
+                            results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase)).ToList();
+                        else
+                            results = new List<Exam.DTOs.WaveStudentResultDto>();
+                    }
+                    else
+                        results = new List<Exam.DTOs.WaveStudentResultDto>();
+                }
+
+                return View(results);
+            }
+
+            return View(new List<Exam.DTOs.WaveStudentResultDto>());
         }
 
         [HttpGet]
-        public async Task<IActionResult> Certificates(int? examId, int? typeId = null, int? month = null, int? year = null)
+        public async Task<IActionResult> Certificates(int? waveId, int? examId = null, int? typeId = null, int? month = null, int? year = null)
         {
             var examTypes = (await _examService.GetAllExamTypesAsync())
                 .Where(t => t.TypeName != null && t.TypeName.ToLower().Contains("wave"))
@@ -654,27 +697,58 @@ namespace Exam.Controllers
             ViewBag.SelectedMonth = month;
             ViewBag.SelectedYear = year;
 
-            var exams = (await _examService.GetActiveExamsForDropdownAsync(typeId, month, year))
-                .Where(e => e.TypeName != null && e.TypeName.ToLower().Contains("wave"))
-                .ToList();
-            ViewBag.Exams = exams;
+            var waves = (await _examService.GetAllWavesAsync()).ToList();
 
-            var selectedId = examId ?? exams.OrderByDescending(e => e.StartTime).FirstOrDefault()?.Id ?? 0;
-            ViewBag.SelectedExamId = selectedId;
-
-            if (selectedId > 0)
+            // Apply year/month filters on Wave StartDate if provided
+            if (year.HasValue && year.Value > 0)
             {
-                var exam = await _examService.GetExamByIdAsync(selectedId);
+                waves = waves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Year == year.Value).ToList();
+            }
+            if (month.HasValue && month.Value > 0)
+            {
+                waves = waves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Month == month.Value).ToList();
+            }
+
+            ViewBag.Waves = waves;
+
+            using var conn = new SqlConnection(_connectionString);
+            int selectedWaveId = waveId ?? 0;
+            if (selectedWaveId <= 0 && examId.HasValue && examId.Value > 0)
+            {
+                // Try to find the WaveId from the examId
+                selectedWaveId = await conn.QueryFirstOrDefaultAsync<int>(
+                    "SELECT WaveId FROM Exams WHERE Id = @ExamId",
+                    new { ExamId = examId.Value });
+            }
+
+            if (selectedWaveId <= 0)
+            {
+                selectedWaveId = waves.FirstOrDefault()?.Id ?? 0;
+            }
+
+            ViewBag.SelectedWaveId = selectedWaveId;
+
+            int finalExamId = 0;
+            if (selectedWaveId > 0)
+            {
+                finalExamId = await conn.QueryFirstOrDefaultAsync<int>(
+                    "SELECT TOP 1 Id FROM Exams WHERE WaveId = @WaveId AND IsFinalExam = 1 ORDER BY StartTime DESC",
+                    new { WaveId = selectedWaveId });
+            }
+            ViewBag.SelectedExamId = finalExamId;
+
+            if (finalExamId > 0)
+            {
+                var exam = await _examService.GetExamByIdAsync(finalExamId);
                 if (exam != null)
                 {
-                    var results = await _examService.GetExamResultsByExamIdAsync(selectedId);
+                    var results = await _examService.GetExamResultsByExamIdAsync(finalExamId);
                     
                     if (User.IsInRole("Branch Manager"))
                     {
                         var currentUser = await _userManager.GetUserAsync(User);
                         if (currentUser != null && currentUser.BranchId.HasValue)
                         {
-                            using var conn = new SqlConnection(_connectionString);
                             var branchName = await conn.QueryFirstOrDefaultAsync<string>(
                                 "SELECT BranchName FROM Branches WHERE Id = @Id", 
                                 new { Id = currentUser.BranchId.Value });
@@ -688,8 +762,22 @@ namespace Exam.Controllers
                             results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
                     }
                     
-                    // Since wave exams don't have pass/fail, return all completed exam results for certificate generation
-                    var passedResults = results.Where(r => r.Status == "Completed").ToList();
+                    // Filter who is eligible for certificate based on the new rules:
+                    // Pharmacists: aggregate score >= 150
+                    // Assistants/Others: aggregate score >= 75
+                    var passedResults = results.Where(r => {
+                        if (r.Status != "Completed") return false;
+                        
+                        bool isPharmacist = r.RoleName != null && (r.RoleName.ToLower().Contains("pharmacist") || r.RoleName.Contains("صيدل"));
+                        if (isPharmacist)
+                        {
+                            return r.FinalScore >= 150;
+                        }
+                        else
+                        {
+                            return r.FinalScore >= 75;
+                        }
+                    }).ToList();
                     
                     ViewBag.ExamTitle = exam.Title;
                     return View(passedResults);
@@ -708,8 +796,31 @@ namespace Exam.Controllers
         [HttpGet]
         public async Task<IActionResult> GetFilteredExams(int? typeId, int? month, int? year, string mode = "weekly")
         {
+            if (mode == "cert")
+            {
+                var waves = (await _examService.GetAllWavesAsync()).ToList();
+
+                if (year.HasValue && year.Value > 0)
+                {
+                    waves = waves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Year == year.Value).ToList();
+                }
+                if (month.HasValue && month.Value > 0)
+                {
+                    waves = waves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Month == month.Value).ToList();
+                }
+
+                var results = waves.Select(w => new {
+                    id = w.Id,
+                    title = w.StartDate.HasValue 
+                        ? $"{w.WaveName.ToUpper()} ({w.StartDate.Value.ToString("MMM yyyy")})"
+                        : w.WaveName.ToUpper(),
+                    typeName = "TRAINING BATCHES"
+                });
+                return Json(results);
+            }
+
             var exams = await _examService.GetActiveExamsForDropdownAsync(typeId, month, year);
-            if (mode == "wavey" || mode == "cert")
+            if (mode == "wavey")
             {
                 exams = exams.Where(e => (e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave")).ToList();
             }
@@ -717,14 +828,14 @@ namespace Exam.Controllers
             {
                 exams = exams.Where(e => !((e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave"))).ToList();
             }
-            var results = exams.Select(e => new {
+            var examResults = exams.Select(e => new {
                 id = e.Id,
                 title = !string.IsNullOrEmpty(e.WaveName)
                     ? $"{e.Title.ToUpper()} - {e.WaveName.ToUpper()} ({e.StartTime:MMM yyyy})"
                     : $"{e.Title.ToUpper()} ({e.StartTime:MMM yyyy})",
                 typeName = e.TypeName
             });
-            return Json(results);
+            return Json(examResults);
         }
 
         [HttpPost]
@@ -822,7 +933,19 @@ namespace Exam.Controllers
                 var examInfo = await _examService.GetExamByIdAsync(examId);
                 if (examInfo == null) return Json(new { success = false, message = "Exam not found" });
 
-                var candidates = results.Where(r => r.Status == "Completed");
+                var candidates = results.Where(r => {
+                    if (r.Status != "Completed") return false;
+                    
+                    bool isPharmacist = r.RoleName != null && (r.RoleName.ToLower().Contains("pharmacist") || r.RoleName.Contains("صيدل"));
+                    if (isPharmacist)
+                    {
+                        return r.FinalScore >= 150;
+                    }
+                    else
+                    {
+                        return r.FinalScore >= 75;
+                    }
+                });
                 if (selectedIds != null && selectedIds.Any())
                 {
                     candidates = candidates.Where(c => selectedIds.Contains(c.Id));

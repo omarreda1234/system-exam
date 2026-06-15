@@ -1,35 +1,32 @@
-@model IEnumerable<Exam.DTOs.ExamResultRowDto>
+@model IEnumerable<Exam.DTOs.WaveStudentResultDto>
 @{
-    ViewData["Title"] = "Wavey Training Success Tracker";
+    ViewData["Title"] = "Wave Performance Tracker";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
-    var exams = ViewBag.Exams as IEnumerable<Exam.DTOs.ExamDropdownDto> ?? Enumerable.Empty<Exam.DTOs.ExamDropdownDto>();
-    var selectedExamId = ViewBag.SelectedExamId as int? ?? 0;
+    var waves = ViewBag.Waves as IEnumerable<Exam.DTOs.WaveDto> ?? Enumerable.Empty<Exam.DTOs.WaveDto>();
+    var selectedWaveId = ViewBag.SelectedWaveId as int? ?? 0;
+
+    // Summary stats
+    var total      = Model.Count();
+    var certified  = Model.Count(s => s.WaveStatus == "CERTIFIED");
+    var passed     = Model.Count(s => s.WaveStatus == "PASS");
+    var failed     = Model.Count(s => s.WaveStatus == "FAILED");
+    var incomplete = Model.Count(s => s.WaveStatus == "INCOMPLETE");
 }
 
+<!-- Header / Filter Row -->
 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm">
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-8">
         <div>
-            <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Analytical Filter</h2>
+            <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Wave Analytics</h2>
             <div class="flex items-center gap-3">
-                <p class="text-xl font-bold">Wavey Success Tracking</p>
-                <span class="bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-200">
-                     Advanced Mode Active
+                <p class="text-xl font-bold">Wave Performance Tracker</p>
+                <span class="bg-violet-100 text-violet-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-violet-200">
+                    Aggregate Mode — All 12 Exams
                 </span>
             </div>
         </div>
-        
-        <div class="flex flex-wrap items-center gap-4">
-            <div class="space-y-2">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Exam Type</label>
-                <select id="typeFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold min-w-[150px]">
-                    <option value="0">All Types</option>
-                    @foreach (var type in (IEnumerable<Exam.DTOs.ExamTypeDto>)ViewBag.ExamTypes)
-                    {
-                        <option value="@type.Id" selected="@(ViewBag.SelectedTypeId == type.Id ? "selected" : null)">@type.TypeName.ToUpper()</option>
-                    }
-                </select>
-            </div>
 
+        <div class="flex flex-wrap items-center gap-4">
             <div class="space-y-2">
                 <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Year</label>
                 <select id="yearFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold w-[100px]">
@@ -53,137 +50,154 @@
             </div>
 
             <div class="space-y-2">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Selected Module</label>
-                <select id="examFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3 text-sm font-bold min-w-[280px]">
-                    @{
-                        var groupedExams = exams.GroupBy(e => e.TypeName).OrderByDescending(g => g.Key);
-                        foreach (var group in groupedExams)
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Training Wave</label>
+                <select id="waveFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3 text-sm font-bold min-w-[260px]">
+                    <optgroup label="TRAINING BATCHES">
+                        @foreach (var w in waves)
                         {
-                            <optgroup label="@(group.Key?.ToUpper() ?? "OTHER")">
-                                @foreach (var e in group)
-                                {
-                                    <option value="@e.Id" selected="@(e.Id == selectedExamId ? "selected" : null)">
-                                        @e.Title.ToUpper() @(!string.IsNullOrEmpty(e.WaveName) ? $"- {e.WaveName.ToUpper()}" : "") (@e.StartTime.ToString("MMM yyyy"))
-                                    </option>
-                                }
-                            </optgroup>
+                            <option value="@w.Id" selected="@(w.Id == selectedWaveId ? "selected" : null)">
+                                @w.WaveName.ToUpper() @(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")
+                            </option>
                         }
-                    }
+                    </optgroup>
                 </select>
             </div>
 
             <div class="flex items-center gap-2 mt-auto">
                 <button id="btnExport" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2">
-                    <i class="fas fa-file-excel"></i> Export Results
-                </button>
-                <button onclick="reassignSelected(@selectedExamId)" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-lg flex items-center gap-2">
-                    <i class="fas fa-redo"></i> Reassign Failed
-                </button>
-
-                <button onclick="sendFailEmails(@selectedExamId)" class="bg-rose-600 hover:bg-rose-700 text-white px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-lg flex items-center gap-2">
-                    <i class="fas fa-envelope"></i> Send Fail Notifications
+                    <i class="fas fa-file-excel"></i> Export
                 </button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Summary Cards -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
+        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Students</span>
+        <span class="text-3xl font-black text-slate-900 dark:text-white">@total</span>
+    </div>
+    <div class="bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
+        <span class="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Certified</span>
+        <span class="text-3xl font-black text-emerald-700">@certified</span>
+        <span class="text-[9px] font-bold text-emerald-500">≥ 75% total score</span>
+    </div>
+    <div class="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
+        <span class="text-[10px] font-black text-blue-600 uppercase tracking-widest">Pass (No Cert)</span>
+        <span class="text-3xl font-black text-blue-700">@passed</span>
+        <span class="text-[9px] font-bold text-blue-500">70% – 74.9%</span>
+    </div>
+    <div class="bg-rose-50 dark:bg-rose-950 border border-rose-200 dark:border-rose-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
+        <span class="text-[10px] font-black text-rose-600 uppercase tracking-widest">Failed / Incomplete</span>
+        <span class="text-3xl font-black text-rose-700">@(failed + incomplete)</span>
+        <span class="text-[9px] font-bold text-rose-400">@incomplete incomplete · @failed failed</span>
+    </div>
+</div>
+
+<!-- Results Table -->
 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 overflow-hidden shadow-sm">
     <div class="overflow-x-auto">
-        <table class="datatable saas-table">
+        <table class="datatable saas-table" id="waveResultsTable">
             <thead>
                 <tr>
-                    <th class="w-10 px-4"><input type="checkbox" id="selectAll" /></th>
-                    <th class="min-w-[280px]">Personnel</th>
-                    <th>Wave</th>
+                    <th class="min-w-[240px]">Personnel</th>
                     <th>Branch</th>
-                    <th>Status</th>
-                    <th>Start Time</th>
-                    <th>Finish Time</th>
-                    <th>Time (M)</th>
+                    <th>Role</th>
+                    <th>Exams Done</th>
                     <th>Score</th>
-                    <th>Result Status</th>
-                    <th>User Code</th>
-                    <th class="text-right px-8">Actions</th>
+                    <th>Percentage</th>
+                    <th>Wave Status</th>
+                    <th>Cert Code</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var s in Model) {
-                    var statusClass = s.Status.StartsWith("Completed") ? "bg-emerald-500" : "bg-slate-400";
-                    <tr class="student-row">
-                         <td class="px-4 text-center">
-                             @if(s.Status.StartsWith("Completed") || s.Status.StartsWith("Fail_")) {
-                                 <input type="checkbox" class="student-checkbox" value="@s.Id" data-passed="@(s.IsPassed?.ToString().ToLower() ?? "null")" />
-                             } else {
-                                 <input type="checkbox" disabled class="opacity-20 pointer-events-none" />
-                             }
-                         </td>
+                @foreach (var s in Model)
+                {
+                    <tr>
                         <td>
-                            <div class="flex items-center gap-3 px-4 py-3 flex-nowrap">
-                                <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase transition-transform hover:scale-105">@s.StudentName.Substring(0,1)</div>
+                            <div class="flex items-center gap-3 px-2 py-2 flex-nowrap">
+                                <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase">
+                                    @(s.StudentName.Length > 0 ? s.StudentName.Substring(0, 1) : "?")
+                                </div>
                                 <div class="flex flex-col">
                                     <span class="font-bold text-slate-900 dark:text-white leading-tight">@s.StudentName</span>
-                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">@s.ExamType</span>
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">@s.StudentEmail</span>
+                                    <span class="text-[9px] font-bold text-slate-300 uppercase">@s.UserCode</span>
                                 </div>
                             </div>
                         </td>
-                        <td><span class="text-[10px] font-black text-slate-400 uppercase">@s.WaveName</span></td>
-                        <td><span class="text-[10px] font-black text-slate-400 uppercase">@(string.IsNullOrEmpty(s.BranchName) ? "--" : s.BranchName)</span></td>
                         <td>
-                            <div class="flex items-center gap-1.5 px-3 py-1 rounded-full @(statusClass.Replace("bg-", "bg-opacity-10 text-")) w-fit">
-                                <span class="text-[10px] font-black uppercase tracking-widest">@s.Status.ToUpper()</span>
-                            </div>
-                        </td>
-                        <td class="text-center">
-                            <div class="flex flex-col">
-                                <span class="text-[9px] text-slate-400 font-bold mb-0.5">@(s.ActualStartTime.HasValue ? s.ActualStartTime.Value.ToString("dd/MM/yyyy") : "")</span>
-                                <span class="text-[10px] font-bold text-slate-500 uppercase">@(s.ActualStartTime.HasValue ? s.ActualStartTime.Value.ToString("hh:mm tt") : "--")</span>
-                            </div>
-                        </td>
-                        <td class="text-center">
-                            <div class="flex flex-col">
-                                <span class="text-[9px] text-slate-400 font-bold mb-0.5">@(s.ActualEndTime.HasValue ? s.ActualEndTime.Value.ToString("dd/MM/yyyy") : "")</span>
-                                <span class="text-[10px] font-bold text-slate-500 uppercase">@(s.ActualEndTime.HasValue ? s.ActualEndTime.Value.ToString("hh:mm tt") : "--")</span>
-                            </div>
-                        </td>
-                        <td class="text-xs font-bold text-slate-500">
-                            @(s.DurationInMinutes > 0 ? s.DurationInMinutes + " min" : "--")
-                        </td>
-                        <td class="font-mono font-bold text-slate-700 dark:text-slate-300">
-                            <div class="flex flex-col">
-                                <span class="text-brand-600 dark:text-brand-400 text-sm">@s.FinalScore.ToString("0") / @s.TotalScoreAvailable.ToString("0")</span>
-                                <span class="text-[9px] text-slate-400 uppercase tracking-widest">@s.Score.ToString("0.0")% Achievement</span>
-                            </div>
+                            <span class="text-[10px] font-black text-slate-400 uppercase">@(string.IsNullOrEmpty(s.BranchName) ? "--" : s.BranchName)</span>
                         </td>
                         <td>
-                            @if (s.Status.StartsWith("Completed")) {
-                                <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-emerald-50 text-emerald-600">COMPLETED</span>
-                            } else {
-                                <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-slate-100 text-slate-500">INCOMPLETE</span>
+                            @if (!string.IsNullOrEmpty(s.RoleName))
+                            {
+                                bool isPharm = s.RoleName.ToLower().Contains("pharmacist") || s.RoleName.Contains("صيدل");
+                                <span class="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase @(isPharm ? "bg-purple-50 text-purple-600 border border-purple-200" : "bg-sky-50 text-sky-600 border border-sky-200")">
+                                    @(isPharm ? "Pharmacist" : "Assistant")
+                                </span>
                             }
-                            @if (s.AttemptNumber > 1) {
-                                <div class="mt-1">
-                                    <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-700 text-[8px] font-bold border border-amber-200">
-                                        <i class="fas fa-redo-alt mr-1"></i> RETAKE MODE
-                                    </span>
-                                </div>
+                            else
+                            {
+                                <span class="text-slate-400 text-xs">--</span>
                             }
                         </td>
                         <td>
-                             <span class="text-[10px] font-bold text-slate-500 uppercase">@s.UserCode</span>
-                        </td>
-                        <td class="text-right px-8">
-                            <div class="flex items-center justify-end gap-2">
-                                <button class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-xl view-review" data-student-id="@s.Id">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                @if (User.IsInRole("Admin"))
+                            <div class="flex flex-col items-center">
+                                <span class="text-sm font-black @(s.IsFullyCompleted ? "text-emerald-600" : "text-amber-500")">
+                                    @s.ExamsCompleted / @s.TotalExamsInWave
+                                </span>
+                                @if (!s.IsFullyCompleted)
                                 {
-                                    <button class="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 rounded-xl wipe-data" data-student-id="@s.Id" data-student-name="@s.StudentName" title="Wipe Data & Reset">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
+                                    <span class="text-[9px] text-amber-400 font-bold">@(s.TotalExamsInWave - s.ExamsCompleted) pending</span>
                                 }
                             </div>
+                        </td>
+                        <td>
+                            <div class="flex flex-col">
+                                <span class="text-brand-600 dark:text-brand-400 text-sm font-bold font-mono">
+                                    @s.TotalScore.ToString("0") / @s.TotalAvailable.ToString("0")
+                                </span>
+                            </div>
+                        </td>
+                        <td>
+                            @{
+                                double pct = s.TotalAvailable > 0 ? (double)(s.TotalScore / s.TotalAvailable) * 100 : 0;
+                                string pctColor = pct >= 75 ? "text-emerald-600" : pct >= 70 ? "text-blue-600" : "text-rose-500";
+                            }
+                            <span class="font-black text-sm @pctColor">@pct.ToString("0.0")%</span>
+                        </td>
+                        <td>
+                            @switch (s.WaveStatus)
+                            {
+                                case "CERTIFIED":
+                                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center gap-1 w-fit">
+                                        <i class="fas fa-certificate"></i> CERTIFIED
+                                    </span>
+                                    break;
+                                case "PASS":
+                                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-blue-50 text-blue-600 border border-blue-200 w-fit">PASS (NO CERT)</span>
+                                    break;
+                                case "FAILED":
+                                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-rose-50 text-rose-600 border border-rose-200 w-fit">FAILED</span>
+                                    break;
+                                default:
+                                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200 w-fit">
+                                        <i class="fas fa-clock mr-1"></i> INCOMPLETE
+                                    </span>
+                                    break;
+                            }
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(s.CertificateCode))
+                            {
+                                <span class="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-lg">@s.CertificateCode</span>
+                            }
+                            else
+                            {
+                                <span class="text-slate-300 text-xs">--</span>
+                            }
                         </td>
                     </tr>
                 }
@@ -194,169 +208,40 @@
 
 @section Scripts {
     <script>
-        function updateExamList() {
-            const type = $('#typeFilter').val();
-            const year = $('#yearFilter').val();
+        // Filter dropdowns → reload page
+        function applyFilters() {
+            const waveId = $('#waveFilter').val();
+            const year   = $('#yearFilter').val();
+            const month  = $('#monthFilter').val();
+            let url = '/Admin/WaveyResults?waveId=' + waveId + '&year=' + year + '&month=' + month;
+            if (window.location.search.includes('iframe=true')) url += '&iframe=true';
+            window.location = url;
+        }
+
+        // Wave / year / month change → dynamically reload wave list then page
+        $('#yearFilter, #monthFilter').change(function () {
+            const year  = $('#yearFilter').val();
             const month = $('#monthFilter').val();
 
-            $.get('/Admin/GetFilteredExams', { typeId: type, month: month, year: year, mode: 'wavey' }, function (data) {
-                const $examFilter = $('#examFilter');
-                $examFilter.empty();
-
+            $.get('/Admin/GetFilteredExams', { month: month, year: year, mode: 'cert' }, function (data) {
+                const $wf = $('#waveFilter');
+                $wf.empty();
                 if (data.length === 0) {
-                    $examFilter.append('<option value="0">No exams found</option>');
-                    return;
+                    $wf.append('<option value="0">No waves found</option>');
+                } else {
+                    const $grp = $('<optgroup>').attr('label', 'TRAINING BATCHES');
+                    data.forEach(w => $grp.append($('<option>').val(w.id).text(w.title)));
+                    $wf.append($grp);
                 }
-
-                // Group by typeName
-                const grouped = {};
-                data.forEach(e => {
-                    if (!grouped[e.typeName]) grouped[e.typeName] = [];
-                    grouped[e.typeName].push(e);
-                });
-
-                Object.keys(grouped).sort().reverse().forEach(type => {
-                    const $group = $('<optgroup>').attr('label', type.toUpperCase());
-                    grouped[type].forEach(e => {
-                        $group.append($('<option>').val(e.id).text(e.title));
-                    });
-                    $examFilter.append($group);
-                });
+                applyFilters();
             });
-        }
-
-        $('#typeFilter, #yearFilter, #monthFilter').change(updateExamList);
-
-        $('#examFilter').change(function () { 
-            const type = $('#typeFilter').val();
-            const year = $('#yearFilter').val();
-            const month = $('#monthFilter').val();
-            let newUrl = '/Admin/Students?examId=' + $(this).val() + '&typeId=' + type + '&year=' + year + '&month=' + month; 
-            if (window.location.search.includes('iframe=true')) newUrl += '&iframe=true';
-            window.location = newUrl;
         });
 
-        $('#selectAll').on('change', function() { $('.student-checkbox').prop('checked', this.checked); });
+        $('#waveFilter').change(applyFilters);
 
-        function sendSelectedCerts(examId) {
-            var ids = [];
-            $('.student-checkbox:checked').each(function() { ids.push($(this).val()); });
-            if(ids.length === 0) { Swal.fire('Error', 'Select students first', 'error'); return; }
-            
-            Swal.fire({ title: 'Issuing...', didOpen: () => Swal.showLoading() });
-            fetch('/Admin/SendCertificates?examId=' + examId, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(ids)
-            }).then(r => r.json()).then(res => {
-                if(res.success) Swal.fire('Success', res.message, 'success').then(() => location.reload());
-                else Swal.fire('Error', res.message, 'error');
-            });
-        }
-
-        function reassignSelected(examId) {
-            var ids = [];
-            $('.student-checkbox:checked').each(function() { 
-                const passedVal = $(this).attr('data-passed');
-                if (passedVal === 'false' || passedVal === 'null' || !passedVal) {
-                    ids.push($(this).val());
-                }
-            });
-            if(ids.length === 0) { Swal.fire('Selection Error', 'Select failed students only', 'info'); return; }
-            
-            Swal.fire({
-                title: 'Set Reassignment Time',
-                html: '<input type="datetime-local" id="reStart" class="swal2-input"><input type="datetime-local" id="reEnd" class="swal2-input">',
-                preConfirm: () => {
-                    return { startTime: document.getElementById('reStart').value, endTime: document.getElementById('reEnd').value };
-                }
-            }).then(r => {
-                if(r.isConfirmed) {
-                    fetch('/Admin/ReassignExamToStudents?examId=' + examId, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ StudentIds: ids, StartTime: r.value.startTime, EndTime: r.value.endTime })
-                    }).then(res => res.json()).then(data => {
-                        if (data.success) {
-                            Swal.fire('Success', `Assigned ${data.count} candidates for retake. Emails sent.`, 'success').then(() => location.reload());
-                        } else {
-                            Swal.fire('Error', data.message || 'Deployment failed.', 'error');
-                        }
-                    }).catch(err => {
-                        Swal.fire('Error', 'An unexpected error occurred: ' + err.message, 'error');
-                    });
-                }
-            });
-        }
-
-        function sendFailEmails(examId) {
-            Swal.fire({ title: 'Sending...', didOpen: () => Swal.showLoading() });
-            $.post('/Admin/SendFailEmails', { examId: examId }).done(res => {
-                Swal.fire(res.success ? 'Success' : 'Error', res.message, res.success ? 'success' : 'error');
-            });
-        }
-
-        $(document).on('click', '.view-review', function() {
-            var id = $(this).data('student-id');
-            var examId = $('#examFilter').val();
-            Swal.fire({
-                title: 'Professional Review Analysis',
-                width: '80%',
-                showConfirmButton: false,
-                showCloseButton: true,
-                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
-                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
-                html: '<div id="swalRev" style="text-align:left; max-height: 70vh; overflow-y: auto;"><div class="py-10 text-center"><i class="fas fa-sync fa-spin text-3xl text-brand-500"></i></div></div>',
-                didOpen: () => { 
-                    $.get('/Admin/GetStudentExamReview', { examId: examId, studentId: id })
-                     .done(h => $('#swalRev').html(h))
-                     .fail(() => $('#swalRev').html('<div class="p-8 text-rose-500">Failed to load data.</div>'));
-                }
-            });
-        });
-        $('#btnExport').on('click', function () { window.location = '/Admin/ExportStudentsToExcel?examId=' + $('#examFilter').val(); });
-
-        $(document).on('click', '.wipe-data', function() {
-            const studentId = $(this).data('student-id');
-            const studentName = $(this).data('student-name');
-            const examId = $('#examFilter').val();
-
-            Swal.fire({
-                title: 'Are you absolutely sure?',
-                text: `This will PERMANENTLY delete all answers and attempts for ${studentName}. They will need to be re-assigned to take the exam again.`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#e11d48',
-                cancelButtonColor: '#64748b',
-                confirmButtonText: 'Yes, Wipe Everything!',
-                cancelButtonText: 'Cancel',
-                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
-                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    Swal.fire({
-                        title: 'Wiping Data...',
-                        allowOutsideClick: false,
-                        didOpen: () => { Swal.showLoading(); }
-                    });
-
-                    $.post('/Admin/WipeStudentData', { examId: examId, studentId: studentId }, function(res) {
-                        if (res.success) {
-                            Swal.fire({
-                                title: 'Success!',
-                                text: res.message,
-                                icon: 'success',
-                                timer: 2000,
-                                showConfirmButton: false
-                            }).then(() => {
-                                window.location.reload();
-                            });
-                        } else {
-                            Swal.fire('Error', res.message, 'error');
-                        }
-                    });
-                }
-            });
+        // Export
+        $('#btnExport').on('click', function () {
+            window.location = '/Admin/ExportWaveResultsToExcel?waveId=' + $('#waveFilter').val();
         });
     </script>
 }
