@@ -267,6 +267,7 @@ namespace Exam.DTOs
         public string CertificateCode { get; set; }
         public string CustomRole { get; set; }
         public string RoleName { get; set; }
+        public int? ShiftId { get; set; }
         public string ShiftName { get; set; }
         public TimeSpan? StartTime { get; set; }
         public TimeSpan? EndTime { get; set; }

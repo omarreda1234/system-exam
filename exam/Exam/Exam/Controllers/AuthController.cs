@@ -5,6 +5,8 @@ using Exam.Services;
 using Microsoft.AspNetCore.Identity;
 using Dapper;
 using Microsoft.Data.SqlClient;
+using Microsoft.AspNetCore.WebUtilities;
+using System.Text;
 
 namespace Exam.Controllers
 {
@@ -151,8 +153,9 @@ namespace Exam.Controllers
             var token = await _authService.GeneratePasswordResetTokenAsync(dto.Email);
             if (token != null)
             {
-                var publicIp = "41.33.149.186:5208";
-                var relativeUrl = Url.Action("ResetPassword", "Auth", new { token, email = dto.Email });
+                var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+                var publicIp = "41.33.149.186:8052";
+                var relativeUrl = Url.Action("ResetPassword", "Auth", new { token = encodedToken, email = dto.Email });
                 var callbackUrl = $"{Request.Scheme}://{publicIp}{relativeUrl}";
                 var subject = "Reset Your Password - Eltarshoubi Academy";
                 var body = $@"
@@ -181,7 +184,19 @@ namespace Exam.Controllers
         public IActionResult ResetPassword(string token, string email)
         {
             if (token == null || email == null) return RedirectToAction("Login");
-            return View(new ResetPasswordDTO { Token = token, Email = email });
+            
+            string decodedToken;
+            try
+            {
+                decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token));
+            }
+            catch
+            {
+                // Fallback: replace spaces with pluses if it wasn't Base64UrlEncoded
+                decodedToken = token.Replace(" ", "+");
+            }
+
+            return View(new ResetPasswordDTO { Token = decodedToken, Email = email });
         }
 
         [HttpPost]
@@ -190,7 +205,13 @@ namespace Exam.Controllers
         {
             if (!ModelState.IsValid) return View(dto);
 
-            var result = await _authService.ResetPasswordAsync(dto.Email, dto.Token, dto.NewPassword);
+            var token = dto.Token;
+            if (token != null)
+            {
+                token = token.Replace(" ", "+");
+            }
+
+            var result = await _authService.ResetPasswordAsync(dto.Email, token, dto.NewPassword);
             if (result.Succeeded)
             {
                 // Send confirmation email with the new password
@@ -205,7 +226,7 @@ namespace Exam.Controllers
                             <p style='margin: 8px 0;'><strong>Login Email:</strong> {dto.Email}</p>
                             <p style='margin: 8px 0;'><strong>New Password:</strong> <code style='background: #fff; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 4px; color: #15803d;'>{dto.NewPassword}</code></p>
                         </div>
-
+ 
                         <p>You can now use this password to log in to your account.</p>
                         <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;' />
                         <p style='font-size: 11px; color: #94a3b8; text-align: center;'>© {DateTime.Now.Year} El-Tarshoubi Group. All rights reserved.</p>

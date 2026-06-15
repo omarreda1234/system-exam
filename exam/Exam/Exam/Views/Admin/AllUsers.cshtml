@@ -113,7 +113,7 @@
             <tbody>
                 @foreach (var u in Model ?? Enumerable.Empty<Exam.DTOs.UserWithRoleDto>()) {
                     var currentRoleName = u.RoleName ?? "User";
-                    <tr data-user-id="@u.Id" data-email="@u.Email" data-username="@u.UserName" data-usercode="@(u.Code ?? "")" data-branch-id="@(u.BranchId?.ToString() ?? "")">
+                    <tr data-user-id="@u.Id" data-email="@u.Email" data-username="@u.UserName" data-usercode="@(u.Code ?? "")" data-branch-id="@(u.BranchId?.ToString() ?? "")" data-shift-id="@(u.ShiftId?.ToString() ?? "0")">
                         <td class="pl-8">
                             <div class="flex items-center gap-3">
                                 <div class="js-user-avatar w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center font-bold text-slate-400">@((u.UserName ?? "?").Trim().Substring(0,1).ToUpper())</div>
@@ -206,6 +206,7 @@
         const rolesData = @Html.Raw(Json.Serialize(roles));
         const shiftsData = @Html.Raw(Json.Serialize(shifts));
         const branchesData = @Html.Raw(Json.Serialize(ViewBag.Branches ?? new List<Exam.DTOs.BranchDto>()));
+        const isHR = @((User.IsInRole("HR") || User.IsInRole("Human Resources")).ToString().ToLower());
 
         $(document).ready(function() {
             // Wait a bit for the global DataTable to initialize
@@ -711,6 +712,8 @@
                 if (!obj) return "";
                 return obj[prop.charAt(0).toLowerCase() + prop.slice(1)] || obj[prop] || "";
             };
+            const $tr = $('tr[data-user-id="' + userId + '"]');
+            const shiftId = $tr.attr('data-shift-id') || '0';
             const oldBranchKey = (branchId == null || branchId === '') ? '' : String(branchId);
             let branchOptions = '<option value="">-- NO BRANCH --</option>';
             branchesData.forEach(b => {
@@ -719,25 +722,40 @@
                 let sel = (oldBranchKey !== '' && String(bid) === oldBranchKey) ? ' selected' : '';
                 branchOptions += `<option value="${bid}"${sel}>${(name || '').toUpperCase()}</option>`;
             });
+
+            let shiftOptions = '<option value="0">-- NO SHIFT --</option>';
+            shiftsData.forEach(s => {
+                let name = s.shiftName || s.ShiftName || '';
+                let sid = s.id || s.Id;
+                let sel = (shiftId !== '0' && String(sid) === String(shiftId)) ? ' selected' : '';
+                shiftOptions += `<option value="${sid}"${sel}>${(name || '').toUpperCase()}</option>`;
+            });
+
+            const disabledAttr = isHR ? 'disabled' : '';
+
             Swal.fire({
                 title: 'Edit Personnel',
                 html: `
                     <div class="text-left space-y-3 p-2">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Email</label>
-                            <input id="editEmail" type="email" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" />
+                            <input id="editEmail" type="email" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledAttr} />
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">User name</label>
-                            <input id="editUserName" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" />
+                            <input id="editUserName" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledAttr} />
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">User code</label>
-                            <input id="editUserCode" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" />
+                            <input id="editUserCode" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledAttr} />
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Branch</label>
-                            <select id="editBranchId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">${branchOptions}</select>
+                            <select id="editBranchId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledAttr}>${branchOptions}</select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Shift</label>
+                            <select id="editShiftId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">${shiftOptions}</select>
                         </div>
                     </div>`,
                 showCancelButton: true,
@@ -755,32 +773,74 @@
                         const opt = Array.from(sel.options).find(o => String(o.value) === oldBranchKey);
                         if (opt) opt.selected = true;
                     }
+                    const shiftSel = document.getElementById('editShiftId');
+                    shiftSel.value = shiftId;
                 },
                 preConfirm: async () => {
-                    const fd = new FormData();
-                    fd.append('userId', userId);
-                    fd.append('email', document.getElementById('editEmail').value.trim());
-                    fd.append('userName', document.getElementById('editUserName').value.trim());
-                    fd.append('userCode', document.getElementById('editUserCode').value.trim());
-                    const newBr = document.getElementById('editBranchId').value || '';
-                    if (newBr !== oldBranchKey)
-                        fd.append('branchId', newBr);
-                    const r = await fetch('/Admin/UpdateUserProfile', {
-                        method: 'POST',
-                        body: fd,
-                        headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
-                    });
-                    const res = await r.json();
-                    if (!res.success) {
-                        Swal.showValidationMessage(res.message || 'Update failed');
-                        return false;
+                    const newShiftVal = document.getElementById('editShiftId').value || '0';
+                    if (isHR) {
+                        const r = await fetch('/Admin/UpdateUserShift', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                            },
+                            body: `userId=${userId}&newShiftId=${newShiftVal}`
+                        });
+                        const res = await r.json();
+                        if (!res.success) {
+                            Swal.showValidationMessage(res.message || 'Update failed');
+                            return false;
+                        }
+                        return { isShiftOnly: true, newShiftId: newShiftVal };
+                    } else {
+                        const fd = new FormData();
+                        fd.append('userId', userId);
+                        fd.append('email', document.getElementById('editEmail').value.trim());
+                        fd.append('userName', document.getElementById('editUserName').value.trim());
+                        fd.append('userCode', document.getElementById('editUserCode').value.trim());
+                        const newBr = document.getElementById('editBranchId').value || '';
+                        if (newBr !== oldBranchKey)
+                            fd.append('branchId', newBr);
+                        
+                        const profilePromise = fetch('/Admin/UpdateUserProfile', {
+                            method: 'POST',
+                            body: fd,
+                            headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
+                        }).then(r => r.json());
+
+                        const shiftPromise = fetch('/Admin/UpdateUserShift', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                            },
+                            body: `userId=${userId}&newShiftId=${newShiftVal}`
+                        }).then(r => r.json());
+
+                        const [profileRes, shiftRes] = await Promise.all([profilePromise, shiftPromise]);
+                        if (!profileRes.success) {
+                            Swal.showValidationMessage(profileRes.message || 'Profile update failed');
+                            return false;
+                        }
+                        if (!shiftRes.success) {
+                            Swal.showValidationMessage(shiftRes.message || 'Shift update failed');
+                            return false;
+                        }
+                        return { ...profileRes, newShiftId: newShiftVal };
                     }
-                    return res;
                 }
             }).then((result) => {
                 if (result.isConfirmed && result.value) {
-                    applyPersonnelRowFromServer(userId, result.value);
-                    Swal.fire({ icon: 'success', title: 'Saved', toast: true, position: 'top-end', timer: 2000, showConfirmButton: false });
+                    if (result.value.isShiftOnly) {
+                        location.reload();
+                    } else {
+                        const $tr = $('tr[data-user-id="' + userId + '"]');
+                        $tr.attr('data-shift-id', result.value.newShiftId);
+                        applyPersonnelRowFromServer(userId, result.value);
+                        Swal.fire({ icon: 'success', title: 'Saved', toast: true, position: 'top-end', timer: 2000, showConfirmButton: false });
+                        setTimeout(() => location.reload(), 1000);
+                    }
                 }
             });
         }

@@ -366,21 +366,26 @@
                                         <input type="checkbox" id="filterFailedOnly" class="w-4 h-4 accent-rose-500 rounded cursor-pointer">
                                         <label for="filterFailedOnly" class="text-[10px] font-bold text-rose-600 dark:text-rose-500 uppercase tracking-widest cursor-pointer select-none">Assign to Failed Only (Retake Mode)</label>
                                     </div>
-                                    <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2">Filter by Role</label>
-                                        <div class="flex items-center gap-3 text-[10px] font-bold">
-                                            <label class="flex items-center gap-1.5 cursor-pointer">
-                                                <input type="checkbox" id="rolePharmacist" class="swal-role-cb w-3.5 h-3.5 accent-brand-500 rounded" checked>
-                                                <span>PHARMACISTS</span>
-                                            </label>
-                                            <label class="flex items-center gap-1.5 cursor-pointer">
-                                                <input type="checkbox" id="roleAssistant" class="swal-role-cb w-3.5 h-3.5 accent-brand-500 rounded" checked>
-                                                <span>ASSISTANTS</span>
-                                            </label>
-                                            <label class="flex items-center gap-1.5 cursor-pointer">
-                                                <input type="checkbox" id="roleOther" class="swal-role-cb w-3.5 h-3.5 accent-brand-500 rounded" checked>
-                                                <span>OTHERS</span>
-                                            </label>
+                                    <div class="flex flex-col gap-2 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full md:w-auto">
+                                        <div class="flex items-center gap-3">
+                                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2">Filter by Role</label>
+                                            <div class="flex items-center gap-3 text-[10px] font-bold">
+                                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                                    <input type="checkbox" id="rolePharmacist" class="swal-role-cb w-3.5 h-3.5 accent-brand-500 rounded" checked>
+                                                    <span>PHARMACISTS</span>
+                                                </label>
+                                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                                    <input type="checkbox" id="roleAssistant" class="swal-role-cb w-3.5 h-3.5 accent-brand-500 rounded" checked>
+                                                    <span>ASSISTANTS</span>
+                                                </label>
+                                                <label class="flex items-center gap-1.5 cursor-pointer">
+                                                    <input type="checkbox" id="roleOther" class="swal-role-cb w-3.5 h-3.5 accent-brand-500 rounded">
+                                                    <span>OTHERS</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div id="swalSpecificOthersContainer" class="hidden mt-1 p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 flex flex-wrap gap-2">
+                                            <!-- checkboxes will be populated dynamically -->
                                         </div>
                                     </div>
                                 </div>
@@ -471,6 +476,33 @@
                                 columnDefs: [{ orderable: false, targets: 0 }]
                             });
 
+                            function isPharmacistRole(role) {
+                                const r = (role || '').trim().toLowerCase();
+                                return r === 'pharmacist' || r === 'صيدلي';
+                            }
+                            function isAssistantRole(role) {
+                                const r = (role || '').trim().toLowerCase();
+                                return r === 'assistant' || r === 'مساعد صيدلي';
+                            }
+
+                            const otherRoles = [...new Set(eligibleUsers.map(u => u.roleName || u.RoleName || 'User'))]
+                                .filter(r => !isPharmacistRole(r) && !isAssistantRole(r));
+
+                            if (otherRoles.length > 0) {
+                                let otherHtml = '';
+                                otherRoles.forEach(role => {
+                                    otherHtml += `
+                                         <label class="flex items-center gap-1.5 cursor-pointer text-[9px] bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
+                                             <input type="checkbox" class="swal-specific-other-cb w-3 h-3 accent-brand-500 rounded" data-role="${role}">
+                                             <span>${role.toUpperCase()}</span>
+                                         </label>
+                                    `;
+                                });
+                                $('#swalSpecificOthersContainer').html(otherHtml);
+                            } else {
+                                $('#swalSpecificOthersContainer').html('<span class="text-[9px] text-slate-400 italic">No other roles found</span>');
+                            }
+
                             function updateSelectAllState() {
                                 const visibleRows = table.rows({ search: 'applied' }).nodes();
                                 const visibleCBs = $('input.exam-user-cb:not(:disabled)', visibleRows);
@@ -486,15 +518,21 @@
 
                                 table.rows().every(function() {
                                     const rowNode = this.node();
-                                    const rowRole = $(rowNode).find('.js-role-name').text().trim().toLowerCase();
-                                    const isPharmacist = rowRole === 'pharmacist' || rowRole === 'صيدلي';
-                                    const isAssistant = rowRole === 'assistant' || rowRole === 'مساعد صيدلي';
+                                    const rowRole = $(rowNode).find('.js-role-name').text().trim();
+                                    const isPharmacist = isPharmacistRole(rowRole);
+                                    const isAssistant = isAssistantRole(rowRole);
                                     const isFailed = $(rowNode).attr('data-is-failed') === 'true';
 
                                     let matchesRole = true;
                                     if (isPharmacist) matchesRole = isPharmacistChecked;
                                     else if (isAssistant) matchesRole = isAssistantChecked;
-                                    else matchesRole = isOtherChecked;
+                                    else {
+                                        if (!isOtherChecked) matchesRole = false;
+                                        else {
+                                            const specCb = $(`.swal-specific-other-cb[data-role="${rowRole}"]`);
+                                            matchesRole = specCb.length ? specCb.is(':checked') : false;
+                                        }
+                                    }
 
                                     let matchesFailed = true;
                                     if (isFailedOnly) matchesFailed = isFailed;
@@ -519,22 +557,38 @@
                                 const isAssistantChecked = $('#roleAssistant').is(':checked');
                                 const isOtherChecked = $('#roleOther').is(':checked');
                                 
-                                const rowRole = $(settings.aoData[dataIndex].nTr).find('.js-role-name').text().trim().toLowerCase();
-                                const isPharmacist = rowRole === 'pharmacist' || rowRole === 'صيدلي';
-                                const isAssistant = rowRole === 'assistant' || rowRole === 'مساعد صيدلي';
-                                
-                                if (isPharmacist) {
+                                const rowRole = $(settings.aoData[dataIndex].nTr).find('.js-role-name').text().trim();
+                                if (isPharmacistRole(rowRole)) {
                                     return isPharmacistChecked;
                                 }
-                                if (isAssistant) {
+                                if (isAssistantRole(rowRole)) {
                                     return isAssistantChecked;
                                 }
-                                return isOtherChecked;
+                                if (!isOtherChecked) return false;
+                                const specCb = $(`.swal-specific-other-cb[data-role="${rowRole}"]`);
+                                return specCb.length ? specCb.is(':checked') : false;
                             };
                             $.fn.dataTable.ext.search.push(window._swalRoleFilterFn);
 
                             $('.swal-role-cb').on('change', function() { 
                                 table.draw(); 
+                                syncFilteredCheckedState();
+                            });
+
+                            $('#roleOther').on('change', function() {
+                                if (this.checked) {
+                                    $('#swalSpecificOthersContainer').removeClass('hidden');
+                                    $('.swal-specific-other-cb').prop('checked', true);
+                                } else {
+                                    $('#swalSpecificOthersContainer').addClass('hidden');
+                                    $('.swal-specific-other-cb').prop('checked', false);
+                                }
+                                table.draw();
+                                syncFilteredCheckedState();
+                            });
+
+                            $(document).on('change', '.swal-specific-other-cb', function() {
+                                table.draw();
                                 syncFilteredCheckedState();
                             });
 
@@ -587,19 +641,34 @@
                            const isOtherChecked = $('#roleOther').is(':checked');
                            const isFailedOnly = $('#filterFailedOnly').is(':checked');
 
+                           function isPharmacistRole(role) {
+                               const r = (role || '').trim().toLowerCase();
+                               return r === 'pharmacist' || r === 'صيدلي';
+                           }
+                           function isAssistantRole(role) {
+                               const r = (role || '').trim().toLowerCase();
+                               return r === 'assistant' || r === 'مساعد صيدلي';
+                           }
+
                            $('#swalExamUserTable').DataTable().rows().every(function() {
                                const rowNode = this.node();
                                const cb = $(rowNode).find('input.exam-user-cb');
                                if (cb.is(':checked')) {
-                                   const rowRole = $(rowNode).find('.js-role-name').text().trim().toLowerCase();
-                                   const isPharmacist = rowRole === 'pharmacist' || rowRole === 'صيدلي';
-                                   const isAssistant = rowRole === 'assistant' || rowRole === 'مساعد صيدلي';
+                                   const rowRole = $(rowNode).find('.js-role-name').text().trim();
+                                   const isPharmacist = isPharmacistRole(rowRole);
+                                   const isAssistant = isAssistantRole(rowRole);
                                    const isFailed = $(rowNode).attr('data-is-failed') === 'true';
 
                                    let matchesRole = true;
                                    if (isPharmacist) matchesRole = isPharmacistChecked;
                                    else if (isAssistant) matchesRole = isAssistantChecked;
-                                   else matchesRole = isOtherChecked;
+                                   else {
+                                       if (!isOtherChecked) matchesRole = false;
+                                       else {
+                                           const specCb = $(`.swal-specific-other-cb[data-role="${rowRole}"]`);
+                                           matchesRole = specCb.length ? specCb.is(':checked') : false;
+                                       }
+                                   }
 
                                    let matchesFailed = true;
                                    if (isFailedOnly) matchesFailed = isFailed;

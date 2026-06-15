@@ -1,4 +1,4 @@
-﻿using ClosedXML.Excel;
+using ClosedXML.Excel;
 using Exam.Services;
 using Exam.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -74,6 +74,7 @@ namespace Exam.Controllers
                     "AddUser", 
                     "UpdateUserShift",
                     "GetWaves",
+                    "CreateWave",
                     "UpdateUserRole",
                     "UpdateUserProfile",
                     "DeactivatedUsers",
@@ -2528,7 +2529,7 @@ namespace Exam.Controllers
 
                 if (result.Succeeded)
                 {
-                    var siteUrl = "http://41.33.149.186:5208";
+                    var siteUrl = "http://41.33.149.186:8052";
                     var subject = "Your Password Has Been Reset - Eltarshoubi Academy";
                     var body = $@"
                         <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 25px; border-radius: 12px; border-top: 4px solid #f59e0b;'>
