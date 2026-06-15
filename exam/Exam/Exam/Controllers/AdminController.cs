@@ -2514,55 +2514,30 @@ namespace Exam.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> ResetUserPassword(string userId)
+        public async Task<IActionResult> ResetUserPassword(string userId, string newPassword)
         {
             if (string.IsNullOrEmpty(userId)) return Json(new { success = false, message = "User ID required." });
+            if (string.IsNullOrEmpty(newPassword)) newPassword = "TempPass@123";
 
             try
             {
                 var user = await _userManager.FindByIdAsync(userId);
                 if (user == null) return Json(new { success = false, message = "User not found." });
 
-                var newPassword = "EX-" + Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper(); 
-                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-                var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+                var hasPassword = await _userManager.HasPasswordAsync(user);
+                if (hasPassword)
+                {
+                    var removeResult = await _userManager.RemovePasswordAsync(user);
+                    if (!removeResult.Succeeded)
+                    {
+                        return Json(new { success = false, message = "Failed to remove old password: " + string.Join(", ", removeResult.Errors.Select(e => e.Description)) });
+                    }
+                }
 
+                var result = await _userManager.AddPasswordAsync(user, newPassword);
                 if (result.Succeeded)
                 {
-                    var siteUrl = "http://41.33.149.186:8052";
-                    var subject = "Your Password Has Been Reset - Eltarshoubi Academy";
-                    var body = $@"
-                        <div style='font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 25px; border-radius: 12px; border-top: 4px solid #f59e0b;'>
-                            <h2 style='color: #f59e0b; text-align: center;'>Password Security Update</h2>
-                            <p>Hello <strong>{user.UserName}</strong>,</p>
-                            <p>An administrator has reset your password for the **El-Tarshoubi Training Academy Exam System**.</p>
-                            
-                            <div style='background: #fffbeb; padding: 20px; border-radius: 8px; border: 1px solid #fef3c7; margin: 25px 0;'>
-                                <p style='margin: 8px 0;'><strong>Login Email:</strong> {user.Email}</p>
-                                <p style='margin: 8px 0;'><strong>New Password:</strong> <code style='background: #fff; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 4px; color: #b45309;'>{newPassword}</code></p>
-                            </div>
-
-                            <p style='text-align: center; margin: 35px 0;'>
-                                <a href='{siteUrl}' style='background: #f59e0b; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;'>Login with New Password</a>
-                            </p>
-                            <p style='font-size: 12px; color: #64748b; text-align: center;'>We recommend changing this password after your first login.</p>
-                            <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;' />
-                            <p style='font-size: 11px; color: #94a3b8; text-align: center;'>Â© {DateTime.Now.Year} El-Tarshoubi Group. All rights reserved.</p>
-                        </div>";
-
-                    try 
-                    {
-                        await _emailSender.SendEmailAsync(user.Email, subject, body);
-                        return Json(new { success = true, message = $"Password reset to {newPassword} and email sent." });
-                    }
-                    catch (Exception ex) when (ex.Message.Contains("LIMIT_REACHED"))
-                    {
-                        return Json(new { success = true, message = $"Password reset to {newPassword} but email was NOT sent: " + ex.Message.Replace("LIMIT_REACHED: ", "") });
-                    }
-                    catch (Exception ex)
-                    {
-                        return Json(new { success = true, message = $"Password reset to {newPassword} but email failed: {ex.Message}" });
-                    }
+                    return Json(new { success = true, message = $"Password has been successfully updated to '{newPassword}'." });
                 }
 
                 return Json(new { success = false, message = string.Join(", ", result.Errors.Select(e => e.Description)) });

@@ -963,19 +963,30 @@
 
         function resetPassword(userId) {
             Swal.fire({
-                title: 'Reset Password?',
-                text: "The user's password will be set to 'TempPass@123' and they will receive an email notification.",
-                icon: 'warning',
+                title: 'Reset User Password',
+                text: "Enter the new password for this user (minimum 6 characters, containing uppercase, lowercase, number, and special character):",
+                input: 'text',
+                inputValue: 'TempPass@123',
                 showCancelButton: true,
                 confirmButtonColor: '#f59e0b',
-                confirmButtonText: 'Yes, Reset and Email',
-                cancelButtonText: 'Cancel'
+                confirmButtonText: 'Reset Password',
+                cancelButtonText: 'Cancel',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'You need to write a password!'
+                    }
+                    if (value.length < 6) {
+                        return 'Password must be at least 6 characters long!'
+                    }
+                }
             }).then((result) => {
                 if (result.isConfirmed) {
+                    const newPassword = result.value;
+                    Swal.fire({ title: 'Processing...', didOpen: () => Swal.showLoading() });
                     $.ajax({
                         url: '/Admin/ResetUserPassword',
                         type: 'POST',
-                        data: { userId: userId },
+                        data: { userId: userId, newPassword: newPassword },
                         headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() },
                         success: function (res) {
                             if (res.success) {
@@ -983,6 +994,9 @@
                             } else {
                                 Swal.fire('Error', res.message, 'error');
                             }
+                        },
+                        error: function () {
+                            Swal.fire('Error', 'Communication with the server failed.', 'error');
                         }
                     });
                 }
