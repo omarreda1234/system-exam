@@ -573,6 +573,16 @@ namespace Exam.Controllers
             ViewBag.SelectedYear = year;
 
             var exams = await _examService.GetActiveExamsForDropdownAsync(typeId, month, year);
+
+            if (forceMode == "wavey")
+            {
+                exams = exams.Where(e => (e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave")).ToList();
+            }
+            else if (forceMode == "weekly")
+            {
+                exams = exams.Where(e => !((e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave"))).ToList();
+            }
+
             ViewBag.Exams = exams;
 
             int selectedId = 0;
@@ -582,12 +592,7 @@ namespace Exam.Controllers
             }
             else
             {
-                if (forceMode == "wavey")
-                    selectedId = exams.Where(e => (e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave")).OrderByDescending(e => e.StartTime).FirstOrDefault()?.Id ?? 0;
-                else if (forceMode == "weekly")
-                    selectedId = exams.Where(e => !((e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave"))).OrderByDescending(e => e.StartTime).FirstOrDefault()?.Id ?? 0;
-                else
-                    selectedId = exams.OrderByDescending(e => e.StartTime).FirstOrDefault()?.Id ?? 0;
+                selectedId = exams.OrderByDescending(e => e.StartTime).FirstOrDefault()?.Id ?? 0;
             }
 
             ViewBag.SelectedExamId = selectedId;

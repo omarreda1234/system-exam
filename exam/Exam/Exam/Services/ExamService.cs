@@ -570,50 +570,114 @@ namespace Exam.Services
             using var conn = new SqlConnection(_connectionString);
 
             const string sql = @"
-                SELECT
-                    u.Id               AS UserId,
-                    ISNULL(u.FullName, u.UserName) AS StudentName,
-                    u.Email            AS StudentEmail,
-                    u.UserCode,
-                    r.Name             AS RoleName,
-                    b.BranchName,
-                    s.ShiftName,
-                    e.Title            AS ExamTitle,
-                    et.TypeName        AS ExamType,
-                    tw.WaveName,
-                    ISNULL(uea.Status, 'Not Started') AS Status,
-                    ISNULL(uea.FinalScore, 0)          AS FinalScore,
-                    COALESCE(
-                        NULLIF((SELECT ISNULL(SUM(q.Points), 0) FROM UserSeenQuestions usq JOIN Questions q ON usq.QuestionId = q.Id WHERE usq.AttemptId = uea.Id), 0),
-                        NULLIF(e.TotalQuestionsToShow, 0),
-                        e.TotalPoints
-                    ) AS TotalPoints,
-                    ISNULL(uea.Score, 0)               AS Percentage,
-                    uea.StartTime,
-                    uea.EndTime,
-                    ISNULL(uea.DurationInMinutes, 0)   AS DurationInMinutes,
-                    ISNULL(uea.AttemptNumber, 0)       AS AttemptNumber,
-                    uea.IsPassed,
-                    uea.CertificateCode,
-                    uea.Id             AS AttemptId
-                FROM AspNetUsers u
-                INNER JOIN UserExamAttempts uea ON uea.UserId = u.Id
-                INNER JOIN Exams e              ON e.Id = uea.ExamId
-                LEFT  JOIN ExamTypes et         ON et.Id = e.ExamTypeId
-                LEFT  JOIN Branches b           ON b.Id = u.BranchId
-                LEFT  JOIN Shifts s             ON s.Id = u.ShiftId
-                LEFT  JOIN AspNetUserRoles ur   ON ur.UserId = u.Id
-                LEFT  JOIN AspNetRoles r        ON r.Id = ur.RoleId
-                LEFT  JOIN TrainingWaves tw     ON tw.Id = e.WaveId
-                WHERE u.IsActive = 1
-                    AND (@BranchId  IS NULL OR u.BranchId = @BranchId)
-                    AND (@ShiftId   IS NULL OR u.ShiftId  = @ShiftId)
-                    AND (@RoleName  IS NULL OR r.Name     = @RoleName)
-                    AND (@Status    IS NULL OR uea.Status = @Status)
-                    AND (@WaveId    IS NULL OR e.WaveId   = @WaveId)
-                    AND (@ExamId    IS NULL OR e.Id       = @ExamId)
-                    AND (@Date      IS NULL OR CAST(uea.StartTime AS DATE) = @Date)
-                ORDER BY uea.StartTime DESC";
+                WITH UserRoles AS (
+                    SELECT UR.UserId,
+                           MAX(CASE WHEN LOWER(R.Name) = 'pharmacist' OR R.Name LIKE N'%صيدل%' THEN 1 ELSE 0 END) as IsPharmacist,
+                           MAX(CASE WHEN LOWER(R.Name) = 'assistant' OR R.Name LIKE N'%مساعد%' THEN 1 ELSE 0 END) as IsAssistant,
+                           MAX(R.Name) as RoleName
+                    FROM AspNetUserRoles UR
+                    JOIN AspNetRoles R ON UR.RoleId = R.Id
+                    GROUP BY UR.UserId
+                ),
+                AllLiveMonitor AS (
+                    -- 1. Students with attempts (InProgress / Completed)
+                    SELECT
+                        u.Id               AS UserId,
+                        ISNULL(u.FullName, u.UserName) AS StudentName,
+                        u.Email            AS StudentEmail,
+                        u.UserCode,
+                        COALESCE(ur.RoleName, 'User') AS RoleName,
+                        u.BranchId,
+                        b.BranchName,
+                        u.ShiftId,
+                        s.ShiftName,
+                        e.Title            AS ExamTitle,
+                        et.TypeName        AS ExamType,
+                        tw.WaveName,
+                        e.WaveId           AS WaveId,
+                        e.Id               AS ExamId,
+                        uea.Status         AS Status,
+                        ISNULL(uea.FinalScore, 0)          AS FinalScore,
+                        COALESCE(
+                            NULLIF((SELECT ISNULL(SUM(q.Points), 0) FROM UserSeenQuestions usq JOIN Questions q ON usq.QuestionId = q.Id WHERE usq.AttemptId = uea.Id), 0),
+                            NULLIF(e.TotalQuestionsToShow, 0),
+                            e.TotalPoints
+                        ) AS TotalPoints,
+                        ISNULL(uea.Score, 0)               AS Percentage,
+                        uea.StartTime,
+                        uea.EndTime,
+                        ISNULL(uea.DurationInMinutes, 0)   AS DurationInMinutes,
+                        ISNULL(uea.AttemptNumber, 0)       AS AttemptNumber,
+                        uea.IsPassed,
+                        uea.CertificateCode,
+                        uea.Id             AS AttemptId,
+                        uea.StartTime      AS FilterDate
+                    FROM AspNetUsers u
+                    INNER JOIN UserExamAttempts uea ON uea.UserId = u.Id
+                    INNER JOIN Exams e              ON e.Id = uea.ExamId
+                    LEFT  JOIN ExamTypes et         ON et.Id = e.ExamTypeId
+                    LEFT  JOIN Branches b           ON b.Id = u.BranchId
+                    LEFT  JOIN Shifts s             ON s.Id = u.ShiftId
+                    LEFT  JOIN UserRoles ur         ON ur.UserId = u.Id
+                    LEFT  JOIN TrainingWaves tw     ON tw.Id = e.WaveId
+                    WHERE u.IsActive = 1
+
+                    UNION ALL
+
+                    -- 2. Students assigned to exams but have NOT started yet
+                    SELECT
+                        u.Id               AS UserId,
+                        ISNULL(u.FullName, u.UserName) AS StudentName,
+                        u.Email            AS StudentEmail,
+                        u.UserCode,
+                        COALESCE(ur.RoleName, 'User') AS RoleName,
+                        u.BranchId,
+                        b.BranchName,
+                        u.ShiftId,
+                        s.ShiftName,
+                        e.Title            AS ExamTitle,
+                        et.TypeName        AS ExamType,
+                        tw.WaveName,
+                        e.WaveId           AS WaveId,
+                        e.Id               AS ExamId,
+                        'Not Started'      AS Status,
+                        0                  AS FinalScore,
+                        COALESCE(
+                            NULLIF(e.TotalQuestionsToShow, 0),
+                            e.TotalPoints
+                        )                  AS TotalPoints,
+                        0                  AS Percentage,
+                        NULL               AS StartTime,
+                        NULL               AS EndTime,
+                        0                  AS DurationInMinutes,
+                        0                  AS AttemptNumber,
+                        CAST(0 AS BIT)     AS IsPassed,
+                        NULL               AS CertificateCode,
+                        NULL               AS AttemptId,
+                        ea.ScheduledStartTime AS FilterDate
+                    FROM AspNetUsers u
+                    INNER JOIN ExamAssignments ea   ON ea.StudentId = u.Id
+                    INNER JOIN Exams e              ON e.Id = ea.ExamId
+                    LEFT  JOIN ExamTypes et         ON et.Id = e.ExamTypeId
+                    LEFT  JOIN Branches b           ON b.Id = u.BranchId
+                    LEFT  JOIN Shifts s             ON s.Id = u.ShiftId
+                    LEFT  JOIN UserRoles ur         ON ur.UserId = u.Id
+                    LEFT  JOIN TrainingWaves tw     ON tw.Id = e.WaveId
+                    WHERE u.IsActive = 1
+                      AND NOT EXISTS (
+                          SELECT 1 FROM UserExamAttempts uea 
+                          WHERE uea.UserId = u.Id AND uea.ExamId = e.Id
+                      )
+                )
+                SELECT * FROM AllLiveMonitor
+                WHERE (@BranchId  IS NULL OR BranchId = @BranchId)
+                  AND (@ShiftId   IS NULL OR ShiftId  = @ShiftId)
+                  AND (@RoleName  IS NULL OR RoleName = @RoleName)
+                  AND (@Status    IS NULL OR Status   = @Status)
+                  AND (@WaveId    IS NULL OR WaveId   = @WaveId)
+                  AND (@ExamId    IS NULL OR ExamId   = @ExamId)
+                  AND (@Date      IS NULL OR CAST(FilterDate AS DATE) = @Date)
+                ORDER BY StartTime DESC, StudentName ASC";
 
             var rows = await conn.QueryAsync<Exam.DTOs.LiveMonitorRowDto>(sql, new
             {
