@@ -697,6 +697,9 @@ namespace Exam.Controllers
             var waves     = await _examService.GetAllWavesAsync();
             var examTypes = await _examService.GetAllExamTypesAsync();
 
+            var allExams = await _examService.GetAllExamsWithDetailsAsync();
+            var weeklyExams = allExams.Where(e => !(e.ExamType ?? "").ToLower().Contains("wave")).ToList();
+
             using var conn = new SqlConnection(_connectionString);
             var roles = (await conn.QueryAsync<string>(
                 "SELECT DISTINCT r.Name FROM AspNetRoles r " +
@@ -707,6 +710,7 @@ namespace Exam.Controllers
             ViewBag.Branches  = branches;
             ViewBag.Shifts    = shifts;
             ViewBag.Waves     = waves;
+            ViewBag.WeeklyExams = weeklyExams;
             ViewBag.ExamTypes = examTypes;
             ViewBag.Roles     = roles;
             ViewBag.SelectedBranchId = branchId;
@@ -731,6 +735,88 @@ namespace Exam.Controllers
             ViewBag.NotStartedCount = results.Count(r => r.Status == "Not Started");
 
             return View(results);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportLiveMonitorToExcel(
+            int? branchId = null, int? shiftId = null, string roleName = null,
+            string status = null, int? waveId = null, string date = null, int? examId = null)
+        {
+            try
+            {
+                DateTime? parsedDate = null;
+                if (!string.IsNullOrWhiteSpace(date) && DateTime.TryParse(date, out var d))
+                    parsedDate = d;
+
+                var results = await _examService.GetLiveMonitorDataAsync(
+                    branchId, shiftId, roleName, status, waveId, parsedDate, examId);
+
+                using (var workbook = new XLWorkbook())
+                {
+                    var worksheet = workbook.Worksheets.Add("Live Monitor");
+                    var currentRow = 1;
+
+                    string[] headers = { "Personnel", "User Code", "Branch", "Shift", "Role", "Exam", "Wave", "Status", "Start Time", "End Time", "Duration (Min)", "Score", "Total Points", "Percentage (%)", "Result" };
+                    for (int i = 0; i < headers.Length; i++)
+                    {
+                        var cell = worksheet.Cell(currentRow, i + 1);
+                        cell.Value = headers[i];
+                        cell.Style.Font.Bold = true;
+                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#2A766F");
+                        cell.Style.Font.FontColor = XLColor.White;
+                    }
+
+                    foreach (var item in results)
+                    {
+                        currentRow++;
+                        worksheet.Cell(currentRow, 1).Value = item.StudentName;
+                        worksheet.Cell(currentRow, 2).Value = item.UserCode;
+                        worksheet.Cell(currentRow, 3).Value = item.BranchName ?? "--";
+                        worksheet.Cell(currentRow, 4).Value = item.ShiftName ?? "--";
+                        worksheet.Cell(currentRow, 5).Value = item.RoleName ?? "--";
+                        worksheet.Cell(currentRow, 6).Value = item.ExamTitle;
+                        worksheet.Cell(currentRow, 7).Value = item.WaveName ?? "--";
+                        worksheet.Cell(currentRow, 8).Value = item.Status;
+                        worksheet.Cell(currentRow, 9).Value = item.StartTime.HasValue ? item.StartTime.Value.ToString("dd/MM/yyyy hh:mm tt") : "--";
+                        worksheet.Cell(currentRow, 10).Value = item.EndTime.HasValue ? item.EndTime.Value.ToString("dd/MM/yyyy hh:mm tt") : "--";
+                        worksheet.Cell(currentRow, 11).Value = item.DurationInMinutes;
+                        worksheet.Cell(currentRow, 12).Value = item.FinalScore;
+                        worksheet.Cell(currentRow, 13).Value = item.TotalPoints;
+                        worksheet.Cell(currentRow, 14).Value = item.Percentage;
+
+                        string resultStr = "--";
+                        if (item.Status == "Completed")
+                        {
+                            resultStr = item.IsPassed == true ? "PASS" : "FAILED";
+                        }
+                        worksheet.Cell(currentRow, 15).Value = resultStr;
+                    }
+
+                    worksheet.Columns().AdjustToContents();
+
+                    using (var stream = new MemoryStream())
+                    {
+                        workbook.SaveAs(stream);
+                        var content = stream.ToArray();
+                        return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"Live_Monitor_Report_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return Content($"Error: {ex.Message}");
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetExamsByWaveId(int waveId)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var exams = await conn.QueryAsync<dynamic>(
+                "SELECT Id, Title FROM Exams WHERE WaveId = @WaveId AND IsActive = 1 ORDER BY Title",
+                new { WaveId = waveId }
+            );
+            return Json(exams.Select(e => new { id = e.Id, title = e.Title }));
         }
 
         [HttpGet]

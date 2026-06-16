@@ -583,7 +583,11 @@ namespace Exam.Services
                     tw.WaveName,
                     ISNULL(uea.Status, 'Not Started') AS Status,
                     ISNULL(uea.FinalScore, 0)          AS FinalScore,
-                    ISNULL(e.TotalPoints, 0)           AS TotalPoints,
+                    COALESCE(
+                        NULLIF((SELECT ISNULL(SUM(q.Points), 0) FROM UserSeenQuestions usq JOIN Questions q ON usq.QuestionId = q.Id WHERE usq.AttemptId = uea.Id), 0),
+                        NULLIF(e.TotalQuestionsToShow, 0),
+                        e.TotalPoints
+                    ) AS TotalPoints,
                     ISNULL(uea.Score, 0)               AS Percentage,
                     uea.StartTime,
                     uea.EndTime,

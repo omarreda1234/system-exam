@@ -5,6 +5,7 @@
     var branches  = ViewBag.Branches  as IEnumerable<Exam.DTOs.BranchDto>    ?? Enumerable.Empty<Exam.DTOs.BranchDto>();
     var shifts    = ViewBag.Shifts    as IEnumerable<Exam.DTOs.ShiftDto>      ?? Enumerable.Empty<Exam.DTOs.ShiftDto>();
     var waves     = ViewBag.Waves     as IEnumerable<Exam.DTOs.WaveDto>       ?? Enumerable.Empty<Exam.DTOs.WaveDto>();
+    var weeklyExams = ViewBag.WeeklyExams as IEnumerable<Exam.DTOs.adminExamDto> ?? Enumerable.Empty<Exam.DTOs.adminExamDto>();
     var roles     = ViewBag.Roles     as IEnumerable<string>                  ?? Enumerable.Empty<string>();
     string selBranch = ViewBag.SelectedBranchId?.ToString() ?? "";
     string selShift  = ViewBag.SelectedShiftId?.ToString()  ?? "";
@@ -12,6 +13,23 @@
     string selStatus = ViewBag.SelectedStatus   ?? "";
     string selWave   = ViewBag.SelectedWaveId?.ToString()   ?? "";
     string selDate   = ViewBag.SelectedDate     ?? "";
+    string selExam   = ViewBag.SelectedExamId?.ToString()   ?? "";
+    string selCategory = "";
+    if (!string.IsNullOrEmpty(selExam))
+    {
+        if (weeklyExams.Any(e => e.Id.ToString() == selExam))
+        {
+            selCategory = "weekly";
+        }
+        else
+        {
+            selCategory = "wave";
+        }
+    }
+    else if (!string.IsNullOrEmpty(selWave))
+    {
+        selCategory = "wave";
+    }
 }
 
 <!-- Header -->
@@ -42,7 +60,7 @@
         </div>
 
         <!-- Filter Bar -->
-        <form method="get" action="/Admin/LiveMonitor" id="filterForm" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+        <form method="get" action="/Admin/LiveMonitor" id="filterForm" class="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div class="flex flex-col gap-1">
                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Branch</label>
                 <select name="branchId" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
@@ -59,7 +77,7 @@
                     <option value="">All Shifts</option>
                     @foreach (var s in shifts)
                     {
-                        <option value="@s.ShiftId" selected="@(selShift == s.ShiftId.ToString() ? "selected" : null)">@s.ShiftName</option>
+                        <option value="@s.Id" selected="@(selShift == s.Id.ToString() ? "selected" : null)">@s.ShiftName</option>
                     }
                 </select>
             </div>
@@ -82,9 +100,32 @@
                     <option value="Not Started" selected="@(selStatus == "Not Started" ? "selected" : null)">⚪ Not Started</option>
                 </select>
             </div>
+
             <div class="flex flex-col gap-1">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Exam Category</label>
+                <select id="examCategory" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
+                    <option value="" selected="@(selCategory == "" ? "selected" : null)">All Exams</option>
+                    <option value="weekly" selected="@(selCategory == "weekly" ? "selected" : null)">Weekly Exams</option>
+                    <option value="wave" selected="@(selCategory == "wave" ? "selected" : null)">Wave Exams</option>
+                </select>
+            </div>
+
+            <!-- Weekly Exam -->
+            <div class="flex flex-col gap-1 @(selCategory == "weekly" ? "" : "hidden")" id="weeklyExamWrapper">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Weekly Exam</label>
+                <select id="weeklyExamFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
+                    <option value="">All Weekly Exams</option>
+                    @foreach (var e in weeklyExams)
+                    {
+                        <option value="@e.Id" selected="@(selCategory == "weekly" && selExam == e.Id.ToString() ? "selected" : null)">@e.Title</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Wave Select -->
+            <div class="flex flex-col gap-1 @(selCategory == "wave" ? "" : "hidden")" id="waveWrapper">
                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Wave</label>
-                <select name="waveId" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
+                <select name="waveId" id="waveFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
                     <option value="">All Waves</option>
                     @foreach (var w in waves)
                     {
@@ -92,14 +133,25 @@
                     }
                 </select>
             </div>
+
+            <!-- Wave Exam Select -->
+            <div class="flex flex-col gap-1 @(selCategory == "wave" ? "" : "hidden")" id="waveExamWrapper">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Wave Exam</label>
+                <select id="waveExamFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
+                    <option value="">All Wave Exams</option>
+                </select>
+            </div>
+
             <div class="flex flex-col gap-1">
                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Date</label>
                 <input type="date" name="date" value="@selDate"
                     class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold" />
             </div>
+
+            <input type="hidden" name="examId" id="hiddenExamId" value="@selExam" />
+
             <div class="flex flex-col gap-1 justify-end">
-                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 opacity-0">Go</label>
-                <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center justify-center gap-2">
+                <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center justify-center gap-2 h-[38px]">
                     <i class="fas fa-search"></i> Apply
                 </button>
             </div>
@@ -111,22 +163,22 @@
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[20px] p-5 shadow-sm">
         <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Records</div>
-        <div class="text-3xl font-black text-slate-900 dark:text-white">@ViewBag.TotalCount</div>
+        <div class="text-3xl font-black text-slate-900 dark:text-white" id="cardTotalCount">@ViewBag.TotalCount</div>
     </div>
     <div class="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-[20px] p-5 shadow-sm">
         <div class="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1 flex items-center gap-2">
             <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span></span>
             In Progress Now
         </div>
-        <div class="text-3xl font-black text-amber-700">@ViewBag.InProgressCount</div>
+        <div class="text-3xl font-black text-amber-700" id="cardInProgressCount">@ViewBag.InProgressCount</div>
     </div>
     <div class="bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-[20px] p-5 shadow-sm">
         <div class="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Completed</div>
-        <div class="text-3xl font-black text-emerald-700">@ViewBag.CompletedCount</div>
+        <div class="text-3xl font-black text-emerald-700" id="cardCompletedCount">@ViewBag.CompletedCount</div>
     </div>
     <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[20px] p-5 shadow-sm">
         <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Not Started</div>
-        <div class="text-3xl font-black text-slate-600 dark:text-slate-300">@ViewBag.NotStartedCount</div>
+        <div class="text-3xl font-black text-slate-600 dark:text-slate-300" id="cardNotStartedCount">@ViewBag.NotStartedCount</div>
     </div>
 </div>
 
@@ -222,16 +274,9 @@
                         <td>
                             @if (r.Status == "Completed")
                             {
-                                double pct = (double)r.Percentage;
-                                bool isPharm = (r.RoleName ?? "").ToLower().Contains("pharmacist") || (r.RoleName ?? "").Contains("صيدل");
-                                double cert = 75.0, pass = 70.0;
-                                if (pct >= cert)
+                                if (r.IsPassed == true)
                                 {
-                                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200">PASS ✓CERT</span>
-                                }
-                                else if (pct >= pass)
-                                {
-                                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-50 text-blue-600 border border-blue-200">PASS</span>
+                                    <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200">PASS</span>
                                 }
                                 else
                                 {
@@ -252,26 +297,286 @@
 
 @section Scripts {
     <script>
-        // Auto-refresh every 60 seconds if InProgress filter is active
-        const statusFilter = '@selStatus';
-        if (statusFilter === 'InProgress') {
-            setTimeout(() => location.reload(), 60000);
+        let refreshTimer = null;
+
+        function toggleCategoryWrappers() {
+            const category = $('#examCategory').val();
+            if (category === 'weekly') {
+                $('#weeklyExamWrapper').removeClass('hidden');
+                $('#waveWrapper').addClass('hidden');
+                $('#waveExamWrapper').addClass('hidden');
+            } else if (category === 'wave') {
+                $('#weeklyExamWrapper').addClass('hidden');
+                $('#waveWrapper').removeClass('hidden');
+                $('#waveExamWrapper').removeClass('hidden');
+            } else {
+                $('#weeklyExamWrapper').addClass('hidden');
+                $('#waveWrapper').addClass('hidden');
+                $('#waveExamWrapper').addClass('hidden');
+            }
         }
 
-        $('#btnRefresh').on('click', () => location.reload());
+        $('#examCategory').on('change', function () {
+            toggleCategoryWrappers();
+            // Clear selections
+            $('#weeklyExamFilter').val('');
+            $('#waveFilter').val('').trigger('change');
+        });
+
+        $('#waveFilter').on('change', function () {
+            const waveId = $(this).val();
+            const examFilter = $('#waveExamFilter');
+            examFilter.html('<option value="">All Wave Exams</option>');
+
+            if (waveId) {
+                $.getJSON('/Admin/GetExamsByWaveId', { waveId: waveId }, function (exams) {
+                    exams.forEach(e => {
+                        const isSelected = e.id.toString() === '@selExam';
+                        examFilter.append(`<option value="${e.id}" ${isSelected ? 'selected' : ''}>${e.title}</option>`);
+                    });
+                });
+            }
+        });
+
+        function loadData() {
+            Swal.fire({
+                title: 'Updating Live Monitor...',
+                html: 'Fetching fresh records...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            // Map the selected value to hidden examId
+            let examId = null;
+            const category = $('#examCategory').val();
+            if (category === 'weekly') {
+                examId = $('#weeklyExamFilter').val();
+            } else if (category === 'wave') {
+                examId = $('#waveExamFilter').val();
+            }
+            $('#hiddenExamId').val(examId || '');
+
+            const formData = $('#filterForm').serialize();
+            
+            // Update URL in address bar so users can refresh/bookmark
+            const params = new URLSearchParams(formData);
+            window.history.pushState({}, '', window.location.pathname + '?' + params.toString());
+
+            $.ajax({
+                url: '/Admin/GetLiveMonitorData',
+                type: 'GET',
+                data: formData,
+                success: function (data) {
+                    let total = data.length;
+                    let inProgress = 0;
+                    let completed = 0;
+                    let notStarted = 0;
+
+                    const dt = $('#liveMonitorTable').DataTable();
+                    dt.clear();
+
+                    const newRows = [];
+
+                    data.forEach(item => {
+                        if (item.status === 'InProgress') inProgress++;
+                        else if (item.status === 'Completed') completed++;
+                        else notStarted++;
+
+                        // Build Personnel HTML
+                        let personnelHtml = `
+                            <div class="flex items-center gap-3 flex-nowrap">
+                                <div class="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase text-sm flex-shrink-0">
+                                    ${item.studentName ? item.studentName.substring(0, 1) : '?'}
+                                </div>
+                                <div class="flex flex-col min-w-0">
+                                    <span class="font-bold text-slate-900 dark:text-white text-sm leading-tight truncate">${item.studentName || ''}</span>
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase">${item.userCode || ''}</span>
+                                </div>
+                            </div>
+                        `;
+
+                        // Branch HTML
+                        let branchHtml = `<span class="text-[11px] font-bold text-slate-500 uppercase">${item.branchName || '--'}</span>`;
+
+                        // Shift HTML
+                        let shiftHtml = `<span class="text-[11px] font-bold text-slate-500">${item.shiftName || '--'}</span>`;
+
+                        // Role HTML
+                        let roleHtml = '--';
+                        if (item.roleName) {
+                            let isPharm = item.roleName.toLowerCase().includes('pharmacist') || item.roleName.includes('صيدل');
+                            roleHtml = `
+                                <span class="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase ${isPharm ? 'bg-purple-50 text-purple-600 border border-purple-200' : 'bg-sky-50 text-sky-600 border border-sky-200'}">
+                                    ${isPharm ? 'Pharm.' : 'Asst.'}
+                                </span>
+                            `;
+                        }
+
+                        // Exam HTML
+                        let examHtml = `
+                            <div class="flex flex-col max-w-[180px]">
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">${item.examTitle || ''}</span>
+                                <span class="text-[9px] font-bold text-slate-400 uppercase">${item.examType || ''}</span>
+                            </div>
+                        `;
+
+                        // Wave HTML
+                        let waveHtml = `<span class="text-[11px] font-bold text-slate-400 uppercase">${item.waveName || '--'}</span>`;
+
+                        // Status HTML
+                        let statusHtml = '';
+                        if (item.status === 'InProgress') {
+                            statusHtml = `
+                                <span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200 flex items-center gap-1 w-fit">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0"></span> In Progress
+                                </span>
+                            `;
+                        } else if (item.status === 'Completed') {
+                            statusHtml = `
+                                <span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200 w-fit">✓ Completed</span>
+                            `;
+                        } else {
+                            statusHtml = `
+                                <span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-slate-100 text-slate-400 w-fit">Not Started</span>
+                            `;
+                        }
+
+                        // Start/End Time HTML
+                        let startHtml = '--';
+                        if (item.startTime) {
+                            let parts = item.startTime.split(' ');
+                            startHtml = `
+                                <div class="flex flex-col">
+                                    <span class="text-[10px] font-bold text-slate-500">${parts[0]}</span>
+                                    <span class="text-[9px] text-slate-400">${parts[1]} ${parts[2] || ''}</span>
+                                </div>
+                            `;
+                        }
+
+                        let endHtml = '--';
+                        if (item.endTime) {
+                            let parts = item.endTime.split(' ');
+                            endHtml = `
+                                <div class="flex flex-col">
+                                    <span class="text-[10px] font-bold text-slate-500">${parts[0]}</span>
+                                    <span class="text-[9px] text-slate-400">${parts[1]} ${parts[2] || ''}</span>
+                                </div>
+                            `;
+                        }
+
+                        // Duration HTML
+                        let durationHtml = `<span class="text-xs font-bold text-slate-500">${item.durationInMinutes > 0 ? item.durationInMinutes + ' min' : '--'}</span>`;
+
+                        // Score HTML
+                        let scoreHtml = `
+                            <div class="flex flex-col">
+                                <span class="text-sm font-bold font-mono text-brand-600">${Math.round(item.finalScore)} / ${Math.round(item.totalPoints)}</span>
+                                <span class="text-[9px] text-slate-400">${item.percentage.toFixed(1)}%</span>
+                            </div>
+                        `;
+
+                        // Result HTML
+                        let resultHtml = '<span class="text-slate-300 text-xs">--</span>';
+                        if (item.status === 'Completed') {
+                            if (item.isPassed) {
+                                resultHtml = `<span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200">PASS</span>`;
+                            } else {
+                                resultHtml = `<span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-rose-50 text-rose-600 border border-rose-200">FAILED</span>`;
+                            }
+                        }
+
+                        // Push row
+                        newRows.push([
+                            personnelHtml,
+                            branchHtml,
+                            shiftHtml,
+                            roleHtml,
+                            examHtml,
+                            waveHtml,
+                            statusHtml,
+                            startHtml,
+                            endHtml,
+                            durationHtml,
+                            scoreHtml,
+                            resultHtml
+                        ]);
+                    });
+
+                    // Add and draw
+                    dt.rows.add(newRows).draw();
+
+                    // Update UI Counters
+                    $('#cardTotalCount').text(total);
+                    $('#cardInProgressCount').text(inProgress);
+                    $('#cardCompletedCount').text(completed);
+                    $('#cardNotStartedCount').text(notStarted);
+
+                    // Re-schedule auto refresh if InProgress is selected
+                    clearTimeout(refreshTimer);
+                    const currentStatus = $('[name="status"]').val();
+                    if (currentStatus === 'InProgress') {
+                        refreshTimer = setTimeout(loadData, 60000);
+                    }
+
+                    Swal.close();
+                },
+                error: function () {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Failed to retrieve fresh monitor records.'
+                    });
+                }
+            });
+        }
+
+        // Intercept form submit to load data via AJAX
+        $('#filterForm').on('submit', function (e) {
+            e.preventDefault();
+            loadData();
+        });
+
+        // Auto-refresh timer for initial page load if needed
+        const initialStatus = $('[name="status"]').val();
+        if (initialStatus === 'InProgress') {
+            refreshTimer = setTimeout(loadData, 60000);
+        }
+
+        $('#btnRefresh').on('click', function(e) {
+            e.preventDefault();
+            loadData();
+        });
 
         $('#btnExport').on('click', function() {
-            const params = new URLSearchParams(window.location.search);
-            params.set('export', 'excel');
+            // Map the selected value to hidden examId before export
+            let examId = null;
+            const category = $('#examCategory').val();
+            if (category === 'weekly') {
+                examId = $('#weeklyExamFilter').val();
+            } else if (category === 'wave') {
+                examId = $('#waveExamFilter').val();
+            }
+            $('#hiddenExamId').val(examId || '');
+
+            const params = new URLSearchParams($('#filterForm').serialize());
             window.location = '/Admin/ExportLiveMonitorToExcel?' + params.toString();
         });
+
+        // Initial setup
+        toggleCategoryWrappers();
+        const initialWave = '@selWave';
+        if (initialWave) {
+            $('#waveFilter').val(initialWave).trigger('change');
+        }
 
         // Today's shortcut
         document.addEventListener('keydown', e => {
             if (e.altKey && e.key === 't') {
                 const today = new Date().toISOString().split('T')[0];
                 document.querySelector('[name="date"]').value = today;
-                document.getElementById('filterForm').submit();
+                loadData();
             }
         });
     </script>
