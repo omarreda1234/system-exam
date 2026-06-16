@@ -600,37 +600,41 @@ namespace Exam.Controllers
                     bool isWavey = (exam.ExamType ?? "").ToLower().Contains("wave") || 
                                    (exam.Title ?? "").ToLower().Contains("wave");
                     
-                    var results = await _examService.GetExamResultsByExamIdAsync(selectedId);
-                    if (User.IsInRole("Branch Manager"))
+                    ViewBag.ExamTitle = exam.Title;
+
+                    if (isWavey)
                     {
-                        var currentUser = await _userManager.GetUserAsync(User);
-                        if (currentUser != null && currentUser.BranchId.HasValue)
+                        var results = await _examService.GetExamResultsByExamIdAsync(selectedId);
+                        if (User.IsInRole("Branch Manager"))
                         {
-                            using var conn = new SqlConnection(_connectionString);
-                            var branchName = await conn.QueryFirstOrDefaultAsync<string>(
-                                "SELECT BranchName FROM Branches WHERE Id = @Id", 
-                                new { Id = currentUser.BranchId.Value });
-                                
-                            if (!string.IsNullOrEmpty(branchName))
+                            var currentUser = await _userManager.GetUserAsync(User);
+                            if (currentUser != null && currentUser.BranchId.HasValue)
                             {
-                                results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
+                                using var conn = new SqlConnection(_connectionString);
+                                var branchName = await conn.QueryFirstOrDefaultAsync<string>(
+                                    "SELECT BranchName FROM Branches WHERE Id = @Id", 
+                                    new { Id = currentUser.BranchId.Value });
+                                    
+                                if (!string.IsNullOrEmpty(branchName))
+                                {
+                                    results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
+                                }
+                                else
+                                {
+                                    results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
+                                }
                             }
                             else
                             {
                                 results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
                             }
                         }
-                        else
-                        {
-                            results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
-                        }
-                    }
-                    ViewBag.ExamTitle = exam.Title;
-
-                    if (isWavey)
                         return View("WaveyResults", results);
+                    }
                     else
-                        return View("WeeklyResults", results);
+                    {
+                        return View("WeeklyResults", Enumerable.Empty<Exam.DTOs.ExamResultRowDto>());
+                    }
                 }
             }
 
@@ -721,20 +725,13 @@ namespace Exam.Controllers
             ViewBag.SelectedDate     = date;
             ViewBag.SelectedExamId   = examId;
 
-            DateTime? parsedDate = null;
-            if (!string.IsNullOrWhiteSpace(date) && DateTime.TryParse(date, out var d))
-                parsedDate = d;
-
-            var results = (await _examService.GetLiveMonitorDataAsync(
-                branchId, shiftId, roleName, status, waveId, parsedDate, examId)).ToList();
-
             // Summary stats
-            ViewBag.TotalCount      = results.Count;
-            ViewBag.InProgressCount = results.Count(r => r.Status == "InProgress");
-            ViewBag.CompletedCount  = results.Count(r => r.Status == "Completed");
-            ViewBag.NotStartedCount = results.Count(r => r.Status == "Not Started");
+            ViewBag.TotalCount      = 0;
+            ViewBag.InProgressCount = 0;
+            ViewBag.CompletedCount  = 0;
+            ViewBag.NotStartedCount = 0;
 
-            return View(results);
+            return View(Enumerable.Empty<Exam.DTOs.LiveMonitorRowDto>());
         }
 
         [HttpGet]
@@ -840,6 +837,153 @@ namespace Exam.Controllers
                 endTime   = r.EndTime?.ToString("dd/MM/yyyy HH:mm"),
                 r.DurationInMinutes, r.AttemptNumber, r.IsPassed, r.CertificateCode
             }));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GetLiveMonitorPaged()
+        {
+            var draw = Request.Form["draw"].FirstOrDefault();
+            var startStr = Request.Form["start"].FirstOrDefault();
+            var lengthStr = Request.Form["length"].FirstOrDefault();
+            var searchValue = Request.Form["search[value]"].FirstOrDefault();
+            var orderColumnIndex = Request.Form["order[0][column]"].FirstOrDefault();
+            var orderDir = Request.Form["order[0][dir]"].FirstOrDefault();
+
+            // Filters passed from form serialization
+            var branchIdStr = Request.Form["branchId"].FirstOrDefault();
+            var shiftIdStr = Request.Form["shiftId"].FirstOrDefault();
+            var roleName = Request.Form["roleName"].FirstOrDefault();
+            var status = Request.Form["status"].FirstOrDefault();
+            var waveIdStr = Request.Form["waveId"].FirstOrDefault();
+            var dateStr = Request.Form["date"].FirstOrDefault();
+            var examIdStr = Request.Form["examId"].FirstOrDefault();
+
+            int start = string.IsNullOrEmpty(startStr) ? 0 : int.Parse(startStr);
+            int length = string.IsNullOrEmpty(lengthStr) ? 10 : int.Parse(lengthStr);
+
+            int? branchId = string.IsNullOrEmpty(branchIdStr) ? null : int.Parse(branchIdStr);
+            int? shiftId = string.IsNullOrEmpty(shiftIdStr) ? null : int.Parse(shiftIdStr);
+            int? waveId = string.IsNullOrEmpty(waveIdStr) ? null : int.Parse(waveIdStr);
+            int? examId = string.IsNullOrEmpty(examIdStr) ? null : int.Parse(examIdStr);
+
+            DateTime? parsedDate = null;
+            if (!string.IsNullOrWhiteSpace(dateStr) && DateTime.TryParse(dateStr, out var d))
+                parsedDate = d;
+
+            var results = await _examService.GetLiveMonitorDataAsync(
+                branchId, shiftId, roleName, status, waveId, parsedDate, examId);
+
+            int totalRecords = results.Count();
+
+            // Stats counts for cards (computed from the matches BEFORE search filter)
+            int totalCount = totalRecords;
+            int inProgressCount = results.Count(r => r.Status == "InProgress");
+            int completedCount = results.Count(r => r.Status == "Completed");
+            int notStartedCount = results.Count(r => r.Status == "Not Started");
+
+            // Apply search
+            if (!string.IsNullOrEmpty(searchValue))
+            {
+                var searchLower = searchValue.ToLower();
+                results = results.Where(r =>
+                    (r.StudentName ?? "").ToLower().Contains(searchLower) ||
+                    (r.StudentEmail ?? "").ToLower().Contains(searchLower) ||
+                    (r.UserCode ?? "").ToLower().Contains(searchLower) ||
+                    (r.BranchName ?? "").ToLower().Contains(searchLower) ||
+                    (r.ShiftName ?? "").ToLower().Contains(searchLower) ||
+                    (r.ExamTitle ?? "").ToLower().Contains(searchLower) ||
+                    (r.WaveName ?? "").ToLower().Contains(searchLower) ||
+                    (r.Status ?? "").ToLower().Contains(searchLower)
+                );
+            }
+
+            int filteredRecords = results.Count();
+
+            // Apply sorting
+            if (!string.IsNullOrEmpty(orderColumnIndex))
+            {
+                bool isAsc = orderDir == "asc";
+                switch (orderColumnIndex)
+                {
+                    case "0":
+                        results = isAsc ? results.OrderBy(r => r.StudentName) : results.OrderByDescending(r => r.StudentName);
+                        break;
+                    case "1":
+                        results = isAsc ? results.OrderBy(r => r.BranchName) : results.OrderByDescending(r => r.BranchName);
+                        break;
+                    case "2":
+                        results = isAsc ? results.OrderBy(r => r.ShiftName) : results.OrderByDescending(r => r.ShiftName);
+                        break;
+                    case "3":
+                        results = isAsc ? results.OrderBy(r => r.RoleName) : results.OrderByDescending(r => r.RoleName);
+                        break;
+                    case "4":
+                        results = isAsc ? results.OrderBy(r => r.ExamTitle) : results.OrderByDescending(r => r.ExamTitle);
+                        break;
+                    case "5":
+                        results = isAsc ? results.OrderBy(r => r.WaveName) : results.OrderByDescending(r => r.WaveName);
+                        break;
+                    case "6":
+                        results = isAsc ? results.OrderBy(r => r.Status) : results.OrderByDescending(r => r.Status);
+                        break;
+                    case "7":
+                        results = isAsc ? results.OrderBy(r => r.StartTime) : results.OrderByDescending(r => r.StartTime);
+                        break;
+                    case "8":
+                        results = isAsc ? results.OrderBy(r => r.EndTime) : results.OrderByDescending(r => r.EndTime);
+                        break;
+                    case "9":
+                        results = isAsc ? results.OrderBy(r => r.DurationInMinutes) : results.OrderByDescending(r => r.DurationInMinutes);
+                        break;
+                    case "10":
+                        results = isAsc ? results.OrderBy(r => r.Percentage) : results.OrderByDescending(r => r.Percentage);
+                        break;
+                    case "11":
+                        results = isAsc ? results.OrderBy(r => r.IsPassed) : results.OrderByDescending(r => r.IsPassed);
+                        break;
+                }
+            }
+
+            var pagedResults = results.Skip(start).Take(length).ToList();
+
+            var data = pagedResults.Select(r => new
+            {
+                userId = r.UserId,
+                studentName = r.StudentName,
+                studentEmail = r.StudentEmail,
+                userCode = r.UserCode ?? "--",
+                branchName = r.BranchName ?? "--",
+                shiftName = r.ShiftName ?? "--",
+                roleName = r.RoleName ?? "--",
+                examTitle = r.ExamTitle,
+                examType = r.ExamType,
+                waveName = r.WaveName ?? "--",
+                status = r.Status,
+                finalScore = r.FinalScore,
+                totalPoints = r.TotalPoints,
+                percentage = r.Percentage,
+                startTimeDate = r.StartTime?.ToString("dd/MM/yyyy") ?? "--",
+                startTimeTime = r.StartTime?.ToString("hh:mm tt") ?? "",
+                endTimeDate = r.EndTime?.ToString("dd/MM/yyyy") ?? "--",
+                endTimeTime = r.EndTime?.ToString("hh:mm tt") ?? "",
+                duration = r.DurationInMinutes,
+                isPassed = r.IsPassed,
+                certificateCode = r.CertificateCode,
+                attemptId = r.AttemptId
+            });
+
+            return Json(new
+            {
+                draw = draw,
+                recordsTotal = totalRecords,
+                recordsFiltered = filteredRecords,
+                totalCount = totalCount,
+                inProgressCount = inProgressCount,
+                completedCount = completedCount,
+                notStartedCount = notStartedCount,
+                data = data
+            });
         }
 
         [HttpGet]
@@ -1498,15 +1642,408 @@ namespace Exam.Controllers
 
 
 
+        [HttpPost]
+        public async Task<IActionResult> GetWeeklyResultsPaged()
+        {
+            var draw = Request.Form["draw"].FirstOrDefault();
+            var startStr = Request.Form["start"].FirstOrDefault();
+            var lengthStr = Request.Form["length"].FirstOrDefault();
+            var searchValue = Request.Form["search[value]"].FirstOrDefault();
+            var orderColumnIndex = Request.Form["order[0][column]"].FirstOrDefault();
+            var orderDir = Request.Form["order[0][dir]"].FirstOrDefault();
+            var examIdStr = Request.Form["examId"].FirstOrDefault();
+
+            int start = string.IsNullOrEmpty(startStr) ? 0 : int.Parse(startStr);
+            int length = string.IsNullOrEmpty(lengthStr) ? 10 : int.Parse(lengthStr);
+            int examId = string.IsNullOrEmpty(examIdStr) ? 0 : int.Parse(examIdStr);
+
+            if (examId <= 0)
+            {
+                return Json(new { draw = draw, recordsTotal = 0, recordsFiltered = 0, data = new List<object>() });
+            }
+
+            var results = await _examService.GetExamResultsByExamIdAsync(examId);
+
+            // Apply Branch Manager filters if needed
+            if (User.IsInRole("Branch Manager"))
+            {
+                var currentUser = await _userManager.GetUserAsync(User);
+                if (currentUser != null && currentUser.BranchId.HasValue)
+                {
+                    using var conn = new SqlConnection(_connectionString);
+                    var branchName = await conn.QueryFirstOrDefaultAsync<string>(
+                        "SELECT BranchName FROM Branches WHERE Id = @Id", 
+                        new { Id = currentUser.BranchId.Value });
+                        
+                    if (!string.IsNullOrEmpty(branchName))
+                    {
+                        results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
+                    }
+                    else
+                    {
+                        results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
+                    }
+                }
+                else
+                {
+                    results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
+                }
+            }
+
+            int totalRecords = results.Count();
+
+            // Apply Search filter
+            if (!string.IsNullOrEmpty(searchValue))
+            {
+                var searchLower = searchValue.ToLower();
+                results = results.Where(r => 
+                    (r.StudentName ?? "").ToLower().Contains(searchLower) ||
+                    (r.StudentEmail ?? "").ToLower().Contains(searchLower) ||
+                    (r.UserCode ?? "").ToLower().Contains(searchLower) ||
+                    (r.BranchName ?? "").ToLower().Contains(searchLower) ||
+                    (r.Status ?? "").ToLower().Contains(searchLower)
+                );
+            }
+
+            int filteredRecords = results.Count();
+
+            // Apply Sorting
+            if (!string.IsNullOrEmpty(orderColumnIndex))
+            {
+                bool isAsc = orderDir == "asc";
+                switch (orderColumnIndex)
+                {
+                    case "0": // Personnel Node (StudentName)
+                        results = isAsc ? results.OrderBy(r => r.StudentName) : results.OrderByDescending(r => r.StudentName);
+                        break;
+                    case "1": // Email Address
+                        results = isAsc ? results.OrderBy(r => r.StudentEmail) : results.OrderByDescending(r => r.StudentEmail);
+                        break;
+                    case "2": // Branch
+                        results = isAsc ? results.OrderBy(r => r.BranchName) : results.OrderByDescending(r => r.BranchName);
+                        break;
+                    case "3": // Status
+                        results = isAsc ? results.OrderBy(r => r.Status) : results.OrderByDescending(r => r.Status);
+                        break;
+                    case "4": // Start Time
+                        results = isAsc ? results.OrderBy(r => r.ActualStartTime) : results.OrderByDescending(r => r.ActualStartTime);
+                        break;
+                    case "5": // Finish Time
+                        results = isAsc ? results.OrderBy(r => r.ActualEndTime) : results.OrderByDescending(r => r.ActualEndTime);
+                        break;
+                    case "6": // Time (M) (Duration)
+                        results = isAsc ? results.OrderBy(r => r.DurationInMinutes) : results.OrderByDescending(r => r.DurationInMinutes);
+                        break;
+                    case "7": // Score (Percentage)
+                        results = isAsc ? results.OrderBy(r => r.Score) : results.OrderByDescending(r => r.Score);
+                        break;
+                    case "8": // User Code
+                        results = isAsc ? results.OrderBy(r => r.UserCode) : results.OrderByDescending(r => r.UserCode);
+                        break;
+                }
+            }
+
+            // Pagination
+            var pagedResults = results.Skip(start).Take(length).ToList();
+
+            // Map results to DataTable-friendly DTO/Anonymous objects
+            var data = pagedResults.Select(r => new
+            {
+                id = r.Id,
+                studentName = r.StudentName,
+                studentEmail = r.StudentEmail,
+                branchName = r.BranchName ?? "--",
+                status = r.Status,
+                examType = r.ExamType,
+                actualStartTimeDate = r.ActualStartTime?.ToString("dd/MM/yyyy") ?? "",
+                actualStartTimeTime = r.ActualStartTime?.ToString("hh:mm tt") ?? "--",
+                actualEndTimeDate = r.ActualEndTime?.ToString("dd/MM/yyyy") ?? "",
+                actualEndTimeTime = r.ActualEndTime?.ToString("hh:mm tt") ?? "--",
+                duration = r.DurationInMinutes > 0 ? $"{r.DurationInMinutes} min" : "--",
+                scoreDisplay = $"{r.FinalScore.ToString("0")} / {r.TotalScoreAvailable.ToString("0")}",
+                scorePercent = $"{r.Score.ToString("0.0")}% Achievement",
+                userCode = r.UserCode ?? "--",
+                isAdmin = User.IsInRole("Admin")
+            });
+
+            return Json(new
+            {
+                draw = draw,
+                recordsTotal = totalRecords,
+                recordsFiltered = filteredRecords,
+                data = data
+            });
+        }
+
         public async Task<IActionResult> AllUsers()
         {
-            var users = await _examService.GetAllUsersWithRolesAsync();
             var allRoles = await _examService.GetAllRolesAsync();
             // English-only Role Filter
             ViewBag.Roles = allRoles.Where(r => !System.Text.RegularExpressions.Regex.IsMatch(r.RoleName, @"\p{IsArabic}") && !r.RoleName.Contains("ØµÙŠØ¯Ù„ÙŠ") && !r.RoleName.Contains("Ù…Ø³Ø§Ø¹Ø¯")).ToList();
             ViewBag.Shifts = await _examService.GetAllShiftsAsync();
             ViewBag.Branches = await _examService.GetAllBranchesAsync();
-            return View(users);
+            return View(Enumerable.Empty<Exam.DTOs.UserWithRoleDto>());
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> GetUsersPaged()
+        {
+            // Read DataTable parameters
+            var draw = Request.Form["draw"].FirstOrDefault();
+            var startStr = Request.Form["start"].FirstOrDefault();
+            var lengthStr = Request.Form["length"].FirstOrDefault();
+            var searchValue = Request.Form["search[value]"].FirstOrDefault();
+            var orderColumnIndex = Request.Form["order[0][column]"].FirstOrDefault();
+            var orderDir = Request.Form["order[0][dir]"].FirstOrDefault();
+
+            // Custom filters
+            var classification = Request.Form["classification"].FirstOrDefault();
+            var branchName = Request.Form["branchName"].FirstOrDefault();
+
+            int start = string.IsNullOrEmpty(startStr) ? 0 : int.Parse(startStr);
+            int length = string.IsNullOrEmpty(lengthStr) ? 10 : int.Parse(lengthStr);
+
+            using var conn = new SqlConnection(_connectionString);
+
+            // Base SQL query
+            string sqlBase = @"
+FROM dbo.AspNetUsers U WITH(NOLOCK)
+LEFT JOIN dbo.AspNetUserRoles UR ON U.Id = UR.UserId
+LEFT JOIN dbo.AspNetRoles R WITH(NOLOCK) ON UR.RoleId = R.Id
+LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId
+LEFT JOIN dbo.Branches B WITH(NOLOCK) ON U.BranchId = B.Id
+WHERE 1 = 1";
+
+            var parameters = new DynamicParameters();
+
+            if (!string.IsNullOrEmpty(searchValue))
+            {
+                sqlBase += " AND (U.UserName LIKE @Search OR U.Email LIKE @Search OR U.UserCode LIKE @Search)";
+                parameters.Add("Search", $"%{searchValue}%");
+            }
+
+            if (!string.IsNullOrEmpty(classification))
+            {
+                sqlBase += " AND UPPER(R.Name) = @Classification";
+                parameters.Add("Classification", classification.ToUpper());
+            }
+
+            if (!string.IsNullOrEmpty(branchName))
+            {
+                if (branchName.Equals("GLOBAL", StringComparison.OrdinalIgnoreCase))
+                {
+                    sqlBase += " AND (B.BranchName IS NULL OR B.BranchName = '')";
+                }
+                else
+                {
+                    sqlBase += " AND UPPER(B.BranchName) = @BranchName";
+                    parameters.Add("BranchName", branchName.ToUpper());
+                }
+            }
+
+            // Get total count (without filters)
+            int totalRecords = await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM dbo.AspNetUsers U WITH(NOLOCK)");
+
+            // Get filtered count
+            int filteredRecords = await conn.ExecuteScalarAsync<int>($"SELECT COUNT(1) {sqlBase}", parameters);
+
+            // Determine sort column
+            string sortColumn = "U.UserName";
+            if (orderColumnIndex == "0") sortColumn = "U.UserName";
+            else if (orderColumnIndex == "1") sortColumn = "U.Email";
+            else if (orderColumnIndex == "2") sortColumn = "B.BranchName";
+            else if (orderColumnIndex == "3") sortColumn = "U.UserCode";
+            else if (orderColumnIndex == "4") sortColumn = "R.Name";
+
+            string sortDirection = (orderDir == "desc") ? "DESC" : "ASC";
+
+            // Paginated query
+            string sqlQuery = $@"
+SELECT
+    U.Id,
+    U.UserName,
+    U.FullName,
+    U.Email,
+    U.PhoneNumber AS Phone,
+    U.UserCode AS Code,
+    B.Id AS BranchId,
+    B.BranchName,
+    U.ShiftId AS ShiftId,
+    S.StartTime,
+    S.EndTime,
+    S.ShiftName,
+    U.CertificateCode,
+    U.IsActive,
+    R.Name AS RoleName
+{sqlBase}
+ORDER BY {sortColumn} {sortDirection}
+OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
+
+            parameters.Add("Start", start);
+            parameters.Add("Length", length);
+
+            var users = await conn.QueryAsync<dynamic>(sqlQuery, parameters);
+
+            var dataList = new List<object>();
+
+            var allRoles = (await _examService.GetAllRolesAsync()).ToList();
+            var allShifts = (await _examService.GetAllShiftsAsync()).ToList();
+
+            foreach (var u in users)
+            {
+                string userId = u.Id;
+                string email = u.Email ?? "";
+                string userName = u.UserName ?? "";
+                string userCode = u.Code ?? "";
+                string branchNameVal = u.BranchName ?? "GLOBAL";
+                string roleName = u.RoleName ?? "User";
+                string shiftName = u.ShiftName ?? "";
+                bool isActive = u.IsActive ?? true;
+                string certCode = u.CertificateCode ?? "";
+                string branchId = u.BranchId?.ToString() ?? "";
+                string shiftId = u.ShiftId?.ToString() ?? "0";
+
+                // Generate HTML for Personnel Column
+                string avatarChar = string.IsNullOrEmpty(userName) ? "?" : userName.Trim().Substring(0, 1).ToUpper();
+                string displayUserName = userName.Replace("_", " ");
+                string subCode = string.IsNullOrWhiteSpace(userCode) 
+                    ? ("SYS-" + userId.Substring(0, Math.Min(8, userId.Length)).ToUpper()) 
+                    : userCode;
+
+                string personnelHtml = $@"
+                    <div class='flex items-center gap-3'>
+                        <div class='js-user-avatar w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center font-bold text-slate-400'>{avatarChar}</div>
+                        <div class='flex flex-col'>
+                            <span class='js-user-display font-bold text-slate-900 dark:text-white'>{displayUserName}</span>
+                            <span class='js-user-sub text-[9px] font-bold text-slate-400 uppercase'>{subCode}</span>
+                        </div>
+                    </div>";
+
+                // Email Column
+                string emailHtml = $"<span class='js-user-email text-xs font-medium text-slate-500'>{email}</span>";
+
+                // Branch Column
+                string activeBadge = !isActive ? "<span class='ml-2 text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-1 rounded border border-rose-100 dark:border-rose-800 uppercase'>Inactive</span>" : "";
+                string branchHtml = $@"
+                    <span class='js-user-branch-name text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest bg-brand-50 dark:bg-brand-500/10 px-2 py-1 rounded'>{branchNameVal}</span>
+                    {activeBadge}";
+
+                // Security Code Column
+                string codeHtml = $"<span class='js-user-code font-mono font-bold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded'>{userCode}</span>";
+
+                // Classification Column
+                string roleHtml = $"<span class='text-[9px] font-bold text-white bg-slate-900 dark:bg-brand-500/20 dark:text-brand-400 px-2.5 py-1 rounded-full uppercase tracking-widest'>{roleName.ToUpper()}</span>";
+
+                // Shift Column
+                string shiftHtml = "";
+                if (!string.IsNullOrWhiteSpace(shiftName))
+                {
+                    string startTimeStr = u.StartTime is TimeSpan st ? st.ToString(@"hh\:mm") : "00:00";
+                    string endTimeStr = u.EndTime is TimeSpan et ? et.ToString(@"hh\:mm") : "00:00";
+                    shiftHtml = $@"
+                        <div class='flex flex-col'>
+                            <span class='text-[10px] font-bold italic uppercase'>{shiftName}</span>
+                            <span class='text-[8px] font-bold text-slate-400'>{startTimeStr} — {endTimeStr}</span>
+                        </div>";
+                }
+                else
+                {
+                    shiftHtml = "<span class='text-[9px] font-bold text-rose-500/50 uppercase'>Unassigned</span>";
+                }
+
+                // Actions Column
+                // Role Options
+                string roleSelectOptions = "";
+                foreach (var r in allRoles)
+                {
+                    string sel = string.Equals(r.RoleName, roleName, StringComparison.OrdinalIgnoreCase) ? "selected" : "";
+                    roleSelectOptions += $"<option value='{r.RoleId}' {sel}>{r.RoleName.ToUpper()}</option>";
+                }
+
+                // Shift Options
+                string shiftSelectOptions = "<option value='0'>-- SYNC SHIFT --</option>";
+                foreach (var s in allShifts)
+                {
+                    string sel = string.Equals(shiftName, s.ShiftName, StringComparison.OrdinalIgnoreCase) ? "selected" : "";
+                    string startTimeStr = s.StartTime.ToString(@"hh\:mm");
+                    string endTimeStr = s.EndTime.ToString(@"hh\:mm");
+                    shiftSelectOptions += $"<option value='{s.Id}' data-name='{s.ShiftName.ToUpper()}' data-time='{startTimeStr} — {endTimeStr}' {sel}>{s.ShiftName.ToUpper()} ({startTimeStr})</option>";
+                }
+
+                string statusButton = "";
+                if (isActive)
+                {
+                    statusButton = $@"
+                        <button type='button' onclick=""deactivateUser('{userId}')"" class='w-full bg-white dark:bg-slate-900 text-rose-500 hover:bg-rose-500 hover:text-white p-1.5 rounded-xl transition-all border border-rose-100 dark:border-rose-900/50 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm'>
+                            <i class='fas fa-ban'></i> Deactivate
+                        </button>";
+                }
+                else
+                {
+                    statusButton = $@"
+                        <button type='button' onclick=""activateUser('{userId}')"" class='w-full bg-white dark:bg-slate-900 text-emerald-500 hover:bg-emerald-500 hover:text-white p-1.5 rounded-xl transition-all border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm'>
+                            <i class='fas fa-check-circle'></i> Activate
+                        </button>";
+                }
+
+                var userNameEscaped = userName.Replace("'", "\\'");
+                string actionsHtml = $@"
+                    <div class='flex flex-col gap-2 min-w-[220px]'>
+                        <div class='flex gap-1'>
+                            <button type='button' class='js-edit-personnel flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase hover:bg-brand-50 dark:hover:bg-brand-900/20'>
+                                <i class='fas fa-pen'></i> Edit
+                            </button>
+                            <button type='button' onclick=""deleteUser('{userId}')"" class='flex-1 bg-white dark:bg-slate-900 text-slate-500 hover:text-rose-600 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase'>
+                                <i class='fas fa-trash-alt'></i> Delete
+                            </button>
+                        </div>
+                        <button type='button' onclick=""openSendMailModal('{userId}', '{userNameEscaped}')"" class='w-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 p-1.5 rounded-xl border border-brand-100 dark:border-brand-800 text-[9px] font-bold uppercase hover:bg-brand-600 hover:text-white transition-all flex items-center justify-center gap-2'>
+                            <i class='fas fa-paper-plane'></i> Send Custom Message
+                        </button>
+                        <form action='/Admin/UpdateUserRole' method='post' class='flex gap-2 ajax-update-form' data-type='role'>
+                            <input type='hidden' name='userId' value='{userId}' />
+                            <select name='roleId' onchange=""$(this).closest('form').submit();"" class='bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-brand-500 outline-none flex-1 transition-all'>
+                                {roleSelectOptions}
+                            </select>
+                        </form>
+                        <form action='/Admin/UpdateUserShift' method='post' class='flex gap-2 ajax-update-form' data-type='shift'>
+                            <input type='hidden' name='userId' value='{userId}' />
+                            <select name='newShiftId' onchange=""$(this).closest('form').submit();"" class='bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-amber-500 outline-none flex-1 transition-all'>
+                                {shiftSelectOptions}
+                            </select>
+                        </form>
+                        {statusButton}
+                        <button type='button' onclick=""resetPassword('{userId}')"" class='w-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white p-1.5 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm'>
+                            <i class='fas fa-key'></i> Reset Password
+                        </button>
+                    </div>";
+
+                dataList.Add(new {
+                    personnel = personnelHtml,
+                    email = emailHtml,
+                    branch = branchHtml,
+                    code = codeHtml,
+                    classification = roleHtml,
+                    shift = shiftHtml,
+                    actions = actionsHtml,
+                    DT_RowId = userId,
+                    DT_RowAttr = new { 
+                        data_user_id = userId,
+                        data_email = email,
+                        data_username = userName,
+                        data_usercode = userCode,
+                        data_branch_id = branchId,
+                        data_shift_id = shiftId
+                    }
+                });
+            }
+
+            return Json(new {
+                draw = draw,
+                recordsTotal = totalRecords,
+                recordsFiltered = filteredRecords,
+                data = dataList
+            });
         }
 
         [HttpPost]

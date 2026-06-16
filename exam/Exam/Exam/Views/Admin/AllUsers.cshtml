@@ -98,7 +98,7 @@
     </div>
 
     <div class="overflow-x-auto">
-        <table class="datatable saas-table">
+        <table class="saas-table" id="personnelTable">
             <thead>
                 <tr>
                     <th class="pl-8">User Name</th>
@@ -111,90 +111,6 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var u in Model ?? Enumerable.Empty<Exam.DTOs.UserWithRoleDto>()) {
-                    var currentRoleName = u.RoleName ?? "User";
-                    <tr data-user-id="@u.Id" data-email="@u.Email" data-username="@u.UserName" data-usercode="@(u.Code ?? "")" data-branch-id="@(u.BranchId?.ToString() ?? "")" data-shift-id="@(u.ShiftId?.ToString() ?? "0")">
-                        <td class="pl-8">
-                            <div class="flex items-center gap-3">
-                                <div class="js-user-avatar w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center font-bold text-slate-400">@((u.UserName ?? "?").Trim().Substring(0,1).ToUpper())</div>
-                                <div class="flex flex-col">
-                                    <span class="js-user-display font-bold text-slate-900 dark:text-white">@(u.UserName?.Replace("_", " "))</span>
-                                    <span class="js-user-sub text-[9px] font-bold text-slate-400 uppercase">@(string.IsNullOrWhiteSpace(u.Code) ? ("SYS-" + u.Id.Substring(0, Math.Min(8, u.Id.Length)).ToUpper()) : u.Code)</span>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="hidden lg:table-cell"><span class="js-user-email text-xs font-medium text-slate-500">@u.Email</span></td>
-                        <td class="hidden sm:table-cell">
-                             <span class="js-user-branch-name text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest bg-brand-50 dark:bg-brand-500/10 px-2 py-1 rounded">@(u.BranchName ?? "GLOBAL")</span>
-                             @if(u.IsActive == false) {
-                                 <span class="ml-2 text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-1 rounded border border-rose-100 dark:border-rose-800 uppercase">Inactive</span>
-                             }
-                        </td>
-                        <td class="hidden md:table-cell"><span class="js-user-code font-mono font-bold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">@u.Code</span></td>
-                        <td class="text-center">
-                            <span class="text-[9px] font-bold text-white bg-slate-900 dark:bg-brand-500/20 dark:text-brand-400 px-2.5 py-1 rounded-full uppercase tracking-widest">@currentRoleName.ToUpper()</span>
-                        </td>
-                        <td class="hidden xl:table-cell">
-                            @if (!string.IsNullOrWhiteSpace(u.ShiftName)) {
-                                <div class="flex flex-col">
-                                    <span class="text-[10px] font-bold italic uppercase">@u.ShiftName</span>
-                                    <span class="text-[8px] font-bold text-slate-400">@(u.StartTime?.ToString(@"hh\:mm")) — @(u.EndTime?.ToString(@"hh\:mm"))</span>
-                                </div>
-                            } else {
-                                <span class="text-[9px] font-bold text-rose-500/50 uppercase">Unassigned</span>
-                            }
-                        </td>
-                        <td class="pr-8">
-                            <div class="flex flex-col gap-2 min-w-[220px]">
-                                <div class="flex gap-1">
-                                    <button type="button" class="js-edit-personnel flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase hover:bg-brand-50 dark:hover:bg-brand-900/20">
-                                        <i class="fas fa-pen"></i> Edit
-                                    </button>
-                                    <button type="button" onclick="deleteUser('@u.Id')" class="flex-1 bg-white dark:bg-slate-900 text-slate-500 hover:text-rose-600 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase">
-                                        <i class="fas fa-trash-alt"></i> Delete
-                                    </button>
-                                </div>
-                                <button type="button" onclick="openSendMailModal('@u.Id', '@(u.FullName ?? u.UserName)')" class="w-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 p-1.5 rounded-xl border border-brand-100 dark:border-brand-800 text-[9px] font-bold uppercase hover:bg-brand-600 hover:text-white transition-all flex items-center justify-center gap-2">
-                                    <i class="fas fa-paper-plane"></i> Send Custom Message
-                                </button>
-                                <form asp-action="UpdateUserRole" asp-controller="Admin" method="post" class="flex gap-2 ajax-update-form" data-type="role">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="userId" value="@u.Id" />
-                                    <select name="roleId" onchange="$(this).closest('form').submit();" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-brand-500 outline-none flex-1 transition-all">
-                                        @foreach (var r in roles) {
-                                            <option value="@r.RoleId" selected="@(string.Equals(r.RoleName, currentRoleName, StringComparison.OrdinalIgnoreCase))">@r.RoleName.ToUpper()</option>
-                                        }
-                                    </select>
-                                </form>
-                                <form asp-action="UpdateUserShift" asp-controller="Admin" method="post" class="flex gap-2 ajax-update-form" data-type="shift">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="userId" value="@u.Id" />
-                                    <select name="newShiftId" onchange="$(this).closest('form').submit();" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-amber-500 outline-none flex-1 transition-all">
-                                        <option value="0">-- SYNC SHIFT --</option>
-                                        @foreach (var s in shifts) {
-                                            <option value="@s.Id" data-name="@s.ShiftName.ToUpper()" data-time="@s.StartTime.ToString(@"hh\:mm") — @s.EndTime.ToString(@"hh\:mm")" selected="@(string.Equals(u.ShiftName, s.ShiftName, StringComparison.OrdinalIgnoreCase))">@s.ShiftName.ToUpper() (@s.StartTime.ToString(@"hh\:mm"))</option>
-                                        }
-                                    </select>
-                                </form>
-                                @if (u.IsActive != false)
-                                {
-                                    <button type="button" onclick="deactivateUser('@u.Id')" class="w-full bg-white dark:bg-slate-900 text-rose-500 hover:bg-rose-500 hover:text-white p-1.5 rounded-xl transition-all border border-rose-100 dark:border-rose-900/50 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm">
-                                        <i class="fas fa-ban"></i> Deactivate
-                                    </button>
-                                }
-                                else
-                                {
-                                    <button type="button" onclick="activateUser('@u.Id')" class="w-full bg-white dark:bg-slate-900 text-emerald-500 hover:bg-emerald-500 hover:text-white p-1.5 rounded-xl transition-all border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm">
-                                        <i class="fas fa-check-circle"></i> Activate
-                                    </button>
-                                }
-                                <button type="button" onclick="resetPassword('@u.Id')" class="w-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white p-1.5 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm">
-                                    <i class="fas fa-key"></i> Reset Password
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                }
             </tbody>
         </table>
     </div>
@@ -208,33 +124,48 @@
         const branchesData = @Html.Raw(Json.Serialize(ViewBag.Branches ?? new List<Exam.DTOs.BranchDto>()));
         const isHR = @((User.IsInRole("HR") || User.IsInRole("Human Resources")).ToString().ToLower());
 
+        let table;
         $(document).ready(function() {
-            // Wait a bit for the global DataTable to initialize
-            setTimeout(function() {
-                var table = $('table.datatable').DataTable();
-                
-                $.fn.dataTable.ext.search.push(
-                    function(settings, data, dataIndex) {
-                        var selectedClass = $('#filterClassification').val();
-                        var selectedBranch = $('#filterBranch').val();
-                        
-                        var branch = data[2] || "";
-                        var classification = data[4] || "";
-                        
-                        if (selectedClass && !classification.toUpperCase().includes(selectedClass.toUpperCase())) {
-                            return false;
-                        }
-                        if (selectedBranch && !branch.toUpperCase().includes(selectedBranch.toUpperCase())) {
-                            return false;
-                        }
-                        return true;
+            table = $('#personnelTable').DataTable({
+                serverSide: true,
+                processing: true,
+                ajax: {
+                    url: '/Admin/GetUsersPaged',
+                    type: 'POST',
+                    data: function (d) {
+                        d.classification = $('#filterClassification').val();
+                        d.branchName = $('#filterBranch').val();
+                    },
+                    headers: {
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
                     }
-                );
+                },
+                columns: [
+                    { data: 'personnel', className: 'pl-8', orderable: true },
+                    { data: 'email', className: 'hidden lg:table-cell', orderable: true },
+                    { data: 'branch', className: 'hidden sm:table-cell', orderable: true },
+                    { data: 'code', className: 'hidden md:table-cell', orderable: true },
+                    { data: 'classification', className: 'text-center', orderable: true },
+                    { data: 'shift', className: 'hidden xl:table-cell', orderable: false },
+                    { data: 'actions', className: 'text-right pr-8', orderable: false }
+                ],
+                deferRender: true,
+                autoWidth: false,
+                orderClasses: false,
+                stateSave: true,
+                pageLength: 10,
+                lengthMenu: [[10, 25, 50], [10, 25, 50]],
+                dom: '<"flex flex-col sm:flex-row justify-between items-center mb-4"lf>rt<"flex flex-col sm:flex-row justify-between items-center mt-4"ip>',
+                language: {
+                    search: "",
+                    searchPlaceholder: "Search records...",
+                    processing: '<div class="flex items-center gap-2 text-brand-600 font-bold"><i class="fas fa-circle-notch animate-spin text-lg"></i> Loading Matrix...</div>'
+                }
+            });
 
-                $('#filterClassification, #filterBranch').on('change', function() {
-                    table.draw();
-                });
-            }, 300);
+            $('#filterClassification, #filterBranch').on('change', function() {
+                table.draw();
+            });
         });
 
         function openManualAddModal() {
@@ -368,86 +299,7 @@
         }
 
         function appendNewUserToTable(u) {
-            const $table = $('table.datatable');
-            if (!$table.length) return;
-
-            const roleName = (u.roleName || 'User').toUpperCase();
-            const branchName = (u.branchName || 'GLOBAL').toUpperCase();
-            const avatar = u.userName ? u.userName.charAt(0).toUpperCase() : '?';
-            const sysCode = u.code ? u.code : ('SYS-' + u.id.substring(0, 8).toUpperCase());
-            
-            const roleOpts = rolesData.map(r => `<option value="${r.roleId}" ${r.roleName.toLowerCase() === (u.roleName||'').toLowerCase() ? 'selected' : ''}>${r.roleName.toUpperCase()}</option>`).join('');
-            const shiftOpts = shiftsData.map(s => `<option value="${s.id}" ${s.shiftName.toLowerCase() === (u.shiftName||'').toLowerCase() ? 'selected' : ''}>${s.shiftName.toUpperCase()} (${s.startTime ? s.startTime.substring(0,5) : ''})</option>`).join('');
-
-            const rowHtml = `
-                <tr data-user-id="${u.id}" data-email="${u.email}" data-username="${u.userName}" data-usercode="${u.code || ''}" data-branch-id="${u.branchId || ''}">
-                    <td class="pl-8">
-                        <div class="flex items-center gap-3">
-                            <div class="js-user-avatar w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center font-bold text-slate-400">${avatar}</div>
-                            <div class="flex flex-col">
-                                <span class="js-user-display font-bold text-slate-900 dark:text-white">${u.userName}</span>
-                                <span class="js-user-sub text-[9px] font-bold text-slate-400 uppercase">${sysCode}</span>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span class="js-user-email text-xs font-medium text-slate-500">${u.email}</span></td>
-                    <td>
-                        <span class="js-user-branch-name text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest bg-brand-50 dark:bg-brand-500/10 px-2 py-1 rounded">${branchName}</span>
-                    </td>
-                    <td><span class="js-user-code font-mono font-bold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">${u.code || ''}</span></td>
-                    <td class="text-center">
-                        <span class="text-[9px] font-bold text-white bg-slate-900 dark:bg-brand-500/20 dark:text-brand-400 px-2.5 py-1 rounded-full uppercase tracking-widest">${roleName}</span>
-                    </td>
-                    <td>
-                        ${u.shiftName ? `
-                            <div class="flex flex-col">
-                                <span class="text-[10px] font-bold italic uppercase">${u.shiftName}</span>
-                                <span class="text-[8px] font-bold text-slate-400">${u.startTime} — ${u.endTime}</span>
-                            </div>
-                        ` : `<span class="text-[9px] font-bold text-rose-500/50 uppercase">Unassigned</span>`}
-                    </td>
-                    <td class="pr-8">
-                        <div class="flex flex-col gap-2 min-w-[220px]">
-                            <div class="flex gap-1">
-                                <button type="button" class="js-edit-personnel flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase hover:bg-brand-50 dark:hover:bg-brand-900/20">
-                                    <i class="fas fa-pen"></i> Edit
-                                </button>
-                                <button type="button" onclick="deleteUser('${u.id}')" class="flex-1 bg-white dark:bg-slate-900 text-slate-500 hover:text-rose-600 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase">
-                                    <i class="fas fa-trash-alt"></i> Delete
-                                </button>
-                            </div>
-                            <button type="button" onclick="openSendMailModal('${u.id}', '${u.userName}')" class="w-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 p-1.5 rounded-xl border border-brand-100 dark:border-brand-800 text-[9px] font-bold uppercase hover:bg-brand-600 hover:text-white transition-all flex items-center justify-center gap-2">
-                                <i class="fas fa-paper-plane"></i> Send Custom Message
-                            </button>
-                            <form action="/Admin/UpdateUserRole" method="post" class="flex gap-2 ajax-update-form" data-type="role">
-                                <input type="hidden" name="userId" value="${u.id}" />
-                                <select name="roleId" onchange="$(this).closest('form').submit();" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-brand-500 outline-none flex-1 transition-all">
-                                    ${roleOpts}
-                                </select>
-                            </form>
-                             <form action="/Admin/UpdateUserShift" method="post" class="flex gap-2 ajax-update-form" data-type="shift">
-                                <input type="hidden" name="userId" value="${u.id}" />
-                                <select name="newShiftId" onchange="$(this).closest('form').submit();" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-amber-500 outline-none flex-1 transition-all">
-                                    <option value="0">-- SYNC SHIFT --</option>
-                                    ${shiftOpts}
-                                </select>
-                            </form>
-                            <button type="button" onclick="deactivateUser('${u.id}')" class="w-full bg-white dark:bg-slate-900 text-rose-500 hover:bg-rose-500 hover:text-white p-1.5 rounded-xl transition-all border border-rose-100 dark:border-rose-900/50 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm">
-                                <i class="fas fa-ban"></i> Deactivate
-                            </button>
-                            <button type="button" onclick="resetPassword('${u.id}')" class="w-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white p-1.5 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm">
-                                <i class="fas fa-key"></i> Reset Password
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-
-            if ($.fn.DataTable.isDataTable($table[0])) {
-                $table.DataTable().row.add($(rowHtml)).draw(false);
-            } else {
-                $table.find('tbody').prepend(rowHtml);
-            }
+            table.draw(false);
         }
 
         const conn = new signalR.HubConnectionBuilder().withUrl("/importHub").withAutomaticReconnect().build();
@@ -483,28 +335,7 @@
                         timer: 3000,
                         background: '#f8fafc'
                     });
-                    
-                    // Update UI labels without refresh
-                    const $row = $form.closest('tr');
-                    if(type === 'role') {
-                        const newRole = $form.find('select option:selected').text();
-                        $row.find('td:nth-child(5) span').text(newRole);
-                    } else if(type === 'shift') {
-                        const $opt = $form.find('select option:selected');
-                        const name = $opt.data('name');
-                        const time = $opt.data('time');
-                        
-                        let html = '';
-                        if(name) {
-                            html = `<div class="flex flex-col">
-                                        <span class="text-[10px] font-bold italic uppercase">${name}</span>
-                                        <span class="text-[8px] font-bold text-slate-400">${time}</span>
-                                    </div>`;
-                        } else {
-                            html = `<span class="text-[9px] font-bold text-rose-500/50 uppercase">Unassigned</span>`;
-                        }
-                        $row.find('td:nth-child(6)').html(html);
-                    }
+                    table.draw(false);
                 } else {
                     Swal.fire('Error', res.message, 'error');
                 }
@@ -633,7 +464,7 @@
                                     text: 'The personnel node has been deactivated.',
                                     timer: 2000,
                                     showConfirmButton: false
-                                }).then(() => location.reload());
+                                }).then(() => table.draw(false));
                             } else {
                                 Swal.fire('Error', res.message, 'error');
                             }
@@ -673,7 +504,7 @@
                                     text: 'The personnel node has been activated.',
                                     timer: 2000,
                                     showConfirmButton: false
-                                }).then(() => location.reload());
+                                }).then(() => table.draw(false));
                             } else {
                                 Swal.fire('Error', res.message, 'error');
                             }
@@ -687,24 +518,7 @@
         }
 
         function applyPersonnelRowFromServer(userId, res) {
-            const $tr = $('tr[data-user-id]').filter(function () { return $(this).attr('data-user-id') === userId; });
-            if (!$tr.length) return;
-            $tr.attr('data-email', res.email || '');
-            $tr.attr('data-username', res.fullName || res.userName || '');
-            $tr.attr('data-usercode', res.userCode || '');
-            $tr.attr('data-branch-id', res.branchId == null ? '' : String(res.branchId));
-            const un = res.fullName || res.userName || '';
-            $tr.find('.js-user-display').text(un.replace(/_/g, ' '));
-            $tr.find('.js-user-avatar').text(un ? un.charAt(0).toUpperCase() : '?');
-            const sub = res.userCode ? res.userCode : ('SYS-' + userId.substring(0, 8).toUpperCase());
-            $tr.find('.js-user-sub').text(sub);
-            $tr.find('.js-user-email').text(res.email || '');
-            $tr.find('.js-user-branch-name').text((res.branchName || 'GLOBAL').toUpperCase());
-            $tr.find('.js-user-code').text(res.userCode || '');
-            const $tbl = $tr.closest('table.datatable');
-            if ($tbl.length && $.fn.DataTable.isDataTable($tbl[0])) {
-                try { $tbl.DataTable().row($tr).invalidate('dom').draw(false); } catch (e) { /* ignore */ }
-            }
+            table.draw(false);
         }
 
         function openEditUserModal(userId, email, userName, userCode, branchId) {
@@ -832,15 +646,8 @@
                 }
             }).then((result) => {
                 if (result.isConfirmed && result.value) {
-                    if (result.value.isShiftOnly) {
-                        location.reload();
-                    } else {
-                        const $tr = $('tr[data-user-id="' + userId + '"]');
-                        $tr.attr('data-shift-id', result.value.newShiftId);
-                        applyPersonnelRowFromServer(userId, result.value);
-                        Swal.fire({ icon: 'success', title: 'Saved', toast: true, position: 'top-end', timer: 2000, showConfirmButton: false });
-                        setTimeout(() => location.reload(), 1000);
-                    }
+                    table.draw(false);
+                    Swal.fire({ icon: 'success', title: 'Saved', toast: true, position: 'top-end', timer: 2000, showConfirmButton: false });
                 }
             });
         }

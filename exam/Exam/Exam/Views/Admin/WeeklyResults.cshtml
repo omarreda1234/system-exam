@@ -80,7 +80,7 @@
 
 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 overflow-hidden shadow-sm">
     <div class="overflow-x-auto">
-        <table class="datatable saas-table">
+        <table id="weeklyResultsTable" class="saas-table">
             <thead>
                 <tr>
                     <th class="min-w-[280px]">Personnel Node</th>
@@ -96,62 +96,6 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var s in Model) {
-                    var statusClass = s.Status.StartsWith("Completed") ? "bg-emerald-500" : "bg-slate-400";
-                    <tr class="student-row">
-                        <td>
-                            <div class="flex items-center gap-3 px-4 py-3 flex-nowrap">
-                                <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase">@s.StudentName.Substring(0,1)</div>
-                                <div class="flex flex-col">
-                                    <span class="font-bold text-slate-900 dark:text-white leading-tight">@s.StudentName</span>
-                                    <span class="text-[10px] font-bold text-slate-400 uppercase">@s.ExamType.ToUpper()</span>
-                                </div>
-                            </div>
-                        </td>
-                        <td><span class="text-xs font-medium text-slate-500">@s.StudentEmail</span></td>
-                        <td><span class="text-[10px] font-black text-slate-400 uppercase">@s.BranchName</span></td>
-                        <td>
-                             <div class="flex items-center gap-1.5 px-3 py-1 rounded-full @(statusClass.Replace("bg-", "bg-opacity-10 text-")) w-fit">
-                                <span class="text-[10px] font-black uppercase">@s.Status.ToUpper()</span>
-                            </div>
-                        </td>
-                        <td class="text-center">
-                            <div class="flex flex-col">
-                                <span class="text-[9px] text-slate-400 font-bold mb-0.5">@(s.ActualStartTime.HasValue ? s.ActualStartTime.Value.ToString("dd/MM/yyyy") : "")</span>
-                                <span class="text-[10px] font-bold text-slate-500 uppercase">@(s.ActualStartTime.HasValue ? s.ActualStartTime.Value.ToString("hh:mm tt") : "--")</span>
-                            </div>
-                        </td>
-                        <td class="text-center">
-                            <div class="flex flex-col">
-                                <span class="text-[9px] text-slate-400 font-bold mb-0.5">@(s.ActualEndTime.HasValue ? s.ActualEndTime.Value.ToString("dd/MM/yyyy") : "")</span>
-                                <span class="text-[10px] font-bold text-slate-500 uppercase">@(s.ActualEndTime.HasValue ? s.ActualEndTime.Value.ToString("hh:mm tt") : "--")</span>
-                            </div>
-                        </td>
-                        <td class="text-xs font-bold text-slate-500">
-                            @(s.DurationInMinutes > 0 ? s.DurationInMinutes + " min" : "--")
-                        </td>
-                        <td class="font-mono font-bold text-slate-700 dark:text-slate-300">
-                            <div class="flex flex-col">
-                                <span class="text-brand-600 dark:text-brand-400 text-sm">@s.FinalScore.ToString("0") / @s.TotalScoreAvailable.ToString("0")</span>
-                                <span class="text-[9px] text-slate-400 uppercase tracking-widest">@s.Score.ToString("0.0")% Achievement</span>
-                            </div>
-                        </td>
-                        <td class="text-[10px] font-bold text-slate-500 uppercase">@s.UserCode</td>
-                        <td class="text-right px-8">
-                             <div class="flex items-center justify-end gap-2">
-                                <button class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 dark:bg-slate-800 rounded-xl view-review" data-student-id="@s.Id" title="View Review">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                @if (User.IsInRole("Admin"))
-                                {
-                                    <button class="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 dark:bg-slate-800 rounded-xl wipe-data" data-student-id="@s.Id" data-student-name="@s.StudentName" title="Wipe Data & Reset">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                }
-                             </div>
-                        </td>
-                    </tr>
-                }
             </tbody>
         </table>
     </div>
@@ -159,6 +103,138 @@
 
 @section Scripts {
     <script>
+        var table;
+        $(document).ready(function () {
+            table = $('#weeklyResultsTable').DataTable({
+                serverSide: true,
+                processing: true,
+                ajax: {
+                    url: '/Admin/GetWeeklyResultsPaged',
+                    type: 'POST',
+                    data: function (d) {
+                        d.examId = $('#examFilter').val();
+                    },
+                    headers: {
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    }
+                },
+                columns: [
+                    {
+                        data: 'studentName',
+                        render: function(data, type, row) {
+                            const initial = data ? data.charAt(0).toUpperCase() : '?';
+                            return `
+                                <div class="flex items-center gap-3 px-4 py-3 flex-nowrap">
+                                    <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase">${initial}</div>
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-slate-900 dark:text-white leading-tight">${data}</span>
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase">${row.examType ? row.examType.toUpperCase() : ''}</span>
+                                    </div>
+                                </div>`;
+                        }
+                    },
+                    { 
+                        data: 'studentEmail',
+                        render: function(data) {
+                            return `<span class="text-xs font-medium text-slate-500">${data}</span>`;
+                        }
+                    },
+                    {
+                        data: 'branchName',
+                        render: function(data) {
+                            return `<span class="text-[10px] font-black text-slate-400 uppercase">${data}</span>`;
+                        }
+                    },
+                    {
+                        data: 'status',
+                        render: function(data) {
+                            const statusLower = (data || '').toLowerCase();
+                            const isCompleted = statusLower.startsWith('completed');
+                            const statusClass = isCompleted ? 'text-emerald-600 bg-emerald-500/10' : 'text-slate-500 bg-slate-400/10';
+                            return `
+                                <div class="flex items-center gap-1.5 px-3 py-1 rounded-full ${statusClass} w-fit">
+                                    <span class="text-[10px] font-black uppercase">${data.toUpperCase()}</span>
+                                </div>`;
+                        }
+                    },
+                    {
+                        data: 'actualStartTimeDate',
+                        render: function(data, type, row) {
+                            return `
+                                <div class="flex flex-col text-center">
+                                    <span class="text-[9px] text-slate-400 font-bold mb-0.5">${data}</span>
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase">${row.actualStartTimeTime}</span>
+                                </div>`;
+                        }
+                    },
+                    {
+                        data: 'actualEndTimeDate',
+                        render: function(data, type, row) {
+                            return `
+                                <div class="flex flex-col text-center">
+                                    <span class="text-[9px] text-slate-400 font-bold mb-0.5">${data}</span>
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase">${row.actualEndTimeTime}</span>
+                                </div>`;
+                        }
+                    },
+                    {
+                        data: 'duration',
+                        render: function(data) {
+                            return `<span class="text-xs font-bold text-slate-500">${data}</span>`;
+                        }
+                    },
+                    {
+                        data: 'scoreDisplay',
+                        render: function(data, type, row) {
+                            return `
+                                <div class="flex flex-col">
+                                    <span class="text-brand-600 dark:text-brand-400 text-sm font-bold">${data}</span>
+                                    <span class="text-[9px] text-slate-400 uppercase tracking-widest">${row.scorePercent}</span>
+                                </div>`;
+                        }
+                    },
+                    {
+                        data: 'userCode',
+                        render: function(data) {
+                            return `<span class="text-[10px] font-bold text-slate-500 uppercase">${data}</span>`;
+                        }
+                    },
+                    {
+                        data: 'id',
+                        orderable: false,
+                        className: 'text-right px-8',
+                        render: function(data, type, row) {
+                            let actionHtml = `
+                                <div class="flex items-center justify-end gap-2">
+                                    <button class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 dark:bg-slate-800 rounded-xl view-review" data-student-id="${data}" title="View Review">
+                                        <i class="fas fa-eye"></i>
+                                    </button>`;
+                            if (row.isAdmin) {
+                                actionHtml += `
+                                    <button class="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 dark:bg-slate-800 rounded-xl wipe-data" data-student-id="${data}" data-student-name="${row.studentName}" title="Wipe Data & Reset">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>`;
+                            }
+                            actionHtml += `</div>`;
+                            return actionHtml;
+                        }
+                    }
+                ],
+                deferRender: true,
+                autoWidth: false,
+                orderClasses: false,
+                stateSave: true,
+                pageLength: 10,
+                lengthMenu: [[10, 25, 50], [10, 25, 50]],
+                dom: '<"flex flex-col sm:flex-row justify-between items-center mb-4"lf>rt<"flex flex-col sm:flex-row justify-between items-center mt-4"ip>',
+                language: {
+                    search: "",
+                    searchPlaceholder: "Search records...",
+                    processing: '<div class="flex items-center gap-2 text-brand-600 font-bold"><i class="fas fa-circle-notch animate-spin text-lg"></i> Loading Matrix...</div>'
+                }
+            });
+        });
+
         function updateExamList() {
             const type = $('#typeFilter').val();
             const year = $('#yearFilter').val();
@@ -170,6 +246,7 @@
 
                 if (data.length === 0) {
                     $examFilter.append('<option value="0">No exams found</option>');
+                    table.draw();
                     return;
                 }
 
@@ -187,18 +264,23 @@
                     });
                     $examFilter.append($group);
                 });
+
+                $examFilter.trigger('change');
             });
         }
 
         $('#typeFilter, #yearFilter, #monthFilter').change(updateExamList);
 
-        $('#examFilter').change(function () { 
+        $('#examFilter').change(function () {
+            const val = $(this).val();
             const type = $('#typeFilter').val();
             const year = $('#yearFilter').val();
             const month = $('#monthFilter').val();
-            let newUrl = '/Admin/WeeklyResults?examId=' + $(this).val() + '&typeId=' + type + '&year=' + year + '&month=' + month; 
+            let newUrl = '/Admin/WeeklyResults?examId=' + val + '&typeId=' + type + '&year=' + year + '&month=' + month; 
             if (window.location.search.includes('iframe=true')) newUrl += '&iframe=true';
-            window.location = newUrl;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+
+            table.draw();
         });
 
         $('#btnExport').on('click', function () { window.location = '/Admin/ExportStudentsToExcel?examId=' + $('#examFilter').val(); });
@@ -255,7 +337,7 @@
                                 timer: 2000,
                                 showConfirmButton: false
                             }).then(() => {
-                                window.location.reload();
+                                table.draw(false);
                             });
                         } else {
                             Swal.fire('Error', res.message, 'error');
