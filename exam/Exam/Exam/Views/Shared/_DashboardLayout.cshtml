@@ -522,6 +522,33 @@
 
             // If we are inside an iframe, automatically append iframe=true to all links and forms
             if (window.self !== window.top) {
+                // If we redirected back to the main admin dashboard inside the iframe, close the current tab
+                const path = window.location.pathname.toLowerCase();
+                if (path === '/admin' || path === '/admin/index' || path === '/admin/') {
+                    if (window.parent && typeof window.parent.closeTab === 'function' && window.frameElement) {
+                        const paneId = window.frameElement.parentNode.id;
+                        if (paneId && paneId.startsWith('tab-pane-')) {
+                            const tabId = paneId.replace('tab-pane-', '');
+                            var successMsg = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["SuccessMessage"] ?? ""));
+                            if (successMsg && window.parent.Swal) {
+                                window.parent.Swal.fire({
+                                    icon: 'success',
+                                    title: successMsg,
+                                    timer: 2000,
+                                    showConfirmButton: false,
+                                    background: window.parent.document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                                    color: window.parent.document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+                                });
+                            }
+                            window.parent.closeTab(new Event('click'), tabId);
+                            const activeTabId = window.parent.$('.tab-btn.active').attr('id')?.replace('tab-btn-', '');
+                            if (activeTabId) {
+                                window.parent.refreshTab(new Event('click'), activeTabId);
+                            }
+                        }
+                    }
+                }
+
                 $(document).on('click', 'a', function(e) {
                     var href = $(this).attr('href');
                     if (href && href !== '#' && !href.startsWith('javascript:') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {

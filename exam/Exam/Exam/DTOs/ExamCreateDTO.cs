@@ -77,6 +77,7 @@ namespace Exam.DTOs
         public bool IsGraded { get; set; } = true;
         public bool ShowQuestionOverview { get; set; } = true;
         public bool IsFinalExam { get; set; }
+        public int AssignmentCount { get; set; }
     }
 
     public class adminExamDto
@@ -387,6 +388,7 @@ namespace Exam.DTOs
         public bool? IsPassed { get; set; }
         public DateTime AttemptDate { get; set; }
         public DateTime? StartTime { get; set; }
+        public int AttemptNumber { get; set; }
     }
 
     public class ExamQuestionStatsDto

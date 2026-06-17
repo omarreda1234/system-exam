@@ -97,31 +97,46 @@
                             </div>
                             <p class="text-[9px] text-slate-400 mt-2 uppercase font-bold italic">The system will dynamically pick questions based on the candidate's role.</p>
                         </div>
-                        <div class="col-span-2 mt-4 flex flex-col md:flex-row items-start md:items-center gap-4">
-                            <!-- Question Overview -->
-                            <div class="flex-1 w-full flex items-center gap-4 bg-amber-50/50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30">
-                                <div class="relative inline-block w-12 h-6 transition duration-200 ease-in">
-                                    <input type="checkbox" name="ShowQuestionOverview" id="ShowQuestionOverview" value="true" checked class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
-                                    <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-brand-600 transition-colors"></div>
-                                    <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
-                                </div>
-                                <div class="flex flex-col">
-                                    <label for="ShowQuestionOverview" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Question Overview & Back Navigation</label>
-                                    <span class="text-[9px] font-medium text-slate-500 italic">If disabled, students can only move forward and cannot see the question list.</span>
-                                </div>
-                            </div>
+                    </div>
 
-                            <!-- Is Final Exam -->
-                            <div class="flex-1 w-full flex items-center gap-4 bg-rose-50/50 dark:bg-rose-900/10 p-4 rounded-2xl border border-rose-100 dark:border-rose-900/30">
-                                <div class="relative inline-block w-12 h-6 transition duration-200 ease-in">
-                                    <input type="checkbox" name="IsFinalExam" id="IsFinalExam" value="true" class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
-                                    <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-rose-600 transition-colors"></div>
-                                    <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
-                                </div>
-                                <div class="flex flex-col">
-                                    <label for="IsFinalExam" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Mark as Final Exam</label>
-                                    <span class="text-[9px] font-medium text-slate-500 italic">Enable this to apply Final Exam certification rules.</span>
-                                </div>
+                    <div class="col-span-1 md:col-span-2 mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <!-- Has Passing Grade -->
+                        <div class="w-full flex items-center gap-4 bg-emerald-50/50 dark:bg-emerald-900/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                            <div class="relative inline-block w-12 h-6 transition duration-200 ease-in flex-shrink-0">
+                                <input type="checkbox" name="IsGraded" id="IsGraded" value="true" class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
+                                <input type="hidden" name="IsGraded" value="false" />
+                                <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-emerald-600 transition-colors"></div>
+                                <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
+                            </div>
+                            <div class="flex flex-col min-w-0">
+                                <label for="IsGraded" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Has Passing Grade</label>
+                                <span class="text-[9px] font-medium text-slate-500 italic break-words">Enable this if the exam requires a pass/fail threshold.</span>
+                            </div>
+                        </div>
+
+                        <!-- Question Overview -->
+                        <div class="w-full flex items-center gap-4 bg-amber-50/50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30">
+                            <div class="relative inline-block w-12 h-6 transition duration-200 ease-in flex-shrink-0">
+                                <input type="checkbox" name="ShowQuestionOverview" id="ShowQuestionOverview" value="true" checked class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
+                                <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-brand-600 transition-colors"></div>
+                                <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
+                            </div>
+                            <div class="flex flex-col min-w-0">
+                                <label for="ShowQuestionOverview" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Question Overview & Back Navigation</label>
+                                <span class="text-[9px] font-medium text-slate-500 italic break-words">If disabled, students can only move forward and cannot see the question list.</span>
+                            </div>
+                        </div>
+
+                        <!-- Is Final Exam -->
+                        <div class="w-full flex items-center gap-4 bg-rose-50/50 dark:bg-rose-900/10 p-4 rounded-2xl border border-rose-100 dark:border-rose-900/30">
+                            <div class="relative inline-block w-12 h-6 transition duration-200 ease-in flex-shrink-0">
+                                <input type="checkbox" name="IsFinalExam" id="IsFinalExam" value="true" class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
+                                <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-rose-600 transition-colors"></div>
+                                <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
+                            </div>
+                            <div class="flex flex-col min-w-0">
+                                <label for="IsFinalExam" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Mark as Final Exam</label>
+                                <span class="text-[9px] font-medium text-slate-500 italic break-words">Enable this to apply Final Exam certification rules.</span>
                             </div>
                         </div>
                     </div>
@@ -156,7 +171,8 @@
             <div id="questionsContainer" class="space-y-6"></div>
         </div>
 
-        <div class="flex justify-end pt-8">
+        <div class="flex justify-end items-center gap-4 pt-8">
+            <a href="#" onclick="return handleCancel(event);" class="text-[10px] font-bold text-slate-400 hover:text-slate-900 dark:hover:text-white px-10 py-5 transition-colors uppercase tracking-widest">Cancel</a>
             <button type="submit" class="bg-brand-600 text-white px-10 py-4 rounded-2xl font-black text-sm uppercase shadow-xl hover:-translate-y-1 transition-all"><i class="fas fa-rocket mr-2"></i> Deploy Exam Config</button>
         </div>
     </form>
@@ -164,6 +180,34 @@
 
 @section Scripts {
     <script>
+        window.handleCancel = function(e) {
+            if (e) e.preventDefault();
+            
+            if (window.parent && typeof window.parent.closeTab === 'function' && window.frameElement) {
+                const paneId = window.frameElement.parentNode.id;
+                if (paneId && paneId.startsWith('tab-pane-')) {
+                    const tabId = paneId.replace('tab-pane-', '');
+                    window.parent.closeTab(new Event('click'), tabId);
+                    return false;
+                }
+            }
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const returnUrl = urlParams.get('returnUrl');
+            if (returnUrl) {
+                window.location.href = returnUrl;
+                return false;
+            }
+            
+            if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
+                window.location.href = document.referrer;
+                return false;
+            }
+            
+            window.location.href = '@Url.Action("Index", "Admin")';
+            return false;
+        };
+
         $(function() {
             var qIdx = 0;
             var rIdx = 0;
@@ -173,6 +217,17 @@
             var addCUrl = '@Url.Action("AddChoice", "Exams")';
             var updateCUrl = '@Url.Action("UpdateChoice", "Exams")';
             var currentCategoryOptions = '<option value="">--- CATEGORY ---</option>';
+
+            function syncGradingVisibility() {
+                const isGraded = $('#IsGraded').is(':checked');
+                if (isGraded) {
+                    $('#passGradeWrapper').slideDown();
+                } else {
+                    $('#passGradeWrapper').slideUp();
+                }
+            }
+
+            $('#IsGraded').on('change', syncGradingVisibility);
 
             $('#ExamTypeId').on('change', function() {
                 var name = $(this).find(':selected').attr('data-type-name') || '';
@@ -200,7 +255,7 @@
                     $('.wave-container').show();
                     $('#blueprintSection').show();
                     $('#totalQuestionsWrapper').show();
-                    $('#passGradeWrapper').show();
+                    syncGradingVisibility();
                     $.getJSON('/Admin/GetWaves', function(waves) {
                         $('#WaveId').empty().append('<option value="">-- SELECT TARGET BATCH --</option>');
                         if(waves && waves.length > 0) {
@@ -217,7 +272,7 @@
                     $('.wave-container').hide();
                     $('#blueprintSection').show();
                     $('#totalQuestionsWrapper').show();
-                    $('#passGradeWrapper').hide();
+                    syncGradingVisibility();
                 } else {
                     $('.wave-container').hide();
                     $('#blueprintSection').hide();

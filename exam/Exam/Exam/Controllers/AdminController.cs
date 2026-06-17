@@ -696,6 +696,69 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
+        public async Task<IActionResult> GetStudentWaveDetails(string studentId, int waveId)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            var student = await _userManager.FindByIdAsync(studentId);
+            if (student == null) return NotFound("Student not found.");
+
+            // 1. Get all exams in this wave
+            var exams = (await conn.QueryAsync<dynamic>(@"
+                SELECT 
+                    e.Id AS ExamId,
+                    e.Title AS ExamTitle,
+                    e.TotalPoints
+                FROM Exams e
+                WHERE e.WaveId = @WaveId
+                ORDER BY e.Title", new { WaveId = waveId })).ToList();
+
+            // 2. Get the student's latest attempts on these exams
+            var attempts = (await conn.QueryAsync<dynamic>(@"
+                WITH LatestAttempts AS (
+                    SELECT 
+                        uea.ExamId,
+                        uea.Status,
+                        ISNULL(uea.FinalScore, 0) AS FinalScore,
+                        uea.Score AS Percentage,
+                        uea.AttemptNumber,
+                        uea.IsPassed,
+                        uea.Id AS AttemptId,
+                        ROW_NUMBER() OVER (PARTITION BY uea.ExamId ORDER BY uea.AttemptNumber DESC) AS rn
+                    FROM UserExamAttempts uea
+                    INNER JOIN Exams e ON e.Id = uea.ExamId
+                    WHERE e.WaveId = @WaveId AND uea.UserId = @UserId
+                )
+                SELECT * FROM LatestAttempts WHERE rn = 1", 
+                new { WaveId = waveId, UserId = studentId })).ToList();
+
+            // 3. Map them together
+            var details = new List<dynamic>();
+            foreach (var exam in exams)
+            {
+                int examId = (int)exam.ExamId;
+                var attempt = attempts.FirstOrDefault(a => (int)a.ExamId == examId);
+
+                details.Add(new {
+                    ExamId = examId,
+                    ExamTitle = (string)exam.ExamTitle,
+                    TotalPoints = (decimal)(exam.TotalPoints ?? 0),
+                    Status = attempt != null ? (string)attempt.Status : "Not Started",
+                    FinalScore = attempt != null ? (decimal)attempt.FinalScore : 0,
+                    Percentage = attempt != null ? (decimal)attempt.Percentage : 0,
+                    AttemptNumber = attempt != null ? (int)attempt.AttemptNumber : 0,
+                    IsPassed = attempt != null ? (bool?)attempt.IsPassed : null,
+                    AttemptId = attempt != null ? (int?)attempt.AttemptId : null
+                });
+            }
+
+            ViewBag.StudentName = student.FullName ?? student.UserName;
+            ViewBag.StudentId = studentId;
+            return PartialView("GetStudentWaveDetails", details);
+        }
+
+        [HttpGet]
         public async Task<IActionResult> LiveMonitor(
             int? branchId = null, int? shiftId = null, string roleName = null,
             string status = null, int? waveId = null, string date = null, int? examId = null)

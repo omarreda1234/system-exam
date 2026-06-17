@@ -1,0 +1,85 @@
+@model IEnumerable<dynamic>
+
+<div class="space-y-4 text-slate-800 dark:text-slate-200">
+    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+        <div>
+            <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Student Performance Details</h3>
+            <h2 class="text-lg font-bold text-slate-800 dark:text-white">@ViewBag.StudentName</h2>
+        </div>
+        <div class="text-xs font-bold text-slate-400">
+            Total Wave Exams: @Model.Count()
+        </div>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                    <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Exam Title</th>
+                    <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+                    <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Score</th>
+                    <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Percentage</th>
+                    <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/50">
+                @foreach (var item in Model)
+                {
+                    var status = (string)item.Status;
+                    var statusClass = status == "Completed" ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800/30" :
+                                      status == "InProgress" ? "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800/30" :
+                                      "bg-slate-50 text-slate-400 border-slate-200 dark:bg-slate-800/30 dark:text-slate-500 dark:border-slate-700/30";
+                    var statusLabel = status == "Completed" ? "COMPLETED" :
+                                      status == "InProgress" ? "IN PROGRESS" : "NOT STARTED";
+                    
+                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
+                        <td class="py-3.5 px-4 text-xs font-bold text-slate-700 dark:text-slate-200">
+                            @item.ExamTitle
+                        </td>
+                        <td class="py-3.5 px-4 text-center">
+                            <span class="inline-block px-2.5 py-1 rounded-lg text-[9px] font-black border uppercase @statusClass">
+                                @statusLabel
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-4 text-center font-mono text-xs font-bold text-slate-500 dark:text-slate-400">
+                            @if (status == "Completed")
+                            {
+                                <span>@(((decimal)item.FinalScore).ToString("0")) / @(((decimal)item.TotalPoints).ToString("0"))</span>
+                            }
+                            else
+                            {
+                                <span>--</span>
+                            }
+                        </td>
+                        <td class="py-3.5 px-4 text-center">
+                            @if (status == "Completed")
+                            {
+                                double pct = (double)item.Percentage;
+                                var pctColor = pct >= 75 ? "text-emerald-600 dark:text-emerald-400" : pct >= 70 ? "text-blue-600 dark:text-blue-400" : "text-rose-500 dark:text-rose-400";
+                                <span class="font-black text-xs @pctColor">@pct.ToString("0.0")%</span>
+                            }
+                            else
+                            {
+                                <span class="text-slate-300 dark:text-slate-700 font-bold">--</span>
+                            }
+                        </td>
+                        <td class="py-3.5 px-4 text-right">
+                            @if (status == "Completed")
+                            {
+                                <button type="button" 
+                                        onclick="viewIndividualExamReview(@item.ExamId, '@ViewBag.StudentId', '@item.ExamTitle')" 
+                                        class="inline-flex items-center gap-1 bg-slate-50 hover:bg-brand-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[10px] font-bold transition-all">
+                                    <i class="fas fa-eye"></i> View Review
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="text-slate-300 dark:text-slate-700 text-xs">-</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

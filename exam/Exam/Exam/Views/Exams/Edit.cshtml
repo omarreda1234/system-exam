@@ -105,31 +105,45 @@
 
                             <p class="text-[9px] text-slate-400 mt-2 uppercase font-bold italic">The system will dynamically pick questions based on the candidate's role.</p>
                         </div>
-                        <div class="col-span-2 mt-4 flex flex-col md:flex-row items-start md:items-center gap-4">
-                            <!-- Question Overview -->
-                            <div class="flex-1 w-full flex items-center gap-4 bg-amber-50/50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30">
-                                <div class="relative inline-block w-12 h-6 transition duration-200 ease-in">
-                                    <input type="checkbox" asp-for="ShowQuestionOverview" id="ShowQuestionOverview" class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
-                                    <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-brand-600 transition-colors"></div>
-                                    <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
-                                </div>
-                                <div class="flex flex-col">
-                                    <label for="ShowQuestionOverview" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Question Overview & Back Navigation</label>
-                                    <span class="text-[9px] font-medium text-slate-500 italic">If disabled, students can only move forward and cannot see the question list.</span>
-                                </div>
-                            </div>
+                    </div>
 
-                            <!-- Is Final Exam -->
-                            <div class="flex-1 w-full flex items-center gap-4 bg-rose-50/50 dark:bg-rose-900/10 p-4 rounded-2xl border border-rose-100 dark:border-rose-900/30">
-                                <div class="relative inline-block w-12 h-6 transition duration-200 ease-in">
-                                    <input type="checkbox" asp-for="IsFinalExam" id="IsFinalExam" class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
-                                    <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-rose-600 transition-colors"></div>
-                                    <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
-                                </div>
-                                <div class="flex flex-col">
-                                    <label for="IsFinalExam" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Mark as Final Exam</label>
-                                    <span class="text-[9px] font-medium text-slate-500 italic">Enable this to apply Final Exam certification rules.</span>
-                                </div>
+                    <div class="col-span-1 md:col-span-2 mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <!-- Has Passing Grade -->
+                        <div class="w-full flex items-center gap-4 bg-emerald-50/50 dark:bg-emerald-900/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                            <div class="relative inline-block w-12 h-6 transition duration-200 ease-in flex-shrink-0">
+                                <input type="checkbox" asp-for="IsGraded" id="IsGraded" class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
+                                <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-emerald-600 transition-colors"></div>
+                                <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
+                            </div>
+                            <div class="flex flex-col min-w-0">
+                                <label for="IsGraded" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Has Passing Grade</label>
+                                <span class="text-[9px] font-medium text-slate-500 italic break-words">Enable this if the exam requires a pass/fail threshold.</span>
+                            </div>
+                        </div>
+
+                        <!-- Question Overview -->
+                        <div class="w-full flex items-center gap-4 bg-amber-50/50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30">
+                            <div class="relative inline-block w-12 h-6 transition duration-200 ease-in flex-shrink-0">
+                                <input type="checkbox" asp-for="ShowQuestionOverview" id="ShowQuestionOverview" class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
+                                <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-brand-600 transition-colors"></div>
+                                <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
+                            </div>
+                            <div class="flex flex-col min-w-0">
+                                <label for="ShowQuestionOverview" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Question Overview & Back Navigation</label>
+                                <span class="text-[9px] font-medium text-slate-500 italic break-words">If disabled, students can only move forward and cannot see the question list.</span>
+                            </div>
+                        </div>
+
+                        <!-- Is Final Exam -->
+                        <div class="w-full flex items-center gap-4 bg-rose-50/50 dark:bg-rose-900/10 p-4 rounded-2xl border border-rose-100 dark:border-rose-900/30">
+                            <div class="relative inline-block w-12 h-6 transition duration-200 ease-in flex-shrink-0">
+                                <input type="checkbox" asp-for="IsFinalExam" id="IsFinalExam" class="peer absolute w-6 h-6 opacity-0 z-10 cursor-pointer" />
+                                <div class="w-12 h-6 bg-slate-300 dark:bg-slate-700 rounded-full peer-checked:bg-rose-600 transition-colors"></div>
+                                <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
+                            </div>
+                            <div class="flex flex-col min-w-0">
+                                <label for="IsFinalExam" class="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider cursor-pointer">Mark as Final Exam</label>
+                                <span class="text-[9px] font-medium text-slate-500 italic break-words">Enable this to apply Final Exam certification rules.</span>
                             </div>
                         </div>
                     </div>
@@ -205,7 +219,6 @@
                              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Grading Logic</span>
                              <span id="gradingStatus" class="text-xs font-bold text-slate-600 dark:text-slate-300">Non-Evaluative (Points only)</span>
                         </div>
-                        <input type="hidden" asp-for="IsGraded" id="hiddenIsGraded" />
                         <div class="flex items-center gap-2">
                             <div id="gradedBadge" class="px-3 py-1 bg-slate-100 text-slate-400 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all">Not Graded</div>
                         </div>
@@ -239,7 +252,7 @@
 
         <!-- Actions -->
         <div class="flex justify-center gap-6 py-8">
-            <a asp-action="Index" asp-controller="Admin" class="text-[10px] font-bold text-slate-400 hover:text-slate-900 dark:hover:text-white px-10 py-5 transition-colors uppercase tracking-widest">Cancel</a>
+            <a href="#" onclick="return handleCancel(event);" class="text-[10px] font-bold text-slate-400 hover:text-slate-900 dark:hover:text-white px-10 py-5 transition-colors uppercase tracking-widest">Cancel</a>
             <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white px-16 py-4 rounded-[24px] font-black uppercase text-sm tracking-widest shadow-xl shadow-brand-500/20 transition-all hover:scale-105 active:scale-95">
                 Save Changes
             </button>
@@ -250,28 +263,61 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
+        window.handleCancel = function(e) {
+            if (e) e.preventDefault();
+            
+            if (window.parent && typeof window.parent.closeTab === 'function' && window.frameElement) {
+                const paneId = window.frameElement.parentNode.id;
+                if (paneId && paneId.startsWith('tab-pane-')) {
+                    const tabId = paneId.replace('tab-pane-', '');
+                    window.parent.closeTab(new Event('click'), tabId);
+                    return false;
+                }
+            }
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const returnUrl = urlParams.get('returnUrl');
+            if (returnUrl) {
+                window.location.href = returnUrl;
+                return false;
+            }
+            
+            if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
+                window.location.href = document.referrer;
+                return false;
+            }
+            
+            window.location.href = '@Url.Action("Index", "Admin")';
+            return false;
+        };
+
         $(function() {
                 // $('#waveContainer').show(); // Handled by syncWave() below
+
+            function syncGradingVisibility() {
+                const isGraded = $('#IsGraded').is(':checked');
+                if (isGraded) {
+                    $('#passGradeWrapper').slideDown();
+                    $('#gradedBadge').text('Graded (Pass/Fail)').addClass('bg-emerald-100 text-emerald-600').removeClass('bg-slate-100 text-slate-400 bg-blue-100 text-blue-600');
+                    $('#gradingStatus').text('Evaluative Protocol - requires passing threshold for Certification.');
+                } else {
+                    $('#passGradeWrapper').slideUp();
+                    $('#gradedBadge').text('Weekly/Not Graded (Points Only)').addClass('bg-blue-100 text-blue-600').removeClass('bg-emerald-100 text-emerald-600 bg-slate-100 text-slate-400');
+                    $('#gradingStatus').text('Assessment Protocol - point accumulation only, no pass/fail logic.');
+                }
+            }
+
+            $('#IsGraded').on('change', syncGradingVisibility);
 
             function updateGradingMode() {
                 const opt = $('#ExamTypeId').find(':selected');
                 const typeName = (opt.data('type-name')||'').toLowerCase();
                 const isWavey = (opt.val() == '2' || typeName.includes('wave'));
                 
-                if (isWavey) {
-                    $('#hiddenIsGraded').val('true');
-                    $('#gradedBadge').text('Graded (Pass/Fail)').addClass('bg-emerald-100 text-emerald-600').removeClass('bg-slate-100 text-slate-400 bg-blue-100 text-blue-600');
-                    $('#gradingStatus').text('Evaluative Protocol - requires passing threshold for Certification.');
+                if (opt.val() != '0') {
                     $('#blueprintSection').slideDown();
-                    $('#passGradeWrapper').show();
                     $('#totalQuestionsWrapper').show();
-                } else if (opt.val() != '0') {
-                    $('#hiddenIsGraded').val('false');
-                    $('#gradedBadge').text('Weekly (Points Only)').addClass('bg-blue-100 text-blue-600').removeClass('bg-emerald-100 text-emerald-600 bg-slate-100 text-slate-400');
-                    $('#gradingStatus').text('Assessment Protocol - point accumulation only, no pass/fail logic.');
-                    $('#blueprintSection').slideDown();
-                    $('#passGradeWrapper').hide();
-                    $('#totalQuestionsWrapper').show();
+                    syncGradingVisibility();
                 } else {
                     $('#blueprintSection').slideUp();
                     $('#passGradeWrapper').hide();
@@ -498,8 +544,31 @@
                             toast: true,
                             position: 'top-end',
                             showConfirmButton: false,
-                            timer: 3000
+                            timer: 1500
                         });
+                        
+                        setTimeout(() => {
+                            if (window.parent && typeof window.parent.closeTab === 'function' && window.frameElement) {
+                                const paneId = window.frameElement.parentNode.id;
+                                if (paneId && paneId.startsWith('tab-pane-')) {
+                                    const tabId = paneId.replace('tab-pane-', '');
+                                    window.parent.closeTab(new Event('click'), tabId);
+                                    
+                                    const activeTabId = window.parent.$('.tab-btn.active').attr('id')?.replace('tab-btn-', '');
+                                    if (activeTabId) {
+                                        window.parent.refreshTab(new Event('click'), activeTabId);
+                                    }
+                                    return;
+                                }
+                            }
+                            const urlParams = new URLSearchParams(window.location.search);
+                            const returnUrl = urlParams.get('returnUrl');
+                            if (returnUrl) {
+                                window.location.href = returnUrl;
+                            } else {
+                                window.location.href = '@Url.Action("Index", "Admin")';
+                            }
+                        }, 1500);
                     } else {
                         Swal.fire({
                             icon: 'error',

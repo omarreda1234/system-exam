@@ -46,6 +46,10 @@ namespace Exam.Controllers
         public async Task<IActionResult> Create(ExamCreateDTO model)
         {
             var m = model ?? new ExamCreateDTO();
+            if (!m.IsGraded)
+            {
+                m.PassPercentage = 0;
+            }
 
             ViewBag.ExamTypes = await _examService.GetAllExamTypesAsync();
             ViewBag.Categories = await _examService.GetAllCategoriesAsync();
@@ -265,9 +269,11 @@ namespace Exam.Controllers
             {
                 if (latestAttempt.Status != "InProgress")
                 {
+                    int assignmentCount = assignment != null ? await _examService.GetAssignmentCountAsync(id, userId) : 0;
                     // Check if this finished attempt belongs to an old assignment
-                    if (assignment != null && assignment.ScheduledStartTime.HasValue && 
-                        latestAttempt.AttemptDate < assignment.ScheduledStartTime.Value)
+                    if (assignment != null && 
+                        ((assignment.ScheduledStartTime.HasValue && latestAttempt.AttemptDate < assignment.ScheduledStartTime.Value) ||
+                         (assignmentCount > latestAttempt.AttemptNumber)))
                     {
                         attemptId = await _examService.CreateStudentAttemptAsync(id, userId);
                         examStartTime = DateTime.Now;
@@ -468,6 +474,10 @@ namespace Exam.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(adminExamDto model)
         {
+            if (model != null && !model.IsGraded)
+            {
+                model.PassPercentage = 0;
+            }
             ModelState.Remove("ExamType");
             ModelState.Remove("WaveName");
 

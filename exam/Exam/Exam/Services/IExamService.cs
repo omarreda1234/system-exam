@@ -100,6 +100,7 @@ namespace Exam.Services
         Task SendExamAssignmentEmailAsync(string userId, int examId, string siteUrl = "");
         Task WipeStudentExamDataAsync(int examId, string studentId);
         Task<UserAttemptSummaryDto?> GetAttemptByIdAsync(int attemptId);
+        Task<int> GetAssignmentCountAsync(int examId, string studentId);
         Task EnsureDatabaseSchemaUpdatedAsync(System.IServiceProvider serviceProvider = null);
     }
 }

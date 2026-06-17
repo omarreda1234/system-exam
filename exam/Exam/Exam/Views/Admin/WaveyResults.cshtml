@@ -109,6 +109,7 @@
                     <th>Percentage</th>
                     <th>Wave Status</th>
                     <th>Cert Code</th>
+                    <th class="text-right px-8">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -199,6 +200,15 @@
                                 <span class="text-slate-300 text-xs">--</span>
                             }
                         </td>
+                        <td class="text-right px-8">
+                            <button type="button" 
+                                    class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 dark:bg-slate-800 rounded-xl view-wave-details" 
+                                    data-student-id="@s.UserId" 
+                                    data-wave-id="@s.WaveId" 
+                                    title="View Exam Details">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -243,5 +253,43 @@
         $('#btnExport').on('click', function () {
             window.location = '/Admin/ExportWaveResultsToExcel?waveId=' + $('#waveFilter').val();
         });
+
+        // View wave breakdown details
+        $(document).on('click', '.view-wave-details', function() {
+            const id = $(this).data('student-id');
+            const waveId = $(this).data('wave-id');
+            Swal.fire({
+                title: 'Student Wave Performance Breakdown',
+                width: '70%',
+                showConfirmButton: false,
+                showCloseButton: true,
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+                html: '<div id="swalWaveDetails" style="text-align:left; max-height: 75vh; overflow-y: auto;"><div class="py-10 text-center"><i class="fas fa-sync fa-spin text-3xl text-brand-500"></i></div></div>',
+                didOpen: () => { 
+                    $.get('/Admin/GetStudentWaveDetails', { studentId: id, waveId: waveId })
+                     .done(h => $('#swalWaveDetails').html(h))
+                     .fail(() => $('#swalWaveDetails').html('<div class="p-8 text-rose-500">Failed to load data.</div>'));
+                }
+            });
+        });
+
+        // View individual exam review
+        function viewIndividualExamReview(examId, studentId, examTitle) {
+            Swal.fire({
+                title: `Review: ${examTitle}`,
+                width: '80%',
+                showConfirmButton: false,
+                showCloseButton: true,
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+                html: '<div id="swalIndividualReview" style="text-align:left; max-height: 70vh; overflow-y: auto;"><div class="py-10 text-center"><i class="fas fa-sync fa-spin text-3xl text-brand-500"></i></div></div>',
+                didOpen: () => { 
+                    $.get('/Admin/GetStudentExamReview', { examId: examId, studentId: studentId })
+                     .done(h => $('#swalIndividualReview').html(h))
+                     .fail(() => $('#swalIndividualReview').html('<div class="p-8 text-rose-500">Failed to load data.</div>'));
+                }
+            });
+        }
     </script>
 }
