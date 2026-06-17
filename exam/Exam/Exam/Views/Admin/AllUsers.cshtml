@@ -138,6 +138,36 @@
                     },
                     headers: {
                         'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    dataSrc: function (json) {
+                        if (json && json.data) {
+                            json.data.forEach(row => {
+                                let rawAttr = null;
+                                for (let key in row) {
+                                    if (key.toLowerCase() === 'dt_rowid') {
+                                        row.DT_RowId = row[key];
+                                    }
+                                    if (key.toLowerCase() === 'dt_rowattr') {
+                                        rawAttr = row[key];
+                                    }
+                                }
+                                if (rawAttr) {
+                                    row.DT_RowAttr = {};
+                                    for (let key in rawAttr) {
+                                        let normalizedKey = key;
+                                        if (key === 'dataUserId' || key === 'data_user_id') normalizedKey = 'data-user-id';
+                                        else if (key === 'dataEmail' || key === 'data_email') normalizedKey = 'data-email';
+                                        else if (key === 'dataUsername' || key === 'data_username') normalizedKey = 'data-username';
+                                        else if (key === 'dataUsercode' || key === 'data_usercode') normalizedKey = 'data-usercode';
+                                        else if (key === 'dataBranchId' || key === 'data_branch_id') normalizedKey = 'data-branch-id';
+                                        else if (key === 'dataShiftId' || key === 'data_shift_id') normalizedKey = 'data-shift-id';
+                                        
+                                        row.DT_RowAttr[normalizedKey] = rawAttr[key];
+                                    }
+                                }
+                            });
+                        }
+                        return json.data;
                     }
                 },
                 columns: [
@@ -321,7 +351,7 @@
                 const r = await fetch(this.action, { 
                     method: 'POST', 
                     body: fd, 
-                    headers: { 'RequestVerificationToken': $form.find('input[name="__RequestVerificationToken"]').val() } 
+                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() } 
                 });
                 const res = await r.json();
                 
