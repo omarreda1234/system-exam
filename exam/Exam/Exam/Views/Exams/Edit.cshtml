@@ -266,15 +266,6 @@
         window.handleCancel = function(e) {
             if (e) e.preventDefault();
             
-            if (window.parent && typeof window.parent.closeTab === 'function' && window.frameElement) {
-                const paneId = window.frameElement.parentNode.id;
-                if (paneId && paneId.startsWith('tab-pane-')) {
-                    const tabId = paneId.replace('tab-pane-', '');
-                    window.parent.closeTab(new Event('click'), tabId);
-                    return false;
-                }
-            }
-            
             const urlParams = new URLSearchParams(window.location.search);
             const returnUrl = urlParams.get('returnUrl');
             if (returnUrl) {
@@ -283,8 +274,21 @@
             }
             
             if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
-                window.location.href = document.referrer;
-                return false;
+                const refUrl = new URL(document.referrer);
+                const path = refUrl.pathname.toLowerCase();
+                if (path !== '/admin' && path !== '/admin/' && path !== '/admin/index') {
+                    window.location.href = document.referrer;
+                    return false;
+                }
+            }
+
+            if (window.parent && typeof window.parent.closeTab === 'function' && window.frameElement) {
+                const paneId = window.frameElement.parentNode.id;
+                if (paneId && paneId.startsWith('tab-pane-')) {
+                    const tabId = paneId.replace('tab-pane-', '');
+                    window.parent.closeTab(new Event('click'), tabId);
+                    return false;
+                }
             }
             
             window.location.href = '@Url.Action("Index", "Admin")';
@@ -548,6 +552,22 @@
                         });
                         
                         setTimeout(() => {
+                            const urlParams = new URLSearchParams(window.location.search);
+                            const returnUrl = urlParams.get('returnUrl');
+                            if (returnUrl) {
+                                window.location.href = returnUrl;
+                                return;
+                            }
+                            
+                            if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
+                                const refUrl = new URL(document.referrer);
+                                const path = refUrl.pathname.toLowerCase();
+                                if (path !== '/admin' && path !== '/admin/' && path !== '/admin/index') {
+                                    window.location.href = document.referrer;
+                                    return;
+                                }
+                            }
+
                             if (window.parent && typeof window.parent.closeTab === 'function' && window.frameElement) {
                                 const paneId = window.frameElement.parentNode.id;
                                 if (paneId && paneId.startsWith('tab-pane-')) {
@@ -561,13 +581,7 @@
                                     return;
                                 }
                             }
-                            const urlParams = new URLSearchParams(window.location.search);
-                            const returnUrl = urlParams.get('returnUrl');
-                            if (returnUrl) {
-                                window.location.href = returnUrl;
-                            } else {
-                                window.location.href = '@Url.Action("Index", "Admin")';
-                            }
+                            window.location.href = '@Url.Action("Index", "Admin")';
                         }, 1500);
                     } else {
                         Swal.fire({

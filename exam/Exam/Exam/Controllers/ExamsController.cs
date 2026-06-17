@@ -99,12 +99,20 @@ namespace Exam.Controllers
                     .SelectMany(v => v.Errors)
                     .Select(e => string.IsNullOrWhiteSpace(e.ErrorMessage) ? e.Exception?.Message : e.ErrorMessage));
                 TempData["ErrorMessage"] = errors;
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { success = false, message = errors });
+                }
                 return View(m);
             }
 
             var examId = await _examService.CreateExamWithQuestionsAsync(m);
 
             TempData["SuccessMessage"] = "Exam created successfully";
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                return Json(new { success = true, message = "Exam created successfully", examId = examId });
+            }
             return RedirectToAction("Index", "Admin");
         }
 

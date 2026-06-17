@@ -119,14 +119,14 @@ namespace Exam.Controllers
                 {
                     "Index",
                     "Students",
-                    "WaveyResults",
                     "WeeklyResults",
                     "GetFilteredExams",
                     "ExportStudentsToExcel",
                     "SendCertificates",
                     "SendFailEmails",
                     "ReassignExamToStudents",
-                    "GetStudentExamReview"
+                    "GetStudentExamReview",
+                    "GetWeeklyResultsPaged"
                 };
                 
                 var actionName = context.RouteData.Values["action"]?.ToString();
@@ -159,7 +159,7 @@ namespace Exam.Controllers
             }
             if (User.IsInRole("Branch Manager"))
             {
-                return RedirectToAction("Students");
+                return RedirectToAction("WeeklyResults");
             }
             if (User.IsInRole("SoftSkills Specialist") && !User.IsInRole("Admin"))
             {
@@ -563,6 +563,99 @@ namespace Exam.Controllers
                 return Content($"Error: {ex.Message}");
             }
         }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportWaveResultsToExcel(int waveId)
+        {
+            try
+            {
+                var waves = await _examService.GetAllWavesAsync();
+                var waveInfo = waves.FirstOrDefault(w => w.Id == waveId);
+                string waveName = waveInfo?.WaveName ?? "Wave";
+
+                var results = (await _examService.GetWaveAggregateResultsAsync(waveId)).ToList();
+
+                // Branch manager restriction
+                if (User.IsInRole("Branch Manager"))
+                {
+                    var currentUser = await _userManager.GetUserAsync(User);
+                    if (currentUser != null && currentUser.BranchId.HasValue)
+                    {
+                        using var conn = new SqlConnection(_connectionString);
+                        var branchName = await conn.QueryFirstOrDefaultAsync<string>(
+                            "SELECT BranchName FROM Branches WHERE Id = @Id",
+                            new { Id = currentUser.BranchId.Value });
+                        if (!string.IsNullOrEmpty(branchName))
+                        {
+                            results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase)).ToList();
+                        }
+                        else
+                        {
+                            results = new List<Exam.DTOs.WaveStudentResultDto>();
+                        }
+                    }
+                    else
+                    {
+                        results = new List<Exam.DTOs.WaveStudentResultDto>();
+                    }
+                }
+
+                using (var workbook = new XLWorkbook())
+                {
+                    var worksheet = workbook.Worksheets.Add("Wave Performance Report");
+                    var currentRow = 1;
+
+                    // Header Info
+                    worksheet.Cell(currentRow, 1).Value = "Wave:";
+                    worksheet.Cell(currentRow, 2).Value = waveName;
+                    currentRow++;
+                    worksheet.Cell(currentRow, 1).Value = "Generated:";
+                    worksheet.Cell(currentRow, 2).Value = DateTime.Now.ToString("g");
+                    currentRow += 2;
+
+                    string[] headers = { "Student Name", "Email", "User Code", "Role", "Batch/Wave", "Branch", "Exams Completed", "Exams Assigned", "Total Score", "Total Available", "Aggregate (%)", "Wave Status" };
+                    for (int i = 0; i < headers.Length; i++)
+                    {
+                        var cell = worksheet.Cell(currentRow, i + 1);
+                        cell.Value = headers[i];
+                        cell.Style.Font.Bold = true;
+                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#0D9488");
+                        cell.Style.Font.FontColor = XLColor.White;
+                    }
+
+                    foreach (var item in results)
+                    {
+                        currentRow++;
+                        worksheet.Cell(currentRow, 1).Value = item.StudentName;
+                        worksheet.Cell(currentRow, 2).Value = item.StudentEmail;
+                        worksheet.Cell(currentRow, 3).Value = item.UserCode;
+                        worksheet.Cell(currentRow, 4).Value = item.RoleName;
+                        worksheet.Cell(currentRow, 5).Value = item.WaveName ?? "Global";
+                        worksheet.Cell(currentRow, 6).Value = item.BranchName ?? "Global";
+                        worksheet.Cell(currentRow, 7).Value = item.ExamsCompleted;
+                        worksheet.Cell(currentRow, 8).Value = item.ExamsAssigned;
+                        worksheet.Cell(currentRow, 9).Value = item.TotalScore;
+                        worksheet.Cell(currentRow, 10).Value = item.TotalAvailable;
+                        worksheet.Cell(currentRow, 11).Value = item.AggregatePercentage;
+                        worksheet.Cell(currentRow, 12).Value = item.WaveStatus;
+                    }
+
+                    worksheet.Columns().AdjustToContents();
+
+                    using (var stream = new MemoryStream())
+                    {
+                        workbook.SaveAs(stream);
+                        var content = stream.ToArray();
+                        return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{waveName.Replace(" ", "_")}_Wave_Report.xlsx");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return Content($"Error: {ex.Message}");
+            }
+        }
+
         [HttpGet]
         public async Task<IActionResult> Students(int? examId, int? typeId = null, int? month = null, int? year = null, string forceMode = null)
         {
@@ -586,7 +679,7 @@ namespace Exam.Controllers
             ViewBag.Exams = exams;
 
             int selectedId = 0;
-            if (examId.HasValue)
+            if (examId.HasValue && exams.Any(e => e.Id == examId.Value))
             {
                 selectedId = examId.Value;
             }
@@ -634,7 +727,7 @@ namespace Exam.Controllers
                                 results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
                             }
                         }
-                        return View("WaveyResults", results);
+                        return View("Students", results);
                     }
                     else
                     {
@@ -709,8 +802,12 @@ namespace Exam.Controllers
                 SELECT 
                     e.Id AS ExamId,
                     e.Title AS ExamTitle,
-                    e.TotalPoints
+                    e.TotalPoints,
+                    e.TotalQuestionsToShow,
+                    et.TypeName AS ExamType,
+                    e.IsFinalExam
                 FROM Exams e
+                LEFT JOIN ExamTypes et ON e.ExamTypeId = et.Id
                 WHERE e.WaveId = @WaveId
                 ORDER BY e.Title", new { WaveId = waveId })).ToList();
 
@@ -733,6 +830,116 @@ namespace Exam.Controllers
                 SELECT * FROM LatestAttempts WHERE rn = 1", 
                 new { WaveId = waveId, UserId = studentId })).ToList();
 
+            var roles = await _userManager.GetRolesAsync(student);
+            string userRole = roles.FirstOrDefault() ?? "All";
+
+            var examIds = exams.Select(e => (int)e.ExamId).ToList();
+            var rules = new List<dynamic>();
+            if (examIds.Any())
+            {
+                rules = (await conn.QueryAsync<dynamic>(@"
+                    SELECT ExamId, EasyCount, MediumCount, HardCount, CategoryId, TargetRole 
+                    FROM ExamGenerationRules 
+                    WHERE ExamId IN @ExamIds", 
+                    new { ExamIds = examIds })).ToList();
+            }
+
+            // Fetch seen question points for all attempts for this user in this wave
+            var seenPointsList = new List<dynamic>();
+            if (examIds.Any())
+            {
+                seenPointsList = (await conn.QueryAsync<dynamic>(@"
+                    SELECT usq.AttemptId, SUM(q.Points) AS SeenPoints
+                    FROM UserSeenQuestions usq
+                    JOIN Questions q ON usq.QuestionId = q.Id
+                    JOIN UserExamAttempts uea ON usq.AttemptId = uea.Id
+                    WHERE uea.UserId = @UserId AND uea.ExamId IN @ExamIds
+                    GROUP BY usq.AttemptId",
+                    new { UserId = studentId, ExamIds = examIds })).ToList();
+            }
+
+            var attemptSeenPoints = seenPointsList.ToDictionary(
+                x => (int)x.AttemptId,
+                x => (decimal)x.SeenPoints
+            );
+
+            // Calculate MaxPoints per exam for this student
+            var examMaxPoints = new Dictionary<int, decimal>();
+            foreach (var exam in exams)
+            {
+                int examId = (int)exam.ExamId;
+                bool isFinal = exam.IsFinalExam != null && (bool)exam.IsFinalExam;
+                string typeName = exam.ExamType ?? "";
+                
+                var attempt = attempts.FirstOrDefault(a => (int)a.ExamId == examId);
+                decimal? seenPoints = null;
+                if (attempt != null)
+                {
+                    if (attemptSeenPoints.TryGetValue((int)attempt.AttemptId, out decimal sp))
+                    {
+                        seenPoints = sp;
+                    }
+                }
+
+                decimal maxPoints = 0;
+                if (!isFinal && seenPoints.HasValue && seenPoints.Value > 0)
+                {
+                    maxPoints = seenPoints.Value;
+                }
+                else
+                {
+                    // Calculate expected points from rules
+                    var examRules = rules.Where(r => (int)r.ExamId == examId).ToList();
+                    var matchingRules = examRules.Where(r => {
+                        string target = (string)r.TargetRole;
+                        if (target == "All") return true;
+                        return string.Equals(target, userRole, StringComparison.OrdinalIgnoreCase) ||
+                               userRole.ToLower().Contains(target.ToLower());
+                    }).ToList();
+
+                    if (matchingRules.Any())
+                    {
+                        decimal rulePoints = 0;
+                        foreach (var rule in matchingRules)
+                        {
+                            int count = (int)rule.EasyCount + (int)rule.MediumCount + (int)rule.HardCount;
+                            decimal catPoints = 2; // Default fallback for wave exams
+                            rulePoints += count * catPoints;
+                        }
+                        maxPoints = rulePoints;
+                    }
+                    else
+                    {
+                        int questionsToShow = exam.TotalQuestionsToShow != null ? (int)exam.TotalQuestionsToShow : 0;
+                        if (questionsToShow > 0)
+                        {
+                            maxPoints = typeName.ToLower().Contains("wave") ? questionsToShow * 2.0m : questionsToShow * 1.0m;
+                        }
+                        else
+                        {
+                            maxPoints = (decimal)(exam.TotalPoints ?? 0);
+                        }
+                    }
+
+                    if (maxPoints <= 0)
+                    {
+                        maxPoints = typeName.ToLower().Contains("wave") ? 10.0m : 5.0m;
+                    }
+                }
+
+                examMaxPoints[examId] = maxPoints;
+            }
+
+            // If there's a final exam, its MaxPoints should be the sum of MaxPoints of all quizzes in the wave
+            var finalExam = exams.FirstOrDefault(e => e.IsFinalExam != null && (bool)e.IsFinalExam);
+            if (finalExam != null)
+            {
+                int finalExamId = (int)finalExam.ExamId;
+                var quizzes = exams.Where(e => e.IsFinalExam == null || !(bool)e.IsFinalExam).ToList();
+                decimal quizzesMaxSum = quizzes.Sum(q => examMaxPoints[(int)q.ExamId]);
+                examMaxPoints[finalExamId] = quizzesMaxSum > 0 ? quizzesMaxSum : 112.0m;
+            }
+
             // 3. Map them together
             var details = new List<dynamic>();
             foreach (var exam in exams)
@@ -743,7 +950,7 @@ namespace Exam.Controllers
                 details.Add(new {
                     ExamId = examId,
                     ExamTitle = (string)exam.ExamTitle,
-                    TotalPoints = (decimal)(exam.TotalPoints ?? 0),
+                    TotalPoints = examMaxPoints[examId],
                     Status = attempt != null ? (string)attempt.Status : "Not Started",
                     FinalScore = attempt != null ? (decimal)attempt.FinalScore : 0,
                     Percentage = attempt != null ? (decimal)attempt.Percentage : 0,

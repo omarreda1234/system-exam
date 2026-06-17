@@ -89,10 +89,16 @@
                     <th>Status</th>
                     <th>Start Time</th>
                     <th>Finish Time</th>
-                    <th>Time (M)</th>
+                    @if (!User.IsInRole("Branch Manager"))
+                    {
+                        <th>Time (M)</th>
+                    }
                     <th>Score</th>
                     <th>User Code</th>
-                    <th class="text-right px-8">Actions</th>
+                    @if (!User.IsInRole("Branch Manager"))
+                    {
+                        <th class="text-right px-8">Actions</th>
+                    }
                 </tr>
             </thead>
             <tbody>
@@ -177,12 +183,17 @@
                                 </div>`;
                         }
                     },
+                    @if (!User.IsInRole("Branch Manager"))
                     {
-                        data: 'duration',
-                        render: function(data) {
-                            return `<span class="text-xs font-bold text-slate-500">${data}</span>`;
-                        }
-                    },
+                        <text>
+                        {
+                            data: 'duration',
+                            render: function(data) {
+                                return `<span class="text-xs font-bold text-slate-500">${data}</span>`;
+                            }
+                        },
+                        </text>
+                    }
                     {
                         data: 'scoreDisplay',
                         render: function(data, type, row) {
@@ -198,26 +209,32 @@
                         render: function(data) {
                             return `<span class="text-[10px] font-bold text-slate-500 uppercase">${data}</span>`;
                         }
-                    },
+                    }
+                    @if (!User.IsInRole("Branch Manager"))
                     {
-                        data: 'id',
-                        orderable: false,
-                        className: 'text-right px-8',
-                        render: function(data, type, row) {
-                            let actionHtml = `
-                                <div class="flex items-center justify-end gap-2">
-                                    <button class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 dark:bg-slate-800 rounded-xl view-review" data-student-id="${data}" title="View Review">
-                                        <i class="fas fa-eye"></i>
-                                    </button>`;
-                            if (row.isAdmin) {
-                                actionHtml += `
-                                    <button class="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 dark:bg-slate-800 rounded-xl wipe-data" data-student-id="${data}" data-student-name="${row.studentName}" title="Wipe Data & Reset">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>`;
+                        <text>
+                        ,
+                        {
+                            data: 'id',
+                            orderable: false,
+                            className: 'text-right px-8',
+                            render: function(data, type, row) {
+                                let actionHtml = `
+                                    <div class="flex items-center justify-end gap-2">
+                                        <button class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 dark:bg-slate-800 rounded-xl view-review" data-student-id="${data}" title="View Review">
+                                            <i class="fas fa-eye"></i>
+                                        </button>`;
+                                if (row.isAdmin) {
+                                    actionHtml += `
+                                        <button class="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 dark:bg-slate-800 rounded-xl wipe-data" data-student-id="${data}" data-student-name="${row.studentName}" title="Wipe Data & Reset">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>`;
+                                }
+                                actionHtml += `</div>`;
+                                return actionHtml;
                             }
-                            actionHtml += `</div>`;
-                            return actionHtml;
                         }
+                        </text>
                     }
                 ],
                 deferRender: true,

@@ -113,6 +113,20 @@
                 </tr>
             </thead>
             <tbody>
+                @if (!Model.Any())
+                {
+                    <tr>
+                        <td colspan="8" class="text-center py-12 text-slate-400">
+                            <div class="flex flex-col items-center justify-center gap-3">
+                                <div class="w-16 h-16 bg-slate-50 dark:bg-slate-900 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-600 shadow-inner">
+                                    <i class="fas fa-inbox text-2xl"></i>
+                                </div>
+                                <span class="font-bold text-sm">No records found for this branch or wave</span>
+                                <p class="text-xs text-slate-400 max-w-xs leading-relaxed">Ensure the selected wave contains exams and that students from your branch are assigned to it.</p>
+                            </div>
+                        </td>
+                    </tr>
+                }
                 @foreach (var s in Model)
                 {
                     <tr>

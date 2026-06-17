@@ -715,13 +715,26 @@ namespace Exam.Services
                 "SELECT WaveName FROM TrainingWaves WHERE Id = @WaveId",
                 new { WaveId = waveId });
 
-            // 2. All exams in this wave with their total points
-            var waveExams = (await conn.QueryAsync<dynamic>(
-                "SELECT Id, TotalPoints FROM Exams WHERE WaveId = @WaveId",
+            // 2. All exams in this wave with details
+            var waveExams = (await conn.QueryAsync<dynamic>(@"
+                SELECT E.Id, E.TotalPoints, E.TotalQuestionsToShow, ET.TypeName AS ExamType, E.IsFinalExam 
+                FROM Exams E 
+                LEFT JOIN ExamTypes ET ON E.ExamTypeId = ET.Id 
+                WHERE E.WaveId = @WaveId",
                 new { WaveId = waveId })).ToList();
 
             int totalExamsInWave = waveExams.Count;
-            decimal totalAvailablePoints = waveExams.Sum(e => (decimal)(e.TotalPoints ?? 0));
+
+            var examIds = waveExams.Select(e => (int)e.Id).ToList();
+            var rules = new List<dynamic>();
+            if (examIds.Any())
+            {
+                rules = (await conn.QueryAsync<dynamic>(@"
+                    SELECT ExamId, EasyCount, MediumCount, HardCount, CategoryId, TargetRole 
+                    FROM ExamGenerationRules 
+                    WHERE ExamId IN @ExamIds", 
+                    new { ExamIds = examIds })).ToList();
+            }
 
             // 3. All students assigned to this wave
             var students = (await conn.QueryAsync<dynamic>(@"
@@ -748,8 +761,10 @@ namespace Exam.Services
                     uea.ExamId,
                     uea.Status,
                     ISNULL(uea.FinalScore, 0) AS FinalScore,
+                    uea.Score AS Percentage,
                     uea.CertificateCode,
                     uea.AttemptNumber,
+                    uea.Id AS AttemptId,
                     ROW_NUMBER() OVER (PARTITION BY uea.UserId, uea.ExamId ORDER BY uea.AttemptNumber DESC) AS rn
                 FROM UserExamAttempts uea
                 INNER JOIN Exams e ON e.Id = uea.ExamId
@@ -758,6 +773,22 @@ namespace Exam.Services
 
             // Keep only latest attempt per (user, exam)
             var latestAttempts = allAttempts.Where(a => (int)a.rn == 1).ToList();
+
+            // Fetch seen question points for all attempts in this wave
+            var seenPointsList = (await conn.QueryAsync<dynamic>(@"
+                SELECT usq.AttemptId, SUM(q.Points) AS SeenPoints
+                FROM UserSeenQuestions usq
+                JOIN Questions q ON usq.QuestionId = q.Id
+                JOIN UserExamAttempts uea ON usq.AttemptId = uea.Id
+                INNER JOIN Exams e ON e.Id = uea.ExamId
+                WHERE e.WaveId = @WaveId
+                GROUP BY usq.AttemptId",
+                new { WaveId = waveId })).ToList();
+            
+            var attemptSeenPoints = seenPointsList.ToDictionary(
+                x => (int)x.AttemptId,
+                x => (decimal)x.SeenPoints
+            );
 
             var results = new List<Exam.DTOs.WaveStudentResultDto>();
 
@@ -769,9 +800,36 @@ namespace Exam.Services
                 var studentAttempts = latestAttempts.Where(a => (string)a.UserId == userId).ToList();
                 int examsCompleted = studentAttempts.Count(a => (string)a.Status == "Completed");
                 int examsAssigned  = studentAttempts.Count;
-                decimal totalScore = studentAttempts
-                    .Where(a => (string)a.Status == "Completed")
-                    .Sum(a => (decimal)a.FinalScore);
+
+                // MaxPoints rule: all wave exams (quiz or final) = TotalQuestionsToShow × 2
+                var examMaxPoints = new Dictionary<int, decimal>();
+                foreach (var exam in waveExams)
+                {
+                    int examId = (int)exam.Id;
+                    int questionsToShow = exam.TotalQuestionsToShow != null ? (int)exam.TotalQuestionsToShow : 0;
+                    examMaxPoints[examId] = questionsToShow * 2.0m;
+                }
+
+                // Compute TotalScore and TotalAvailable
+                var finalExam = waveExams.FirstOrDefault(e => e.IsFinalExam != null && (bool)e.IsFinalExam);
+                decimal totalScore = 0;
+                decimal studentTotalAvailablePoints = 0;
+
+                var finalExamAttempt = studentAttempts.FirstOrDefault(a => (int)a.ExamId == (finalExam != null ? (int)finalExam.Id : -1) && (string)a.Status == "Completed");
+                if (finalExamAttempt != null)
+                {
+                    // Student finished the final exam → use final exam score and its max
+                    totalScore = (decimal)finalExamAttempt.FinalScore;
+                    studentTotalAvailablePoints = examMaxPoints[(int)finalExam.Id];
+                }
+                else
+                {
+                    // No final yet → sum of completed quizzes
+                    var quizzes = waveExams.Where(e => e.IsFinalExam == null || !(bool)e.IsFinalExam).ToList();
+                    var completedQuizzes = studentAttempts.Where(a => (string)a.Status == "Completed" && (finalExam == null || (int)a.ExamId != (int)finalExam.Id)).ToList();
+                    totalScore = completedQuizzes.Sum(a => (decimal)a.FinalScore);
+                    studentTotalAvailablePoints = quizzes.Sum(q => examMaxPoints[(int)q.Id]);
+                }
 
                 // Certificate code from any completed attempt (latest)
                 string certCode = studentAttempts
@@ -779,10 +837,8 @@ namespace Exam.Services
                     .Select(a => (string)a.CertificateCode)
                     .FirstOrDefault();
 
-                // Determine thresholds based on role
-                bool isPharmacist = roleName.ToLower().Contains("pharmacist") || roleName.Contains("صيدل");
-                double percentage = totalAvailablePoints > 0
-                    ? (double)(totalScore / totalAvailablePoints) * 100
+                double percentage = studentTotalAvailablePoints > 0
+                    ? (double)(totalScore / studentTotalAvailablePoints) * 100
                     : 0;
                 double certThreshold = 75.0;
                 double passThreshold = 70.0;
@@ -811,7 +867,7 @@ namespace Exam.Services
                     ExamsCompleted    = examsCompleted,
                     ExamsAssigned     = examsAssigned,
                     TotalScore        = totalScore,
-                    TotalAvailable    = totalAvailablePoints,
+                    TotalAvailable    = studentTotalAvailablePoints,
                     WaveStatus        = waveStatus,
                     CertificateCode   = certCode
                 });
@@ -1760,12 +1816,15 @@ WHERE U.Id = @UserId;";
                     INSERT INTO @WaveExams (ExamId, MaxPoints)
                     SELECT 
                         E.Id,
-                        ISNULL(
-                            CASE 
-                                WHEN ISNULL(E.TotalQuestionsToShow, 0) > 0 THEN 
-                                    CASE WHEN LOWER(ET.TypeName) LIKE '%wave%' THEN E.TotalQuestionsToShow * 2.0 ELSE E.TotalQuestionsToShow * 1.0 END
-                                ELSE E.TotalPoints 
-                            END, 100.0)
+                        COALESCE(
+                            (SELECT NULLIF(SUM(q.Points), 0) FROM UserSeenQuestions usq JOIN Questions q ON usq.QuestionId = q.Id JOIN UserExamAttempts uea ON usq.AttemptId = uea.Id WHERE uea.ExamId = E.Id AND uea.UserId = @UserId),
+                            NULLIF((SELECT SUM(egr.EasyCount + egr.MediumCount + egr.HardCount) * 2 FROM ExamGenerationRules egr WHERE egr.ExamId = E.Id AND (egr.TargetRole = 'All' OR egr.TargetRole = @RoleName OR @RoleName LIKE '%' + egr.TargetRole + '%')), 0),
+                            NULLIF(CASE WHEN ISNULL(E.TotalQuestionsToShow, 0) > 0 THEN 
+                                CASE WHEN LOWER(ET.TypeName) LIKE '%wave%' THEN E.TotalQuestionsToShow * 2.0 ELSE E.TotalQuestionsToShow * 1.0 END
+                                ELSE 0 END, 0),
+                            NULLIF(E.TotalPoints, 0),
+                            CASE WHEN LOWER(ET.TypeName) LIKE '%wave%' THEN 10.0 ELSE 5.0 END
+                        )
                     FROM Exams E
                     LEFT JOIN ExamTypes ET ON E.ExamTypeId = ET.Id
                     WHERE E.WaveId = @WaveId;

@@ -47,6 +47,11 @@ BEGIN
     SELECT @NewExamId, QuestionId
     FROM ExamQuestions WHERE ExamId = @OldExamId;
     
+    -- Clone Exam Generation Rules (Injection Rules)
+    INSERT INTO ExamGenerationRules (ExamId, CategoryId, TopicId, EasyCount, MediumCount, HardCount, TargetRole)
+    SELECT @NewExamId, CategoryId, TopicId, EasyCount, MediumCount, HardCount, TargetRole
+    FROM ExamGenerationRules WHERE ExamId = @OldExamId;
+    
     SELECT @NewExamId;
 END
 GO

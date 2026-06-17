@@ -183,6 +183,13 @@
         window.handleCancel = function(e) {
             if (e) e.preventDefault();
             
+            const urlParams = new URLSearchParams(window.location.search);
+            const returnUrl = urlParams.get('returnUrl');
+            if (returnUrl) {
+                window.location.href = returnUrl;
+                return false;
+            }
+            
             if (window.parent && typeof window.parent.closeTab === 'function' && window.frameElement) {
                 const paneId = window.frameElement.parentNode.id;
                 if (paneId && paneId.startsWith('tab-pane-')) {
@@ -192,16 +199,13 @@
                 }
             }
             
-            const urlParams = new URLSearchParams(window.location.search);
-            const returnUrl = urlParams.get('returnUrl');
-            if (returnUrl) {
-                window.location.href = returnUrl;
-                return false;
-            }
-            
             if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
-                window.location.href = document.referrer;
-                return false;
+                const refUrl = new URL(document.referrer);
+                const path = refUrl.pathname.toLowerCase();
+                if (path !== '/admin' && path !== '/admin/' && path !== '/admin/index') {
+                    window.location.href = document.referrer;
+                    return false;
+                }
             }
             
             window.location.href = '@Url.Action("Index", "Admin")';
@@ -539,8 +543,69 @@
 
             $('#examForm').on('submit', async function(e) {
                 e.preventDefault();
-                await ensureDraft(true);
-                this.submit();
+                const $form = $(this);
+                const $btn = $form.find('button[type="submit"]');
+                const origText = $btn.text();
+                
+                $btn.prop('disabled', true).text('Creating Exam...');
+
+                try {
+                    await ensureDraft(true);
+                    
+                    const fd = new FormData(this);
+                    const res = await fetch(this.action, {
+                        method: 'POST',
+                        body: fd,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    }).then(r => r.json());
+
+                    if (res.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Created!',
+                            text: res.message,
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+
+                        setTimeout(() => {
+                            if (window.parent && typeof window.parent.closeTab === 'function' && window.frameElement) {
+                                const paneId = window.frameElement.parentNode.id;
+                                if (paneId && paneId.startsWith('tab-pane-')) {
+                                    const tabId = paneId.replace('tab-pane-', '');
+                                    window.parent.closeTab(new Event('click'), tabId);
+                                    
+                                    const activeTabId = window.parent.$('.tab-btn.active').attr('id')?.replace('tab-btn-', '');
+                                    if (activeTabId) {
+                                        window.parent.refreshTab(new Event('click'), activeTabId);
+                                    }
+                                    return;
+                                }
+                            }
+                            const urlParams = new URLSearchParams(window.location.search);
+                            const returnUrl = urlParams.get('returnUrl');
+                            if (returnUrl) {
+                                window.location.href = returnUrl;
+                            } else {
+                                window.location.href = '@Url.Action("Index", "Admin")';
+                            }
+                        }, 1500);
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Validation Error',
+                            text: res.message
+                        });
+                    }
+                } catch(err) {
+                    Swal.fire('Error', 'Creation communication failed', 'error');
+                } finally {
+                    $btn.prop('disabled', false).text(origText);
+                }
             });
 
             $(document).on('click', '.save-individual-q', async function() { 

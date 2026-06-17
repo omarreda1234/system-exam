@@ -131,7 +131,7 @@
                         </td>
                         <td class="text-right px-8">
                             <div class="flex items-center justify-end gap-2">
-                                <a href="@Url.Action("Edit", "Exams", new { id = exam.Id })" class="p-2.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl" title="Configure">
+                                <a href="@Url.Action("Edit", "Exams", new { id = exam.Id, returnUrl = Context.Request.Path + Context.Request.QueryString })" class="p-2.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl" title="Configure">
                                     <i class="fas fa-cog"></i>
                                 </a>
                                 <button class="p-2.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl import-questions-btn" data-examid="@exam.Id" title="Import Questions (Excel)">
@@ -229,7 +229,7 @@
                             </td>
                             <td class="text-right px-8">
                                 <div class="flex items-center justify-end gap-2">
-                                    <a href="${editExamBaseUrl}/${id}" class="p-2.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl"><i class="fas fa-cog"></i></a>
+                                    <a href="${editExamBaseUrl}/${id}?returnUrl=${encodeURIComponent(window.location.pathname + window.location.search)}" class="p-2.5 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl"><i class="fas fa-cog"></i></a>
                                     <button class="p-2.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl import-questions-btn" data-examid="${id}" title="Import Questions (Excel)">
                                         <i class="fas fa-file-excel"></i>
                                     </button>
