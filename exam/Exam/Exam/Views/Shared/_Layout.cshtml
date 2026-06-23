@@ -7,7 +7,7 @@
     <title>@ViewData["Title"] - Eltarshoubi Training Academy</title>
     
     <!-- Favicon -->
-    <link rel="icon" type="image/jpeg" href="~/images/logo.jpeg" />
+    <link rel="icon" type="image/png" href="~/images/logo-circle.png" />
     
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -53,9 +53,128 @@
         .glass-nav {
             @@apply bg-white/80 backdrop-blur-xl border-b border-slate-100;
         }
+
+        /* Splash Screen Premium Animations */
+        #splash-screen {
+            position: fixed;
+            inset: 0;
+            background-color: #ffffff;
+            z-index: 999999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.8s cubic-bezier(0.85, 0, 0.15, 1), transform 0.8s cubic-bezier(0.85, 0, 0.15, 1), visibility 0.8s;
+        }
+
+        #splash-screen.fade-out {
+            opacity: 0;
+            transform: translateY(-100%);
+            visibility: hidden;
+        }
+
+        .splash-letter {
+            display: inline-block;
+            opacity: 0;
+            transform: translateY(20px) scale(0.9);
+            filter: blur(4px);
+            animation: revealLetter 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        @@keyframes revealLetter {
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+                filter: blur(0);
+            }
+        }
     </style>
 </head>
 <body class="bg-white text-slate-900 font-sans selection:bg-brand-100 selection:text-brand-700">
+    <!-- Splash Screen Overlay -->
+    <div id="splash-screen" class="fixed inset-0 bg-white z-[999999] flex flex-col items-center justify-center select-none" style="display: none;">
+        <div class="flex flex-col items-center text-center px-4">
+            <!-- Logo Box -->
+            <div id="splash-logo-box" class="w-24 h-24 bg-white rounded-full overflow-hidden flex items-center justify-center p-2 border border-slate-100 shadow-xl shadow-slate-200/50 mb-8 opacity-0 scale-90 transition-all duration-[1000ms] ease-out">
+                <img src="@Url.Content("~/images/logo.jpeg")" alt="Logo" class="w-full h-full object-cover" />
+            </div>
+            
+            <!-- Eltarshoubi -->
+            <h1 id="splash-title" class="text-4xl sm:text-5xl font-extrabold text-[#0f172a] tracking-tight leading-none uppercase mb-3 flex flex-wrap justify-center gap-[2px]">
+                <!-- Filled dynamically by JS -->
+            </h1>
+            
+            <!-- Training Academy -->
+            <p id="splash-subtitle" class="text-xs sm:text-sm font-bold text-[#01443c] tracking-[0.25em] uppercase flex flex-wrap justify-center gap-[1px]">
+                <!-- Filled dynamically by JS -->
+            </p>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const isReload = performance.getEntriesByType("navigation")[0]?.type === "reload";
+            const isSplashShown = sessionStorage.getItem('splash-shown') && !isReload && !window.location.search.includes('splash=true');
+            const splash = document.getElementById('splash-screen');
+            
+            if (isSplashShown) {
+                splash.style.display = 'none';
+            } else {
+                splash.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                
+                const titleText = "Eltarshoubi";
+                const subtitleText = "Training Academy";
+                
+                const titleEl = document.getElementById('splash-title');
+                const subtitleEl = document.getElementById('splash-subtitle');
+                
+                function wrapLetters(text, element, delayOffset, delayStep) {
+                    element.innerHTML = '';
+                    let wordWrapper = document.createElement('span');
+                    wordWrapper.className = 'flex';
+                    
+                    Array.from(text).forEach((char, idx) => {
+                        if (char === ' ') {
+                            element.appendChild(wordWrapper);
+                            wordWrapper = document.createElement('span');
+                            wordWrapper.className = 'flex ml-2.5';
+                        } else {
+                            const span = document.createElement('span');
+                            span.textContent = char;
+                            span.className = 'splash-letter';
+                            span.style.animationDelay = (delayOffset + idx * delayStep) + 's';
+                            wordWrapper.appendChild(span);
+                        }
+                    });
+                    element.appendChild(wordWrapper);
+                }
+                
+                wrapLetters(titleText, titleEl, 0.4, 0.05);
+                wrapLetters(subtitleText, subtitleEl, 0.8, 0.04);
+                
+                setTimeout(() => {
+                    const logoBox = document.getElementById('splash-logo-box');
+                    if (logoBox) {
+                        logoBox.style.opacity = '1';
+                        logoBox.style.transform = 'scale(1)';
+                    }
+                }, 100);
+                
+                setTimeout(() => {
+                    splash.classList.add('fade-out');
+                    document.body.style.overflow = '';
+                    setTimeout(() => {
+                        splash.remove();
+                    }, 800);
+                    sessionStorage.setItem('splash-shown', 'true');
+                }, 3000);
+            }
+        })();
+    </script>
+
     
     @if (ViewData["HideNavbar"] as bool? != true)
     {
