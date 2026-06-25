@@ -88,6 +88,8 @@ namespace Exam.Controllers
                     "DeleteCompany",
                     "ClearCompanyTrainees",
                     "ImportCompanyTraineesFromExcel",
+                    "DownloadTraineesTemplate",
+                    "DownloadPersonnelTemplate",
                     "GetCompanyTrainees",
                     "DeleteCompanyTrainee",
                     "AddCompanyTraineeManually",
@@ -2444,7 +2446,6 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 if (colRoleName == null) missingColumns.Add("RoleName (أو Role)");
                 if (colUserCode == null) missingColumns.Add("UserCode (أو Code)");
                 if (colBranchName == null) missingColumns.Add("BranchName (أو Branch أو Location أو الفرع)");
-                if (colCertificateCode == null) missingColumns.Add("CertificateCode (أو Certificate)");
                 if (colshiftid == null) missingColumns.Add("ShiftId (أو Shift Window)");
 
                 if (missingColumns.Any())
@@ -2461,8 +2462,8 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                                   "5. <b>RoleName</b> (أو Role)<br/>" +
                                   "6. <b>UserCode</b> (أو Code)<br/>" +
                                   "7. <b>BranchName</b> (أو Branch أو الفرع)<br/>" +
-                                  "8. <b>CertificateCode</b> (أو Certificate)<br/>" +
-                                  "9. <b>ShiftId</b> (أو Shift Window)"
+                                  "8. <b>ShiftId</b> (أو Shift Window)<br/>" +
+                                  "ملاحظة: عمود <b>CertificateCode</b> اختياري بالكامل وليس ضرورياً."
                     });
                 }
 
@@ -4163,7 +4164,8 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                         var val = worksheet.Cell(r, col).Value.ToString().Trim();
                         if (!string.IsNullOrWhiteSpace(val) && !headers.ContainsKey(val)) headers[val] = col;
                     }
-                    if (headers.ContainsKey("Ø§Ù„ÙƒÙˆØ¯") || headers.ContainsKey("Code") || headers.ContainsKey("Ø§Ù„Ø§Ø³Ù…") || headers.ContainsKey("Name"))
+                    if (headers.ContainsKey("Ø§Ù„ÙƒÙˆØ¯") || headers.ContainsKey("Code") || headers.ContainsKey("Ø§Ù„Ø§Ø³Ù…") || headers.ContainsKey("Name") ||
+                        headers.ContainsKey("Full Name") || headers.ContainsKey("User Code") || headers.ContainsKey("FullName") || headers.ContainsKey("UserCode"))
                     {
                         headerRow = r;
                         break;
@@ -4295,6 +4297,109 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 return Json(new { success = false, message = "Error: " + ex.Message });
             }
         }
+
+        [HttpGet]
+        public IActionResult DownloadTraineesTemplate()
+        {
+            using (var workbook = new XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Trainees Template");
+                
+                // Add header row
+                worksheet.Cell(1, 1).Value = "Full Name";
+                worksheet.Cell(1, 2).Value = "User Code";
+                worksheet.Cell(1, 3).Value = "Job Title";
+                worksheet.Cell(1, 4).Value = "Branch";
+                worksheet.Cell(1, 5).Value = "Email";
+                worksheet.Cell(1, 6).Value = "Phone";
+
+                // Format header row to look professional
+                var headerRange = worksheet.Range("A1:F1");
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Font.FontColor = XLColor.White;
+                headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#1e293b"); // Slate 800
+                headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                
+                // Set borders for first 15 rows for clean entry appearance
+                for (int row = 2; row <= 15; row++)
+                {
+                    for (int col = 1; col <= 6; col++)
+                    {
+                        worksheet.Cell(row, col).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        worksheet.Cell(row, col).Style.Border.OutsideBorderColor = XLColor.FromHtml("#cbd5e1"); // Slate 300
+                    }
+                }
+                
+                // Pre-adjust column widths
+                worksheet.Column(1).Width = 30; // Full Name
+                worksheet.Column(2).Width = 15; // User Code
+                worksheet.Column(3).Width = 25; // Job Title
+                worksheet.Column(4).Width = 20; // Branch
+                worksheet.Column(5).Width = 30; // Email
+                worksheet.Column(6).Width = 20; // Phone
+
+                using (var stream = new MemoryStream())
+                {
+                    workbook.SaveAs(stream);
+                    var content = stream.ToArray();
+                    return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Trainees_Import_Template.xlsx");
+                }
+            }
+        }
+
+        [HttpGet]
+        public IActionResult DownloadPersonnelTemplate()
+        {
+            using (var workbook = new XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Personnel Template");
+                
+                // Add header row
+                worksheet.Cell(1, 1).Value = "UserName";
+                worksheet.Cell(1, 2).Value = "Email";
+                worksheet.Cell(1, 3).Value = "Password";
+                worksheet.Cell(1, 4).Value = "Phone";
+                worksheet.Cell(1, 5).Value = "RoleName";
+                worksheet.Cell(1, 6).Value = "UserCode";
+                worksheet.Cell(1, 7).Value = "BranchName";
+                worksheet.Cell(1, 8).Value = "ShiftId";
+
+                // Format header row to look professional
+                var headerRange = worksheet.Range("A1:H1");
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Font.FontColor = XLColor.White;
+                headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f172a"); // Slate 900
+                headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                
+                // Set borders for first 15 rows for clean entry appearance
+                for (int row = 2; row <= 15; row++)
+                {
+                    for (int col = 1; col <= 8; col++)
+                    {
+                        worksheet.Cell(row, col).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        worksheet.Cell(row, col).Style.Border.OutsideBorderColor = XLColor.FromHtml("#cbd5e1"); // Slate 300
+                    }
+                }
+                
+                // Pre-adjust column widths
+                worksheet.Column(1).Width = 25; // UserName
+                worksheet.Column(2).Width = 30; // Email
+                worksheet.Column(3).Width = 18; // Password
+                worksheet.Column(4).Width = 18; // Phone
+                worksheet.Column(5).Width = 18; // RoleName
+                worksheet.Column(6).Width = 15; // UserCode
+                worksheet.Column(7).Width = 20; // BranchName
+                worksheet.Column(8).Width = 15; // ShiftId
+
+                using (var stream = new MemoryStream())
+                {
+                    workbook.SaveAs(stream);
+                    var content = stream.ToArray();
+                    return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Personnel_Import_Template.xlsx");
+                }
+            }
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetTraineeDetailsByCode(string code)
         {

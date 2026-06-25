@@ -41,7 +41,12 @@
             <form id="importForm" asp-action="ImportUsersFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
                 @Html.AntiForgeryToken()
                 <div class="flex-1 min-w-[300px] space-y-2">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Personnel Payload (.xlsx)</label>
+                    <div class="flex justify-between items-center px-1">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personnel Payload (.xlsx)</label>
+                        <a href="/Admin/DownloadPersonnelTemplate" class="text-[10px] font-extrabold text-brand-600 hover:text-brand-700 uppercase tracking-wider flex items-center gap-1">
+                            <i class="fas fa-download"></i> Download Template / تحميل النموذج
+                        </a>
+                    </div>
                     <input id="excelFile" type="file" name="excelFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-slate-900 dark:file:bg-brand-500 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-white dark:bg-slate-950 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
                 </div>
                 <label class="flex items-center gap-2 cursor-pointer select-none text-[10px] font-bold text-slate-500 uppercase tracking-widest">
