@@ -9,8 +9,7 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="~/images/logo-circle.png" />
     
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Comfortaa:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Icons & Styling -->
     <link rel="stylesheet" href="~/lib/font-awesome/css/all.min.css" />
@@ -75,19 +74,67 @@
             visibility: hidden;
         }
 
-        .splash-letter {
-            display: inline-block;
-            opacity: 0;
-            transform: translateY(20px) scale(0.9);
-            filter: blur(4px);
-            animation: revealLetter 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        .letter-path {
+            stroke: #0f172a;
+            stroke-width: 5.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: drawLetter 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
 
-        @@keyframes revealLetter {
+        .accent-path {
+            fill: none;
+            stroke: #0f172a;
+            stroke-width: 5.5;
+            stroke-linecap: round;
+            opacity: 0;
+            animation: dropAccent 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        .accent-dot {
+            fill: #0f172a;
+            opacity: 0;
+            animation: dropAccent 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        .sub-letter {
+            stroke: #01443c;
+            stroke-width: 1.5;
+            fill: rgba(1, 68, 60, 0);
+            stroke-dasharray: 120;
+            stroke-dashoffset: 120;
+            animation: drawSubLetter 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards, fillSubLetter 0.5s ease forwards;
+        }
+
+        @@keyframes drawSubLetter {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        @@keyframes fillSubLetter {
+            to {
+                fill: rgba(1, 68, 60, 1);
+            }
+        }
+
+        @@keyframes drawLetter {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        @@keyframes dropAccent {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
             to {
                 opacity: 1;
-                transform: translateY(0) scale(1);
-                filter: blur(0);
+                transform: translateY(0);
             }
         }
     </style>
@@ -101,15 +148,72 @@
                 <img src="@Url.Content("~/images/logo.jpeg")" alt="Logo" class="w-full h-full object-cover" />
             </div>
             
-            <!-- Eltarshoubi -->
-            <h1 id="splash-title" class="text-4xl sm:text-5xl font-extrabold text-[#0f172a] tracking-tight leading-none uppercase mb-3 flex flex-wrap justify-center gap-[2px]">
-                <!-- Filled dynamically by JS -->
-            </h1>
-            
-            <!-- Training Academy -->
-            <p id="splash-subtitle" class="text-xs sm:text-sm font-bold text-[#01443c] tracking-[0.25em] uppercase flex flex-wrap justify-center gap-[1px]">
-                <!-- Filled dynamically by JS -->
-            </p>
+            <!-- SVG Title with Clean Geometric Comfortaa-like Draw-In Animation -->
+            <div class="w-full max-w-[620px] aspect-[500/230]">
+                <svg viewBox="0 0 500 230" class="w-full h-full text-slate-900 dark:text-slate-900">
+                    <!-- E -->
+                    <path class="letter-path" style="animation-delay: 0s;" pathLength="100" d="M 85,85 C 65,85 55,95 55,115 C 55,135 65,145 85,145" />
+                    <path class="accent-path" style="animation-delay: 0.1s;" d="M 55,115 L 75,115" />
+                    
+                    <!-- l -->
+                    <path class="letter-path" style="animation-delay: 0.1s;" pathLength="100" d="M 105,80 L 105,145" />
+                    
+                    <!-- t -->
+                    <path class="letter-path" style="animation-delay: 0.2s;" pathLength="100" d="M 125,90 L 125,145" />
+                    <path class="accent-path" style="animation-delay: 0.35s;" d="M 117,105 L 133,105" />
+                    
+                    <!-- a -->
+                    <path class="letter-path" style="animation-delay: 0.3s;" pathLength="100" d="M 170,125 C 170,112 150,112 150,125 C 150,138 170,138 170,125" />
+                    <path class="letter-path" style="animation-delay: 0.38s;" pathLength="100" d="M 170,115 L 170,145" />
+                    
+                    <!-- r -->
+                    <path class="letter-path" style="animation-delay: 0.4s;" pathLength="100" d="M 190,145 L 190,115" />
+                    <path class="letter-path" style="animation-delay: 0.48s;" pathLength="100" d="M 190,125 C 190,118 202,118 205,120" />
+                    
+                    <!-- s -->
+                    <path class="letter-path" style="animation-delay: 0.5s;" pathLength="100" d="M 235,118 C 222,115 220,128 235,132 C 248,135 242,148 228,145" />
+                    
+                    <!-- h -->
+                    <path class="letter-path" style="animation-delay: 0.6s;" pathLength="100" d="M 260,80 L 260,145" />
+                    <path class="letter-path" style="animation-delay: 0.68s;" pathLength="100" d="M 260,128 C 265,116 278,116 278,145" />
+                    
+                    <!-- o -->
+                    <path class="letter-path" style="animation-delay: 0.7s;" pathLength="100" d="M 315,130 C 315,115 295,115 295,130 C 295,145 315,145 315,130" />
+                    
+                    <!-- u -->
+                    <path class="letter-path" style="animation-delay: 0.8s;" pathLength="100" d="M 335,115 L 335,138 C 335,145 350,145 350,138" />
+                    <path class="letter-path" style="animation-delay: 0.88s;" pathLength="100" d="M 350,115 L 350,145" />
+                    
+                    <!-- b -->
+                    <path class="letter-path" style="animation-delay: 0.9s;" pathLength="100" d="M 372,80 L 372,145" />
+                    <path class="letter-path" style="animation-delay: 0.98s;" pathLength="100" d="M 372,130 C 372,115 392,115 392,130 C 392,145 372,145 372,130" />
+                    
+                    <!-- i -->
+                    <path class="letter-path" style="animation-delay: 1.0s;" pathLength="100" d="M 412,115 L 412,145" />
+                    <circle class="accent-dot" style="animation-delay: 1.15s;" cx="412" cy="98" r="4.5" />
+
+                    <!-- Handwriting/Draw-In Subtitle using Plus Jakarta Sans Font outlines -->
+                    <text x="250" y="215" text-anchor="middle" font-family="'Plus Jakarta Sans', 'Inter', sans-serif" font-size="20" font-weight="800" letter-spacing="0.35em" fill="none">
+                        <tspan class="sub-letter" style="animation-delay: 1.1s, 1.3s;">T</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.15s, 1.35s;">R</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.2s, 1.4s;">A</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.25s, 1.45s;">I</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.3s, 1.5s;">N</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.35s, 1.55s;">I</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.4s, 1.6s;">N</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.45s, 1.65s;">G</tspan>
+                        <tspan> </tspan>
+                        <!-- dx="18" to force a clear visual separation between the two words -->
+                        <tspan class="sub-letter" dx="18" style="animation-delay: 1.55s, 1.75s;">A</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.6s, 1.8s;">C</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.65s, 1.85s;">A</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.7s, 1.9s;">D</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.75s, 1.95s;">E</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.8s, 2.0s;">M</tspan>
+                        <tspan class="sub-letter" style="animation-delay: 1.85s, 2.05s;">Y</tspan>
+                    </text>
+                </svg>
+            </div>
         </div>
     </div>
 
@@ -125,36 +229,8 @@
                 splash.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
                 
-                const titleText = "Eltarshoubi";
-                const subtitleText = "Training Academy";
-                
-                const titleEl = document.getElementById('splash-title');
-                const subtitleEl = document.getElementById('splash-subtitle');
-                
-                function wrapLetters(text, element, delayOffset, delayStep) {
-                    element.innerHTML = '';
-                    let wordWrapper = document.createElement('span');
-                    wordWrapper.className = 'flex';
-                    
-                    Array.from(text).forEach((char, idx) => {
-                        if (char === ' ') {
-                            element.appendChild(wordWrapper);
-                            wordWrapper = document.createElement('span');
-                            wordWrapper.className = 'flex ml-2.5';
-                        } else {
-                            const span = document.createElement('span');
-                            span.textContent = char;
-                            span.className = 'splash-letter';
-                            span.style.animationDelay = (delayOffset + idx * delayStep) + 's';
-                            wordWrapper.appendChild(span);
-                        }
-                    });
-                    element.appendChild(wordWrapper);
-                }
-                
-                wrapLetters(titleText, titleEl, 0.4, 0.05);
-                wrapLetters(subtitleText, subtitleEl, 0.8, 0.04);
-                
+
+
                 setTimeout(() => {
                     const logoBox = document.getElementById('splash-logo-box');
                     if (logoBox) {
@@ -170,7 +246,7 @@
                         splash.remove();
                     }, 800);
                     sessionStorage.setItem('splash-shown', 'true');
-                }, 3000);
+                }, 2600);
             }
         })();
     </script>
