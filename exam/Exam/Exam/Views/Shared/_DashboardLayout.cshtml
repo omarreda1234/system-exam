@@ -1526,6 +1526,12 @@
         });
 
         if (existingTabId) {
+            var $iframe = $('#tab-pane-' + existingTabId).find('iframe.iframe-pane');
+            var newIframeUrl = url + (url.indexOf('?') > -1 ? '&' : '?') + 'iframe=true';
+            if ($iframe.attr('src') !== newIframeUrl) {
+                $('#loader-' + existingTabId).show();
+                $iframe.attr('src', newIframeUrl);
+            }
             switchTab(existingTabId);
             return;
         }

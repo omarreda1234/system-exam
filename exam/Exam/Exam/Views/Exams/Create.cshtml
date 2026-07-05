@@ -222,6 +222,10 @@
             var updateCUrl = '@Url.Action("UpdateChoice", "Exams")';
             var currentCategoryOptions = '<option value="">--- CATEGORY ---</option>';
 
+            const urlParams = new URLSearchParams(window.location.search);
+            const selectedTypeId = urlParams.get('selectedTypeId');
+            const selectedWaveId = urlParams.get('waveId');
+
             function syncGradingVisibility() {
                 const isGraded = $('#IsGraded').is(':checked');
                 if (isGraded) {
@@ -271,6 +275,9 @@
                                 }
                             });
                         }
+                        if (selectedWaveId && selectedWaveId !== '0' && selectedWaveId !== '') {
+                            $('#WaveId').val(selectedWaveId);
+                        }
                     });
                 } else if (typeId && typeId != '0') {
                     $('.wave-container').hide();
@@ -286,17 +293,61 @@
                 updateTotalQuestions();
             });
 
-            var defaultType = '@(ViewBag.DefaultType ?? "")';
-            if (defaultType === 'wave') {
-                $('#ExamTypeId option').filter(function() {
-                    return $(this).attr('data-type-name') && $(this).attr('data-type-name').toLowerCase().includes('wave');
-                }).first().prop('selected', true);
-                $('#ExamTypeId').trigger('change');
-            } else if (defaultType === 'weekly') {
-                $('#ExamTypeId option').filter(function() {
-                    return $(this).val() !== "" && (!$(this).attr('data-type-name') || !$(this).attr('data-type-name').toLowerCase().includes('wave'));
-                }).first().prop('selected', true);
-                $('#ExamTypeId').trigger('change');
+            // Filter exam types based on context (weekly vs wave)
+            const defaultType = '@(ViewBag.DefaultType ?? "")'.toLowerCase();
+            $('#ExamTypeId option').each(function() {
+                const val = $(this).val();
+                if (val === "") return;
+                const typeName = ($(this).attr('data-type-name') || '').trim().toLowerCase();
+                const isWaveType = typeName.includes('wave');
+                
+                // Remove empty/junk types
+                if (typeName === "" || $(this).text().trim() === "") {
+                    $(this).remove();
+                    return;
+                }
+                
+                if (defaultType === 'wave') {
+                    if (!isWaveType) {
+                        $(this).remove();
+                    }
+                } else if (defaultType === 'weekly') {
+                    if (isWaveType) {
+                        $(this).remove();
+                    }
+                }
+            });
+
+            let matchedVal = null;
+            if (selectedTypeId && selectedTypeId !== '0' && selectedTypeId !== '') {
+                matchedVal = selectedTypeId;
+            } else {
+                // Find option that contains 'weekly' or 'wave' based on defaultType
+                $('#ExamTypeId option').each(function() {
+                    const val = $(this).val();
+                    if (val === "") return;
+                    const name = ($(this).attr('data-type-name') || '').toLowerCase();
+                    if (name === defaultType || name.includes(defaultType)) {
+                        matchedVal = val;
+                        return false; // break loop
+                    }
+                });
+                
+                // Fallback to first non-empty option if no match found
+                if (!matchedVal) {
+                    matchedVal = $('#ExamTypeId option').filter(function() {
+                        return $(this).val() !== "";
+                    }).first().val();
+                }
+            }
+
+            if (matchedVal) {
+                $('#ExamTypeId').val(matchedVal).trigger('change');
+                // Lock the dropdown in all cases when coming from weekly/wave context
+                if (defaultType === 'weekly' || defaultType === 'wave') {
+                    $('#ExamTypeId').css('pointer-events', 'none').attr('tabindex', '-1');
+                    $('#ExamTypeId').addClass('bg-slate-100 dark:bg-slate-800 text-slate-500 opacity-70');
+                }
             }
 
             async function ensureDraft(isFinal) {
@@ -562,38 +613,38 @@
                     }).then(r => r.json());
 
                     if (res.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Created!',
-                            text: res.message,
-                            toast: true,
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            timer: 1500
-                        });
-
-                        setTimeout(() => {
-                            if (window.parent && typeof window.parent.closeTab === 'function' && window.frameElement) {
-                                const paneId = window.frameElement.parentNode.id;
-                                if (paneId && paneId.startsWith('tab-pane-')) {
-                                    const tabId = paneId.replace('tab-pane-', '');
-                                    window.parent.closeTab(new Event('click'), tabId);
-                                    
-                                    const activeTabId = window.parent.$('.tab-btn.active').attr('id')?.replace('tab-btn-', '');
-                                    if (activeTabId) {
-                                        window.parent.refreshTab(new Event('click'), activeTabId);
+                        if (window.parent && typeof window.parent.closeTab === 'function' && window.frameElement) {
+                            const paneId = window.frameElement.parentNode.id;
+                            if (paneId && paneId.startsWith('tab-pane-')) {
+                                const tabId = paneId.replace('tab-pane-', '');
+                                
+                                // Find which tab will become active before we close the current one
+                                let targetActiveTabId = 'home';
+                                const tabButtons = window.parent.$('.tab-btn');
+                                if (tabButtons.length > 1) {
+                                    const remainingButtons = tabButtons.filter(function() {
+                                        return window.parent.$(this).attr('id') !== 'tab-btn-' + tabId;
+                                    });
+                                    if (remainingButtons.length > 0) {
+                                        targetActiveTabId = remainingButtons.last().attr('id').replace('tab-btn-', '');
                                     }
-                                    return;
                                 }
+                                
+                                // Refresh the target active tab first
+                                window.parent.refreshTab(new Event('click'), targetActiveTabId);
+                                
+                                // Then close our tab
+                                window.parent.closeTab(new Event('click'), tabId);
+                                return;
                             }
-                            const urlParams = new URLSearchParams(window.location.search);
-                            const returnUrl = urlParams.get('returnUrl');
-                            if (returnUrl) {
-                                window.location.href = returnUrl;
-                            } else {
-                                window.location.href = '@Url.Action("Index", "Admin")';
-                            }
-                        }, 1500);
+                        }
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const returnUrl = urlParams.get('returnUrl');
+                        if (returnUrl) {
+                            window.location.href = returnUrl;
+                        } else {
+                            window.location.href = '@Url.Action("Index", "Admin")';
+                        }
                     } else {
                         Swal.fire({
                             icon: 'error',
