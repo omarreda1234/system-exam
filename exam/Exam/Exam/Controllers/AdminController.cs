@@ -481,6 +481,19 @@ namespace Exam.Controllers
         {
             try
             {
+                if (User.IsInRole("Branch Manager"))
+                {
+                    using var conn = new SqlConnection(_connectionString);
+                    var examEndTime = await conn.QueryFirstOrDefaultAsync<DateTime?>(
+                        "SELECT EndTime FROM Exams WHERE Id = @Id", 
+                        new { Id = examId });
+
+                    if (examEndTime.HasValue && DateTime.Now < examEndTime.Value)
+                    {
+                        return Content("Results are coming soon after the exam concludes.");
+                    }
+                }
+
                 var results = await _examService.GetExamResultsByExamIdAsync(examId);
                 if (User.IsInRole("Branch Manager"))
                 {
@@ -675,7 +688,10 @@ namespace Exam.Controllers
             }
             else if (forceMode == "weekly")
             {
-                exams = exams.Where(e => !((e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave"))).ToList();
+                if (!User.IsInRole("Branch Manager") && (!typeId.HasValue || typeId.Value == 0))
+                {
+                    exams = exams.Where(e => !((e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave"))).ToList();
+                }
             }
 
             ViewBag.Exams = exams;
@@ -728,6 +744,10 @@ namespace Exam.Controllers
                             {
                                 results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
                             }
+                        }
+                        if (forceMode == "weekly")
+                        {
+                            return View("WeeklyResults", Enumerable.Empty<Exam.DTOs.ExamResultRowDto>());
                         }
                         return View("Students", results);
                     }
@@ -1402,9 +1422,12 @@ namespace Exam.Controllers
             {
                 exams = exams.Where(e => (e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave")).ToList();
             }
-            else
+            else if (mode == "weekly")
             {
-                exams = exams.Where(e => !((e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave"))).ToList();
+                if (!User.IsInRole("Branch Manager") && (!typeId.HasValue || typeId.Value == 0))
+                {
+                    exams = exams.Where(e => !((e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave"))).ToList();
+                }
             }
             var examResults = exams.Select(e => new {
                 id = e.Id,
@@ -1937,6 +1960,25 @@ namespace Exam.Controllers
             if (examId <= 0)
             {
                 return Json(new { draw = draw, recordsTotal = 0, recordsFiltered = 0, data = new List<object>() });
+            }
+
+            if (User.IsInRole("Branch Manager"))
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var examEndTime = await conn.QueryFirstOrDefaultAsync<DateTime?>(
+                    "SELECT EndTime FROM Exams WHERE Id = @Id", 
+                    new { Id = examId });
+
+                if (examEndTime.HasValue && DateTime.Now < examEndTime.Value)
+                {
+                    return Json(new { 
+                        draw = draw, 
+                        recordsTotal = 0, 
+                        recordsFiltered = 0, 
+                        data = new List<object>(),
+                        isComingSoon = true
+                    });
+                }
             }
 
             var results = await _examService.GetExamResultsByExamIdAsync(examId);
@@ -4617,6 +4659,132 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             {
                 Console.WriteLine($"Error merging branch: {ex.Message}");
                 return Json(new { success = false, message = "An error occurred while merging." });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UploadCertificatesOnlyExcel(IFormFile excelFile)
+        {
+            if (excelFile == null || excelFile.Length == 0)
+            {
+                return Json(new { success = false, message = "Please upload an Excel file." });
+            }
+
+            try
+            {
+                using var memoryStream = new MemoryStream();
+                await excelFile.CopyToAsync(memoryStream);
+                memoryStream.Position = 0;
+
+                using var workbook = new XLWorkbook(memoryStream);
+                var worksheet = workbook.Worksheets.FirstOrDefault();
+                if (worksheet == null) return Json(new { success = false, message = "Excel file has no worksheets." });
+
+                var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                var headerRow = 1;
+
+                // Try to find the header row in the first 3 rows
+                for (int r = 1; r <= 3; r++)
+                {
+                    headers.Clear();
+                    for (int col = 1; col <= 20; col++)
+                    {
+                        var val = worksheet.Cell(r, col).Value.ToString().Trim();
+                        if (!string.IsNullOrWhiteSpace(val) && !headers.ContainsKey(val)) headers[val] = col;
+                    }
+                    if (headers.ContainsKey("Code") || headers.ContainsKey("UserCode") || headers.ContainsKey("User Code") || 
+                        headers.ContainsKey("الرمز") || headers.ContainsKey("الكود") || headers.ContainsKey("كود") || 
+                        headers.ContainsKey("Certificate") || headers.ContainsKey("CertificateCode") || headers.ContainsKey("الشهادة") || 
+                        headers.ContainsKey("كود الشهادة"))
+                    {
+                        headerRow = r;
+                        break;
+                    }
+                }
+
+                int? GetCol(params string[] possibleNames)
+                {
+                    foreach (var name in possibleNames)
+                    {
+                        if (headers.TryGetValue(name.Trim(), out var colIndex)) return colIndex;
+                        foreach (var kvp in headers)
+                        {
+                            if (kvp.Key.Contains(name.Trim(), StringComparison.OrdinalIgnoreCase) || name.Trim().Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return kvp.Value;
+                            }
+                        }
+                    }
+                    return null;
+                }
+
+                var colUserCode = GetCol("Code", "UserCode", "User Code", "الكود", "كود", "كود الطالب");
+                var colCertificateCode = GetCol("Certificate", "CertificateCode", "Certificate Code", "الشهادة", "كود الشهادة", "رقم الشهادة");
+
+                if (colUserCode == null || colCertificateCode == null)
+                {
+                    return Json(new { 
+                        success = false, 
+                        message = "الملف المرفوع يجب أن يحتوي على عمودين على الأقل: كود المستخدم (UserCode) وكود الشهادة (CertificateCode)." 
+                    });
+                }
+
+                var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? headerRow;
+                int updatedCount = 0;
+                var skippedCodes = new List<string>();
+
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                for (int row = headerRow + 1; row <= lastRow; row++)
+                {
+                    var rawUserCode = worksheet.Cell(row, colUserCode.Value).Value.ToString()?.Trim();
+                    var rawCertCode = worksheet.Cell(row, colCertificateCode.Value).Value.ToString()?.Trim();
+
+                    if (string.IsNullOrWhiteSpace(rawUserCode)) continue;
+
+                    // Normalizing double/scientific notation for codes (like 10243.0 or 1.23E+4)
+                    if (double.TryParse(rawUserCode, out var codeDouble))
+                    {
+                        rawUserCode = ((long)codeDouble).ToString();
+                    }
+
+                    // 1. Find user by UserCode in AspNetUsers
+                    var user = _userManager.Users.FirstOrDefault(x => x.UserCode == rawUserCode);
+                    if (user != null)
+                    {
+                        // Update AspNetUsers
+                        user.CertificateCode = rawCertCode;
+                        await _userManager.UpdateAsync(user);
+
+                        // 2. Also update UserExamAttempts (update the latest completed attempt or all completed attempts for this user)
+                        var updateAttemptsSql = @"
+                            UPDATE UserExamAttempts 
+                            SET CertificateCode = @CertCode 
+                            WHERE UserId = @UserId AND [Status] = 'Completed'";
+                        
+                        await conn.ExecuteAsync(updateAttemptsSql, new { CertCode = rawCertCode, UserId = user.Id });
+
+                        updatedCount++;
+                    }
+                    else
+                    {
+                        skippedCodes.Add(rawUserCode);
+                    }
+                }
+
+                var msg = $"تم تحديث كود الشهادة بنجاح لعدد {updatedCount} مستخدم.";
+                if (skippedCodes.Any())
+                {
+                    msg += $" تم تخطي الكودات التالية لعدم وجودها بالنظام: {string.Join(", ", skippedCodes.Take(10))}";
+                    if (skippedCodes.Count > 10) msg += $" (وآخرين...)";
+                }
+
+                return Json(new { success = true, message = msg });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ أثناء قراءة الملف: " + ex.Message });
             }
         }
     }

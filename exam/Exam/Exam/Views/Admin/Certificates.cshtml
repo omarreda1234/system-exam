@@ -71,6 +71,10 @@
                 <button onclick="sendSelectedCerts(@selectedExamId)" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-lg flex items-center gap-2">
                     <i class="fas fa-certificate"></i> Send Selected Certs
                 </button>
+                <button onclick="triggerExcelUpload()" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-sm flex items-center gap-2 border border-slate-200 dark:border-slate-700">
+                    <i class="fas fa-file-excel text-emerald-600"></i> Import Certificates Excel
+                </button>
+                <input type="file" id="certExcelInput" class="hidden" accept=".xlsx, .xls" onchange="uploadCertExcel(event)" />
             </div>
         </div>
     </div>
@@ -233,6 +237,61 @@
             }).then(r => r.json()).then(res => {
                 if(res.success) Swal.fire('Success', res.message, 'success').then(() => location.reload());
                 else Swal.fire('Error', res.message, 'error');
+            });
+        }
+
+        function triggerExcelUpload() {
+            $('#certExcelInput').click();
+        }
+
+        function uploadCertExcel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('excelFile', file);
+            
+            Swal.fire({
+                title: 'Importing Certificates...',
+                text: 'Please wait while we process the Excel file',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            fetch('/Admin/UploadCertificatesOnlyExcel', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(res => {
+                $('#certExcelInput').val('');
+                if (res.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Import Successful',
+                        text: res.message,
+                        confirmButtonText: 'Reload Page'
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Import Failed',
+                        text: res.message
+                    });
+                }
+            })
+            .catch(err => {
+                $('#certExcelInput').val('');
+                console.error(err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'An error occurred during upload.'
+                });
             });
         }
 

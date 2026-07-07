@@ -79,7 +79,7 @@
 </div>
 
 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 overflow-hidden shadow-sm">
-    <div class="overflow-x-auto">
+    <div id="tableWrapper" class="overflow-x-auto">
         <table id="weeklyResultsTable" class="saas-table">
             <thead>
                 <tr>
@@ -105,6 +105,15 @@
             </tbody>
         </table>
     </div>
+    <div id="comingSoonContainer" class="hidden flex flex-col items-center justify-center py-16 text-center">
+        <div class="w-16 h-16 bg-amber-50 dark:bg-amber-950/30 text-amber-500 dark:text-amber-400 rounded-3xl flex items-center justify-center text-2xl mb-4 shadow-sm">
+            <i class="fas fa-hourglass-half animate-spin" style="animation-duration: 3s;"></i>
+        </div>
+        <h3 class="text-xl font-black text-slate-800 dark:text-white mb-2">Results Coming Soon</h3>
+        <p class="text-sm text-slate-400 dark:text-slate-500 max-w-md">
+            This exam is currently active. The evaluation matrix will be fully accessible to Branch Managers immediately after the exam closes.
+        </p>
+    </div>
 </div>
 
 @section Scripts {
@@ -122,6 +131,18 @@
                     },
                     headers: {
                         'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    dataSrc: function (json) {
+                        if (json.isComingSoon) {
+                            $('#tableWrapper').addClass('hidden');
+                            $('#comingSoonContainer').removeClass('hidden');
+                            $('#btnExport').addClass('pointer-events-none opacity-50');
+                        } else {
+                            $('#tableWrapper').removeClass('hidden');
+                            $('#comingSoonContainer').addClass('hidden');
+                            $('#btnExport').removeClass('pointer-events-none opacity-50');
+                        }
+                        return json.data;
                     }
                 },
                 columns: [
