@@ -154,7 +154,7 @@ namespace Exam.Controllers
             if (token != null)
             {
                 var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
-                var publicIp = "41.33.149.186:8052";
+                var publicIp = "41.33.149.186:8090";
                 var relativeUrl = Url.Action("ResetPassword", "Auth", new { token = encodedToken, email = dto.Email });
                 var callbackUrl = $"{Request.Scheme}://{publicIp}{relativeUrl}";
                 var subject = "Reset Your Password - Eltarshoubi Academy";

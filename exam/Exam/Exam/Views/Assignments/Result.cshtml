@@ -1,0 +1,188 @@
+@model IEnumerable<dynamic>
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Assessment Results";
+    var attempt = ViewBag.Attempt;
+    var studentRole = ViewBag.StudentRole as string ?? "All";
+    decimal maxScore = studentRole == "Pharmacist" ? (decimal)attempt.PharmacistMaxScore : (decimal)attempt.AssistantMaxScore;
+    
+    int correctCount = Model.Count(x => x.IsCorrect != null && (bool)x.IsCorrect);
+    int totalCount = Model.Count();
+    
+    double percent = maxScore > 0 ? (double)((decimal)attempt.Score / maxScore) * 100 : 0;
+}
+
+<div class="max-w-4xl mx-auto px-6 py-12">
+    <!-- Header Back Button -->
+    <div class="mb-8">
+        <a href="@Url.Action("Index", "Assignments")" class="text-xs font-black text-slate-400 hover:text-brand-600 transition-colors uppercase tracking-widest flex items-center gap-2">
+            <i class="fas fa-arrow-left"></i> Back to Assignments
+        </a>
+    </div>
+
+    <!-- Results Overview Card -->
+    <div class="bg-white border border-slate-200 rounded-[32px] p-8 mb-8 shadow-sm relative overflow-hidden">
+        <div class="absolute top-0 right-0 h-2 w-full @(percent >= 75 ? "bg-emerald-500" : percent >= 70 ? "bg-blue-500" : "bg-rose-500")"></div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 items-center text-left">
+            <!-- Score & Circular Dial -->
+            <div class="flex flex-col items-center md:border-r border-slate-100 py-4">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Overall Score & Grade</span>
+                <div class="relative w-28 h-28 flex items-center justify-center rounded-full border-4 border-slate-100 shadow-inner">
+                    <div class="text-center">
+                        <span class="text-2xl font-black @(percent >= 75 ? "text-emerald-600" : percent >= 70 ? "text-blue-600" : "text-rose-600") font-mono">
+                            @(((decimal)attempt.Score).ToString("0.##"))
+                        </span>
+                        <span class="text-xs text-slate-400 block font-bold border-t border-slate-50 mt-0.5 pt-0.5">out of @maxScore.ToString("0.##")</span>
+                    </div>
+                </div>
+                <span class="text-xs font-black @(percent >= 75 ? "text-emerald-600 bg-emerald-50 border border-emerald-100" : percent >= 70 ? "text-blue-600 bg-blue-50 border border-blue-100" : "text-rose-600 bg-rose-50 border border-rose-100") px-3 py-1 rounded-full mt-4">
+                    @percent.ToString("0.0")%
+                </span>
+            </div>
+
+            <!-- Stats -->
+            <div class="md:col-span-2 space-y-4">
+                <div>
+                    <h2 class="text-xs font-black text-brand-600 uppercase tracking-[0.2em] mb-1">Training Assignment Assessment</h2>
+                    <h1 class="text-2xl font-black text-slate-900">@attempt.Title</h1>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+                    <div>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Start Time</span>
+                        <span class="text-xs font-black text-slate-600">@(((DateTime)attempt.StartTime).ToString("dd/MM/yyyy hh:mm tt"))</span>
+                    </div>
+                    <div>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Assessment Status</span>
+                        <span class="text-xs font-black text-emerald-600">Completed & Graded</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Question Breakdown -->
+    <h3 class="text-sm font-black text-slate-800 dark:text-slate-400 uppercase tracking-wider mb-6 text-left">Questions & Answers Details</h3>
+    
+    <div class="space-y-6">
+        @{
+            int qIndex = 0;
+        }
+        @foreach (var r in Model)
+        {
+            qIndex++;
+            bool isCorrect = r.IsCorrect != null && (bool)r.IsCorrect;
+            decimal earnedPoints = r.EarnedPoints != null ? (decimal)r.EarnedPoints : 0;
+            decimal maxPoints = (decimal)r.Points;
+
+            <div class="bg-white border border-slate-200 rounded-[32px] p-8 shadow-sm relative text-left">
+                <!-- Points Tag -->
+                <div class="absolute -top-3 right-6 bg-slate-950 text-white rounded-xl px-3 py-1.5 text-[10px] font-black font-mono shadow-md">
+                    @earnedPoints.ToString("0.##") / @maxPoints.ToString("0.##") Points
+                </div>
+
+                <div class="flex items-center gap-3 mb-4">
+                    <span class="w-8 h-8 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center font-bold text-sm">
+                        @qIndex
+                    </span>
+                    <span class="px-2.5 py-0.5 rounded-lg text-[9px] font-black bg-slate-50 text-slate-500 border border-slate-100">
+                        @if ((string)r.QuestionType == "CategorySelect")
+                        {
+                            <span>Classify Products (Type 1)</span>
+                        }
+                        else
+                        {
+                            <span>Match Definition (Type 2)</span>
+                        }
+                    </span>
+                </div>
+
+                <!-- Prompt -->
+                @if ((string)r.QuestionType == "CategorySelect")
+                {
+                    <div class="mb-4">
+                        <p class="text-sm font-bold text-slate-700">
+                            Required to select products belonging to the following category:
+                        </p>
+                        <div class="flex flex-wrap gap-2 mt-2">
+                            <span class="bg-slate-50 text-slate-600 rounded-lg px-2.5 py-1 text-xs font-semibold">Main Group: @r.CategoryName</span>
+                            <span class="bg-slate-50 text-slate-600 rounded-lg px-2.5 py-1 text-xs font-semibold">Group: @r.GroupName</span>
+                            <span class="bg-slate-50 text-slate-600 rounded-lg px-2.5 py-1 text-xs font-semibold">Subgroup: @r.SubcategoryName</span>
+                        </div>
+                        <p class="text-xs font-bold text-slate-400 mt-2">Required count: @r.RequiredItemsCount products</p>
+                    </div>
+
+                    <!-- Answers comparison -->
+                    <div class="space-y-3 pt-3 border-t border-slate-50">
+                        <div>
+                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Your Answer:</span>
+                            <div class="flex flex-wrap gap-2">
+                                @if (string.IsNullOrEmpty((string)r.SelectedItemNos))
+                                {
+                                    <span class="text-xs text-rose-500 font-semibold italic">Not selected</span>
+                                }
+                                else
+                                {
+                                    string[] codes = ((string)r.SelectedItemNos).Split(',');
+                                    foreach (var code in codes)
+                                    {
+                                        <span class="bg-indigo-50 text-indigo-700 rounded-lg px-3 py-1 text-xs font-mono font-bold border border-indigo-100">@code</span>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="mb-4">
+                        <p class="text-sm font-bold text-slate-700 mb-2">Medical Definition / Usage:</p>
+                        <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-slate-600 text-xs leading-relaxed">
+                            @r.ItemDefinition
+                        </div>
+                    </div>
+
+                    <!-- Answers comparison -->
+                    <div class="space-y-4 pt-3 border-t border-slate-50">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Correct Answer:</span>
+                                <span class="bg-emerald-50 text-emerald-700 rounded-xl px-4 py-2 text-xs font-mono font-bold border border-emerald-100 inline-block">@r.CorrectItemNo</span>
+                            </div>
+                            <div>
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Your Answer:</span>
+                                @if (string.IsNullOrEmpty((string)r.SelectedItemNos))
+                                {
+                                    <span class="text-xs text-rose-500 font-semibold italic">Not selected</span>
+                                }
+                                else
+                                {
+                                    <span class="bg-indigo-50 text-indigo-700 rounded-xl px-4 py-2 text-xs font-mono font-bold border border-indigo-100 inline-block">@r.SelectedItemNos</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Success / Fail Flag -->
+                <div class="mt-6 pt-4 border-t border-slate-50 flex items-center justify-between">
+                    <span class="text-[10px] font-black uppercase">
+                        @if (isCorrect)
+                        {
+                            <span class="text-emerald-600 bg-emerald-50 border border-emerald-100 px-3.5 py-1 rounded-xl"><i class="fas fa-check-circle mr-1"></i> Correct Answer</span>
+                        }
+                        else if (earnedPoints > 0)
+                        {
+                            <span class="text-amber-600 bg-amber-50 border border-amber-100 px-3.5 py-1 rounded-xl"><i class="fas fa-exclamation-circle mr-1"></i> Partially Correct</span>
+                        }
+                        else
+                        {
+                            <span class="text-rose-600 bg-rose-50 border border-rose-100 px-3.5 py-1 rounded-xl"><i class="fas fa-times-circle mr-1"></i> Incorrect Answer</span>
+                        }
+                    </span>
+                </div>
+            </div>
+        }
+    </div>
+</div>

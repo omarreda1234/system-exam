@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en" translate="no" class="notranslate">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="google" content="notranslate">
+    <title>Training Assignments - Eltarshoubi Training Academy</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/images/logo-circle.png" />
+    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Comfortaa:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons & Styling -->
+    <link rel="stylesheet" href="/lib/font-awesome/css/all.min.css" />
+    <script src="/lib/tailwind/tailwindcss.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#edf4f3',
+                            100: '#d1e4e2',
+                            200: '#a8cdca',
+                            300: '#75b0ab',
+                            400: '#48918a',
+                            500: '#2a766f',
+                            600: '#01443c',
+                            700: '#013831',
+                            800: '#012c27',
+                            900: '#011f1c',
+                            950: '#00120f',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        .nav-link {
+            @apply flex items-center px-4 py-2 text-xs font-bold text-slate-500 hover:text-brand-600 transition-all uppercase tracking-widest;
+        }
+        .nav-link.active {
+            @apply text-brand-600;
+        }
+        .glass-nav {
+            @apply bg-white/80 backdrop-blur-xl border-b border-slate-100;
+        }
+
+        /* Splash Screen Premium Animations */
+        #splash-screen {
+            position: fixed;
+            inset: 0;
+            background-color: #ffffff;
+            z-index: 999999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.8s cubic-bezier(0.85, 0, 0.15, 1), transform 0.8s cubic-bezier(0.85, 0, 0.15, 1), visibility 0.8s;
+        }
+
+        #splash-screen.fade-out {
+            opacity: 0;
+            transform: translateY(-100%);
+            visibility: hidden;
+        }
+
+        .letter-path {
+            stroke: #0f172a;
+            stroke-width: 5.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: drawLetter 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        .accent-path {
+            fill: none;
+            stroke: #0f172a;
+            stroke-width: 5.5;
+            stroke-linecap: round;
+            opacity: 0;
+            animation: dropAccent 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        .accent-dot {
+            fill: #0f172a;
+            opacity: 0;
+            animation: dropAccent 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        .sub-letter {
+            stroke: #01443c;
+            stroke-width: 1.5;
+            fill: rgba(1, 68, 60, 0);
+            stroke-dasharray: 120;
+            stroke-dashoffset: 120;
+            animation: drawSubLetter 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards, fillSubLetter 0.5s ease forwards;
+        }
+
+        @keyframes drawSubLetter {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        @keyframes fillSubLetter {
+            to {
+                fill: rgba(1, 68, 60, 1);
+            }
+        }
+
+        @keyframes drawLetter {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        @keyframes dropAccent {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body class="bg-white text-slate-900 font-sans selection:bg-brand-100 selection:text-brand-700">
+    <!-- Splash Screen Overlay -->
+    <div b-fgzhqm2ecr id="splash-screen" class="fixed inset-0 bg-white z-[999999] flex flex-col items-center justify-center select-none" style="display: none;">
+        <div b-fgzhqm2ecr class="flex flex-col items-center text-center px-4">
+            <!-- Logo Box -->
+            <div b-fgzhqm2ecr id="splash-logo-box" class="w-24 h-24 bg-white rounded-full overflow-hidden flex items-center justify-center p-2 border border-slate-100 shadow-xl shadow-slate-200/50 mb-8 opacity-0 scale-90 transition-all duration-[1000ms] ease-out">
+                <img b-fgzhqm2ecr src="/images/logo.jpeg" alt="Logo" class="w-full h-full object-cover" />
+            </div>
+            
+            <!-- SVG Title with Clean Geometric Comfortaa-like Draw-In Animation -->
+            <div b-fgzhqm2ecr class="w-full max-w-[620px] aspect-[500/230]">
+                <svg b-fgzhqm2ecr viewBox="0 0 500 230" class="w-full h-full text-slate-900 dark:text-slate-900">
+                    <!-- E -->
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0s;" pathLength="100" d="M 85,85 C 65,85 55,95 55,115 C 55,135 65,145 85,145" />
+                    <path b-fgzhqm2ecr class="accent-path" style="animation-delay: 0.1s;" d="M 55,115 L 75,115" />
+                    
+                    <!-- l -->
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.1s;" pathLength="100" d="M 105,80 L 105,145" />
+                    
+                    <!-- t -->
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.2s;" pathLength="100" d="M 125,90 L 125,145" />
+                    <path b-fgzhqm2ecr class="accent-path" style="animation-delay: 0.35s;" d="M 117,105 L 133,105" />
+                    
+                    <!-- a -->
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.3s;" pathLength="100" d="M 170,125 C 170,112 150,112 150,125 C 150,138 170,138 170,125" />
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.38s;" pathLength="100" d="M 170,115 L 170,145" />
+                    
+                    <!-- r -->
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.4s;" pathLength="100" d="M 190,145 L 190,115" />
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.48s;" pathLength="100" d="M 190,125 C 190,118 202,118 205,120" />
+                    
+                    <!-- s -->
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.5s;" pathLength="100" d="M 235,118 C 222,115 220,128 235,132 C 248,135 242,148 228,145" />
+                    
+                    <!-- h -->
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.6s;" pathLength="100" d="M 260,80 L 260,145" />
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.68s;" pathLength="100" d="M 260,128 C 265,116 278,116 278,145" />
+                    
+                    <!-- o -->
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.7s;" pathLength="100" d="M 315,130 C 315,115 295,115 295,130 C 295,145 315,145 315,130" />
+                    
+                    <!-- u -->
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.8s;" pathLength="100" d="M 335,115 L 335,138 C 335,145 350,145 350,138" />
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.88s;" pathLength="100" d="M 350,115 L 350,145" />
+                    
+                    <!-- b -->
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.9s;" pathLength="100" d="M 372,80 L 372,145" />
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 0.98s;" pathLength="100" d="M 372,130 C 372,115 392,115 392,130 C 392,145 372,145 372,130" />
+                    
+                    <!-- i -->
+                    <path b-fgzhqm2ecr class="letter-path" style="animation-delay: 1.0s;" pathLength="100" d="M 412,115 L 412,145" />
+                    <circle b-fgzhqm2ecr class="accent-dot" style="animation-delay: 1.15s;" cx="412" cy="98" r="4.5" />
+
+                    <!-- Handwriting/Draw-In Subtitle using Plus Jakarta Sans Font outlines -->
+                    <text b-fgzhqm2ecr x="250" y="215" text-anchor="middle" font-family="'Plus Jakarta Sans', 'Inter', sans-serif" font-size="20" font-weight="800" letter-spacing="0.35em" fill="none">
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.1s, 1.3s;">T</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.15s, 1.35s;">R</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.2s, 1.4s;">A</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.25s, 1.45s;">I</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.3s, 1.5s;">N</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.35s, 1.55s;">I</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.4s, 1.6s;">N</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.45s, 1.65s;">G</tspan>
+                        <tspan b-fgzhqm2ecr> </tspan>
+                        <!-- dx="18" to force a clear visual separation between the two words -->
+                        <tspan b-fgzhqm2ecr class="sub-letter" dx="18" style="animation-delay: 1.55s, 1.75s;">A</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.6s, 1.8s;">C</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.65s, 1.85s;">A</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.7s, 1.9s;">D</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.75s, 1.95s;">E</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.8s, 2.0s;">M</tspan>
+                        <tspan b-fgzhqm2ecr class="sub-letter" style="animation-delay: 1.85s, 2.05s;">Y</tspan>
+                    </text>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const isReload = performance.getEntriesByType("navigation")[0]?.type === "reload";
+            const isSplashShown = sessionStorage.getItem('splash-shown') && !isReload && !window.location.search.includes('splash=true');
+            const splash = document.getElementById('splash-screen');
+            
+            if (isSplashShown) {
+                splash.style.display = 'none';
+            } else {
+                splash.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                
+
+
+                setTimeout(() => {
+                    const logoBox = document.getElementById('splash-logo-box');
+                    if (logoBox) {
+                        logoBox.style.opacity = '1';
+                        logoBox.style.transform = 'scale(1)';
+                    }
+                }, 100);
+                
+                setTimeout(() => {
+                    splash.classList.add('fade-out');
+                    document.body.style.overflow = '';
+                    setTimeout(() => {
+                        splash.remove();
+                    }, 800);
+                    sessionStorage.setItem('splash-shown', 'true');
+                }, 2600);
+            }
+        })();
+    </script>
+
+    
+    <header b-fgzhqm2ecr class="sticky top-0 z-50 glass-nav">
+        <nav b-fgzhqm2ecr class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <!-- Logo area -->
+            <a b-fgzhqm2ecr href="/" class="flex items-center gap-3">
+                <div b-fgzhqm2ecr class="w-10 h-10 bg-white rounded-xl flex items-center justify-center p-1 border border-slate-100 shadow-sm">
+                    <img src="/images/logo.jpeg" alt="Logo" class="w-full h-full object-contain" />
+                </div>
+                <div b-fgzhqm2ecr class="hidden sm:block">
+                    <span b-fgzhqm2ecr class="text-sm font-black tracking-tight block leading-none text-slate-900 uppercase">Eltarshoubi</span>
+                    <span b-fgzhqm2ecr class="text-[9px] font-bold text-brand-600 tracking-[0.2em] uppercase">Academy</span>
+                </div>
+            </a>
+
+            <!-- Center Nav Links -->
+            <div b-fgzhqm2ecr class="hidden lg:flex items-center gap-2 p-1 bg-slate-100/50 rounded-2xl border border-slate-200/50">
+                <a b-fgzhqm2ecr href="/" class="rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm transition-all">Home</a>
+                <a b-fgzhqm2ecr href="#about" class="rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm transition-all">About</a>
+                <a b-fgzhqm2ecr href="#program" class="rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm transition-all">Program</a>
+            </div>
+
+            <div b-fgzhqm2ecr class="flex items-center gap-3">
+                    <div b-fgzhqm2ecr class="hidden md:flex items-center gap-2 mr-4 border-r border-slate-100 pr-4">
+
+                            <a b-fgzhqm2ecr href="/Materials" class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all">
+                                <i b-fgzhqm2ecr class="fas fa-project-diagram mr-2"></i>Program Dash
+                            </a>
+                            <a b-fgzhqm2ecr href="/Home/StudentExams" class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/20 hover:bg-brand-700 transition-all">
+                                <i b-fgzhqm2ecr class="fas fa-file-signature mr-2"></i>My Exams
+                            </a>
+                            <a b-fgzhqm2ecr href="/Assignments" class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all">
+                                <i b-fgzhqm2ecr class="fas fa-tasks mr-2"></i>My Assignments
+                            </a>
+                    </div>
+                    <div b-fgzhqm2ecr class="flex items-center gap-3 relative">
+                        <button b-fgzhqm2ecr id="profileDropdownBtn" class="w-8 h-8 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 hover:bg-brand-100 dark:hover:bg-brand-500/20 font-black text-xs transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                            &#x639;
+                        </button>
+                        
+                        <!-- Dropdown Menu -->
+                        <div b-fgzhqm2ecr id="profileDropdown" class="hidden absolute right-0 top-10 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 py-3 z-50 transition-all duration-300">
+                            <div b-fgzhqm2ecr class="px-4 py-3 border-b border-slate-50 mb-2">
+                                <p b-fgzhqm2ecr class="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Active Session</p>
+                                <p b-fgzhqm2ecr class="text-xs font-black text-slate-800 truncate mt-1.5 mb-0.5">&#x639;&#x628;&#x62F;&#x627;&#x644;&#x644;&#x647;_&#x645;&#x62D;&#x645;&#x62F;_&#x645;&#x62D;&#x633;&#x646;_&#x627;&#x62D;&#x645;&#x62F;_&#x627;&#x644;&#x62A;&#x628;&#x631;&#x64A;&#x632;&#x649;</p>
+                                <span b-fgzhqm2ecr class="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold bg-brand-50 text-brand-600 uppercase tracking-wider mt-1">
+                                    <i b-fgzhqm2ecr class="fas fa-shield-alt mr-1"></i> Trainee Node
+                                </span>
+                            </div>
+                            <div b-fgzhqm2ecr class="px-2">
+                                <form method="post" class="w-full" action="/Auth/Logout">
+                                    
+                                    <button b-fgzhqm2ecr type="submit" class="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs font-bold text-rose-500 hover:bg-rose-50 rounded-xl transition-all">
+                                        <i b-fgzhqm2ecr class="fas fa-power-off text-sm"></i>
+                                        <span b-fgzhqm2ecr>Sign Out</span>
+                                    </button>
+                                <input name="__RequestVerificationToken" type="hidden" value="CfDJ8GZYuiFuH4lBruHmcgcXk0MXre8PGQOgZ4voqkvxmPkaGpeRXArrM300plhQtMpzqXq9oA89u4Z0Uvl-qDTrgGtjhU0PpCLygE6Xj9NVsazgD1jWvQDwn9RPdREOlIRIvQp76BVbpb8wR1loHlhMFiEnFpz2ldVHC375QVs6sT06yQwpsTtGpjpxmwPyAapD8w" /></form>
+                            </div>
+                        </div>
+
+                        <form method="post" class="inline" action="/Auth/Logout">
+                            
+                            <button b-fgzhqm2ecr type="submit" class="text-xs font-black uppercase tracking-widest text-slate-400 hover:text-rose-500 transition-colors">
+                                <i b-fgzhqm2ecr class="fas fa-power-off"></i>
+                            </button>
+                        <input name="__RequestVerificationToken" type="hidden" value="CfDJ8GZYuiFuH4lBruHmcgcXk0MXre8PGQOgZ4voqkvxmPkaGpeRXArrM300plhQtMpzqXq9oA89u4Z0Uvl-qDTrgGtjhU0PpCLygE6Xj9NVsazgD1jWvQDwn9RPdREOlIRIvQp76BVbpb8wR1loHlhMFiEnFpz2ldVHC375QVs6sT06yQwpsTtGpjpxmwPyAapD8w" /></form>
+                    </div>
+                <!-- Mobile Menu Button -->
+                <button b-fgzhqm2ecr id="mobileMenuBtn" class="lg:hidden ml-2 w-10 h-10 flex items-center justify-center text-slate-600 bg-slate-50 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors">
+                    <i b-fgzhqm2ecr class="fas fa-bars"></i>
+                </button>
+            </div>
+        </nav>
+        <!-- Mobile Menu Panel -->
+        <div b-fgzhqm2ecr id="mobileMenu" class="hidden lg:hidden bg-white border-t border-slate-100 px-6 py-6 shadow-2xl absolute w-full left-0 top-20">
+            <div b-fgzhqm2ecr class="flex flex-col gap-6">
+                <a b-fgzhqm2ecr href="/" class="text-sm font-black uppercase tracking-widest text-slate-700 hover:text-brand-600">Home</a>
+                <a b-fgzhqm2ecr href="/#about" class="text-sm font-black uppercase tracking-widest text-slate-700 hover:text-brand-600">About</a>
+                <a b-fgzhqm2ecr href="/#program" class="text-sm font-black uppercase tracking-widest text-slate-700 hover:text-brand-600">Program</a>
+                    <div b-fgzhqm2ecr class="h-px bg-slate-100 w-full my-2"></div>
+                        <a b-fgzhqm2ecr href="/Materials" class="text-xs font-black uppercase tracking-widest text-emerald-600"><i b-fgzhqm2ecr class="fas fa-project-diagram mr-2"></i> Program Dash</a>
+                        <a b-fgzhqm2ecr href="/Home/StudentExams" class="text-xs font-black uppercase tracking-widest text-brand-600"><i b-fgzhqm2ecr class="fas fa-file-signature mr-2"></i> My Exams</a>
+                        <a b-fgzhqm2ecr href="/Assignments" class="text-xs font-black uppercase tracking-widest text-indigo-600"><i b-fgzhqm2ecr class="fas fa-tasks mr-2"></i> My Assignments</a>
+            </div>
+        </div>
+    </header>
+
+    <main b-fgzhqm2ecr>
+        
+<div class="max-w-6xl mx-auto px-6 py-12">
+    <!-- Header -->
+    <div class="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+            <h2 class="text-xs font-black text-brand-600 uppercase tracking-[0.3em] mb-2">Training Academy</h2>
+            <h1 class="text-3xl font-black text-slate-900 tracking-tight">Continuous Assignments & Assessments</h1>
+            <p class="text-sm text-slate-500 mt-1">View and solve training assignments assigned to your batch</p>
+        </div>
+
+            <div class="bg-indigo-50 border border-indigo-100 rounded-2xl px-6 py-4 flex items-center gap-4">
+                <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-lg">
+                    <i class="fas fa-water"></i>
+                </div>
+                <div>
+                    <span class="text-[9px] font-bold text-indigo-400 uppercase tracking-widest leading-none">Active Batch</span>
+                    <p class="text-sm font-black text-indigo-900 leading-tight">Wave 11</p>
+                    <span class="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700">Pharmacist</span>
+                </div>
+            </div>
+    </div>
+
+        <div class="bg-white border border-slate-200 rounded-[32px] p-12 text-center shadow-sm max-w-xl mx-auto">
+            <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 shadow-inner mx-auto mb-6">
+                <i class="fas fa-clipboard-list text-2xl"></i>
+            </div>
+            <h3 class="text-lg font-bold text-slate-900 mb-2">No assignments available currently</h3>
+            <p class="text-sm text-slate-500 leading-relaxed">There are no scheduled or active assignments in your current training wave at this time. Check back later.</p>
+        </div>
+</div>
+
+    </main>
+
+    <footer b-fgzhqm2ecr class="bg-slate-950 text-slate-400 pt-20 pb-10 mt-20">
+        <div b-fgzhqm2ecr class="max-w-7xl mx-auto px-6">
+            <div b-fgzhqm2ecr class="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20 text-center md:text-left">
+                <div b-fgzhqm2ecr class="col-span-1 md:col-span-2">
+                    <div b-fgzhqm2ecr class="flex items-center justify-center md:justify-start gap-3 mb-6">
+                        <div b-fgzhqm2ecr class="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white">
+                            <i b-fgzhqm2ecr class="fas fa-graduation-cap"></i>
+                        </div>
+                            <span b-fgzhqm2ecr class="text-lg font-black text-white tracking-tight uppercase">Eltarshoubi Academy</span>
+                    </div>
+                    <p b-fgzhqm2ecr class="text-sm leading-relaxed max-w-sm mx-auto md:mx-0">
+                        Bridging academia and clinical excellence through innovation. Empowering practitioners since 2008.
+                    </p>
+                </div>
+                <div b-fgzhqm2ecr>
+                    <h4 b-fgzhqm2ecr class="text-white font-bold text-xs uppercase tracking-widest mb-6">Resources</h4>
+                    <ul b-fgzhqm2ecr class="space-y-4 text-[10px] font-bold uppercase tracking-widest">
+                        <li b-fgzhqm2ecr><a b-fgzhqm2ecr href="#" class="hover:text-brand-600 transition-colors">Privacy Policy</a></li>
+                        <li b-fgzhqm2ecr><a b-fgzhqm2ecr href="#" class="hover:text-brand-600 transition-colors">Accreditation</a></li>
+                        <li b-fgzhqm2ecr><a b-fgzhqm2ecr href="#" class="hover:text-brand-600 transition-colors">Terms of Service</a></li>
+                    </ul>
+                </div>
+                <div b-fgzhqm2ecr>
+                    <h4 b-fgzhqm2ecr class="text-white font-bold text-xs uppercase tracking-widest mb-6">Connect</h4>
+                    <div b-fgzhqm2ecr class="flex justify-center md:justify-start gap-4">
+                        <a b-fgzhqm2ecr href="#" class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-brand-600 transition-all hover:-translate-y-1">
+                            <i b-fgzhqm2ecr class="fab fa-linkedin-in"></i>
+                        </a>
+                        <a b-fgzhqm2ecr href="#" class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-brand-600 transition-all hover:-translate-y-1">
+                            <i b-fgzhqm2ecr class="fab fa-twitter"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div b-fgzhqm2ecr class="pt-10 border-t border-white/10 text-center text-[9px] font-black tracking-[0.3em] uppercase opacity-40">
+                &copy; 2026 Eltarshouby Medical Training Academy.
+            </div>
+        </div>
+    </footer>
+
+    <script src="/lib/jquery-3.6.0/jquery.min.js"></script>
+    <script src="/lib/sweetalert2-11/sweetalert2.all.min.js"></script>
+        <script>
+            (function () {
+                var successMsg = "";
+                var errorMsg = "";
+                if (successMsg) { Swal.fire({ icon: 'success', title: 'Synchronized', text: successMsg, timer: 3000, background: '#fff' }); }
+                if (errorMsg) { Swal.fire({ icon: 'error', title: 'Protocol Alert', text: errorMsg, background: '#fff' }); }
+ 
+                // Mobile Menu Toggle
+                $('#mobileMenuBtn').on('click', function() {
+                    $('#mobileMenu').slideToggle('fast');
+                });
+
+                // Profile Dropdown Toggle
+                $('#profileDropdownBtn').on('click', function(e) {
+                    e.stopPropagation();
+                    $('#profileDropdown').toggleClass('hidden');
+                });
+
+                $(document).on('click', function(e) {
+                    if (!$(e.target).closest('#profileDropdownBtn, #profileDropdown').length) {
+                        $('#profileDropdown').addClass('hidden');
+                    }
+                });
+            })();
+        </script>
+    
+</body>
+</html>
+
+
+
+

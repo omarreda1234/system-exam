@@ -351,11 +351,14 @@
                     
                     // Filter out users who are already assigned or have successfully completed the exam
                     const eligibleUsers = users.filter(u => {
-                        const status = u.lastExamStatus || '';
+                        const status = u.lastExamStatus || u.LastExamStatus || '';
                         const isPassedOrCompleted = status && (status.toLowerCase() === 'passed' || status.toLowerCase() === 'completed');
                         const isAlreadyAssigned = (u.isAlreadyAssigned === 1 || u.IsAlreadyAssigned === 1);
                         return !isAlreadyAssigned && !isPassedOrCompleted;
                     });
+
+                    // Track selected student IDs in a Set to handle pagination/filtering correctly
+                    const selectedStudentIds = new Set();
 
                     Swal.fire({
                         title: `<div class="text-left border-b border-slate-100 pb-4"><p class="text-[10px] font-bold text-brand-600 uppercase tracking-[0.2em] mb-1">Assign Students to</p><p class="text-2xl font-black italic uppercase text-slate-900">${rowTitle}</p></div>`,
@@ -403,49 +406,6 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${eligibleUsers.map(u => {
-                                            const status = u.lastExamStatus || '';
-                                            const isFailed = status && (status.startsWith('Fail') || status === 'Cheating');
-                                            const absenceCount = u.absenceCount ?? u.AbsenceCount ?? 0;
-                                            const isSuspended = absenceCount >= 2;
-                                            
-                                            return `
-                                                <tr class="border-b border-slate-50 transition-colors ${isSuspended ? 'bg-rose-50/50 opacity-75' : 'cursor-pointer hover:bg-slate-50'}" data-is-failed="${isFailed}">
-                                                    <td><input type="checkbox" class="exam-user-cb w-4 h-4 accent-brand-500" value="${u.id ?? u.Id}" ${isSuspended ? 'disabled' : ''}></td>
-                                                    <td>
-                                                        <div class="flex flex-col">
-                                                            <div class="flex items-center gap-2">
-                                                                <span class="font-bold text-slate-900">${u.fullName ?? u.FullName ?? u.userName ?? u.UserName}</span>
-                                                            </div>
-                                                            <span class="text-[9px] text-slate-500 uppercase">${u.email ?? u.Email}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td class="font-bold text-slate-500">${u.userCode ?? u.UserCode ?? '--'}</td>
-                                                    <td>
-                                                        <span class="js-role-name px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">
-                                                            ${u.roleName ?? u.RoleName ?? 'User'}
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <span class="text-[9px] font-bold text-slate-400 uppercase">
-                                                            ${u.branchName ?? u.BranchName ?? 'N/A'}
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        ${status ? 
-                                                            `<span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${isFailed ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}">${status}</span>` : 
-                                                            '<span class="text-slate-300 text-[8px] font-bold uppercase tracking-widest">New Candidate</span>'
-                                                        }
-                                                    </td>
-                                                    <td class="text-right">
-                                                        ${isSuspended ? 
-                                                            `<span class="text-[8px] font-bold px-2 py-0.5 bg-rose-100 text-rose-600 rounded-full uppercase" title="${absenceCount} Absences">Suspended (${absenceCount} Absences)</span>` : 
-                                                            '<span class="text-[8px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full uppercase">Ready</span>'
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            `;
-                                        }).join('')}
                                     </tbody>
                                 </table>
                             </div>
@@ -460,21 +420,15 @@
                         },
                         buttonsStyling: false,
                         didOpen: () => {
-                            window._failedFilterFn = function(settings, data, dataIndex) {
+                            window._failedFilterFn = function(settings, searchData, dataIndex, rowData) {
                                 if (settings.nTable.id !== 'swalExamUserTable') return true;
                                 var isChecked = $('#filterFailedOnly').is(':checked');
                                 if (!isChecked) return true;
-                                var row = settings.aoData[dataIndex].nTr;
-                                return $(row).attr('data-is-failed') === 'true';
+                                const status = rowData.lastExamStatus || rowData.LastExamStatus || '';
+                                const isFailed = status && (status.startsWith('Fail') || status === 'Cheating' || status.toLowerCase().includes('fail'));
+                                return isFailed;
                             };
                             $.fn.dataTable.ext.search.push(window._failedFilterFn);
-
-                            const table = $('#swalExamUserTable').DataTable({
-                                pageLength: 5,
-                                lengthMenu: [5, 10, 25, 50],
-                                language: { search: "", searchPlaceholder: "Filter students..." },
-                                columnDefs: [{ orderable: false, targets: 0 }]
-                            });
 
                             function isPharmacistRole(role) {
                                 const r = (role || '').trim().toLowerCase();
@@ -484,6 +438,93 @@
                                 const r = (role || '').trim().toLowerCase();
                                 return r === 'assistant' || r === 'مساعد صيدلي';
                             }
+
+                            window._swalRoleFilterFn = function(settings, searchData, dataIndex, rowData) {
+                                if (settings.nTable.id !== 'swalExamUserTable') return true;
+                                
+                                const isPharmacistChecked = $('#rolePharmacist').is(':checked');
+                                const isAssistantChecked = $('#roleAssistant').is(':checked');
+                                const isOtherChecked = $('#roleOther').is(':checked');
+                                
+                                const rowRole = (rowData.roleName || rowData.RoleName || 'User').trim().toLowerCase();
+                                
+                                if (isPharmacistRole(rowRole)) {
+                                    return isPharmacistChecked;
+                                }
+                                if (isAssistantRole(rowRole)) {
+                                    return isAssistantChecked;
+                                }
+                                if (!isOtherChecked) return false;
+                                const specCb = $(`.swal-specific-other-cb[data-role="${rowRole}"]`);
+                                return specCb.length ? specCb.is(':checked') : false;
+                            };
+                            $.fn.dataTable.ext.search.push(window._swalRoleFilterFn);
+
+                            const table = $('#swalExamUserTable').DataTable({
+                                data: eligibleUsers,
+                                columns: [
+                                    {
+                                        data: null,
+                                        orderable: false,
+                                        render: (data, type, row) => {
+                                             const absenceCount = row.absenceCount ?? row.AbsenceCount ?? 0;
+                                             const isSuspended = absenceCount >= 2;
+                                             const studentId = row.id ?? row.Id;
+                                             const isChecked = selectedStudentIds.has(studentId) ? 'checked' : '';
+                                             return `<input type="checkbox" class="exam-user-cb w-4 h-4 accent-brand-500" value="${studentId}" ${isSuspended ? 'disabled' : ''} ${isChecked}>`;
+                                        }
+                                    },
+                                    {
+                                        data: null,
+                                        render: (data, type, row) => {
+                                             return `
+                                                 <div class="flex flex-col">
+                                                     <span class="font-bold text-slate-900">${row.fullName ?? row.FullName ?? row.userName ?? row.UserName}</span>
+                                                     <span class="text-[9px] text-slate-500 uppercase">${row.email ?? row.Email}</span>
+                                                 </div>`;
+                                        }
+                                    },
+                                    { data: 'userCode', defaultContent: '--' },
+                                    {
+                                        data: 'roleName',
+                                        render: (data) => `<span class="js-role-name px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">${data ?? 'User'}</span>`
+                                    },
+                                    { data: 'branchName', defaultContent: 'N/A' },
+                                    {
+                                        data: 'lastExamStatus',
+                                        render: (data) => {
+                                             if (!data) return '<span class="text-slate-300 text-[8px] font-bold uppercase tracking-widest">New Candidate</span>';
+                                             const isFailed = data.startsWith('Fail') || data === 'Cheating';
+                                             return `<span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${isFailed ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}">${data}</span>`;
+                                        }
+                                    },
+                                    {
+                                        data: null,
+                                        render: (data, type, row) => {
+                                             const absenceCount = row.absenceCount ?? row.AbsenceCount ?? 0;
+                                             const isSuspended = absenceCount >= 2;
+                                             return isSuspended ? 
+                                                 `<span class="text-[8px] font-bold px-2 py-0.5 bg-rose-100 text-rose-600 rounded-full uppercase" title="${absenceCount} Absences">Suspended (${absenceCount} Absences)</span>` : 
+                                                 '<span class="text-[8px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full uppercase">Ready</span>';
+                                        }
+                                    }
+                                ],
+                                pageLength: 5,
+                                lengthMenu: [5, 10, 25, 50],
+                                language: { search: "", searchPlaceholder: "Filter students..." },
+                                createdRow: (row, data) => {
+                                     const status = data.lastExamStatus || data.LastExamStatus || '';
+                                     const isFailed = status && (status.startsWith('Fail') || status === 'Cheating');
+                                     const absenceCount = data.absenceCount ?? data.AbsenceCount ?? 0;
+                                     const isSuspended = absenceCount >= 2;
+                                     $(row).attr('data-is-failed', isFailed);
+                                     if (isSuspended) {
+                                         $(row).addClass('bg-rose-50/50 opacity-75');
+                                     } else {
+                                         $(row).addClass('cursor-pointer hover:bg-slate-50 transition-colors');
+                                     }
+                                }
+                            });
 
                             const otherRoles = [...new Set(eligibleUsers.map(u => u.roleName || u.RoleName || 'User'))]
                                 .filter(r => !isPharmacistRole(r) && !isAssistantRole(r));
@@ -504,71 +545,76 @@
                             }
 
                             function updateSelectAllState() {
-                                const visibleRows = table.rows({ search: 'applied' }).nodes();
-                                const visibleCBs = $('input.exam-user-cb:not(:disabled)', visibleRows);
-                                const checkedVisibleCBs = visibleCBs.filter(':checked');
-                                $('#selectAllSwal').prop('checked', visibleCBs.length > 0 && visibleCBs.length === checkedVisibleCBs.length);
+                                const filteredRowsData = table.rows({ search: 'applied' }).data().toArray();
+                                const nonSuspendedFiltered = filteredRowsData.filter(row => {
+                                     const absenceCount = row.absenceCount ?? row.AbsenceCount ?? 0;
+                                     return absenceCount < 2;
+                                });
+                                 
+                                if (nonSuspendedFiltered.length === 0) {
+                                     $('#selectAllSwal').prop('checked', false);
+                                     return;
+                                }
+                                 
+                                const allChecked = nonSuspendedFiltered.every(row => {
+                                     const studentId = row.id ?? row.Id;
+                                     return selectedStudentIds.has(studentId);
+                                });
+                                 
+                                $('#selectAllSwal').prop('checked', allChecked);
                             }
 
                             function syncFilteredCheckedState() {
+                                const allRowsData = table.rows().data().toArray();
+                                 
                                 const isPharmacistChecked = $('#rolePharmacist').is(':checked');
                                 const isAssistantChecked = $('#roleAssistant').is(':checked');
                                 const isOtherChecked = $('#roleOther').is(':checked');
                                 const isFailedOnly = $('#filterFailedOnly').is(':checked');
-
-                                table.rows().every(function() {
-                                    const rowNode = this.node();
-                                    const rowRole = $(rowNode).find('.js-role-name').text().trim();
-                                    const isPharmacist = isPharmacistRole(rowRole);
-                                    const isAssistant = isAssistantRole(rowRole);
-                                    const isFailed = $(rowNode).attr('data-is-failed') === 'true';
-
-                                    let matchesRole = true;
-                                    if (isPharmacist) matchesRole = isPharmacistChecked;
-                                    else if (isAssistant) matchesRole = isAssistantChecked;
-                                    else {
-                                        if (!isOtherChecked) matchesRole = false;
-                                        else {
-                                            const specCb = $(`.swal-specific-other-cb[data-role="${rowRole}"]`);
-                                            matchesRole = specCb.length ? specCb.is(':checked') : false;
-                                        }
-                                    }
-
-                                    let matchesFailed = true;
-                                    if (isFailedOnly) matchesFailed = isFailed;
-
-                                    if (!matchesRole || !matchesFailed) {
-                                        $(rowNode).find('input.exam-user-cb').prop('checked', false);
-                                    }
-                                });
-                                updateSelectAllState();
+                                 
+                                allRowsData.forEach(row => {
+                                     const studentId = row.id ?? row.Id;
+                                     if (selectedStudentIds.has(studentId)) {
+                                         const rowRole = (row.roleName || row.RoleName || 'User').trim().toLowerCase();
+                                         const status = row.lastExamStatus || row.LastExamStatus || '';
+                                         const isFailed = status && (status.startsWith('Fail') || status === 'Cheating' || status.toLowerCase().includes('fail'));
+                                         
+                                         let matchesRole = true;
+                                         if (isPharmacistRole(rowRole)) matchesRole = isPharmacistChecked;
+                                         else if (isAssistantRole(rowRole)) matchesRole = isAssistantChecked;
+                                         else {
+                                             if (!isOtherChecked) matchesRole = false;
+                                             else {
+                                                 const specCb = $(`.swal-specific-other-cb[data-role="${rowRole}"]`);
+                                                 matchesRole = specCb.length ? specCb.is(':checked') : false;
+                                             }
+                                         }
+                                         
+                                         let matchesFailed = true;
+                                         if (isFailedOnly) matchesFailed = isFailed;
+                                         
+                                         if (!matchesRole || !matchesFailed) {
+                                             selectedStudentIds.delete(studentId);
+                                         }
+                                     }
+                                 });
+                                 
+                                 table.rows().every(function() {
+                                     const rowNode = this.node();
+                                     if (rowNode) {
+                                         const cb = $(rowNode).find('input.exam-user-cb');
+                                         if (cb.length) {
+                                             cb.prop('checked', selectedStudentIds.has(cb.val()));
+                                         }
+                                     }
+                                 });
+                                 updateSelectAllState();
                             }
 
                             $('#filterFailedOnly').on('change', function() { 
                                 table.draw(); 
                                 syncFilteredCheckedState();
                             });
-
-                            // Enhanced Role Filter Logic (Handles Synonyms and Multi-selection)
-                            window._swalRoleFilterFn = function(settings, data, dataIndex) {
-                                if (settings.nTable.id !== 'swalExamUserTable') return true;
-                                
-                                const isPharmacistChecked = $('#rolePharmacist').is(':checked');
-                                const isAssistantChecked = $('#roleAssistant').is(':checked');
-                                const isOtherChecked = $('#roleOther').is(':checked');
-                                
-                                const rowRole = $(settings.aoData[dataIndex].nTr).find('.js-role-name').text().trim();
-                                if (isPharmacistRole(rowRole)) {
-                                    return isPharmacistChecked;
-                                }
-                                if (isAssistantRole(rowRole)) {
-                                    return isAssistantChecked;
-                                }
-                                if (!isOtherChecked) return false;
-                                const specCb = $(`.swal-specific-other-cb[data-role="${rowRole}"]`);
-                                return specCb.length ? specCb.is(':checked') : false;
-                            };
-                            $.fn.dataTable.ext.search.push(window._swalRoleFilterFn);
 
                             $('.swal-role-cb').on('change', function() { 
                                 table.draw(); 
@@ -593,11 +639,38 @@
                             });
 
                             $('#selectAllSwal').on('change', function() {
-                                const rows = table.rows({ search: 'applied' }).nodes();
-                                $('input.exam-user-cb:not(:disabled)', rows).prop('checked', this.checked);
+                                const isChecked = this.checked;
+                                const filteredRowsData = table.rows({ search: 'applied' }).data().toArray();
+                                filteredRowsData.forEach(row => {
+                                     const absenceCount = row.absenceCount ?? row.AbsenceCount ?? 0;
+                                     const isSuspended = absenceCount >= 2;
+                                     if (!isSuspended) {
+                                         const studentId = row.id ?? row.Id;
+                                         if (isChecked) {
+                                             selectedStudentIds.add(studentId);
+                                         } else {
+                                             selectedStudentIds.delete(studentId);
+                                         }
+                                     }
+                                });
+                                table.rows().every(function() {
+                                     const rowNode = this.node();
+                                     if (rowNode) {
+                                         const cb = $(rowNode).find('input.exam-user-cb');
+                                         if (cb.length && !cb.prop('disabled')) {
+                                             cb.prop('checked', isChecked);
+                                         }
+                                     }
+                                });
                             });
 
                             $('#swalExamUserTable tbody').on('change', 'input.exam-user-cb', function() {
+                                const studentId = $(this).val();
+                                if (this.checked) {
+                                     selectedStudentIds.add(studentId);
+                                } else {
+                                     selectedStudentIds.delete(studentId);
+                                }
                                 updateSelectAllState();
                             });
 
@@ -605,9 +678,16 @@
                             $('#swalExamUserTable tbody').on('click', 'tr', function (e) {
                                 if ($(e.target).is('input[type="checkbox"]')) return;
                                 const cb = $(this).find('input.exam-user-cb');
-                                if (!cb.prop('disabled')) {
-                                    cb.prop('checked', !cb.prop('checked'));
-                                    updateSelectAllState();
+                                if (cb.length && !cb.prop('disabled')) {
+                                     const studentId = cb.val();
+                                     const checked = !cb.prop('checked');
+                                     cb.prop('checked', checked);
+                                     if (checked) {
+                                         selectedStudentIds.add(studentId);
+                                     } else {
+                                         selectedStudentIds.delete(studentId);
+                                     }
+                                     updateSelectAllState();
                                 }
                             });
 
@@ -623,11 +703,6 @@
                                 if (idx !== -1) $.fn.dataTable.ext.search.splice(idx, 1);
                                 window._failedFilterFn = null;
                             }
-                            if (window._waveFilterFn) {
-                                const idx = $.fn.dataTable.ext.search.indexOf(window._waveFilterFn);
-                                if (idx !== -1) $.fn.dataTable.ext.search.splice(idx, 1);
-                                window._waveFilterFn = null;
-                            }
                             if (window._swalRoleFilterFn) {
                                 const idx = $.fn.dataTable.ext.search.indexOf(window._swalRoleFilterFn);
                                 if (idx !== -1) $.fn.dataTable.ext.search.splice(idx, 1);
@@ -635,52 +710,9 @@
                             }
                         },
                         preConfirm: () => {
-                           const ids = [];
-                           const isPharmacistChecked = $('#rolePharmacist').is(':checked');
-                           const isAssistantChecked = $('#roleAssistant').is(':checked');
-                           const isOtherChecked = $('#roleOther').is(':checked');
-                           const isFailedOnly = $('#filterFailedOnly').is(':checked');
-
-                           function isPharmacistRole(role) {
-                               const r = (role || '').trim().toLowerCase();
-                               return r === 'pharmacist' || r === 'صيدلي';
-                           }
-                           function isAssistantRole(role) {
-                               const r = (role || '').trim().toLowerCase();
-                               return r === 'assistant' || r === 'مساعد صيدلي';
-                           }
-
-                           $('#swalExamUserTable').DataTable().rows().every(function() {
-                               const rowNode = this.node();
-                               const cb = $(rowNode).find('input.exam-user-cb');
-                               if (cb.is(':checked')) {
-                                   const rowRole = $(rowNode).find('.js-role-name').text().trim();
-                                   const isPharmacist = isPharmacistRole(rowRole);
-                                   const isAssistant = isAssistantRole(rowRole);
-                                   const isFailed = $(rowNode).attr('data-is-failed') === 'true';
-
-                                   let matchesRole = true;
-                                   if (isPharmacist) matchesRole = isPharmacistChecked;
-                                   else if (isAssistant) matchesRole = isAssistantChecked;
-                                   else {
-                                       if (!isOtherChecked) matchesRole = false;
-                                       else {
-                                           const specCb = $(`.swal-specific-other-cb[data-role="${rowRole}"]`);
-                                           matchesRole = specCb.length ? specCb.is(':checked') : false;
-                                       }
-                                   }
-
-                                   let matchesFailed = true;
-                                   if (isFailedOnly) matchesFailed = isFailed;
-
-                                   if (matchesRole && matchesFailed) {
-                                       ids.push(cb.val());
-                                   }
-                               }
-                           });
-
-                           if(!ids.length) { Swal.showValidationMessage('Selection required.'); return false; }
-                           return ids;
+                            const ids = Array.from(selectedStudentIds);
+                            if(!ids.length) { Swal.showValidationMessage('Selection required.'); return false; }
+                            return ids;
                         }
                     }).then(result => {
                         if(result.isConfirmed) {
@@ -788,7 +820,7 @@
                     width: '1000px',
                     showConfirmButton: false,
                     showCloseButton: true,
-                    customClass: { popup: 'rounded-3xl' },
+                    customClass: { popup: 'rounded-[32px] dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 md:p-8' },
                     didOpen: () => {
                         if (assignedUsers.length > 0) {
                             $('#swalAssignedTable').DataTable({

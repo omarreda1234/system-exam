@@ -1,0 +1,639 @@
+@{
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    ViewData["Title"] = "Wave Assignments";
+    var waves = ViewBag.Waves as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+}
+
+<!-- Dashboard Card Header -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div>
+            <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Training Wave Operations</h2>
+            <div class="flex items-center gap-3">
+                <p class="text-xl font-bold">Wave Assignments Manager</p>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+                    Automated Grading Active
+                </span>
+            </div>
+        </div>
+        
+        <div>
+            <button id="btnCreateAssignment" class="bg-brand-600 hover:bg-brand-700 dark:bg-brand-500/20 dark:hover:bg-brand-500/30 text-white dark:text-brand-400 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2">
+                <i class="fas fa-plus"></i> New Assignment
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Main Table Card -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 overflow-hidden shadow-sm">
+    <div id="tableWrapper" class="overflow-x-auto">
+        <table id="assignmentsTable" class="saas-table w-full">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Wave</th>
+                    <th>Pharm. Max Score</th>
+                    <th>Assist. Max Score</th>
+                    <th>Start Time</th>
+                    <th>End Time</th>
+                    <th>Created At</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Create Assignment Modal -->
+<div id="createModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col transition-all transform scale-95 opacity-0 duration-300">
+        <!-- Modal Header -->
+        <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+            <div>
+                <h3 class="text-lg font-black text-slate-800 dark:text-white">Create New Wave Assignment</h3>
+                <p class="text-xs text-slate-500">Configure assignment metadata and interactive questions</p>
+            </div>
+            <button onclick="closeModal()" class="w-10 h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Modal Body (Form) -->
+        <form id="assignmentForm" class="overflow-y-auto p-6 space-y-8 flex-1">
+            <!-- Metadata Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-2">
+                    <label class="block text-xs font-black uppercase text-slate-500">Assignment Title</label>
+                    <input type="text" id="assignTitle" required placeholder="e.g. Wave 3 - Skin Care Assessment" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all" />
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-black uppercase text-slate-500">Target Training Wave</label>
+                    <select id="assignWaveId" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all">
+                        <option value="">Select Wave</option>
+                        @foreach (var w in waves)
+                        {
+                            <option value="@w.Id">@w.WaveName.ToUpper()</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-black uppercase text-slate-500">Pharmacist Max Score</label>
+                    <input type="number" step="0.01" id="assignPharmScore" required value="10" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all" />
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-black uppercase text-slate-500">Assistant Max Score</label>
+                    <input type="number" step="0.01" id="assignAssistScore" required value="10" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all" />
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-black uppercase text-slate-500">Scheduled Start Time</label>
+                    <input type="datetime-local" id="assignStart" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all" />
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-xs font-black uppercase text-slate-500">Scheduled End Time</label>
+                    <input type="datetime-local" id="assignEnd" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all" />
+                </div>
+            </div>
+
+            <!-- Questions Header -->
+            <div class="border-t border-slate-100 dark:border-slate-800 pt-6">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h4 class="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">Assignment Questions</h4>
+                        <p class="text-xs text-slate-400">Add different question templates mapped to roles</p>
+                    </div>
+                    <button type="button" id="btnAddQuestion" class="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5">
+                        <i class="fas fa-plus-circle"></i> Add Question
+                    </button>
+                </div>
+
+                <!-- Questions Container -->
+                <div id="questionsContainer" class="space-y-6">
+                    <!-- Dynamic Questions injected here -->
+                </div>
+            </div>
+        </form>
+
+        <!-- Modal Footer -->
+        <div class="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex justify-end gap-3 rounded-b-[32px]">
+            <button onclick="closeModal()" type="button" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Cancel</button>
+            <button type="button" id="btnSaveAssignment" class="bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-brand-600/20 transition-all">Create Assignment</button>
+        </div>
+    </div>
+</div>
+
+<!-- Attempts Modal -->
+<div id="attemptsModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col transition-all transform scale-95 opacity-0 duration-300">
+        <!-- Modal Header -->
+        <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
+            <div>
+                <h3 class="text-lg font-black text-slate-800 dark:text-white">Student Assignment Attempts</h3>
+                <p class="text-xs text-slate-500">View performance breakdown and detailed submissions for the selected assignment</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="exportAttemptsToExcel()" class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm">
+                    <i class="fas fa-file-excel"></i> Export Excel
+                </button>
+                <button onclick="closeAttemptsModal()" class="w-10 h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="overflow-y-auto p-6 flex-1">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30">
+                            <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Student</th>
+                            <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Role</th>
+                            <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+                            <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Start Time</th>
+                            <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Submit Time</th>
+                            <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Score</th>
+                            <th class="py-3 px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attemptsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/50">
+                        <!-- Loaded dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex justify-end gap-3 rounded-b-[32px]">
+            <button onclick="closeAttemptsModal()" type="button" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Close</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let appCategories = [];
+        let questionCounter = 0;
+
+        $(document).ready(function () {
+            // Load DataTable
+            const table = $('#assignmentsTable').DataTable({
+                serverSide: true,
+                processing: true,
+                ajax: {
+                    url: '/Admin/GetAssignmentsPaged',
+                    type: 'POST'
+                },
+                columns: [
+                    { data: 'title', className: 'font-semibold' },
+                    { data: 'waveName', className: 'font-bold text-slate-500' },
+                    { data: 'pharmacistMaxScore', className: 'font-mono text-center' },
+                    { data: 'assistantMaxScore', className: 'font-mono text-center' },
+                    { data: 'scheduledStartTime', className: 'text-xs' },
+                    { data: 'scheduledEndTime', className: 'text-xs' },
+                    { data: 'createdAt', className: 'text-xs text-slate-400' },
+                    { 
+                        data: 'id',
+                        className: 'text-right px-6',
+                        orderable: false,
+                        render: function (data) {
+                            return `
+                                <div class="flex items-center justify-end gap-2">
+                                    <button onclick="viewAttempts(${data})" class="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-all" title="View Attempts & Grades"><i class="fas fa-users-cog"></i></button>
+                                    <button onclick="deleteAssignment(${data})" class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-xl transition-all" title="Delete Assignment"><i class="fas fa-trash-alt"></i></button>
+                                </div>
+                            `;
+                        }
+                    }
+                ],
+                order: [[6, 'desc']]
+            });
+
+            // Pre-fetch Category list for building Type 1 dropdowns
+            $.get('/Admin/GetAppCategories', function (data) {
+                appCategories = data;
+            });
+
+            // Open/Close Modal
+            $('#btnCreateAssignment').on('click', function () {
+                // Initialize start/end defaults
+                const now = new Date();
+                const nextWeek = new Date();
+                nextWeek.setDate(now.getDate() + 7);
+                
+                $('#assignStart').val(formatDateLocal(now));
+                $('#assignEnd').val(formatDateLocal(nextWeek));
+                
+                $('#questionsContainer').empty();
+                questionCounter = 0;
+                
+                addQuestionBlock();
+
+                const $modal = $('#createModal');
+                $modal.removeClass('hidden').addClass('flex');
+                setTimeout(() => {
+                    $modal.find('> div').removeClass('scale-95 opacity-0').addClass('scale-100 opacity-100');
+                }, 50);
+            });
+
+            $('#btnAddQuestion').on('click', function () {
+                addQuestionBlock();
+            });
+
+            // Submit Assignment
+            $('#btnSaveAssignment').on('click', function () {
+                const title = $('#assignTitle').val();
+                const waveId = $('#assignWaveId').val();
+                const pharmScore = parseFloat($('#assignPharmScore').val()) || 0;
+                const assistScore = parseFloat($('#assignAssistScore').val()) || 0;
+                const start = $('#assignStart').val();
+                const end = $('#assignEnd').val();
+
+                if (!title || !waveId || !start || !end) {
+                    Swal.fire('Required fields', 'Please fill assignment header data.', 'warning');
+                    return;
+                }
+
+                // Gather questions
+                const questions = [];
+                let valid = true;
+
+                $('.question-block').each(function () {
+                    const blockId = $(this).data('id');
+                    const qType = $(this).find('.q-type').val();
+                    const role = $(this).find('.q-role').val();
+                    const points = parseFloat($(this).find('.q-points').val()) || 0;
+
+                    const q = {
+                        QuestionType: qType,
+                        TargetRole: role,
+                        Points: points
+                    };
+
+                    if (qType === 'CategorySelect') {
+                        q.CategoryName = $(this).find('.cat-select').val();
+                        q.GroupName = $(this).find('.group-select').val();
+                        q.SubcategoryName = $(this).find('.subcat-select').val();
+                        q.RequiredItemsCount = parseInt($(this).find('.req-count').val()) || 0;
+
+                        if (!q.CategoryName || !q.GroupName || !q.SubcategoryName || q.RequiredItemsCount <= 0) {
+                            valid = false;
+                            Swal.fire('Error', 'Please fill category criteria and item count for CategorySelect question.', 'warning');
+                            return false;
+                        }
+                    } else {
+                        q.CorrectItemNo = $(this).find('.correct-item-no').val();
+                        q.ItemDefinition = $(this).find('.item-def').val();
+
+                        if (!q.CorrectItemNo || !q.ItemDefinition) {
+                            valid = false;
+                            Swal.fire('Error', 'Please search and select a product for ItemDefinitionMatch question.', 'warning');
+                            return false;
+                        }
+                    }
+
+                    questions.push(q);
+                });
+
+                if (!valid) return;
+                if (questions.length === 0) {
+                    Swal.fire('Warning', 'Assignment must have at least one question.', 'warning');
+                    return;
+                }
+
+                const payload = {
+                    Title: title,
+                    WaveId: parseInt(waveId),
+                    PharmacistMaxScore: pharmScore,
+                    AssistantMaxScore: assistScore,
+                    ScheduledStartTime: start,
+                    ScheduledEndTime: end,
+                    Questions: questions
+                };
+
+                $.ajax({
+                    url: '/Admin/CreateAssignment',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(payload),
+                    success: function (res) {
+                        if (res.success) {
+                            Swal.fire('Success', res.message, 'success');
+                            closeModal();
+                            table.ajax.reload();
+                        } else {
+                            Swal.fire('Fail', res.message, 'error');
+                        }
+                    }
+                });
+            });
+        });
+
+        function closeModal() {
+            const $modal = $('#createModal');
+            $modal.find('> div').removeClass('scale-100 opacity-100').addClass('scale-95 opacity-0');
+            setTimeout(() => {
+                $modal.removeClass('flex').addClass('hidden');
+            }, 300);
+        }
+
+        function deleteAssignment(id) {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "All student attempts and grading logs for this assignment will be deleted permanently!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                confirmButtonText: 'Yes, delete it'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.post('/Admin/DeleteAssignment/' + id, function (res) {
+                        if (res.success) {
+                            Swal.fire('Deleted!', res.message, 'success');
+                            $('#assignmentsTable').DataTable().ajax.reload();
+                        } else {
+                            Swal.fire('Error', res.message, 'error');
+                        }
+                    });
+                }
+            });
+        }
+
+        function addQuestionBlock() {
+            questionCounter++;
+            const id = questionCounter;
+
+            const blockHtml = `
+                <div class="question-block bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 relative" data-id="${id}">
+                    <button type="button" onclick="removeQuestionBlock(${id})" class="absolute top-4 right-4 text-slate-400 hover:text-rose-600 transition-colors">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div class="space-y-1">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Question Type</label>
+                            <select class="q-type bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold w-full outline-none focus:border-brand-500 transition-all" onchange="toggleQuestionTypeFields(${id})">
+                                <option value="CategorySelect">Category Select (Type 1)</option>
+                                <option value="ItemDefinitionMatch">Item Definition Match (Type 2)</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Target Role</label>
+                            <select class="q-role bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold w-full outline-none focus:border-brand-500 transition-all">
+                                <option value="All">All Roles</option>
+                                <option value="Pharmacist">Pharmacist</option>
+                                <option value="Assistant">Assistant</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Points Contribution</label>
+                            <input type="number" step="0.01" value="5" class="q-points bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs w-full outline-none focus:border-brand-500 transition-all" />
+                        </div>
+                    </div>
+
+                    <!-- Type 1 (CategorySelect) Fields -->
+                    <div class="type1-fields grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
+                        <div class="space-y-1">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Category</label>
+                            <select class="cat-select bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs w-full outline-none focus:border-brand-500 transition-all" onchange="populateGroups(${id})">
+                                <option value="">Select Category</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Group</label>
+                            <select class="group-select bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs w-full outline-none focus:border-brand-500 transition-all" onchange="populateSubcategories(${id})">
+                                <option value="">Select Group</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Subcategory</label>
+                            <select class="subcat-select bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs w-full outline-none focus:border-brand-500 transition-all">
+                                <option value="">Select Subcategory</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Req. Items Count</label>
+                            <input type="number" min="1" value="3" class="req-count bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs w-full outline-none focus:border-brand-500 transition-all" />
+                        </div>
+                    </div>
+
+                    <!-- Type 2 (ItemDefinitionMatch) Fields -->
+                    <div class="type2-fields hidden space-y-4 mt-4">
+                        <div class="space-y-1 relative">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Search Product to Map</label>
+                            <div class="relative">
+                                <input type="text" class="prod-search bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs w-full outline-none focus:border-brand-500 transition-all" placeholder="Search by name or code..." oninput="handleProductSearch(${id})" />
+                                <div class="prod-search-results hidden absolute top-full left-0 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto mt-1"></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="space-y-1">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mapped Correct Item No (Hidden ID)</label>
+                                <input type="text" readonly class="correct-item-no bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs w-full text-slate-500" placeholder="Auto-populated" />
+                            </div>
+                            <div class="space-y-1">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Long Definition (Question Prompt)</label>
+                                <textarea class="item-def bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs w-full h-20 outline-none focus:border-brand-500 transition-all" placeholder="This description will be shown to the student..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            $('#questionsContainer').append(blockHtml);
+
+            // Populate categories dropdown for this block
+            const $catSelect = $(`.question-block[data-id="${id}"] .cat-select`);
+            const uniqueCats = [...new Set(appCategories.map(c => c.categories || c.Categories))];
+            uniqueCats.forEach(cat => {
+                if (cat) $catSelect.append($('<option>').val(cat).text(cat));
+            });
+        }
+
+        function removeQuestionBlock(id) {
+            $(`.question-block[data-id="${id}"]`).remove();
+        }
+
+        function toggleQuestionTypeFields(id) {
+            const $block = $(`.question-block[data-id="${id}"]`);
+            const type = $block.find('.q-type').val();
+            if (type === 'CategorySelect') {
+                $block.find('.type1-fields').show();
+                $block.find('.type2-fields').hide();
+            } else {
+                $block.find('.type1-fields').hide();
+                $block.find('.type2-fields').show();
+            }
+        }
+
+        function populateGroups(id) {
+            const $block = $(`.question-block[data-id="${id}"]`);
+            const cat = $block.find('.cat-select').val();
+            const $groupSelect = $block.find('.group-select');
+            $groupSelect.empty().append('<option value="">Select Group</option>');
+            $block.find('.subcat-select').empty().append('<option value="">Select Subcategory</option>');
+
+            const filtered = appCategories.filter(c => (c.categories || c.Categories) === cat);
+            const uniqueGroups = [...new Set(filtered.map(c => c.groups || c.Groups))];
+            uniqueGroups.forEach(grp => {
+                if (grp) $groupSelect.append($('<option>').val(grp).text(grp));
+            });
+        }
+
+        function populateSubcategories(id) {
+            const $block = $(`.question-block[data-id="${id}"]`);
+            const cat = $block.find('.cat-select').val();
+            const grp = $block.find('.group-select').val();
+            const $subcatSelect = $block.find('.subcat-select');
+            $subcatSelect.empty().append('<option value="">Select Subcategory</option>');
+
+            const filtered = appCategories.filter(c => (c.categories || c.Categories) === cat && (c.groups || c.Groups) === grp);
+            const uniqueSubs = [...new Set(filtered.map(c => c.subcategories || c.Subcategories))];
+            uniqueSubs.forEach(sub => {
+                if (sub) $subcatSelect.append($('<option>').val(sub).text(sub));
+            });
+        }
+
+        function handleProductSearch(id) {
+            const $block = $(`.question-block[data-id="${id}"]`);
+            const val = $block.find('.prod-search').val();
+            const $results = $block.find('.prod-search-results');
+
+            if (val.length < 2) {
+                $results.empty().hide();
+                return;
+            }
+
+            $.get('/Admin/SearchItems', { q: val }, function (data) {
+                $results.empty();
+                if (data.length === 0) {
+                    $results.append('<div class="p-3 text-xs text-slate-400">No products found</div>');
+                } else {
+                    data.forEach(item => {
+                        const code = item.itemCode || item.ItemCode || '';
+                        const desc = item.description || item.Description || '';
+                        const definition = item.itemDefinition || item.ItemDefinition || '';
+                        const category = item.category || item.Category || '';
+                        
+                        const row = `
+                            <div onclick="selectProduct(${id}, '${code}', '${escapeQuote(desc)}', '${escapeQuote(definition)}')" class="p-3 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                                <div>
+                                    <span class="font-bold text-brand-600 dark:text-brand-400">${code}</span> - 
+                                    <span class="font-semibold text-slate-700 dark:text-slate-300">${desc}</span>
+                                </div>
+                                <span class="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded">${category}</span>
+                            </div>
+                        `;
+                        $results.append(row);
+                    });
+                }
+                $results.show();
+            });
+        }
+
+        function selectProduct(id, itemCode, desc, definition) {
+            const $block = $(`.question-block[data-id="${id}"]`);
+            $block.find('.prod-search').val(desc);
+            $block.find('.correct-item-no').val(itemCode);
+            
+            // If the item doesn't have an item definition, default to description
+            const finalDef = definition ? definition : `Product definition of ${desc}`;
+            $block.find('.item-def').val(finalDef);
+            
+            $block.find('.prod-search-results').empty().hide();
+        }
+
+        function escapeQuote(str) {
+            if (!str) return '';
+            return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        let activeAssignmentId = 0;
+
+        function viewAttempts(id) {
+            activeAssignmentId = id;
+            const $body = $('#attemptsTableBody');
+            $body.html('<tr><td colspan="7" class="text-center py-8"><i class="fas fa-sync fa-spin text-brand-600 text-lg"></i> Loading attempts...</td></tr>');
+
+            const $modal = $('#attemptsModal');
+            $modal.removeClass('hidden').addClass('flex');
+            setTimeout(() => {
+                $modal.find('> div').removeClass('scale-95 opacity-0').addClass('scale-100 opacity-100');
+            }, 50);
+
+            $.get('/Admin/GetAssignmentAttempts/' + id, function (data) {
+                $body.empty();
+                if (data.length === 0) {
+                    $body.append('<tr><td colspan="7" class="text-center py-8 text-slate-400">No attempts recorded for this assignment yet.</td></tr>');
+                } else {
+                    data.forEach(att => {
+                        const scoreStr = att.status === 'Completed' ? `${att.score} pts` : '--';
+                        const statusClass = att.status === 'Completed' 
+                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800/30' 
+                            : 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800/30';
+                        const statusLabel = att.status === 'Completed' ? 'COMPLETED' : 'IN PROGRESS';
+
+                        const actionBtn = att.status === 'Completed'
+                            ? `<a href="/Assignments/Result/${att.attemptId}" target="_blank" class="inline-flex items-center gap-1 bg-slate-50 hover:bg-brand-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[10px] font-bold transition-all"><i class="fas fa-eye"></i> View Details</a>`
+                            : `<span class="text-xs text-slate-300">-</span>`;
+
+                        const row = `
+                            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
+                                <td class="py-3.5 px-4">
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-slate-800 dark:text-slate-200">${att.fullName || att.userName}</span>
+                                        <span class="text-[10px] text-slate-400 font-medium">${att.email}</span>
+                                        ${att.userCode ? `<span class="text-[9px] font-bold text-brand-600 dark:text-brand-400 uppercase">Code: ${att.userCode}</span>` : ''}
+                                    </div>
+                                </td>
+                                <td class="py-3.5 px-4 text-center">
+                                    <span class="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">${att.roleName || 'Pharmacist'}</span>
+                                </td>
+                                <td class="py-3.5 px-4 text-center">
+                                    <span class="inline-block px-2.5 py-1 rounded-lg text-[9px] font-black border uppercase ${statusClass}">
+                                        ${statusLabel}
+                                    </span>
+                                </td>
+                                <td class="py-3.5 px-4 text-center text-xs text-slate-500 font-mono">${att.startTime || '--'}</td>
+                                <td class="py-3.5 px-4 text-center text-xs text-slate-500 font-mono">${att.endTime || '--'}</td>
+                                <td class="py-3.5 px-4 text-center text-xs font-bold text-brand-600 font-mono">${scoreStr}</td>
+                                <td class="py-3.5 px-4 text-right">${actionBtn}</td>
+                            </tr>
+                        `;
+                        $body.append(row);
+                    });
+                }
+            });
+        }
+
+        function exportAttemptsToExcel() {
+            if (activeAssignmentId > 0) {
+                window.location = '/Admin/ExportAssignmentAttemptsToExcel/' + activeAssignmentId;
+            }
+        }
+
+        function closeAttemptsModal() {
+            const $modal = $('#attemptsModal');
+            $modal.find('> div').removeClass('scale-100 opacity-100').addClass('scale-95 opacity-0');
+            setTimeout(() => {
+                $modal.removeClass('flex').addClass('hidden');
+            }, 300);
+        }
+
+        function formatDateLocal(date) {
+            const tzoffset = date.getTimezoneOffset() * 60000;
+            const localISOTime = (new Date(date - tzoffset)).toISOString().slice(0, 16);
+            return localISOTime;
+        }
+    </script>
+}

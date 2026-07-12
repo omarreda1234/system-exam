@@ -308,6 +308,9 @@
                             <a href="@Url.Action("StudentExams", "Home")" class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/20 hover:bg-brand-700 transition-all">
                                 <i class="fas fa-file-signature mr-2"></i>My Exams
                             </a>
+                            <a href="@Url.Action("Index", "Assignments")" class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all">
+                                <i class="fas fa-tasks mr-2"></i>My Assignments
+                            </a>
                         }
                     </div>
 
@@ -393,6 +396,7 @@
                     @if (User.IsInRole("pharmacist") || User.IsInRole("assistant") || User.IsInRole("صيدلي") || User.IsInRole("مساعد صيدلي") || User.IsInRole("Pharmacist") || User.IsInRole("Assistant") || User.IsInRole("Doctor"))
                     {
                         <a href="@Url.Action("StudentExams", "Home")" class="text-xs font-black uppercase tracking-widest text-brand-600"><i class="fas fa-file-signature mr-2"></i> My Exams</a>
+                        <a href="@Url.Action("Index", "Assignments")" class="text-xs font-black uppercase tracking-widest text-indigo-600"><i class="fas fa-tasks mr-2"></i> My Assignments</a>
                     }
                 }
             </div>

@@ -2408,6 +2408,9 @@ WHERE U.Id = @UserId;";
         {
             if (studentIds == null || !studentIds.Any()) return 0;
 
+            var distinctStudentIds = studentIds.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
+            if (!distinctStudentIds.Any()) return 0;
+
             using (var conn = new SqlConnection(_connectionString))
             {
                 await conn.OpenAsync();
@@ -2416,15 +2419,51 @@ WHERE U.Id = @UserId;";
                 var exam = await conn.QueryFirstOrDefaultAsync<adminExamDto>(
                     "SELECT Title, StartTime, EndTime FROM Exams WHERE Id = @Id", new { Id = examId });
 
-                // 2. Perform DB assignment with default times from exam
-                foreach (var studentId in studentIds)
+                // 2. Perform DB assignment with default times from exam inside a transaction
+                using (var transaction = conn.BeginTransaction())
                 {
-                    await AssignExamToStudentAsync(examId, studentId, exam?.StartTime, exam?.EndTime);
+                    try
+                    {
+                        foreach (var studentId in distinctStudentIds)
+                        {
+                            var existingId = await conn.ExecuteScalarAsync<int?>(@"
+                                SELECT TOP 1 EA.Id FROM ExamAssignments EA
+                                WHERE EA.ExamId = @ExamId AND EA.StudentId = @StudentId
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM UserExamAttempts UA 
+                                    WHERE UA.UserId = EA.StudentId AND UA.ExamId = EA.ExamId
+                                    AND UA.AttemptDate >= ISNULL(EA.ScheduledStartTime, '2000-01-01')
+                                    AND UA.[Status] IN ('Completed', 'Fail_Cheating', 'Fail_ProhibitedActions', 'Fail_Timeout', 'Fail_Abandoned')
+                                )
+                                ORDER BY EA.Id DESC", new { ExamId = examId, StudentId = studentId }, transaction);
+
+                            if (existingId.HasValue)
+                            {
+                                await conn.ExecuteAsync(@"
+                                    UPDATE ExamAssignments 
+                                    SET ScheduledStartTime = @StartTime, ScheduledEndTime = @EndTime, IsEmailSent = 0
+                                    WHERE Id = @Id", new { Id = existingId.Value, StartTime = exam?.StartTime, EndTime = exam?.EndTime }, transaction);
+                            }
+                            else
+                            {
+                                var sql = @"
+                                    INSERT INTO ExamAssignments (ExamId, StudentId, ScheduledStartTime, ScheduledEndTime, IsEmailSent)
+                                    VALUES (@ExamId, @StudentId, @StartTime, @EndTime, 0)";
+                                await conn.ExecuteAsync(sql, new { ExamId = examId, StudentId = studentId, StartTime = exam?.StartTime, EndTime = exam?.EndTime }, transaction);
+                            }
+                        }
+                        transaction.Commit();
+                    }
+                    catch
+                    {
+                        transaction.Rollback();
+                        throw;
+                    }
                 }
 
                 // 3. Materialize user data for background emails
                 var users = (await conn.QueryAsync<UserDto>(
-                    "SELECT Id, UserName, Email FROM AspNetUsers WHERE Id IN @Ids", new { Ids = studentIds }))
+                    "SELECT Id, UserName, Email FROM AspNetUsers WHERE Id IN @Ids", new { Ids = distinctStudentIds }))
                     .ToList();
 
                 _ = Task.Run(async () =>
@@ -2436,7 +2475,7 @@ WHERE U.Id = @UserId;";
                     }
                 });
 
-                return studentIds.Count;
+                return distinctStudentIds.Count;
             }
         }
 

@@ -1,0 +1,380 @@
+@model IEnumerable<dynamic>
+@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Solve Assignment";
+    var assignment = ViewBag.Assignment;
+    var attemptId = (int)ViewBag.AttemptId;
+    var savedAnswers = ViewBag.SavedAnswers as Dictionary<int, string> ?? new Dictionary<int, string>();
+}
+
+<div class="max-w-4xl mx-auto px-6 py-12">
+    <!-- Top Header -->
+    <div class="bg-white border border-slate-200 rounded-[32px] p-8 mb-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+            <span class="text-[9px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                Active Training Assignment
+            </span>
+            <h1 class="text-2xl font-black text-slate-900 tracking-tight mt-3">@assignment.Title</h1>
+            <p class="text-xs text-slate-500 mt-1">Submission Deadline: @(((DateTime)assignment.ScheduledEndTime).ToString("dd/MM/yyyy hh:mm tt"))</p>
+        </div>
+
+        <div>
+            <button onclick="confirmSubmit()" class="bg-brand-600 hover:bg-brand-700 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-brand-600/20 transition-all flex items-center gap-2">
+                <i class="fas fa-paper-plane"></i> Submit Answers & Complete
+            </button>
+        </div>
+    </div>
+
+    <!-- Questions Form -->
+    <div class="space-y-8">
+        @{
+            int qIndex = 0;
+        }
+        @foreach (var q in Model)
+        {
+            qIndex++;
+            string savedVal = savedAnswers.ContainsKey((int)q.Id) ? savedAnswers[(int)q.Id] : "";
+
+            <div class="q-card bg-white border border-slate-200 rounded-[32px] p-8 shadow-sm relative group" data-id="@q.Id" data-type="@q.QuestionType" data-req-count="@q.RequiredItemsCount">
+                <!-- Question Number Badge -->
+                <div class="absolute -top-3 -left-3 w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-md">
+                    @qIndex
+                </div>
+
+                <div class="flex justify-between items-center mb-6">
+                    <span class="px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-600">
+                        @if ((string)q.QuestionType == "CategorySelect")
+                        {
+                            <span>Classify Products (Type 1)</span>
+                        }
+                        else
+                        {
+                            <span>Match Definition (Type 2)</span>
+                        }
+                    </span>
+                    <span class="text-xs font-black text-brand-600">@(((decimal)q.Points).ToString("0.##")) Points</span>
+                </div>
+
+                <!-- Question Prompt -->
+                @if ((string)q.QuestionType == "CategorySelect")
+                {
+                    <div class="mb-6">
+                        <p class="text-base font-bold text-slate-800 leading-relaxed text-left">
+                            Select <span class="text-brand-600 font-black underline">@q.RequiredItemsCount</span> products belonging to the following category:
+                        </p>
+                        
+                        <div class="flex flex-wrap gap-2 mt-3 justify-start">
+                            <span class="bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl px-4 py-2 text-xs font-bold">Main Group: @q.CategoryName</span>
+                            <span class="bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl px-4 py-2 text-xs font-bold">Group: @q.GroupName</span>
+                            <span class="bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl px-4 py-2 text-xs font-bold">Subgroup: @q.SubcategoryName</span>
+                        </div>
+                    </div>
+
+                    <!-- Type 1 Interactive Search & Selection -->
+                    <div class="space-y-4">
+                        <div class="relative">
+                            <input type="text" 
+                                   class="search-input w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all text-left" 
+                                   placeholder="Search product by name or code to add..." 
+                                   oninput="searchProductsForQuestion(@q.Id)" />
+                            
+                            <!-- Dropdown Results -->
+                            <div class="search-results hidden absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto mt-1 text-left"></div>
+                        </div>
+
+                        <!-- Selected items list (Pills) -->
+                        <div>
+                            <p class="text-xs font-bold text-slate-400 mb-2 text-left">Selected Products:</p>
+                            <div class="selected-pills flex flex-wrap gap-2 justify-start" data-saved="@savedVal">
+                                <!-- Dynamic JS injection -->
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="mb-6 space-y-3">
+                        <p class="text-base font-bold text-slate-800 leading-relaxed text-left">
+                            Which product matches the following medical definition or usage?
+                        </p>
+                        
+                        <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 text-slate-600 text-sm leading-relaxed text-left font-medium">
+                            @q.ItemDefinition
+                        </div>
+                    </div>
+
+                    <!-- Type 2 Match Search -->
+                    <div class="space-y-4">
+                        <div class="relative select-single-wrapper">
+                            <input type="text" 
+                                   class="search-input w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all text-left" 
+                                   placeholder="Search and select the matching product..." 
+                                   oninput="searchProductsForQuestion(@q.Id)" />
+                            
+                            <!-- Dropdown Results -->
+                            <div class="search-results hidden absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto mt-1 text-left"></div>
+                        </div>
+
+                        <!-- Match Selection Details -->
+                        <div class="selected-match-details hidden bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 flex justify-between items-center" data-saved="@savedVal">
+                            <button onclick="clearSingleMatch(@q.Id)" class="text-xs font-bold text-rose-500 hover:text-rose-700 transition-colors">Change Selection</button>
+                            <div class="flex items-center gap-3 text-left">
+                                <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
+                                    <i class="fas fa-check-double"></i>
+                                </div>
+                                <div class="text-left">
+                                    <span class="font-black text-emerald-800 match-code font-mono"></span>
+                                    <p class="text-xs text-emerald-700 font-bold match-desc mt-0.5"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Sticky Bottom action block for saving progress -->
+    <div class="bg-white border border-slate-200 rounded-[32px] p-6 mt-8 shadow-sm flex justify-between items-center">
+        <span class="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
+            <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            Answers are saved automatically upon submission
+        </span>
+        
+        <button onclick="confirmSubmit()" class="bg-brand-600 hover:bg-brand-700 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-brand-600/20 transition-all">
+            Submit & Finish Assignment
+        </button>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const attemptId = @attemptId;
+        const answersState = {};
+
+        $(document).ready(function () {
+            // Restore previous saved state
+            $('.q-card').each(function () {
+                const qId = $(this).data('id');
+                const qType = $(this).data('type');
+
+                if (qType === 'CategorySelect') {
+                    const $pills = $(this).find('.selected-pills');
+                    const savedVal = $pills.data('saved');
+                    answersState[qId] = [];
+
+                    if (savedVal) {
+                        const codes = savedVal.split(',');
+                        codes.forEach(code => {
+                            if (code) {
+                                // Fetch description briefly or just display code
+                                addCategorySelectPill(qId, code, code);
+                            }
+                        });
+                    }
+                } else {
+                    const $match = $(this).find('.selected-match-details');
+                    const savedVal = $match.data('saved');
+                    
+                    if (savedVal) {
+                        answersState[qId] = savedVal;
+                        // Query server for code description to show premium badge
+                        $.get('/Assignments/SearchItems', { q: savedVal }, function (data) {
+                            const matched = data.find(i => (i.itemCode || i.ItemCode) === savedVal);
+                            const desc = matched ? (matched.description || matched.Description) : savedVal;
+                            showSingleMatch(qId, savedVal, desc);
+                        });
+                    } else {
+                        answersState[qId] = '';
+                    }
+                }
+            });
+        });
+
+        function searchProductsForQuestion(qId) {
+            const $card = $(`.q-card[data-id="${qId}"]`);
+            const val = $card.find('.search-input').val();
+            const $results = $card.find('.search-results');
+
+            if (val.length < 2) {
+                $results.empty().hide();
+                return;
+            }
+
+            $.get('/Assignments/SearchItems', { q: val }, function (data) {
+                $results.empty();
+                if (data.length === 0) {
+                    $results.append('<div class="p-3 text-xs text-slate-400">No matching results</div>');
+                } else {
+                    data.forEach(item => {
+                        const code = item.itemCode || item.ItemCode || '';
+                        const desc = item.description || item.Description || '';
+                        const category = item.category || item.Category || '';
+                        const row = `
+                            <div onclick="selectProduct(${qId}, '${code}', '${escapeQuote(desc)}')" class="p-3 text-xs hover:bg-slate-50 cursor-pointer border-b border-slate-100 text-left">
+                                <span class="font-black text-brand-600">${code}</span> - 
+                                <span class="font-bold text-slate-700">${desc}</span>
+                            </div>
+                        `;
+                        $results.append(row);
+                    });
+                }
+                $results.show();
+            });
+        }
+
+        // Keep description parameters safe from quotes issues in onclick strings
+        function escapeQuote(str) {
+            if (!str) return '';
+            return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        function selectProduct(qId, code, desc) {
+            const $card = $(`.q-card[data-id="${qId}"]`);
+            const qType = $card.data('type');
+            
+            // Hide results dropdown and clear search input
+            $card.find('.search-results').empty().hide();
+            $card.find('.search-input').val('');
+
+            if (qType === 'CategorySelect') {
+                const reqCount = parseInt($card.data('req-count')) || 0;
+                if (answersState[qId].includes(code)) {
+                    Swal.fire('Warning', 'This product is already added to this answer.', 'warning');
+                    return;
+                }
+                if (answersState[qId].length >= reqCount) {
+                    Swal.fire('Warning', `You have already selected the maximum required products (${reqCount}) for this question.`, 'warning');
+                    return;
+                }
+
+                answersState[qId].push(code);
+                addCategorySelectPill(qId, code, desc);
+            } else {
+                answersState[qId] = code;
+                showSingleMatch(qId, code, desc);
+            }
+        }
+
+        function addCategorySelectPill(qId, code, desc) {
+            const $card = $(`.q-card[data-id="${qId}"]`);
+            const pillHtml = `
+                <div class="pill bg-indigo-50 border border-indigo-100 text-indigo-800 rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-2" data-code="${code}">
+                    <button onclick="removeCategorySelectPill(${qId}, '${code}')" class="text-rose-500 hover:text-rose-700 transition-colors"><i class="fas fa-times"></i></button>
+                    <span>${desc} (${code})</span>
+                </div>
+            `;
+            $card.find('.selected-pills').append(pillHtml);
+        }
+
+        function removeCategorySelectPill(qId, code) {
+            answersState[qId] = answersState[qId].filter(c => c !== code);
+            const $card = $(`.q-card[data-id="${qId}"]`);
+            $card.find(`.selected-pills [data-code="${code}"]`).remove();
+        }
+
+        function showSingleMatch(qId, code, desc) {
+            const $card = $(`.q-card[data-id="${qId}"]`);
+            $card.find('.select-single-wrapper').hide();
+            
+            const $match = $card.find('.selected-match-details');
+            $match.find('.match-code').text(code);
+            $match.find('.match-desc').text(desc);
+            $match.removeClass('hidden');
+        }
+
+        function clearSingleMatch(qId) {
+            answersState[qId] = '';
+            const $card = $(`.q-card[data-id="${qId}"]`);
+            $card.find('.selected-match-details').addClass('hidden');
+            $card.find('.select-single-wrapper').show();
+            $card.find('.search-input').focus();
+        }
+
+        function confirmSubmit() {
+            // Check if all questions are answered
+            let incompleteCount = 0;
+            $('.q-card').each(function () {
+                const qId = $(this).data('id');
+                const qType = $(this).data('type');
+
+                if (qType === 'CategorySelect') {
+                    const reqCount = parseInt($(this).data('req-count')) || 0;
+                    if (!answersState[qId] || answersState[qId].length < reqCount) {
+                        incompleteCount++;
+                    }
+                } else {
+                    if (!answersState[qId]) {
+                        incompleteCount++;
+                    }
+                }
+            });
+
+            let confirmText = "Are you sure you want to submit the assignment now?";
+            if (incompleteCount > 0) {
+                confirmText = `You have ${incompleteCount} unanswered/incomplete questions. Do you want to submit the assignment anyway?`;
+            }
+
+            Swal.fire({
+                title: 'Confirm Submission',
+                text: confirmText,
+                icon: incompleteCount > 0 ? 'warning' : 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#2a766f',
+                confirmButtonText: 'Yes, Submit Now',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    submitAssignment();
+                }
+            });
+        }
+
+        function submitAssignment() {
+            const payloadAnswers = [];
+            for (const qId in answersState) {
+                const state = answersState[qId];
+                let val = '';
+                if (Array.isArray(state)) {
+                    val = state.join(',');
+                } else {
+                    val = state;
+                }
+                payloadAnswers.push({
+                    QuestionId: parseInt(qId),
+                    SelectedItemNos: val
+                });
+            }
+
+            const payload = {
+                AttemptId: attemptId,
+                Answers: payloadAnswers
+            };
+
+            $.ajax({
+                url: '/Assignments/Submit',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(payload),
+                success: function (res) {
+                    if (res.success) {
+                        Swal.fire({
+                            title: 'Submitted Successfully!',
+                            text: 'Your answers have been submitted successfully.',
+                            icon: 'success',
+                            confirmButtonColor: '#2a766f',
+                            confirmButtonText: 'Back to Assignments'
+                        }).then(() => {
+                            window.location = '/Assignments';
+                        });
+                    } else {
+                        Swal.fire('Submission Error', res.message, 'error');
+                    }
+                }
+            });
+        }
+    </script>
+}

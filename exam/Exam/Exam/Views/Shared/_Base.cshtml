@@ -1,3 +1,7 @@
+@{
+    var ctrl = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var act = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+}
 <!DOCTYPE html>
 <html>
 <head>
@@ -49,10 +53,12 @@
                                 <a class="rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-white hover:shadow-sm transition-all uppercase tracking-widest"
                                    asp-controller="Admin" asp-action="Index">Dashboard</a>
                             }
-                            @if (User.IsInRole("pharmacist") || User.IsInRole("assistant") || User.IsInRole("صيدلي") || User.IsInRole("مساعد صيدلي"))
+                            @if (User.IsInRole("pharmacist") || User.IsInRole("assistant") || User.IsInRole("صيدلي") || User.IsInRole("مساعد صيدلي") || User.IsInRole("Pharmacist") || User.IsInRole("Assistant") || User.IsInRole("Doctor"))
                             {
-                                <a class="rounded-lg bg-white shadow-sm px-3 py-2 text-xs font-bold text-brand-600 transition-all uppercase tracking-widest"
+                                <a class="rounded-lg px-3 py-2 text-xs font-bold transition-all uppercase tracking-widest @(ctrl == "Home" && act == "StudentExams" ? "bg-white shadow-sm text-brand-600" : "text-slate-600 hover:text-slate-900 hover:bg-white hover:shadow-sm")"
                                    asp-controller="Home" asp-action="StudentExams">My Exams</a>
+                                <a class="rounded-lg px-3 py-2 text-xs font-bold transition-all uppercase tracking-widest @(ctrl == "Assignments" ? "bg-white shadow-sm text-brand-600" : "text-slate-600 hover:text-slate-900 hover:bg-white hover:shadow-sm")"
+                                   asp-controller="Assignments" asp-action="Index">My Assignments</a>
                             }
                         }
                     </div>
@@ -109,12 +115,17 @@
                             Admin Dashboard
                         </a>
                     }
-                    @if (User.IsInRole("pharmacist") || User.IsInRole("assistant") || User.IsInRole("صيدلي") || User.IsInRole("مساعد صيدلي"))
+                    @if (User.IsInRole("pharmacist") || User.IsInRole("assistant") || User.IsInRole("صيدلي") || User.IsInRole("مساعد صيدلي") || User.IsInRole("Pharmacist") || User.IsInRole("Assistant") || User.IsInRole("Doctor"))
                     {
-                        <a class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 transition-all"
+                        <a class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all @(ctrl == "Home" && act == "StudentExams" ? "text-brand-600 bg-brand-50 hover:bg-brand-100" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")"
                            asp-controller="Home" asp-action="StudentExams">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                             My Exams
+                        </a>
+                        <a class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all @(ctrl == "Assignments" ? "text-brand-600 bg-brand-50 hover:bg-brand-100" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")"
+                           asp-controller="Assignments" asp-action="Index">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                            My Assignments
                         </a>
                     }
                     @if (User.IsInRole("Admin"))

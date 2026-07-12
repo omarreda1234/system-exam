@@ -1392,6 +1392,285 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Items()
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var totalCount = await conn.ExecuteScalarAsync<int>(@"
+                SELECT COUNT(1) FROM dbo.Items WITH (NOLOCK)
+            ", commandTimeout: 60);
+            ViewBag.TotalCount = totalCount;
+            return View(new List<LocalItemDto>());
+        }
+
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<IActionResult> ResetAdminPasswordTemp()
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<object>();
+            var newHash = hasher.HashPassword(new object(), "123456");
+            await conn.ExecuteAsync("UPDATE AspNetUsers SET PasswordHash = @Hash WHERE Email = 'anasaladeep@gmail.com'", new { Hash = newHash });
+            return Content("Admin password updated to 123456. Hash: " + newHash);
+        }
+
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetItemsPaged()
+        {
+            var draw = Request.Form["draw"].FirstOrDefault();
+            var startStr = Request.Form["start"].FirstOrDefault();
+            var lengthStr = Request.Form["length"].FirstOrDefault();
+            var searchValue = Request.Form["search[value]"].FirstOrDefault();
+            var orderColumnIndex = Request.Form["order[0][column]"].FirstOrDefault();
+            var orderDir = Request.Form["order[0][dir]"].FirstOrDefault();
+
+            int start = string.IsNullOrEmpty(startStr) ? 0 : int.Parse(startStr);
+            int length = string.IsNullOrEmpty(lengthStr) ? 10 : int.Parse(lengthStr);
+
+            using var conn = new SqlConnection(_connectionString);
+
+            // Base SQL query
+            string sqlBase = @"
+                FROM dbo.Items WITH(NOLOCK)
+                WHERE 1 = 1";
+
+            var parameters = new DynamicParameters();
+
+            if (!string.IsNullOrEmpty(searchValue))
+            {
+                sqlBase += " AND (No_ LIKE @Search OR Description LIKE @Search OR [Description 2] LIKE @Search OR [Item Definition] LIKE @Search OR Color LIKE @Search)";
+                parameters.Add("Search", $"%{searchValue}%");
+            }
+
+            // Get total count (without filters)
+            int totalRecords = await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM dbo.Items WITH(NOLOCK)", commandTimeout: 60);
+
+            // Get filtered count
+            int filteredRecords = await conn.ExecuteScalarAsync<int>($"SELECT COUNT(1) {sqlBase}", parameters, commandTimeout: 60);
+
+            // Determine sort column
+            string sortColumn = "[Last Date Modified]";
+            if (orderColumnIndex == "0") sortColumn = "No_";
+            else if (orderColumnIndex == "1") sortColumn = "Description";
+            else if (orderColumnIndex == "2") sortColumn = "[Description 2]";
+            else if (orderColumnIndex == "3") sortColumn = "[Item Definition]";
+            else if (orderColumnIndex == "4") sortColumn = "[Storage Instructions]";
+            else if (orderColumnIndex == "5") sortColumn = "[Incentive value]";
+            else if (orderColumnIndex == "6") sortColumn = "Color";
+            else if (orderColumnIndex == "7") sortColumn = "[Date Created]";
+            else if (orderColumnIndex == "8") sortColumn = "[Last Date Modified]";
+            else if (orderColumnIndex == "9") sortColumn = "LastSyncedAt";
+
+            string sortDirection = (orderDir == "asc") ? "ASC" : "DESC";
+
+            // Paginated query
+            string sqlQuery = $@"
+                SELECT
+                    No_ AS No_,
+                    Description AS Description,
+                    [Description 2] AS Description2,
+                    [Storage Instructions] AS StorageInstructions,
+                    [Incentive value] AS IncentiveValue,
+                    Color AS Color,
+                    [Item Definition] AS ItemDefinition,
+                    [Date Created] AS DateCreated,
+                    [Last Date Modified] AS LastDateModified,
+                    LastSyncedAt AS LastSyncedAt
+                {sqlBase}
+                ORDER BY {sortColumn} {sortDirection}
+                OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
+
+            parameters.Add("Start", start);
+            parameters.Add("Length", length);
+
+            var items = await conn.QueryAsync<LocalItemDto>(sqlQuery, parameters, commandTimeout: 60);
+
+            var dataList = new List<object>();
+            foreach (var item in items)
+            {
+                dataList.Add(new {
+                    no_ = item.No_ ?? "",
+                    description = item.Description ?? "",
+                    description2 = item.Description2 ?? "",
+                    itemDefinition = item.ItemDefinition ?? "",
+                    storageInstructions = item.StorageInstructions ?? "",
+                    incentiveValue = item.IncentiveValue ?? "",
+                    color = item.Color ?? "",
+                    dateCreated = item.DateCreated?.ToString("yyyy-MM-dd HH:mm") ?? "-",
+                    lastDateModified = item.LastDateModified?.ToString("yyyy-MM-dd HH:mm") ?? "-",
+                    lastSyncedAt = item.LastSyncedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-"
+                });
+            }
+
+            return Json(new {
+                draw = draw,
+                recordsTotal = totalRecords,
+                recordsFiltered = filteredRecords,
+                data = dataList
+            });
+        }
+
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> SyncItems([FromBody] SyncRequest request)
+        {
+            if (request == null || request.Password != "123456")
+            {
+                return Json(new { success = false, message = "Incorrect password." });
+            }
+
+            try
+            {
+                var liveConnectionString = "Server=172.16.0.50;Database=Eltarshouby-Live;User Id=supercommerce;Password=sc@123456;TrustServerCertificate=True;Connection Timeout=60";
+                
+                using var liveConn = new SqlConnection(liveConnectionString);
+                using var localConn = new SqlConnection(_connectionString);
+
+                // 1. Get last sync date from local Items database
+                var lastSyncDate = await localConn.QueryFirstOrDefaultAsync<DateTime?>(
+                    "SELECT MAX([Last Date Modified]) FROM dbo.Items"
+                );
+
+                // 2. Query data from live database using SqlDataReader (stream directly)
+                string selectQuery = @"
+                    SELECT 
+                        No_ AS No_, 
+                        Description AS Description, 
+                        [Description 2] AS [Description 2], 
+                        [Storage Instructions] AS [Storage Instructions], 
+                        [Incentive value] AS [Incentive value], 
+                        Color AS Color, 
+                        [Item Definition] AS [Item Definition], 
+                        [Date Created] AS [Date Created], 
+                        [Last Date Modified] AS [Last Date Modified]
+                    FROM [Tarshobi-Live$Item] WITH (NOLOCK)
+                ";
+
+                if (lastSyncDate.HasValue)
+                {
+                    selectQuery += " WHERE [Last Date Modified] > @LastSyncDate OR [Date Created] > @LastSyncDate";
+                }
+
+                await liveConn.OpenAsync();
+                using var liveCmd = new SqlCommand(selectQuery, liveConn);
+                liveCmd.CommandTimeout = 300;
+                if (lastSyncDate.HasValue)
+                {
+                    liveCmd.Parameters.AddWithValue("@LastSyncDate", lastSyncDate.Value);
+                }
+
+                using var reader = await liveCmd.ExecuteReaderAsync();
+
+                // 3. Write to staging temp table
+                await localConn.OpenAsync();
+                
+                using (var createTempCmd = new SqlCommand(@"
+                    CREATE TABLE #Staging_Items (
+                        No_ NVARCHAR(100) NOT NULL PRIMARY KEY,
+                        Description NVARCHAR(1000) NULL,
+                        [Description 2] NVARCHAR(2000) NULL,
+                        [Storage Instructions] NVARCHAR(MAX) NULL,
+                        [Incentive value] NVARCHAR(2000) NULL,
+                        Color NVARCHAR(1000) NULL,
+                        [Item Definition] NVARCHAR(MAX) NULL,
+                        [Date Created] DATETIME NULL,
+                        [Last Date Modified] DATETIME NULL
+                    )
+                ", localConn))
+                {
+                    await createTempCmd.ExecuteNonQueryAsync();
+                }
+
+                int totalSynced = 0;
+                using (var bulkCopy = new SqlBulkCopy(localConn))
+                {
+                    bulkCopy.DestinationTableName = "#Staging_Items";
+                    bulkCopy.BulkCopyTimeout = 300;
+                    bulkCopy.BatchSize = 10000;
+                    
+                    bulkCopy.ColumnMappings.Add("No_", "No_");
+                    bulkCopy.ColumnMappings.Add("Description", "Description");
+                    bulkCopy.ColumnMappings.Add("Description 2", "Description 2");
+                    bulkCopy.ColumnMappings.Add("Storage Instructions", "Storage Instructions");
+                    bulkCopy.ColumnMappings.Add("Incentive value", "Incentive value");
+                    bulkCopy.ColumnMappings.Add("Color", "Color");
+                    bulkCopy.ColumnMappings.Add("Item Definition", "Item Definition");
+                    bulkCopy.ColumnMappings.Add("Date Created", "Date Created");
+                    bulkCopy.ColumnMappings.Add("Last Date Modified", "Last Date Modified");
+
+                    await bulkCopy.WriteToServerAsync(reader);
+                }
+
+                using (var countCmd = new SqlCommand("SELECT COUNT(*) FROM #Staging_Items", localConn))
+                {
+                    totalSynced = (int)await countCmd.ExecuteScalarAsync();
+                }
+
+                if (totalSynced == 0)
+                {
+                    return Json(new { success = true, message = "Already up to date. No new changes found.", count = 0 });
+                }
+
+                // 4. Merge staging table into destination table
+                int inserted = 0;
+                int updated = 0;
+
+                string mergeSql = @"
+                    SELECT 
+                        SUM(CASE WHEN target.No_ IS NULL THEN 1 ELSE 0 END) as InsertedCount,
+                        SUM(CASE WHEN target.No_ IS NOT NULL THEN 1 ELSE 0 END) as UpdatedCount
+                    FROM #Staging_Items source
+                    LEFT JOIN dbo.Items target ON source.No_ = target.No_;
+
+                    MERGE dbo.Items AS target
+                    USING #Staging_Items AS source
+                    ON (target.No_ = source.No_)
+                    WHEN MATCHED THEN
+                        UPDATE SET 
+                            target.Description = source.Description,
+                            target.[Description 2] = source.[Description 2],
+                            target.[Storage Instructions] = source.[Storage Instructions],
+                            target.[Incentive value] = source.[Incentive value],
+                            target.Color = source.Color,
+                            target.[Item Definition] = source.[Item Definition],
+                            target.[Date Created] = source.[Date Created],
+                            target.[Last Date Modified] = source.[Last Date Modified],
+                            target.LastSyncedAt = GETDATE()
+                    WHEN NOT MATCHED THEN
+                        INSERT (No_, Description, [Description 2], [Storage Instructions], [Incentive value], Color, [Item Definition], [Date Created], [Last Date Modified], LastSyncedAt)
+                        VALUES (source.No_, source.Description, source.[Description 2], source.[Storage Instructions], source.[Incentive value], source.Color, source.[Item Definition], source.[Date Created], source.[Last Date Modified], GETDATE());
+                ";
+
+                using (var mergeCmd = new SqlCommand(mergeSql, localConn))
+                {
+                    mergeCmd.CommandTimeout = 300;
+                    using (var statsReader = await mergeCmd.ExecuteReaderAsync())
+                    {
+                        if (statsReader.Read())
+                        {
+                            inserted = statsReader.IsDBNull(0) ? 0 : statsReader.GetInt32(0);
+                            updated = statsReader.IsDBNull(1) ? 0 : statsReader.GetInt32(1);
+                        }
+                    }
+                }
+
+                return Json(new { 
+                    success = true, 
+                    message = $"Sync completed successfully! {inserted} items inserted, {updated} items updated.",
+                    inserted,
+                    updated
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Error during sync: " + ex.Message });
+            }
+        }
+
+        [HttpGet]
         public async Task<IActionResult> GetFilteredExams(int? typeId, int? month, int? year, string mode = "weekly")
         {
             if (mode == "cert")
@@ -1898,34 +2177,89 @@ namespace Exam.Controllers
                 var exam = await _examService.GetExamByIdAsync(examId);
                 var siteLink = "http://41.33.149.186:5208";
 
-                foreach (var sid in request.StudentIds)
+                var distinctStudentIds = request.StudentIds.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
+                if (!distinctStudentIds.Any())
                 {
-                    await _examService.AssignExamToStudentAsync(examId, sid, request.StartTime, request.EndTime);
-                    
-                    // Send Email Notification
-                    var user = await _userManager.FindByIdAsync(sid);
-                    if (user != null)
-                    {
-                        var subject = $"ðŸš¨ Re-Assignment: {exam.Title}";
-                        var body = $@"
-                            <div style='font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;'>
-                                <h2 style='color: #4f46e5;'>Exam Re-Assignment</h2>
-                                <p>Hello <b>{user.UserName}</b>,</p>
-                                <p>You have been reassigned the exam: <b style='color: #ef4444;'>{exam.Title}</b>.</p>
-                                <div style='background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;'>
-                                    <p style='margin: 0;'><b>New Window:</b></p>
-                                    <p style='margin: 5px 0;'>Starts: {request.StartTime:yyyy-MM-dd HH:mm}</p>
-                                    <p style='margin: 5px 0;'>Ends: {request.EndTime:yyyy-MM-dd HH:mm}</p>
-                                </div>
-                                <p>Please login to the portal to complete your assessment.</p>
-                                <a href='{siteLink}' style='display: inline-block; background: #4f46e5; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;'>Login to Portal</a>
-                                <p style='margin-top: 30px; font-size: 12px; color: #64748b;'>Eltarshoubi Academy - Online Examination System</p>
-                            </div>";
-                        
-                        _ = _emailSender.SendEmailAsync(user.Email, subject, body); // Fire and forget email to avoid blocking the UI
-                    }
+                    return Ok(new { success = true, count = 0 });
                 }
-                return Ok(new { success = true, count = request.StudentIds.Count });
+
+                using (var conn = new SqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+
+                    using (var transaction = conn.BeginTransaction())
+                    {
+                        try
+                        {
+                            foreach (var sid in distinctStudentIds)
+                            {
+                                var existingId = await conn.ExecuteScalarAsync<int?>(@"
+                                    SELECT TOP 1 EA.Id FROM ExamAssignments EA
+                                    WHERE EA.ExamId = @ExamId AND EA.StudentId = @StudentId
+                                    AND NOT EXISTS (
+                                        SELECT 1 FROM UserExamAttempts UA 
+                                        WHERE UA.UserId = EA.StudentId AND UA.ExamId = EA.ExamId
+                                        AND UA.AttemptDate >= ISNULL(EA.ScheduledStartTime, '2000-01-01')
+                                        AND UA.[Status] IN ('Completed', 'Fail_Cheating', 'Fail_ProhibitedActions', 'Fail_Timeout', 'Fail_Abandoned')
+                                    )
+                                    ORDER BY EA.Id DESC", new { ExamId = examId, StudentId = sid }, transaction);
+
+                                if (existingId.HasValue)
+                                {
+                                    await conn.ExecuteAsync(@"
+                                        UPDATE ExamAssignments 
+                                        SET ScheduledStartTime = @StartTime, ScheduledEndTime = @EndTime, IsEmailSent = 0
+                                        WHERE Id = @Id", new { Id = existingId.Value, StartTime = request.StartTime, EndTime = request.EndTime }, transaction);
+                                }
+                                else
+                                {
+                                    var sql = @"
+                                        INSERT INTO ExamAssignments (ExamId, StudentId, ScheduledStartTime, ScheduledEndTime, IsEmailSent)
+                                        VALUES (@ExamId, @StudentId, @StartTime, @EndTime, 0)";
+                                    await conn.ExecuteAsync(sql, new { ExamId = examId, StudentId = sid, StartTime = request.StartTime, EndTime = request.EndTime }, transaction);
+                                }
+                            }
+                            transaction.Commit();
+                        }
+                        catch
+                        {
+                            transaction.Rollback();
+                            throw;
+                        }
+                    }
+
+                    // Send Email Notification in background using materialized user info
+                    var users = (await conn.QueryAsync<UserDto>(
+                        "SELECT Id, UserName, Email FROM AspNetUsers WHERE Id IN @Ids", new { Ids = distinctStudentIds }))
+                        .ToList();
+
+                    _ = Task.Run(async () =>
+                    {
+                        foreach (var user in users)
+                        {
+                            if (string.IsNullOrEmpty(user.Email)) continue;
+
+                            var subject = $"🚨 Re-Assignment: {exam.Title}";
+                            var body = $@"
+                                <div style='font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;'>
+                                    <h2 style='color: #4f46e5;'>Exam Re-Assignment</h2>
+                                    <p>Hello <b>{user.UserName}</b>,</p>
+                                    <p>You have been reassigned the exam: <b style='color: #ef4444;'>{exam.Title}</b>.</p>
+                                    <div style='background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;'>
+                                        <p style='margin: 0;'><b>New Window:</b></p>
+                                        <p style='margin: 5px 0;'>Starts: {request.StartTime:yyyy-MM-dd HH:mm}</p>
+                                        <p style='margin: 5px 0;'>Ends: {request.EndTime:yyyy-MM-dd HH:mm}</p>
+                                    </div>
+                                    <p>Please login to the portal to complete your assessment.</p>
+                                    <a href='{siteLink}' style='display: inline-block; background: #4f46e5; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;'>Login to Portal</a>
+                                    <p style='margin-top: 30px; font-size: 12px; color: #64748b;'>Eltarshoubi Academy - Online Examination System</p>
+                                </div>";
+                            
+                            await _emailSender.SendEmailAsync(user.Email, subject, body);
+                        }
+                    });
+                }
+                return Ok(new { success = true, count = distinctStudentIds.Count });
             }
             catch (System.Exception ex)
             {
@@ -4787,6 +5121,302 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 return Json(new { success = false, message = "حدث خطأ أثناء قراءة الملف: " + ex.Message });
             }
         }
+
+        [HttpGet("Admin/Assignments")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Assignments()
+        {
+            ViewBag.Title = "Wave Assignments";
+            using var conn = new SqlConnection(_connectionString);
+            var waves = await conn.QueryAsync<dynamic>("SELECT Id, WaveName FROM dbo.TrainingWaves ORDER BY Id DESC");
+            ViewBag.Waves = waves;
+            return View();
+        }
+
+        [HttpGet("Admin/GetAssignmentAttempts/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAssignmentAttempts(int id)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var attempts = await conn.QueryAsync<dynamic>(@"
+                SELECT att.Id AS AttemptId, att.Score, att.Status, att.StartTime, att.EndTime, 
+                       u.FullName, u.Email, u.UserName, u.UserCode,
+                       r.Name AS RoleName
+                FROM dbo.StudentAssignmentAttempts att
+                INNER JOIN dbo.AspNetUsers u ON att.UserId = u.Id
+                LEFT JOIN dbo.AspNetUserRoles ur ON u.Id = ur.UserId
+                LEFT JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id
+                WHERE att.AssignmentId = @AssignmentId
+                ORDER BY att.StartTime DESC",
+                new { AssignmentId = id });
+
+            var result = attempts.Select(x => new {
+                attemptId = x.AttemptId,
+                fullName = x.FullName,
+                email = x.Email,
+                userName = x.UserName,
+                roleName = x.RoleName,
+                userCode = x.UserCode,
+                score = x.Score,
+                status = x.Status,
+                startTime = x.StartTime != null ? ((DateTime)x.StartTime).ToString("yyyy-MM-dd HH:mm:ss") : null,
+                endTime = x.EndTime != null ? ((DateTime)x.EndTime).ToString("yyyy-MM-dd HH:mm:ss") : null
+            });
+
+            return Json(result);
+        }
+
+        [HttpGet("Admin/ExportAssignmentAttemptsToExcel/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> ExportAssignmentAttemptsToExcel(int id)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                
+                var assignment = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                    "SELECT Title FROM dbo.Assignments WHERE Id = @Id", new { Id = id });
+                string assignmentTitle = assignment?.Title ?? "Assignment";
+
+                var attempts = await conn.QueryAsync<dynamic>(@"
+                    SELECT att.Id AS AttemptId, att.Score, att.Status, att.StartTime, att.EndTime, 
+                           u.FullName, u.Email, u.UserName, u.UserCode,
+                           r.Name AS RoleName
+                    FROM dbo.StudentAssignmentAttempts att
+                    INNER JOIN dbo.AspNetUsers u ON att.UserId = u.Id
+                    LEFT JOIN dbo.AspNetUserRoles ur ON u.Id = ur.UserId
+                    LEFT JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id
+                    WHERE att.AssignmentId = @AssignmentId
+                    ORDER BY att.StartTime DESC",
+                    new { AssignmentId = id });
+
+                using (var workbook = new ClosedXML.Excel.XLWorkbook())
+                {
+                    var worksheet = workbook.Worksheets.Add("Assignment Attempts");
+                    var currentRow = 1;
+
+                    // Header Info
+                    worksheet.Cell(currentRow, 1).Value = "Assignment:";
+                    worksheet.Cell(currentRow, 2).Value = assignmentTitle;
+                    currentRow++;
+                    worksheet.Cell(currentRow, 1).Value = "Generated:";
+                    worksheet.Cell(currentRow, 2).Value = DateTime.Now.ToString("g");
+                    currentRow += 2;
+
+                    string[] headers = { "Student Name", "Email", "User Code", "Role", "Status", "Start Time", "Submit Time", "Score" };
+                    for (int i = 0; i < headers.Length; i++)
+                    {
+                        var cell = worksheet.Cell(currentRow, i + 1);
+                        cell.Value = headers[i];
+                        cell.Style.Font.Bold = true;
+                        cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#4F46E5");
+                        cell.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+                    }
+
+                    foreach (var att in attempts)
+                    {
+                        currentRow++;
+                        worksheet.Cell(currentRow, 1).Value = (string)(att.FullName ?? att.UserName);
+                        worksheet.Cell(currentRow, 2).Value = (string)att.Email;
+                        worksheet.Cell(currentRow, 3).Value = (string)(att.UserCode ?? "");
+                        worksheet.Cell(currentRow, 4).Value = (string)(att.RoleName ?? "Pharmacist");
+                        worksheet.Cell(currentRow, 5).Value = (string)att.Status;
+                        worksheet.Cell(currentRow, 6).Value = att.StartTime != null ? ((DateTime)att.StartTime).ToString("yyyy-MM-dd HH:mm:ss") : "";
+                        worksheet.Cell(currentRow, 7).Value = att.EndTime != null ? ((DateTime)att.EndTime).ToString("yyyy-MM-dd HH:mm:ss") : "";
+                        worksheet.Cell(currentRow, 8).Value = att.Status == "Completed" ? $"{att.Score} pts" : "--";
+                    }
+
+                    worksheet.Columns().AdjustToContents();
+
+                    using (var stream = new System.IO.MemoryStream())
+                    {
+                        workbook.SaveAs(stream);
+                        var content = stream.ToArray();
+                        return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"Assignment_Attempts_{id}.xlsx");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequest("Error exporting to Excel: " + ex.Message);
+            }
+        }
+
+        [HttpPost("Admin/GetAssignmentsPaged")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAssignmentsPaged()
+        {
+            var draw = Request.Form["draw"].FirstOrDefault();
+            var start = Request.Form["start"].FirstOrDefault();
+            var length = Request.Form["length"].FirstOrDefault();
+            var searchValue = Request.Form["search[value]"].FirstOrDefault();
+
+            int pageSize = string.IsNullOrEmpty(length) ? 10 : Convert.ToInt32(length);
+            int skip = string.IsNullOrEmpty(start) ? 0 : Convert.ToInt32(start);
+
+            using var conn = new SqlConnection(_connectionString);
+
+            string searchFilter = "";
+            var parameters = new DynamicParameters();
+            if (!string.IsNullOrEmpty(searchValue))
+            {
+                searchFilter = " WHERE a.Title LIKE @Search";
+                parameters.Add("Search", "%" + searchValue + "%");
+            }
+
+            string countQuery = $@"
+                SELECT COUNT(1) 
+                FROM dbo.Assignments a 
+                INNER JOIN dbo.TrainingWaves w ON a.WaveId = w.Id
+                {searchFilter}";
+
+            int recordsTotal = await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM dbo.Assignments");
+            int recordsFiltered = await conn.ExecuteScalarAsync<int>(countQuery, parameters);
+
+            string dataQuery = $@"
+                SELECT a.Id, a.Title, w.WaveName, a.PharmacistMaxScore, a.AssistantMaxScore, 
+                       a.ScheduledStartTime, a.ScheduledEndTime, a.CreatedAt
+                FROM dbo.Assignments a
+                INNER JOIN dbo.TrainingWaves w ON a.WaveId = w.Id
+                {searchFilter}
+                ORDER BY a.Id DESC
+                OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY";
+
+            parameters.Add("Skip", skip);
+            parameters.Add("Take", pageSize);
+
+            var list = await conn.QueryAsync<dynamic>(dataQuery, parameters);
+
+            var result = list.Select(x => new {
+                id = x.Id,
+                title = x.Title,
+                waveName = x.WaveName,
+                pharmacistMaxScore = x.PharmacistMaxScore,
+                assistantMaxScore = x.AssistantMaxScore,
+                scheduledStartTime = x.ScheduledStartTime != null ? ((DateTime)x.ScheduledStartTime).ToString("yyyy-MM-dd HH:mm:ss") : null,
+                scheduledEndTime = x.ScheduledEndTime != null ? ((DateTime)x.ScheduledEndTime).ToString("yyyy-MM-dd HH:mm:ss") : null,
+                createdAt = x.CreatedAt != null ? ((DateTime)x.CreatedAt).ToString("yyyy-MM-dd HH:mm:ss") : null
+            });
+
+            return Json(new
+            {
+                draw = draw,
+                recordsTotal = recordsTotal,
+                recordsFiltered = recordsFiltered,
+                data = result
+            });
+        }
+
+        [HttpGet("Admin/GetAppCategories")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAppCategories()
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var categories = await conn.QueryAsync<dynamic>("SELECT DISTINCT Categories AS categories, Groups AS groups, Subcategories AS subcategories FROM dbo.[App Categories ] ORDER BY categories, groups, subcategories");
+            return Json(categories);
+        }
+
+        [HttpGet("Admin/SearchItems")]
+        [Authorize]
+        public async Task<IActionResult> SearchItems(string q)
+        {
+            if (string.IsNullOrWhiteSpace(q)) return Json(new List<object>());
+            using var conn = new SqlConnection(_connectionString);
+            var items = await conn.QueryAsync<dynamic>("dbo.sp_GetItemsForSearch", new { SearchQuery = q }, commandType: CommandType.StoredProcedure);
+            
+            var result = items.Select(x => new {
+                itemCode = x.ItemCode,
+                description = x.Description,
+                descriptionAr = x.DescriptionAr,
+                category = x.Category,
+                group = x.Group,
+                subcategory = x.Subcategory,
+                itemDefinition = x.ItemDefinition
+            });
+            
+            return Json(result);
+        }
+
+        [HttpPost("Admin/CreateAssignment")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> CreateAssignment([FromBody] CreateAssignmentDto model)
+        {
+            if (model == null || string.IsNullOrWhiteSpace(model.Title) || model.WaveId <= 0)
+            {
+                return Json(new { success = false, message = "Invalid data. Please fill required fields." });
+            }
+
+            using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync();
+            using var transaction = conn.BeginTransaction();
+            try
+            {
+                // Insert Assignment
+                string insertAssignSql = @"
+                    INSERT INTO dbo.Assignments (Title, WaveId, PharmacistMaxScore, AssistantMaxScore, ScheduledStartTime, ScheduledEndTime, CreatedAt)
+                    OUTPUT INSERTED.Id
+                    VALUES (@Title, @WaveId, @PharmacistMaxScore, @AssistantMaxScore, @ScheduledStartTime, @ScheduledEndTime, GETDATE());";
+
+                int assignmentId = await conn.QuerySingleAsync<int>(insertAssignSql, new
+                {
+                    model.Title,
+                    model.WaveId,
+                    model.PharmacistMaxScore,
+                    model.AssistantMaxScore,
+                    model.ScheduledStartTime,
+                    model.ScheduledEndTime
+                }, transaction: transaction);
+
+                // Insert Questions
+                if (model.Questions != null && model.Questions.Any())
+                {
+                    string insertQuestionSql = @"
+                        INSERT INTO dbo.AssignmentQuestions (AssignmentId, QuestionType, TargetRole, Points, CategoryName, GroupName, SubcategoryName, RequiredItemsCount, ItemDefinition, CorrectItemNo)
+                        VALUES (@AssignmentId, @QuestionType, @TargetRole, @Points, @CategoryName, @GroupName, @SubcategoryName, @RequiredItemsCount, @ItemDefinition, @CorrectItemNo);";
+
+                    foreach (var q in model.Questions)
+                    {
+                        await conn.ExecuteAsync(insertQuestionSql, new
+                        {
+                            AssignmentId = assignmentId,
+                            q.QuestionType,
+                            q.TargetRole,
+                            q.Points,
+                            q.CategoryName,
+                            q.GroupName,
+                            q.SubcategoryName,
+                            q.RequiredItemsCount,
+                            q.ItemDefinition,
+                            q.CorrectItemNo
+                        }, transaction: transaction);
+                    }
+                }
+
+                transaction.Commit();
+                return Json(new { success = true, message = "Assignment created successfully!" });
+            }
+            catch (Exception ex)
+            {
+                transaction.Rollback();
+                return Json(new { success = false, message = "Error: " + ex.Message });
+            }
+        }
+
+        [HttpPost("Admin/DeleteAssignment/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteAssignment(int id)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            try
+            {
+                await conn.ExecuteAsync("DELETE FROM dbo.Assignments WHERE Id = @Id", new { Id = id });
+                return Json(new { success = true, message = "Assignment deleted successfully." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Error: " + ex.Message });
+            }
+        }
     }
 
     internal static class BranchNameResolver
@@ -4839,7 +5469,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 }
             }
 
-            // Compare with all whitespace removed (Excel / DB spacing differences)
+
             var collapsedQ = RemoveAllWhitespace(normQ);
             if (collapsedQ.Length >= 2)
             {
@@ -4855,8 +5485,6 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
             return null;
         }
-
-
 
         private static string RemoveAllWhitespace(string s)
         {
@@ -4884,6 +5512,49 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 s = s.Substring(al.Length).TrimStart();
             return s.Trim();
         }
+    }
+
+    public class CreateAssignmentDto
+    {
+        public string Title { get; set; }
+        public int WaveId { get; set; }
+        public decimal PharmacistMaxScore { get; set; }
+        public decimal AssistantMaxScore { get; set; }
+        public DateTime ScheduledStartTime { get; set; }
+        public DateTime ScheduledEndTime { get; set; }
+        public List<CreateAssignmentQuestionDto> Questions { get; set; } = new();
+    }
+
+    public class CreateAssignmentQuestionDto
+    {
+        public string QuestionType { get; set; } // "CategorySelect" or "ItemDefinitionMatch"
+        public string TargetRole { get; set; } // "Pharmacist", "Assistant", "All"
+        public decimal Points { get; set; }
+        public string CategoryName { get; set; }
+        public string GroupName { get; set; }
+        public string SubcategoryName { get; set; }
+        public int? RequiredItemsCount { get; set; }
+        public string ItemDefinition { get; set; }
+        public string CorrectItemNo { get; set; }
+    }
+
+    public class SyncRequest
+    {
+        public string Password { get; set; }
+    }
+
+    public class LocalItemDto
+    {
+        public string No_ { get; set; }
+        public string Description { get; set; }
+        public string Description2 { get; set; }
+        public string StorageInstructions { get; set; }
+        public string IncentiveValue { get; set; }
+        public string Color { get; set; }
+        public string ItemDefinition { get; set; }
+        public DateTime? DateCreated { get; set; }
+        public DateTime? LastDateModified { get; set; }
+        public DateTime? LastSyncedAt { get; set; }
     }
 }
 
