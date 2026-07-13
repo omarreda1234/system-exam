@@ -1346,6 +1346,8 @@ namespace Exam.Controllers
                     var passedResults = results.Where(r => {
                         if (r.Status != "Completed") return false;
                         
+                        if (!string.IsNullOrEmpty(r.CertificateCode) || r.Score > 0) return true;
+                        
                         bool isPharmacist = r.RoleName != null && (r.RoleName.ToLower().Contains("pharmacist") || r.RoleName.Contains("صيدل"));
                         if (isPharmacist)
                         {
@@ -1869,6 +1871,29 @@ namespace Exam.Controllers
                         {
                             var saveUserSql = "UPDATE AspNetUsers SET CertificateCode = @Code WHERE Id = @Id";
                             await conn.ExecuteAsync(saveUserSql, new { Id = student.Id, Code = code });
+
+                            if (examInfo.WaveId.HasValue && examInfo.WaveId.Value > 0)
+                            {
+                                var certExists = await conn.QueryFirstOrDefaultAsync<int?>(
+                                    "SELECT Id FROM dbo.UserWaveCertificates WHERE UserId = @UserId AND WaveId = @WaveId",
+                                    new { UserId = student.Id, WaveId = examInfo.WaveId.Value });
+
+                                if (certExists != null)
+                                {
+                                    await conn.ExecuteAsync(@"
+                                        UPDATE dbo.UserWaveCertificates 
+                                        SET CertificateCode = @CertCode
+                                        WHERE UserId = @UserId AND WaveId = @WaveId",
+                                        new { CertCode = code, UserId = student.Id, WaveId = examInfo.WaveId.Value });
+                                }
+                                else
+                                {
+                                    await conn.ExecuteAsync(@"
+                                        INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, Score, CreatedAt)
+                                        VALUES (@UserId, @WaveId, @CertCode, NULL, @CreatedAt)",
+                                        new { UserId = student.Id, WaveId = examInfo.WaveId.Value, CertCode = code, CreatedAt = DateTime.Now });
+                                }
+                            }
                         }
                     }
 
@@ -4987,7 +5012,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
         }
 
         [HttpPost]
-        public async Task<IActionResult> UploadCertificatesOnlyExcel(IFormFile excelFile)
+        public async Task<IActionResult> UploadCertificatesOnlyExcel(IFormFile excelFile, int? examId = null, int? waveId = null)
         {
             if (excelFile == null || excelFile.Length == 0)
             {
@@ -5044,6 +5069,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
                 var colUserCode = GetCol("Code", "UserCode", "User Code", "الكود", "كود", "كود الطالب");
                 var colCertificateCode = GetCol("Certificate", "CertificateCode", "Certificate Code", "الشهادة", "كود الشهادة", "رقم الشهادة");
+                var colScore = GetCol("Score", "الدرجة", "النسبة", "النسبه", "النسبة المئوية", "الدرجة المئوية", "درجة", "نسبة", "نسبه", "Score %", "Percentage");
                 var colWaveName = GetCol("Wave", "الويف", "الدورة", "المجموعة", "WaveName", "Wave Name");
 
                 if (colUserCode == null || colCertificateCode == null)
@@ -5066,6 +5092,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     var rawUserCode = worksheet.Cell(row, colUserCode.Value).Value.ToString()?.Trim();
                     var rawCertCode = worksheet.Cell(row, colCertificateCode.Value).Value.ToString()?.Trim();
                     var rawWaveName = colWaveName != null ? worksheet.Cell(row, colWaveName.Value).Value.ToString()?.Trim() : null;
+                    var rawScore = colScore != null ? worksheet.Cell(row, colScore.Value).Value.ToString()?.Trim() : null;
 
                     if (string.IsNullOrWhiteSpace(rawUserCode)) continue;
 
@@ -5079,60 +5106,102 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     var user = _userManager.Users.FirstOrDefault(x => x.UserCode == rawUserCode);
                     if (user != null)
                     {
-                        // Update AspNetUsers
+                        decimal? parsedScore = null;
+                        if (!string.IsNullOrWhiteSpace(rawScore))
+                        {
+                            var cleanScoreStr = rawScore.Replace("%", "").Trim();
+                            if (decimal.TryParse(cleanScoreStr, out var sVal))
+                            {
+                                parsedScore = sVal;
+                            }
+                        }
+
+                        // Update AspNetUsers CertificateCode as a general field (optional/fallback)
                         user.CertificateCode = rawCertCode;
+                        user.CertificateScore = parsedScore;
                         await _userManager.UpdateAsync(user);
 
-                        // 2. Also update UserExamAttempts (update the latest completed attempt or all completed attempts for this user)
-                        var updateAttemptsSql = @"
-                            UPDATE UserExamAttempts 
-                            SET CertificateCode = @CertCode 
-                            WHERE UserId = @UserId AND [Status] = 'Completed'";
-                        
-                        await conn.ExecuteAsync(updateAttemptsSql, new { CertCode = rawCertCode, UserId = user.Id });
-
-                        // 3. Handle Wave Assignment if present
+                        // 2. Resolve target WaveId
+                        int resolvedWaveId = 0;
                         if (!string.IsNullOrWhiteSpace(rawWaveName))
                         {
-                            // A. Check if the Wave exists
-                            var waveId = await conn.QueryFirstOrDefaultAsync<int?>(
+                            // Check if the Wave exists
+                            var dbWaveId = await conn.QueryFirstOrDefaultAsync<int?>(
                                 "SELECT Id FROM dbo.TrainingWaves WHERE WaveName = @WaveName",
                                 new { WaveName = rawWaveName });
 
-                            if (waveId == null)
+                            if (dbWaveId == null)
                             {
                                 // Create it!
-                                waveId = await conn.QueryFirstOrDefaultAsync<int>(@"
+                                dbWaveId = await conn.QueryFirstOrDefaultAsync<int>(@"
                                     INSERT INTO dbo.TrainingWaves (WaveName, StartDate) 
                                     VALUES (@WaveName, @StartDate);
                                     SELECT CAST(SCOPE_IDENTITY() as int);",
                                     new { WaveName = rawWaveName, StartDate = DateTime.Now });
                             }
+                            resolvedWaveId = dbWaveId ?? 0;
+                        }
 
-                            if (waveId != null && waveId.Value > 0)
+                        if (resolvedWaveId <= 0)
+                        {
+                            resolvedWaveId = waveId ?? 0;
+                        }
+
+                        if (resolvedWaveId <= 0 && examId.HasValue && examId.Value > 0)
+                        {
+                            resolvedWaveId = await conn.QueryFirstOrDefaultAsync<int>(
+                                "SELECT WaveId FROM Exams WHERE Id = @ExamId",
+                                new { ExamId = examId.Value });
+                        }
+
+                        if (resolvedWaveId <= 0)
+                        {
+                            resolvedWaveId = await conn.QueryFirstOrDefaultAsync<int>(
+                                "SELECT TOP 1 Id FROM TrainingWaves ORDER BY StartDate DESC");
+                        }
+
+                        if (resolvedWaveId > 0)
+                        {
+                            // A. Check/insert UserWaves entry (assign user to wave)
+                            var userWaveExists = await conn.QueryFirstOrDefaultAsync<int?>(
+                                "SELECT WaveId FROM dbo.UserWaves WHERE UserId = @UserId AND WaveId = @WaveId",
+                                new { UserId = user.Id, WaveId = resolvedWaveId });
+
+                            if (userWaveExists == null)
                             {
-                                // B. Check if UserWaves entry exists
-                                var userWaveExists = await conn.QueryFirstOrDefaultAsync<int?>(
-                                    "SELECT WaveId FROM dbo.UserWaves WHERE UserId = @UserId AND WaveId = @WaveId",
-                                    new { UserId = user.Id, WaveId = waveId.Value });
+                                await conn.ExecuteAsync(@"
+                                    INSERT INTO dbo.UserWaves (UserId, WaveId, JoinDate, IsActive)
+                                    VALUES (@UserId, @WaveId, @JoinDate, 1)",
+                                    new { UserId = user.Id, WaveId = resolvedWaveId, JoinDate = DateTime.Now });
+                            }
+                            else
+                            {
+                                await conn.ExecuteAsync(@"
+                                    UPDATE dbo.UserWaves 
+                                    SET IsActive = 1 
+                                    WHERE UserId = @UserId AND WaveId = @WaveId",
+                                    new { UserId = user.Id, WaveId = resolvedWaveId });
+                            }
 
-                                if (userWaveExists == null)
-                                {
-                                    // Insert association
-                                    await conn.ExecuteAsync(@"
-                                        INSERT INTO dbo.UserWaves (UserId, WaveId, JoinDate, IsActive)
-                                        VALUES (@UserId, @WaveId, @JoinDate, 1)",
-                                        new { UserId = user.Id, WaveId = waveId.Value, JoinDate = DateTime.Now });
-                                }
-                                else
-                                {
-                                    // Update IsActive just in case it was disabled
-                                    await conn.ExecuteAsync(@"
-                                        UPDATE dbo.UserWaves 
-                                        SET IsActive = 1 
-                                        WHERE UserId = @UserId AND WaveId = @WaveId",
-                                        new { UserId = user.Id, WaveId = waveId.Value });
-                                }
+                            // B. Insert or update UserWaveCertificates table
+                            var certExists = await conn.QueryFirstOrDefaultAsync<int?>(
+                                "SELECT Id FROM dbo.UserWaveCertificates WHERE UserId = @UserId AND WaveId = @WaveId",
+                                new { UserId = user.Id, WaveId = resolvedWaveId });
+
+                            if (certExists != null)
+                            {
+                                await conn.ExecuteAsync(@"
+                                    UPDATE dbo.UserWaveCertificates 
+                                    SET CertificateCode = @CertCode, Score = @Score
+                                    WHERE UserId = @UserId AND WaveId = @WaveId",
+                                    new { CertCode = rawCertCode, Score = parsedScore, UserId = user.Id, WaveId = resolvedWaveId });
+                            }
+                            else
+                            {
+                                await conn.ExecuteAsync(@"
+                                    INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, Score, CreatedAt)
+                                    VALUES (@UserId, @WaveId, @CertCode, @Score, @CreatedAt)",
+                                    new { UserId = user.Id, WaveId = resolvedWaveId, CertCode = rawCertCode, Score = parsedScore, CreatedAt = DateTime.Now });
                             }
                         }
 

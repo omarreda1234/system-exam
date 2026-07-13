@@ -1482,7 +1482,7 @@ WHERE U.Id = @UserId;";
             // Precision Query: Show EVERY attempt made, plus ONE 'Not Started' row if the LATEST assignment hasn't been started.
             var sql = @"
                 WITH ExamMeta AS (
-                    SELECT E.Id, E.Title, ET.TypeName, ISNULL(E.TotalQuestionsToShow, 0) as TotalQuestionsToShow, W.WaveName, ISNULL(E.IsFinalExam, 0) as IsFinalExam,
+                    SELECT E.Id, E.Title, ET.TypeName, ISNULL(E.TotalQuestionsToShow, 0) as TotalQuestionsToShow, W.WaveName, E.WaveId, ISNULL(E.IsFinalExam, 0) as IsFinalExam,
                     ISNULL((SELECT SUM(Q.Points) FROM ExamQuestions EQ JOIN Questions Q ON EQ.QuestionId = Q.Id WHERE EQ.ExamId = E.Id), 0) as StaticTotalPoints
                     FROM Exams E
                     LEFT JOIN ExamTypes ET ON E.ExamTypeId = ET.Id
@@ -1506,25 +1506,20 @@ WHERE U.Id = @UserId;";
                         U.Email as StudentEmail,
                         EM.Title as ExamName,
                         EM.TypeName as ExamType,
-                        CASE WHEN UA.EndTime IS NOT NULL THEN 'Completed' ELSE 'InProgress' END as Status,
-                        -- Dynamic Percentage Calculation
                         CASE 
-                            WHEN EM.IsFinalExam = 1 AND LOWER(EM.TypeName) NOT LIKE '%wave%' THEN ISNULL(UA.Score, 0)
-                            WHEN ISNULL(UA.FinalScore, 0) > 0 THEN 
-                                (ISNULL(UA.FinalScore, 0) * 100.0) / NULLIF(
-                                    CASE 
-                                        WHEN EM.TotalQuestionsToShow > 0 THEN EM.TotalQuestionsToShow
-                                        ELSE EM.StaticTotalPoints 
-                                    END, 0)
-                            ELSE ISNULL(UA.Score, 0) 
-                        END as Score,
+                            WHEN UWC.CertificateCode IS NOT NULL OR UWC.Score IS NOT NULL THEN 'Completed'
+                            WHEN U.CertificateCode IS NOT NULL OR U.CertificateScore IS NOT NULL THEN 'Completed'
+                            WHEN UA.EndTime IS NOT NULL THEN 'Completed' 
+                            ELSE 'InProgress' 
+                        END as Status,
+                        ISNULL(UWC.Score, ISNULL(U.CertificateScore, ISNULL(UA.Score, 0))) as Score,
                         ISNULL(UA.FinalScore, 0) as FinalScore,
                         CASE 
                             WHEN UA.StartTime IS NOT NULL AND UA.EndTime IS NOT NULL THEN DATEDIFF(MINUTE, UA.StartTime, UA.EndTime)
                             ELSE ISNULL(UA.DurationInMinutes, 0) 
                         END as DurationInMinutes,
                         ISNULL(UA.IsPassed, 0) as IsPassed, 
-                        UA.CertificateCode, 
+                        ISNULL(UWC.CertificateCode, ISNULL(U.CertificateCode, UA.CertificateCode)) as CertificateCode, 
                         UA.EmailSent,
                         ISNULL(UA.AttemptNumber, 0) as AttemptNumber, 
                         UA.AttemptDate as CompletionDate, 
@@ -1553,6 +1548,7 @@ WHERE U.Id = @UserId;";
                     INNER JOIN AspNetUsers U ON UA.UserId = U.Id
                     LEFT JOIN Branches B ON U.BranchId = B.Id
                     LEFT JOIN UserRoles UR ON U.Id = UR.UserId
+                    LEFT JOIN UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = EM.WaveId
                     WHERE UA.ExamId = @ExamId
  
                     UNION ALL
@@ -1564,12 +1560,16 @@ WHERE U.Id = @UserId;";
                         U.Email as StudentEmail, 
                         EM.Title as ExamName, 
                         EM.TypeName as ExamType,
-                        'Not Started' as Status, 
-                        CAST(0 AS DECIMAL(18,2)) as Score, 
+                        CASE 
+                            WHEN UWC.CertificateCode IS NOT NULL OR UWC.Score IS NOT NULL THEN 'Completed'
+                            WHEN U.CertificateCode IS NOT NULL OR U.CertificateScore IS NOT NULL THEN 'Completed'
+                            ELSE 'Not Started' 
+                        END as Status, 
+                        ISNULL(UWC.Score, ISNULL(U.CertificateScore, 0)) as Score, 
                         CAST(0 AS DECIMAL(18,2)) as FinalScore, 
                         0 as DurationInMinutes, 
                         CAST(0 AS BIT) as IsPassed, 
-                        NULL as CertificateCode, 
+                        ISNULL(UWC.CertificateCode, U.CertificateCode) as CertificateCode, 
                         CAST(0 AS BIT) as EmailSent, 
                         0 as AttemptNumber, 
                         CAST(NULL AS DATETIME) as CompletionDate, 
@@ -1598,6 +1598,7 @@ WHERE U.Id = @UserId;";
                     INNER JOIN AspNetUsers U ON EA.StudentId = U.Id
                     LEFT JOIN Branches B ON U.BranchId = B.Id
                     LEFT JOIN UserRoles UR ON U.Id = UR.UserId
+                    LEFT JOIN UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = EM.WaveId
                     WHERE EA.ExamId = @ExamId
                     AND NOT EXISTS (SELECT 1 FROM UserExamAttempts UA WHERE UA.UserId = EA.StudentId AND UA.ExamId = EA.ExamId)
                 )
