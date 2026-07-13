@@ -1501,8 +1501,13 @@ WHERE U.Id = @UserId;";
                 AllResults AS (
                     -- 1. All Attempts
                     SELECT 
-                        U.Id, ISNULL(U.FullName, U.UserName) as StudentName, U.Email as StudentEmail,
-                        EM.Title as ExamName,                         -- Dynamic Percentage Calculation
+                        U.Id, 
+                        ISNULL(U.FullName, U.UserName) as StudentName, 
+                        U.Email as StudentEmail,
+                        EM.Title as ExamName,
+                        EM.TypeName as ExamType,
+                        CASE WHEN UA.EndTime IS NOT NULL THEN 'Completed' ELSE 'InProgress' END as Status,
+                        -- Dynamic Percentage Calculation
                         CASE 
                             WHEN EM.IsFinalExam = 1 AND LOWER(EM.TypeName) NOT LIKE '%wave%' THEN ISNULL(UA.Score, 0)
                             WHEN ISNULL(UA.FinalScore, 0) > 0 THEN 
@@ -1518,8 +1523,12 @@ WHERE U.Id = @UserId;";
                             WHEN UA.StartTime IS NOT NULL AND UA.EndTime IS NOT NULL THEN DATEDIFF(MINUTE, UA.StartTime, UA.EndTime)
                             ELSE ISNULL(UA.DurationInMinutes, 0) 
                         END as DurationInMinutes,
-                        ISNULL(UA.IsPassed, 0) as IsPassed, UA.CertificateCode, UA.EmailSent,
-                        ISNULL(UA.AttemptNumber, 0) as AttemptNumber, UA.AttemptDate as CompletionDate, UA.Id as AttemptId,
+                        ISNULL(UA.IsPassed, 0) as IsPassed, 
+                        UA.CertificateCode, 
+                        UA.EmailSent,
+                        ISNULL(UA.AttemptNumber, 0) as AttemptNumber, 
+                        UA.AttemptDate as CompletionDate, 
+                        UA.Id as AttemptId,
                         CASE
                             WHEN EM.IsFinalExam = 1 AND LOWER(EM.TypeName) NOT LIKE '%wave%' THEN 
                                 CASE 
@@ -1533,8 +1542,12 @@ WHERE U.Id = @UserId;";
                                     ELSE EM.StaticTotalPoints 
                                 END
                         END as TotalScoreAvailable,
-                        UA.StartTime as ActualStartTime, UA.EndTime as ActualEndTime,
-                        U.UserCode, B.BranchName, EM.WaveName, COALESCE(UR.RoleName, 'User') as RoleName
+                        UA.StartTime as ActualStartTime, 
+                        UA.EndTime as ActualEndTime,
+                        U.UserCode, 
+                        B.BranchName, 
+                        EM.WaveName, 
+                        COALESCE(UR.RoleName, 'User') as RoleName
                     FROM UserExamAttempts UA
                     CROSS JOIN ExamMeta EM
                     INNER JOIN AspNetUsers U ON UA.UserId = U.Id
@@ -1546,9 +1559,21 @@ WHERE U.Id = @UserId;";
  
                     -- 2. Assignments without attempts
                     SELECT 
-                        U.Id, ISNULL(U.FullName, U.UserName) as StudentName, U.Email as StudentEmail, EM.Title, EM.TypeName,
-                        'Not Started' as [Status], 0, 0, 0, NULL, NULL, CAST(0 AS BIT), 0,
-                        EA.ScheduledStartTime, NULL,
+                        U.Id, 
+                        ISNULL(U.FullName, U.UserName) as StudentName, 
+                        U.Email as StudentEmail, 
+                        EM.Title as ExamName, 
+                        EM.TypeName as ExamType,
+                        'Not Started' as Status, 
+                        CAST(0 AS DECIMAL(18,2)) as Score, 
+                        CAST(0 AS DECIMAL(18,2)) as FinalScore, 
+                        0 as DurationInMinutes, 
+                        CAST(0 AS BIT) as IsPassed, 
+                        NULL as CertificateCode, 
+                        CAST(0 AS BIT) as EmailSent, 
+                        0 as AttemptNumber, 
+                        CAST(NULL AS DATETIME) as CompletionDate, 
+                        CAST(NULL AS INT) as AttemptId,
                         CASE
                             WHEN EM.IsFinalExam = 1 AND LOWER(EM.TypeName) NOT LIKE '%wave%' THEN 
                                 CASE 
@@ -1562,7 +1587,12 @@ WHERE U.Id = @UserId;";
                                     ELSE EM.StaticTotalPoints 
                                 END
                         END as TotalScoreAvailable,
-                        NULL, NULL, U.UserCode, B.BranchName, EM.WaveName, COALESCE(UR.RoleName, 'User') as RoleName
+                        CAST(NULL AS DATETIME) as ActualStartTime, 
+                        CAST(NULL AS DATETIME) as ActualEndTime, 
+                        U.UserCode, 
+                        B.BranchName, 
+                        EM.WaveName, 
+                        COALESCE(UR.RoleName, 'User') as RoleName
                     FROM ExamAssignments EA
                     CROSS JOIN ExamMeta EM
                     INNER JOIN AspNetUsers U ON EA.StudentId = U.Id

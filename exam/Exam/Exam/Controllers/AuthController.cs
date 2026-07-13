@@ -154,6 +154,7 @@ namespace Exam.Controllers
             if (token != null)
             {
                 var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+                LogDebug($"ForgotPassword: Email={dto.Email}, Generated Raw Token Length={token.Length}, Encoded Token={encodedToken}");
                 var publicIp = "41.33.149.186:8090";
                 var relativeUrl = Url.Action("ResetPassword", "Auth", new { token = encodedToken, email = dto.Email });
                 var callbackUrl = $"{Request.Scheme}://{publicIp}{relativeUrl}";
@@ -185,13 +186,19 @@ namespace Exam.Controllers
         {
             if (token == null || email == null) return RedirectToAction("Login");
             
+            LogDebug($"ResetPassword GET: Incoming token={token}, email={email}");
+            Console.WriteLine($"[ResetPassword GET] Incoming token: {token}");
             string decodedToken;
             try
             {
                 decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token));
+                LogDebug($"ResetPassword GET: Base64UrlDecode succeeded. Decoded token Length={decodedToken.Length}");
+                Console.WriteLine($"[ResetPassword GET] Base64UrlDecode succeeded. Decoded token length: {decodedToken?.Length}");
             }
-            catch
+            catch (Exception ex)
             {
+                LogDebug($"ResetPassword GET: Base64UrlDecode failed, exception={ex.Message}");
+                Console.WriteLine($"[ResetPassword GET] Base64UrlDecode failed: {ex.Message}");
                 // Fallback: replace spaces with pluses if it wasn't Base64UrlEncoded
                 decodedToken = token.Replace(" ", "+");
             }
@@ -206,6 +213,10 @@ namespace Exam.Controllers
         {
             if (!ModelState.IsValid) return View(dto);
 
+            LogDebug($"ResetPassword POST: dto.Email={dto.Email}, dto.Token Length={dto.Token?.Length}");
+            Console.WriteLine($"[ResetPassword POST] Incoming dto.Token: {dto.Token}");
+            Console.WriteLine($"[ResetPassword POST] Email: {dto.Email}");
+
             var token = dto.Token;
             if (token != null)
             {
@@ -213,6 +224,12 @@ namespace Exam.Controllers
             }
 
             var result = await _authService.ResetPasswordAsync(dto.Email, token, dto.NewPassword);
+            if (!result.Succeeded)
+            {
+                var errMsgs = string.Join(", ", result.Errors.Select(e => e.Description));
+                LogDebug($"ResetPassword POST Failed: Email={dto.Email}, Errors={errMsgs}");
+                Console.WriteLine($"[ResetPassword POST] Failed! Errors: {errMsgs}");
+            }
             if (result.Succeeded)
             {
                 // Send confirmation email with the new password
@@ -257,6 +274,16 @@ namespace Exam.Controllers
             ViewBag.Email = email;
             ViewBag.Password = password;
             return View();
+        }
+
+        private void LogDebug(string message)
+        {
+            try
+            {
+                var logPath = @"c:\exam final\exam\Exam\Exam\wwwroot\reset_log.txt";
+                System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
+            }
+            catch {}
         }
     }
 }
