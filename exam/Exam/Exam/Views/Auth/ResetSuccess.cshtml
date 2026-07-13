@@ -1,5 +1,6 @@
 @{
     ViewData["Title"] = "Password Reset Successfully";
+    ViewData["HideNavbar"] = true;
 }
 
 <div class="min-h-[70vh] flex items-center justify-center p-4">
@@ -52,12 +53,7 @@
     </div>
 </div>
 
-<style>
-    /* Hide layout header Sign In button and mobile menu toggle button */
-    header a[href*="Login"], header a[href*="login"], #mobileMenuBtn {
-        display: none !important;
-    }
-</style>
+
 
 <script>
     function copyPassword() {
