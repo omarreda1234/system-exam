@@ -1,0 +1,71 @@
+@{
+    ViewData["Title"] = "Password Reset Successfully";
+}
+
+<div class="min-h-[70vh] flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <!-- Main Card -->
+        <div class="bg-white border border-slate-200 rounded-[32px] shadow-xl shadow-slate-200/50 overflow-hidden relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 bg-emerald-500"></div>
+            
+            <div class="p-8 sm:p-10 text-center">
+                <!-- Success Icon with Pulse Animation -->
+                <div class="w-20 h-20 bg-emerald-50 dark:bg-emerald-950/30 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 dark:text-emerald-400 relative">
+                    <div class="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping opacity-75"></div>
+                    <i class="fas fa-check-circle text-4xl relative z-10"></i>
+                </div>
+
+                <h1 class="text-3xl font-black text-slate-900 tracking-tight mb-2">Thank You!</h1>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">Password Changed Successfully</p>
+
+                <!-- Info Box -->
+                <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 mb-6 text-left relative group">
+                    <div class="space-y-4">
+                        <div>
+                            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email Address / البريد الإلكتروني</span>
+                            <span class="text-slate-800 font-semibold break-all">@ViewBag.Email</span>
+                        </div>
+                        <div>
+                            <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">New Password / كلمة المرور الجديدة</span>
+                            <div class="flex items-center justify-between mt-1">
+                                <span class="text-lg font-mono font-bold text-emerald-600 tracking-wider" id="newPasswordText">@ViewBag.Password</span>
+                                <button type="button" onclick="copyPassword()" class="text-slate-400 hover:text-emerald-600 transition-colors p-1.5 rounded-lg hover:bg-emerald-50" title="Copy Password">
+                                    <i class="far fa-copy text-sm" id="copyIcon"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Screenshot Reminder Alert -->
+                <div class="bg-amber-50 border border-amber-200/60 rounded-2xl p-4 mb-8 text-amber-800 text-sm font-semibold flex items-start gap-3 text-left">
+                    <i class="fas fa-camera text-base mt-0.5 text-amber-600"></i>
+                    <div>
+                        <p class="mb-1">⚠️ Please take a screenshot of this page now to keep your password secure.</p>
+                        <p class="text-xs text-amber-700/90 font-medium">⚠️ برجاء أخذ لقطة شاشة (Screenshot) لهذه الصفحة الآن للاحتفاظ بكلمة المرور الجديدة الخاصة بك.</p>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="space-y-3">
+                    <a asp-action="Login" class="block w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-4 rounded-xl transition-all text-sm font-black uppercase tracking-widest shadow-lg shadow-slate-900/10 hover:-translate-y-0.5 text-center">
+                        Go to Login / تسجيل الدخول
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function copyPassword() {
+        const text = document.getElementById("newPasswordText").innerText;
+        navigator.clipboard.writeText(text).then(function() {
+            const icon = document.getElementById("copyIcon");
+            icon.className = "fas fa-check text-emerald-600";
+            setTimeout(function() {
+                icon.className = "far fa-copy text-slate-400";
+            }, 2000);
+        });
+    }
+</script>

@@ -196,6 +196,7 @@ namespace Exam.Controllers
                 decodedToken = token.Replace(" ", "+");
             }
 
+            ModelState.Clear();
             return View(new ResetPasswordDTO { Token = decodedToken, Email = email });
         }
 
@@ -234,12 +235,28 @@ namespace Exam.Controllers
 
                 _ = _emailSender.SendEmailAsync(dto.Email, subject, body);
 
-                TempData["SuccessMessage"] = "Your password has been reset successfully. Please login with your new password.";
-                return RedirectToAction("Login");
+                TempData["ResetEmail"] = dto.Email;
+                TempData["ResetPassword"] = dto.NewPassword;
+                return RedirectToAction("ResetSuccess");
             }
 
             foreach (var error in result.Errors) ModelState.AddModelError(string.Empty, error.Description);
             return View(dto);
+        }
+
+        [HttpGet]
+        public IActionResult ResetSuccess()
+        {
+            var email = TempData["ResetEmail"] as string;
+            var password = TempData["ResetPassword"] as string;
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+            {
+                return RedirectToAction("Login");
+            }
+
+            ViewBag.Email = email;
+            ViewBag.Password = password;
+            return View();
         }
     }
 }

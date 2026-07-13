@@ -798,37 +798,38 @@ namespace Exam.Services
                 string roleName = (string)student.RoleName ?? "";
 
                 var studentAttempts = latestAttempts.Where(a => (string)a.UserId == userId).ToList();
-                int examsCompleted = studentAttempts.Count(a => (string)a.Status == "Completed");
-                int examsAssigned  = studentAttempts.Count;
+                var targetExam = waveExams.FirstOrDefault(e => e.IsFinalExam != null && (bool)e.IsFinalExam) ?? waveExams.FirstOrDefault();
 
-                // MaxPoints rule: all wave exams (quiz or final) = TotalQuestionsToShow × 2
-                var examMaxPoints = new Dictionary<int, decimal>();
-                foreach (var exam in waveExams)
-                {
-                    int examId = (int)exam.Id;
-                    int questionsToShow = exam.TotalQuestionsToShow != null ? (int)exam.TotalQuestionsToShow : 0;
-                    examMaxPoints[examId] = questionsToShow * 2.0m;
-                }
-
-                // Compute TotalScore and TotalAvailable
-                var finalExam = waveExams.FirstOrDefault(e => e.IsFinalExam != null && (bool)e.IsFinalExam);
+                int examsCompleted = 0;
+                int examsAssigned = targetExam != null ? 1 : 0;
                 decimal totalScore = 0;
                 decimal studentTotalAvailablePoints = 0;
+                var targetAttempt = targetExam != null 
+                    ? studentAttempts.FirstOrDefault(a => (int)a.ExamId == (int)targetExam.Id)
+                    : null;
 
-                var finalExamAttempt = studentAttempts.FirstOrDefault(a => (int)a.ExamId == (finalExam != null ? (int)finalExam.Id : -1) && (string)a.Status == "Completed");
-                if (finalExamAttempt != null)
+                if (targetAttempt != null)
                 {
-                    // Student finished the final exam → use final exam score and its max
-                    totalScore = (decimal)finalExamAttempt.FinalScore;
-                    studentTotalAvailablePoints = examMaxPoints[(int)finalExam.Id];
+                    if ((string)targetAttempt.Status == "Completed")
+                    {
+                        examsCompleted = 1;
+                    }
+                    totalScore = (decimal)targetAttempt.FinalScore;
+
+                    if (attemptSeenPoints.TryGetValue((int)targetAttempt.AttemptId, out decimal sp))
+                    {
+                        studentTotalAvailablePoints = sp;
+                    }
+                    else
+                    {
+                        int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
+                        studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
+                    }
                 }
-                else
+                else if (targetExam != null)
                 {
-                    // No final yet → sum of completed quizzes
-                    var quizzes = waveExams.Where(e => e.IsFinalExam == null || !(bool)e.IsFinalExam).ToList();
-                    var completedQuizzes = studentAttempts.Where(a => (string)a.Status == "Completed" && (finalExam == null || (int)a.ExamId != (int)finalExam.Id)).ToList();
-                    totalScore = completedQuizzes.Sum(a => (decimal)a.FinalScore);
-                    studentTotalAvailablePoints = quizzes.Sum(q => examMaxPoints[(int)q.Id]);
+                    int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
+                    studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
                 }
 
                 // Certificate code from any completed attempt (latest)
@@ -844,7 +845,7 @@ namespace Exam.Services
                 double passThreshold = 70.0;
 
                 string waveStatus;
-                if (examsCompleted < totalExamsInWave)
+                if (targetAttempt == null || (string)targetAttempt.Status != "Completed")
                     waveStatus = "INCOMPLETE";
                 else if (percentage >= certThreshold)
                     waveStatus = "CERTIFIED";
@@ -863,7 +864,7 @@ namespace Exam.Services
                     RoleName          = roleName,
                     WaveName          = waveName ?? "",
                     WaveId            = waveId,
-                    TotalExamsInWave  = totalExamsInWave,
+                    TotalExamsInWave  = 1,
                     ExamsCompleted    = examsCompleted,
                     ExamsAssigned     = examsAssigned,
                     TotalScore        = totalScore,
@@ -1501,18 +1502,16 @@ WHERE U.Id = @UserId;";
                     -- 1. All Attempts
                     SELECT 
                         U.Id, ISNULL(U.FullName, U.UserName) as StudentName, U.Email as StudentEmail,
-                        EM.Title as ExamName, EM.TypeName as ExamType,
-                        ISNULL(UA.[Status], 'Not Started') as [Status],
-                        -- Dynamic Percentage Calculation
+                        EM.Title as ExamName,                         -- Dynamic Percentage Calculation
                         CASE 
-                            WHEN EM.IsFinalExam = 1 THEN ISNULL(UA.Score, 0)
+                            WHEN EM.IsFinalExam = 1 AND LOWER(EM.TypeName) NOT LIKE '%wave%' THEN ISNULL(UA.Score, 0)
                             WHEN ISNULL(UA.FinalScore, 0) > 0 THEN 
                                 (ISNULL(UA.FinalScore, 0) * 100.0) / NULLIF(
                                     CASE 
-                                        WHEN EM.TotalQuestionsToShow > 0 THEN CASE WHEN LOWER(EM.TypeName) LIKE '%wave%' THEN EM.TotalQuestionsToShow * 2 ELSE EM.TotalQuestionsToShow END
+                                        WHEN EM.TotalQuestionsToShow > 0 THEN EM.TotalQuestionsToShow
                                         ELSE EM.StaticTotalPoints 
                                     END, 0)
-                            ELSE 0 
+                            ELSE ISNULL(UA.Score, 0) 
                         END as Score,
                         ISNULL(UA.FinalScore, 0) as FinalScore,
                         CASE 
@@ -1522,7 +1521,7 @@ WHERE U.Id = @UserId;";
                         ISNULL(UA.IsPassed, 0) as IsPassed, UA.CertificateCode, UA.EmailSent,
                         ISNULL(UA.AttemptNumber, 0) as AttemptNumber, UA.AttemptDate as CompletionDate, UA.Id as AttemptId,
                         CASE
-                            WHEN EM.IsFinalExam = 1 THEN 
+                            WHEN EM.IsFinalExam = 1 AND LOWER(EM.TypeName) NOT LIKE '%wave%' THEN 
                                 CASE 
                                     WHEN UR.IsPharmacist = 1 THEN 200
                                     WHEN UR.IsAssistant = 1 THEN 100
@@ -1530,7 +1529,7 @@ WHERE U.Id = @UserId;";
                                   END
                             ELSE 
                                 CASE 
-                                    WHEN EM.TotalQuestionsToShow > 0 THEN CASE WHEN LOWER(EM.TypeName) LIKE '%wave%' THEN EM.TotalQuestionsToShow * 2 ELSE EM.TotalQuestionsToShow END
+                                    WHEN EM.TotalQuestionsToShow > 0 THEN EM.TotalQuestionsToShow
                                     ELSE EM.StaticTotalPoints 
                                 END
                         END as TotalScoreAvailable,
@@ -1542,16 +1541,16 @@ WHERE U.Id = @UserId;";
                     LEFT JOIN Branches B ON U.BranchId = B.Id
                     LEFT JOIN UserRoles UR ON U.Id = UR.UserId
                     WHERE UA.ExamId = @ExamId
-
+ 
                     UNION ALL
-
+ 
                     -- 2. Assignments without attempts
                     SELECT 
                         U.Id, ISNULL(U.FullName, U.UserName) as StudentName, U.Email as StudentEmail, EM.Title, EM.TypeName,
                         'Not Started' as [Status], 0, 0, 0, NULL, NULL, CAST(0 AS BIT), 0,
                         EA.ScheduledStartTime, NULL,
                         CASE
-                            WHEN EM.IsFinalExam = 1 THEN 
+                            WHEN EM.IsFinalExam = 1 AND LOWER(EM.TypeName) NOT LIKE '%wave%' THEN 
                                 CASE 
                                     WHEN UR.IsPharmacist = 1 THEN 200
                                     WHEN UR.IsAssistant = 1 THEN 100
@@ -1559,7 +1558,7 @@ WHERE U.Id = @UserId;";
                                 END
                             ELSE 
                                 CASE 
-                                    WHEN EM.TotalQuestionsToShow > 0 THEN CASE WHEN LOWER(EM.TypeName) LIKE '%wave%' THEN EM.TotalQuestionsToShow * 2 ELSE EM.TotalQuestionsToShow END
+                                    WHEN EM.TotalQuestionsToShow > 0 THEN EM.TotalQuestionsToShow
                                     ELSE EM.StaticTotalPoints 
                                 END
                         END as TotalScoreAvailable,
@@ -1574,13 +1573,17 @@ WHERE U.Id = @UserId;";
                 )
                 SELECT * FROM AllResults ORDER BY StudentName, AttemptNumber DESC, CompletionDate DESC";
             var results = (await conn.QueryAsync<ExamResultRowDto>(sql, new { ExamId = examId })).ToList();
-
+ 
             // Dynamic Wave Aggregate Score Override
             var exam = await conn.QueryFirstOrDefaultAsync<dynamic>(
-                "SELECT Id, Title, WaveId, IsFinalExam FROM Exams WHERE Id = @ExamId", 
+                "SELECT E.Id, E.Title, E.WaveId, E.IsFinalExam, ET.TypeName " +
+                "FROM Exams E " +
+                "LEFT JOIN ExamTypes ET ON E.ExamTypeId = ET.Id " +
+                "WHERE E.Id = @ExamId", 
                 new { ExamId = examId });
-
-            if (exam != null && (bool)exam.IsFinalExam && exam.WaveId != null && (int)exam.WaveId > 0)
+ 
+            if (exam != null && (bool)exam.IsFinalExam && exam.WaveId != null && (int)exam.WaveId > 0 && 
+                !((string)(exam.TypeName ?? "")).ToLower().Contains("wave"))
             {
                 int waveId = (int)exam.WaveId;
                 var waveExams = (await conn.QueryAsync<dynamic>(
@@ -1805,8 +1808,8 @@ WHERE U.Id = @UserId;";
                     SET @AbsolutePoints = 0;
                 END
 
-                -- IF THIS IS A FINAL EXAM, CALCULATE OVERALL WAVE SCORE DYNAMICALLY
-                IF @IsFinalExam = 1 AND @WaveId > 0
+                -- IF THIS IS A FINAL EXAM, CALCULATE OVERALL WAVE SCORE DYNAMICALLY (EXCEPT WAVE TYPE EXAMS)
+                IF @IsFinalExam = 1 AND @WaveId > 0 AND EXISTS (SELECT 1 FROM Exams e JOIN ExamTypes et ON e.ExamTypeId = et.Id WHERE e.Id = @ExamId AND LOWER(et.TypeName) NOT LIKE '%wave%')
                 BEGIN
                     DECLARE @WaveExams TABLE (
                         ExamId INT,

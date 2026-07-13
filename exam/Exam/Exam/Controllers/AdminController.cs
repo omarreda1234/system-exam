@@ -904,7 +904,7 @@ namespace Exam.Controllers
                 }
 
                 decimal maxPoints = 0;
-                if (!isFinal && seenPoints.HasValue && seenPoints.Value > 0)
+                if (seenPoints.HasValue && seenPoints.Value > 0)
                 {
                     maxPoints = seenPoints.Value;
                 }
@@ -925,7 +925,7 @@ namespace Exam.Controllers
                         foreach (var rule in matchingRules)
                         {
                             int count = (int)rule.EasyCount + (int)rule.MediumCount + (int)rule.HardCount;
-                            decimal catPoints = 2; // Default fallback for wave exams
+                            decimal catPoints = 1; // Default fallback
                             rulePoints += count * catPoints;
                         }
                         maxPoints = rulePoints;
@@ -935,7 +935,7 @@ namespace Exam.Controllers
                         int questionsToShow = exam.TotalQuestionsToShow != null ? (int)exam.TotalQuestionsToShow : 0;
                         if (questionsToShow > 0)
                         {
-                            maxPoints = typeName.ToLower().Contains("wave") ? questionsToShow * 2.0m : questionsToShow * 1.0m;
+                            maxPoints = questionsToShow * 1.0m;
                         }
                         else
                         {
@@ -945,21 +945,11 @@ namespace Exam.Controllers
 
                     if (maxPoints <= 0)
                     {
-                        maxPoints = typeName.ToLower().Contains("wave") ? 10.0m : 5.0m;
+                        maxPoints = 5.0m;
                     }
                 }
 
                 examMaxPoints[examId] = maxPoints;
-            }
-
-            // If there's a final exam, its MaxPoints should be the sum of MaxPoints of all quizzes in the wave
-            var finalExam = exams.FirstOrDefault(e => e.IsFinalExam != null && (bool)e.IsFinalExam);
-            if (finalExam != null)
-            {
-                int finalExamId = (int)finalExam.ExamId;
-                var quizzes = exams.Where(e => e.IsFinalExam == null || !(bool)e.IsFinalExam).ToList();
-                decimal quizzesMaxSum = quizzes.Sum(q => examMaxPoints[(int)q.ExamId]);
-                examMaxPoints[finalExamId] = quizzesMaxSum > 0 ? quizzesMaxSum : 112.0m;
             }
 
             // 3. Map them together
@@ -5054,6 +5044,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
                 var colUserCode = GetCol("Code", "UserCode", "User Code", "الكود", "كود", "كود الطالب");
                 var colCertificateCode = GetCol("Certificate", "CertificateCode", "Certificate Code", "الشهادة", "كود الشهادة", "رقم الشهادة");
+                var colWaveName = GetCol("Wave", "الويف", "الدورة", "المجموعة", "WaveName", "Wave Name");
 
                 if (colUserCode == null || colCertificateCode == null)
                 {
@@ -5074,6 +5065,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 {
                     var rawUserCode = worksheet.Cell(row, colUserCode.Value).Value.ToString()?.Trim();
                     var rawCertCode = worksheet.Cell(row, colCertificateCode.Value).Value.ToString()?.Trim();
+                    var rawWaveName = colWaveName != null ? worksheet.Cell(row, colWaveName.Value).Value.ToString()?.Trim() : null;
 
                     if (string.IsNullOrWhiteSpace(rawUserCode)) continue;
 
@@ -5098,6 +5090,51 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                             WHERE UserId = @UserId AND [Status] = 'Completed'";
                         
                         await conn.ExecuteAsync(updateAttemptsSql, new { CertCode = rawCertCode, UserId = user.Id });
+
+                        // 3. Handle Wave Assignment if present
+                        if (!string.IsNullOrWhiteSpace(rawWaveName))
+                        {
+                            // A. Check if the Wave exists
+                            var waveId = await conn.QueryFirstOrDefaultAsync<int?>(
+                                "SELECT Id FROM dbo.TrainingWaves WHERE WaveName = @WaveName",
+                                new { WaveName = rawWaveName });
+
+                            if (waveId == null)
+                            {
+                                // Create it!
+                                waveId = await conn.QueryFirstOrDefaultAsync<int>(@"
+                                    INSERT INTO dbo.TrainingWaves (WaveName, StartDate) 
+                                    VALUES (@WaveName, @StartDate);
+                                    SELECT CAST(SCOPE_IDENTITY() as int);",
+                                    new { WaveName = rawWaveName, StartDate = DateTime.Now });
+                            }
+
+                            if (waveId != null && waveId.Value > 0)
+                            {
+                                // B. Check if UserWaves entry exists
+                                var userWaveExists = await conn.QueryFirstOrDefaultAsync<int?>(
+                                    "SELECT WaveId FROM dbo.UserWaves WHERE UserId = @UserId AND WaveId = @WaveId",
+                                    new { UserId = user.Id, WaveId = waveId.Value });
+
+                                if (userWaveExists == null)
+                                {
+                                    // Insert association
+                                    await conn.ExecuteAsync(@"
+                                        INSERT INTO dbo.UserWaves (UserId, WaveId, JoinDate, IsActive)
+                                        VALUES (@UserId, @WaveId, @JoinDate, 1)",
+                                        new { UserId = user.Id, WaveId = waveId.Value, JoinDate = DateTime.Now });
+                                }
+                                else
+                                {
+                                    // Update IsActive just in case it was disabled
+                                    await conn.ExecuteAsync(@"
+                                        UPDATE dbo.UserWaves 
+                                        SET IsActive = 1 
+                                        WHERE UserId = @UserId AND WaveId = @WaveId",
+                                        new { UserId = user.Id, WaveId = waveId.Value });
+                                }
+                            }
+                        }
 
                         updatedCount++;
                     }

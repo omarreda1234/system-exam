@@ -241,7 +241,51 @@
         }
 
         function triggerExcelUpload() {
-            $('#certExcelInput').click();
+            Swal.fire({
+                title: '<div class="flex flex-col items-center gap-2 pt-4 px-6"><i class="fas fa-file-excel text-emerald-500 text-3xl mb-2"></i><span class="text-xl font-black uppercase tracking-widest text-slate-800">Excel Import Guide</span></div>',
+                html: `
+                    <div class="text-left px-6 py-4 space-y-4">
+                        <p class="text-sm text-slate-600 dark:text-slate-400 font-medium">To import certificates successfully, your Excel sheet must contain the following columns (headers):</p>
+                        <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+                            <div class="flex items-start gap-3">
+                                <span class="bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider mt-0.5">Required</span>
+                                <div>
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200">User Code (كود المستخدم)</p>
+                                    <p class="text-[10px] text-slate-400">Accepted headers: Code, UserCode, User Code, الكود, كود, كود الطالب</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3 border-t border-slate-200 dark:border-slate-800 pt-3">
+                                <span class="bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider mt-0.5">Required</span>
+                                <div>
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200">Certificate Code (كود الشهادة)</p>
+                                    <p class="text-[10px] text-slate-400">Accepted headers: Certificate, CertificateCode, Certificate Code, الشهادة, كود الشهادة, رقم الشهادة</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3 border-t border-slate-200 dark:border-slate-800 pt-3">
+                                <span class="bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider mt-0.5">Optional</span>
+                                <div>
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200">Wave Name (اسم الويف)</p>
+                                    <p class="text-[10px] text-slate-400">Accepted headers: Wave, الويف, الدورة, المجموعة, WaveName, Wave Name. If a wave doesn't exist, it will be automatically created and the student assigned to it.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Select Excel File <i class="fas fa-upload ml-2"></i>',
+                cancelButtonText: 'Cancel',
+                width: '600px',
+                customClass: {
+                    popup: 'rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900',
+                    confirmButton: 'bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 px-10 rounded-2xl transition-all shadow-xl shadow-emerald-600/10 text-xs uppercase tracking-widest',
+                    cancelButton: 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-400 font-bold py-4 px-10 rounded-2xl transition-all text-xs uppercase'
+                },
+                buttonsStyling: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $('#certExcelInput').click();
+                }
+            });
         }
 
         function uploadCertExcel(event) {

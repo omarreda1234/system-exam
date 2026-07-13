@@ -7,10 +7,11 @@
 
     // Summary stats
     var total      = Model.Count();
-    var certified  = Model.Count(s => s.WaveStatus == "CERTIFIED");
-    var passed     = Model.Count(s => s.WaveStatus == "PASS");
-    var failed     = Model.Count(s => s.WaveStatus == "FAILED");
+    var completed  = Model.Count(s => s.WaveStatus != "INCOMPLETE");
     var incomplete = Model.Count(s => s.WaveStatus == "INCOMPLETE");
+    
+    var completedList = Model.Where(s => s.WaveStatus != "INCOMPLETE").ToList();
+    var avgPct = completedList.Any() ? completedList.Average(s => s.TotalAvailable > 0 ? (double)(s.TotalScore / s.TotalAvailable) * 100 : 0) : 0.0;
 }
 
 <!-- Header / Filter Row -->
@@ -21,7 +22,7 @@
             <div class="flex items-center gap-3">
                 <p class="text-xl font-bold">Wave Performance Tracker</p>
                 <span class="bg-violet-100 text-violet-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-violet-200">
-                    Aggregate Mode — All 12 Exams
+                    Final Exam Mode
                 </span>
             </div>
         </div>
@@ -79,19 +80,19 @@
         <span class="text-3xl font-black text-slate-900 dark:text-white">@total</span>
     </div>
     <div class="bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
-        <span class="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Certified</span>
-        <span class="text-3xl font-black text-emerald-700">@certified</span>
-        <span class="text-[9px] font-bold text-emerald-500">≥ 75% total score</span>
+        <span class="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Completed</span>
+        <span class="text-3xl font-black text-emerald-700">@completed</span>
+        <span class="text-[9px] font-bold text-emerald-500">Submitted attempts</span>
     </div>
-    <div class="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
-        <span class="text-[10px] font-black text-blue-600 uppercase tracking-widest">Pass (No Cert)</span>
-        <span class="text-3xl font-black text-blue-700">@passed</span>
-        <span class="text-[9px] font-bold text-blue-500">70% – 74.9%</span>
+    <div class="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
+        <span class="text-[10px] font-black text-amber-600 uppercase tracking-widest">Incomplete</span>
+        <span class="text-3xl font-black text-amber-700">@incomplete</span>
+        <span class="text-[9px] font-bold text-amber-500">Pending attempts</span>
     </div>
-    <div class="bg-rose-50 dark:bg-rose-950 border border-rose-200 dark:border-rose-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
-        <span class="text-[10px] font-black text-rose-600 uppercase tracking-widest">Failed / Incomplete</span>
-        <span class="text-3xl font-black text-rose-700">@(failed + incomplete)</span>
-        <span class="text-[9px] font-bold text-rose-400">@incomplete incomplete · @failed failed</span>
+    <div class="bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
+        <span class="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Avg. Percentage</span>
+        <span class="text-3xl font-black text-indigo-700">@avgPct.ToString("0.0")%</span>
+        <span class="text-[9px] font-bold text-indigo-500">Average score percentage</span>
     </div>
 </div>
 
@@ -104,11 +105,8 @@
                     <th class="min-w-[240px]">Personnel</th>
                     <th>Branch</th>
                     <th>Role</th>
-                    <th>Exams Done</th>
                     <th>Score</th>
                     <th>Percentage</th>
-                    <th>Wave Status</th>
-                    <th>Cert Code</th>
                     <th class="text-right px-8">Actions</th>
                 </tr>
             </thead>
@@ -116,7 +114,7 @@
                 @if (!Model.Any())
                 {
                     <tr>
-                        <td colspan="8" class="text-center py-12 text-slate-400">
+                        <td colspan="5" class="text-center py-12 text-slate-400">
                             <div class="flex flex-col items-center justify-center gap-3">
                                 <div class="w-16 h-16 bg-slate-50 dark:bg-slate-900 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-600 shadow-inner">
                                     <i class="fas fa-inbox text-2xl"></i>
@@ -159,17 +157,6 @@
                             }
                         </td>
                         <td>
-                            <div class="flex flex-col items-center">
-                                <span class="text-sm font-black @(s.IsFullyCompleted ? "text-emerald-600" : "text-amber-500")">
-                                    @s.ExamsCompleted / @s.TotalExamsInWave
-                                </span>
-                                @if (!s.IsFullyCompleted)
-                                {
-                                    <span class="text-[9px] text-amber-400 font-bold">@(s.TotalExamsInWave - s.ExamsCompleted) pending</span>
-                                }
-                            </div>
-                        </td>
-                        <td>
                             <div class="flex flex-col">
                                 <span class="text-brand-600 dark:text-brand-400 text-sm font-bold font-mono">
                                     @s.TotalScore.ToString("0") / @s.TotalAvailable.ToString("0")
@@ -183,37 +170,7 @@
                             }
                             <span class="font-black text-sm @pctColor">@pct.ToString("0.0")%</span>
                         </td>
-                        <td>
-                            @switch (s.WaveStatus)
-                            {
-                                case "CERTIFIED":
-                                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center gap-1 w-fit">
-                                        <i class="fas fa-certificate"></i> CERTIFIED
-                                    </span>
-                                    break;
-                                case "PASS":
-                                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-blue-50 text-blue-600 border border-blue-200 w-fit">PASS (NO CERT)</span>
-                                    break;
-                                case "FAILED":
-                                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-rose-50 text-rose-600 border border-rose-200 w-fit">FAILED</span>
-                                    break;
-                                default:
-                                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200 w-fit">
-                                        <i class="fas fa-clock mr-1"></i> INCOMPLETE
-                                    </span>
-                                    break;
-                            }
-                        </td>
-                        <td>
-                            @if (!string.IsNullOrEmpty(s.CertificateCode))
-                            {
-                                <span class="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-lg">@s.CertificateCode</span>
-                            }
-                            else
-                            {
-                                <span class="text-slate-300 text-xs">--</span>
-                            }
-                        </td>
+
                         <td class="text-right px-8">
                             <button type="button" 
                                     class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 dark:bg-slate-800 rounded-xl view-wave-details" 
