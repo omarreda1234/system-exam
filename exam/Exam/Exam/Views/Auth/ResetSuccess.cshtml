@@ -46,16 +46,18 @@
                     </div>
                 </div>
 
-                <!-- Actions -->
-                <div class="space-y-3">
-                    <a asp-action="Login" class="block w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-4 rounded-xl transition-all text-sm font-black uppercase tracking-widest shadow-lg shadow-slate-900/10 hover:-translate-y-0.5 text-center">
-                        Go to Login / تسجيل الدخول
-                    </a>
-                </div>
+                <!-- Actions Removed as requested -->
             </div>
         </div>
     </div>
 </div>
+
+<style>
+    /* Hide layout header Sign In button and mobile menu toggle button */
+    header a[href*="Login"], header a[href*="login"], #mobileMenuBtn {
+        display: none !important;
+    }
+</style>
 
 <script>
     function copyPassword() {
