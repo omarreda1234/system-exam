@@ -35,7 +35,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.User.AllowedUserNameCharacters = null;
      
 
-    options.User.RequireUniqueEmail = true;
+    options.User.RequireUniqueEmail = false;
 
     // إعدادات القفل (Lockout)
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);

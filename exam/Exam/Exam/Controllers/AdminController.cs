@@ -204,16 +204,6 @@ namespace Exam.Controllers
                 return Json(new { success = false, message = "هذا الكود مسجل مسبقاً لمستخدم آخر." });
             }
 
-            // Check if email already exists in AspNetUsers
-            var existingUserByEmail = await conn.QueryFirstOrDefaultAsync<dynamic>(
-                "SELECT Email, UserCode FROM AspNetUsers WHERE Email = @Email", 
-                new { Email = req.Email });
-
-            if (existingUserByEmail != null)
-            {
-                return Json(new { success = false, message = "هذا الإيميل مسجل مسبقاً لمستخدم آخر." });
-            }
-
             // 1. Prepare RegisterDTO
             int? shiftId = null;
             if (int.TryParse(req.Shift, out int parsedShiftId) && parsedShiftId > 0)
