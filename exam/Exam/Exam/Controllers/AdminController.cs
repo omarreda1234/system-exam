@@ -2223,31 +2223,41 @@ namespace Exam.Controllers
                         "SELECT Id, UserName, Email FROM AspNetUsers WHERE Id IN @Ids", new { Ids = distinctStudentIds }))
                         .ToList();
 
-                    _ = Task.Run(async () =>
+                    bool isWeeklyExam = false;
+                    if (exam != null)
                     {
-                        foreach (var user in users)
-                        {
-                            if (string.IsNullOrEmpty(user.Email)) continue;
+                        string examType = exam.ExamType ?? "";
+                        isWeeklyExam = examType.ToLower().Contains("weekly") || !examType.ToLower().Contains("wave") || !exam.WaveId.HasValue;
+                    }
 
-                            var subject = $"🚨 Re-Assignment: {exam.Title}";
-                            var body = $@"
-                                <div style='font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;'>
-                                    <h2 style='color: #4f46e5;'>Exam Re-Assignment</h2>
-                                    <p>Hello <b>{user.UserName}</b>,</p>
-                                    <p>You have been reassigned the exam: <b style='color: #ef4444;'>{exam.Title}</b>.</p>
-                                    <div style='background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;'>
-                                        <p style='margin: 0;'><b>New Window:</b></p>
-                                        <p style='margin: 5px 0;'>Starts: {request.StartTime:yyyy-MM-dd HH:mm}</p>
-                                        <p style='margin: 5px 0;'>Ends: {request.EndTime:yyyy-MM-dd HH:mm}</p>
-                                    </div>
-                                    <p>Please login to the portal to complete your assessment.</p>
-                                    <a href='{siteLink}' style='display: inline-block; background: #4f46e5; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;'>Login to Portal</a>
-                                    <p style='margin-top: 30px; font-size: 12px; color: #64748b;'>Eltarshoubi Academy - Online Examination System</p>
-                                </div>";
-                            
-                            await _emailSender.SendEmailAsync(user.Email, subject, body);
-                        }
-                    });
+                    if (!isWeeklyExam)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            foreach (var user in users)
+                            {
+                                if (string.IsNullOrEmpty(user.Email)) continue;
+
+                                var subject = $"🚨 Re-Assignment: {exam.Title}";
+                                var body = $@"
+                                    <div style='font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;'>
+                                        <h2 style='color: #4f46e5;'>Exam Re-Assignment</h2>
+                                        <p>Hello <b>{user.UserName}</b>,</p>
+                                        <p>You have been reassigned the exam: <b style='color: #ef4444;'>{exam.Title}</b>.</p>
+                                        <div style='background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;'>
+                                            <p style='margin: 0;'><b>New Window:</b></p>
+                                            <p style='margin: 5px 0;'>Starts: {request.StartTime:yyyy-MM-dd HH:mm}</p>
+                                            <p style='margin: 5px 0;'>Ends: {request.EndTime:yyyy-MM-dd HH:mm}</p>
+                                        </div>
+                                        <p>Please login to the portal to complete your assessment.</p>
+                                        <a href='{siteLink}' style='display: inline-block; background: #4f46e5; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;'>Login to Portal</a>
+                                        <p style='margin-top: 30px; font-size: 12px; color: #64748b;'>Eltarshoubi Academy - Online Examination System</p>
+                                    </div>";
+                                
+                                await _emailSender.SendEmailAsync(user.Email, subject, body);
+                            }
+                        });
+                    }
                 }
                 return Ok(new { success = true, count = distinctStudentIds.Count });
             }

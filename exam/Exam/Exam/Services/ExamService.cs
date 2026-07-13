@@ -2515,6 +2515,26 @@ WHERE U.Id = @UserId;";
         public async Task SendExamAssignmentEmailAsync(string userId, int examId, string siteUrl = "")
         {
             using var conn = new SqlConnection(_connectionString);
+            
+            // Check if this is a weekly or wave exam
+            var examDetails = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                @"SELECT ET.TypeName as ExamType, E.WaveId 
+                  FROM Exams E 
+                  LEFT JOIN ExamTypes ET ON E.ExamTypeId = ET.Id 
+                  WHERE E.Id = @Id", new { Id = examId });
+
+            if (examDetails != null)
+            {
+                string examType = examDetails.ExamType ?? "";
+                int? waveId = examDetails.WaveId;
+
+                // Skip sending email for weekly exams (any exam type that contains 'weekly', does not contain 'wave', or doesn't have a WaveId)
+                if (examType.ToLower().Contains("weekly") || !examType.ToLower().Contains("wave") || !waveId.HasValue)
+                {
+                    return; // Do not send email for weekly exams
+                }
+            }
+
             var exam = await conn.QueryFirstOrDefaultAsync<adminExamDto>(
                 "SELECT Title, StartTime, EndTime FROM Exams WHERE Id = @Id", new { Id = examId });
             var user = await conn.QueryFirstOrDefaultAsync<UserDto>(
