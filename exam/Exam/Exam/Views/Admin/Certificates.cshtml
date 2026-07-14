@@ -168,10 +168,7 @@
                         </td>
 
                         <td class="font-mono font-bold text-slate-700 dark:text-slate-300">
-                            <div class="flex flex-col">
-                                <span class="text-brand-600 dark:text-brand-400 text-sm">@(s.FinalScore > 0 ? $"{s.FinalScore.ToString("0")} / {s.TotalScoreAvailable.ToString("0")}" : "--")</span>
-                                <span class="text-[9px] text-slate-400 uppercase tracking-widest">@s.Score.ToString("0.0")% Achievement</span>
-                            </div>
+                            <span class="text-brand-600 dark:text-brand-400 text-sm">@(s.Score > 0 ? $"{s.Score.ToString("0.0")}%" : "--")</span>
                         </td>
                         <td>
                              <span class="text-[10px] font-bold text-slate-500 uppercase">@s.UserCode</span>
