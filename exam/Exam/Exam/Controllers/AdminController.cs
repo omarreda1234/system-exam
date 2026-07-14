@@ -62,6 +62,7 @@ namespace Exam.Controllers
                 {
                     "Index",
                     "AllUsers", 
+                    "GetUsersPaged",
                     "PendingRequests", 
                     "ApproveRequest", 
                     "RejectRequest", 
@@ -71,6 +72,9 @@ namespace Exam.Controllers
                     "SendCustomEmail", 
                     "ResetUserPassword", 
                     "GetUsersWithoutCertificate", 
+                    "Certificates",
+                    "UploadCertificatesOnlyExcel",
+                    "SendCertificates",
                     "AddUser", 
                     "UpdateUserShift",
                     "GetWaves",
@@ -105,7 +109,8 @@ namespace Exam.Controllers
                     "ReassignExamToStudents",
                     "AssignExamToStudents",
                     "GetEligibleUsersForExam",
-                    "ResendAssignmentEmail"
+                    "ResendAssignmentEmail",
+                    "MoveUserToWave"
                 };
                 
                 var actionName = context.RouteData.Values["action"]?.ToString();
@@ -1340,28 +1345,86 @@ namespace Exam.Controllers
                             results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
                     }
                     
-                    // Filter who is eligible for certificate based on the new rules:
-                    // Pharmacists: aggregate score >= 150
-                    // Assistants/Others: aggregate score >= 75
-                    var passedResults = results.Where(r => {
-                        if (r.Status != "Completed") return false;
-                        
-                        if (!string.IsNullOrEmpty(r.CertificateCode) || r.Score > 0) return true;
-                        
-                        bool isPharmacist = r.RoleName != null && (r.RoleName.ToLower().Contains("pharmacist") || r.RoleName.Contains("صيدل"));
-                        if (isPharmacist)
-                        {
-                            return r.FinalScore >= 150;
-                        }
-                        else
-                        {
-                            return r.FinalScore >= 75;
-                        }
-                    }).ToList();
-                    
                     ViewBag.ExamTitle = exam.Title;
-                    return View(passedResults);
+                    return View(results.ToList());
                 }
+            }
+
+            if (selectedWaveId > 0)
+            {
+                // Fallback: Query all users registered in this Wave or having certificates
+                var fallbackSql = @"
+                    WITH UserRoles AS (
+                        SELECT UR.UserId,
+                               MAX(CASE WHEN LOWER(R.Name) = 'pharmacist' OR R.Name LIKE N'%صيدل%' THEN 1 ELSE 0 END) as IsPharmacist,
+                               MAX(CASE WHEN LOWER(R.Name) = 'assistant' OR R.Name LIKE N'%مساعد%' THEN 1 ELSE 0 END) as IsAssistant,
+                               MAX(R.Name) as RoleName
+                        FROM AspNetUserRoles UR
+                        JOIN AspNetRoles R ON UR.RoleId = R.Id
+                        GROUP BY UR.UserId
+                    ),
+                    WaveUsers AS (
+                        SELECT UserId FROM dbo.UserWaves WHERE WaveId = @WaveId AND IsActive = 1
+                        UNION
+                        SELECT UserId FROM dbo.UserWaveCertificates WHERE WaveId = @WaveId
+                    )
+                    SELECT 
+                        U.Id, 
+                        ISNULL(U.FullName, U.UserName) as StudentName, 
+                        U.Email as StudentEmail, 
+                        N'No Exam' as ExamName, 
+                        N'N/A' as ExamType,
+                        CASE 
+                            WHEN UWC.CertificateCode IS NOT NULL OR UWC.Score IS NOT NULL THEN 'Completed'
+                            WHEN U.CertificateCode IS NOT NULL OR U.CertificateScore IS NOT NULL THEN 'Completed'
+                            ELSE 'Not Started' 
+                        END as Status, 
+                        ISNULL(UWC.Score, ISNULL(U.CertificateScore, 0)) as Score, 
+                        CAST(0 AS DECIMAL(18,2)) as FinalScore, 
+                        0 as DurationInMinutes, 
+                        CAST(1 AS BIT) as IsPassed, 
+                        ISNULL(UWC.CertificateCode, U.CertificateCode) as CertificateCode, 
+                        CAST(0 AS BIT) as EmailSent, 
+                        0 as AttemptNumber, 
+                        CAST(NULL AS DATETIME) as CompletionDate, 
+                        CAST(NULL AS INT) as AttemptId,
+                        100 as TotalScoreAvailable,
+                        CAST(NULL AS DATETIME) as ActualStartTime, 
+                        CAST(NULL AS DATETIME) as ActualEndTime, 
+                        U.UserCode, 
+                        B.BranchName, 
+                        W.WaveName, 
+                        COALESCE(UR.RoleName, 'User') as RoleName
+                    FROM WaveUsers WU
+                    INNER JOIN AspNetUsers U ON WU.UserId = U.Id
+                    INNER JOIN TrainingWaves W ON W.Id = @WaveId
+                    LEFT JOIN Branches B ON U.BranchId = B.Id
+                    LEFT JOIN UserRoles UR ON U.Id = UR.UserId
+                    LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = @WaveId";
+
+                var results = await conn.QueryAsync<Exam.DTOs.ExamResultRowDto>(fallbackSql, new { WaveId = selectedWaveId });
+                
+                if (User.IsInRole("Branch Manager"))
+                {
+                    var currentUser = await _userManager.GetUserAsync(User);
+                    if (currentUser != null && currentUser.BranchId.HasValue)
+                    {
+                        var branchName = await conn.QueryFirstOrDefaultAsync<string>(
+                            "SELECT BranchName FROM Branches WHERE Id = @Id", 
+                            new { Id = currentUser.BranchId.Value });
+                            
+                        if (!string.IsNullOrEmpty(branchName))
+                            results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
+                        else
+                            results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
+                    }
+                    else
+                        results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
+                }
+
+                var wave = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT WaveName FROM TrainingWaves WHERE Id = @Id", new { Id = selectedWaveId });
+                ViewBag.ExamTitle = wave?.WaveName ?? "No Exam";
+                return View(results.ToList());
             }
 
             return View(Enumerable.Empty<Exam.DTOs.ExamResultRowDto>());
@@ -5071,12 +5134,16 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 var colCertificateCode = GetCol("Certificate", "CertificateCode", "Certificate Code", "الشهادة", "كود الشهادة", "رقم الشهادة");
                 var colScore = GetCol("Score", "الدرجة", "النسبة", "النسبه", "النسبة المئوية", "الدرجة المئوية", "درجة", "نسبة", "نسبه", "Score %", "Percentage");
                 var colWaveName = GetCol("Wave", "الويف", "الدورة", "المجموعة", "WaveName", "Wave Name");
+                var colStudentName = GetCol("Name", "FullName", "StudentName", "Student Name", "الاسم", "اسم الطالب", "الاسم بالكامل", "الاسم ثلاثي");
+                var colEmail = GetCol("Email", "Mail", "الايميل", "البريد الالكتروني", "البريد الإلكتروني", "الميل");
+                var colBranchName = GetCol("Branch", "BranchName", "الفرع", "فرع", "الفرع/المنطقة");
+                var colRole = GetCol("Role", "RoleName", "الدور", "الوظيفة", "الوظيفه");
 
-                if (colUserCode == null || colCertificateCode == null)
+                if (colUserCode == null)
                 {
                     return Json(new { 
                         success = false, 
-                        message = "الملف المرفوع يجب أن يحتوي على عمودين على الأقل: كود المستخدم (UserCode) وكود الشهادة (CertificateCode)." 
+                        message = "الملف المرفوع يجب أن يحتوي على عمود كود المستخدم (UserCode) على الأقل." 
                     });
                 }
 
@@ -5090,37 +5157,166 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 for (int row = headerRow + 1; row <= lastRow; row++)
                 {
                     var rawUserCode = worksheet.Cell(row, colUserCode.Value).Value.ToString()?.Trim();
-                    var rawCertCode = worksheet.Cell(row, colCertificateCode.Value).Value.ToString()?.Trim();
+                    var rawCertCode = colCertificateCode != null ? worksheet.Cell(row, colCertificateCode.Value).Value.ToString()?.Trim() : null;
                     var rawWaveName = colWaveName != null ? worksheet.Cell(row, colWaveName.Value).Value.ToString()?.Trim() : null;
                     var rawScore = colScore != null ? worksheet.Cell(row, colScore.Value).Value.ToString()?.Trim() : null;
+                    var rawStudentName = colStudentName != null ? worksheet.Cell(row, colStudentName.Value).Value.ToString()?.Trim() : null;
+                    var rawEmail = colEmail != null ? worksheet.Cell(row, colEmail.Value).Value.ToString()?.Trim() : null;
+                    var rawBranchName = colBranchName != null ? worksheet.Cell(row, colBranchName.Value).Value.ToString()?.Trim() : null;
+                    var rawRole = colRole != null ? worksheet.Cell(row, colRole.Value).Value.ToString()?.Trim() : null;
 
-                    if (string.IsNullOrWhiteSpace(rawUserCode)) continue;
+                    if (string.IsNullOrWhiteSpace(rawUserCode) && string.IsNullOrWhiteSpace(rawEmail)) continue;
 
                     // Normalizing double/scientific notation for codes (like 10243.0 or 1.23E+4)
-                    if (double.TryParse(rawUserCode, out var codeDouble))
+                    if (!string.IsNullOrWhiteSpace(rawUserCode) && double.TryParse(rawUserCode, out var codeDouble))
                     {
                         rawUserCode = ((long)codeDouble).ToString();
                     }
 
-                    // 1. Find user by UserCode in AspNetUsers
-                    var user = _userManager.Users.FirstOrDefault(x => x.UserCode == rawUserCode);
-                    if (user != null)
+                    decimal? parsedScore = null;
+                    if (!string.IsNullOrWhiteSpace(rawScore))
                     {
-                        decimal? parsedScore = null;
-                        if (!string.IsNullOrWhiteSpace(rawScore))
+                        var cleanScoreStr = rawScore.Replace("%", "").Trim();
+                        if (decimal.TryParse(cleanScoreStr, out var sVal))
                         {
-                            var cleanScoreStr = rawScore.Replace("%", "").Trim();
-                            if (decimal.TryParse(cleanScoreStr, out var sVal))
+                            parsedScore = sVal;
+                        }
+                    }
+
+                    // 1. Find user by UserCode or Email in AspNetUsers
+                    ApplicationUser user = null;
+                    if (!string.IsNullOrWhiteSpace(rawUserCode))
+                    {
+                        user = await _userManager.Users.FirstOrDefaultAsync(x => x.UserCode == rawUserCode);
+                    }
+                    if (user == null && !string.IsNullOrWhiteSpace(rawEmail))
+                    {
+                        user = await _userManager.FindByEmailAsync(rawEmail);
+                    }
+
+                    if (user == null)
+                    {
+                        // User not found, create new user!
+                        if (string.IsNullOrWhiteSpace(rawEmail))
+                        {
+                            rawEmail = $"{rawUserCode}@eltarshouby.com";
+                        }
+                        
+                        var displayName = rawStudentName;
+                        if (string.IsNullOrWhiteSpace(displayName))
+                        {
+                            displayName = $"Trainee {rawUserCode}";
+                        }
+
+                        // Resolve Branch
+                        int? resolvedBranchId = null;
+                        if (!string.IsNullOrWhiteSpace(rawBranchName))
+                        {
+                            var dbBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
+                                "SELECT Id FROM dbo.Branches WHERE BranchName = @BranchName",
+                                new { BranchName = rawBranchName });
+
+                            if (dbBranchId == null)
                             {
-                                parsedScore = sVal;
+                                dbBranchId = await conn.QueryFirstOrDefaultAsync<int>(@"
+                                    INSERT INTO dbo.Branches (BranchName, BranchCode, IsActive)
+                                    VALUES (@BranchName, @BranchName, 1);
+                                    SELECT CAST(SCOPE_IDENTITY() as int);",
+                                    new { BranchName = rawBranchName });
+                            }
+                            resolvedBranchId = dbBranchId;
+                        }
+
+                        var newUser = new ApplicationUser
+                        {
+                            UserName = rawEmail,
+                            Email = rawEmail,
+                            FullName = displayName,
+                            UserCode = rawUserCode,
+                            BranchId = resolvedBranchId,
+                            IsActive = true,
+                            CertificateCode = rawCertCode,
+                            CertificateScore = parsedScore
+                        };
+
+                        var createResult = await _userManager.CreateAsync(newUser, "Test@123");
+                        if (createResult.Succeeded)
+                        {
+                            string resolvedRole = "Pharmacist"; // default fallback
+                            if (!string.IsNullOrWhiteSpace(rawRole))
+                            {
+                                var lowerRole = rawRole.ToLower();
+                                if (lowerRole.Contains("pharmacist") || lowerRole.Contains("صيدل") || lowerRole.Contains("doctor"))
+                                {
+                                    resolvedRole = "Pharmacist";
+                                }
+                                else if (lowerRole.Contains("assistant") || lowerRole.Contains("مساعد"))
+                                {
+                                    resolvedRole = "Assistant";
+                                }
+                                else if (lowerRole.Contains("admin"))
+                                {
+                                    resolvedRole = "Admin";
+                                }
+                                else if (lowerRole.Contains("hr"))
+                                {
+                                    resolvedRole = "HR";
+                                }
+                            }
+                            await _userManager.AddToRoleAsync(newUser, resolvedRole);
+                            user = newUser;
+                        }
+                        else
+                        {
+                            // If creation failed, log error and skip
+                            var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
+                            skippedCodes.Add($"{rawUserCode} (فشل الإنشاء: {errors})");
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        // User exists, update details if provided in Excel
+                        bool needsUpdate = false;
+                        if (!string.IsNullOrWhiteSpace(rawStudentName) && user.FullName != rawStudentName)
+                        {
+                            user.FullName = rawStudentName;
+                            needsUpdate = true;
+                        }
+                        if (!string.IsNullOrWhiteSpace(rawBranchName))
+                        {
+                            var dbBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
+                                "SELECT Id FROM dbo.Branches WHERE BranchName = @BranchName",
+                                new { BranchName = rawBranchName });
+
+                            if (dbBranchId == null)
+                            {
+                                dbBranchId = await conn.QueryFirstOrDefaultAsync<int>(@"
+                                    INSERT INTO dbo.Branches (BranchName, BranchCode, IsActive)
+                                    VALUES (@BranchName, @BranchName, 1);
+                                    SELECT CAST(SCOPE_IDENTITY() as int);",
+                                    new { BranchName = rawBranchName });
+                            }
+                            if (user.BranchId != dbBranchId)
+                            {
+                                user.BranchId = dbBranchId;
+                                needsUpdate = true;
                             }
                         }
 
-                        // Update AspNetUsers CertificateCode as a general field (optional/fallback)
+                        // Always update certificate info
                         user.CertificateCode = rawCertCode;
                         user.CertificateScore = parsedScore;
-                        await _userManager.UpdateAsync(user);
+                        needsUpdate = true;
 
+                        if (needsUpdate)
+                        {
+                            await _userManager.UpdateAsync(user);
+                        }
+                    }
+
+                    if (user != null)
+                    {
                         // 2. Resolve target WaveId
                         int resolvedWaveId = 0;
                         if (!string.IsNullOrWhiteSpace(rawWaveName))
@@ -5207,16 +5403,12 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
                         updatedCount++;
                     }
-                    else
-                    {
-                        skippedCodes.Add(rawUserCode);
-                    }
                 }
 
-                var msg = $"تم تحديث كود الشهادة بنجاح لعدد {updatedCount} مستخدم.";
+                var msg = $"تم معالجة وتحديث البيانات بنجاح لعدد {updatedCount} مستخدم.";
                 if (skippedCodes.Any())
                 {
-                    msg += $" تم تخطي الكودات التالية لعدم وجودها بالنظام: {string.Join(", ", skippedCodes.Take(10))}";
+                    msg += $" تم مواجهة مشكلات/تخطي لبعض الأكواد: {string.Join(", ", skippedCodes.Take(10))}";
                     if (skippedCodes.Count > 10) msg += $" (وآخرين...)";
                 }
 
@@ -5225,6 +5417,38 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             catch (Exception ex)
             {
                 return Json(new { success = false, message = "حدث خطأ أثناء قراءة الملف: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> MoveUserToWave(string userId, int oldWaveId, int newWaveId)
+        {
+            if (string.IsNullOrEmpty(userId) || oldWaveId <= 0 || newWaveId <= 0)
+            {
+                return Json(new { success = false, message = "بيانات غير صالحة." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                // 1. Deactivate old wave assignment
+                await conn.ExecuteAsync(@"
+                    UPDATE dbo.UserWaves 
+                    SET IsActive = 0, IsDeactivated = 1 
+                    WHERE UserId = @UserId AND WaveId = @OldWaveId",
+                    new { UserId = userId, OldWaveId = oldWaveId });
+
+                // 2. Assign to new wave
+                var siteLink = "http://41.33.149.186:5208";
+                await _examService.AssignUsersToWaveAsync(newWaveId, new List<string> { userId }, siteLink);
+
+                return Json(new { success = true, message = "تم تحويل المستخدم للويف الجديدة بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ أثناء التحويل: " + ex.Message });
             }
         }
 

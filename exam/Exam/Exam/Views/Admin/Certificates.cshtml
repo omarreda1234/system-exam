@@ -67,6 +67,17 @@
                 </select>
             </div>
 
+            <div class="space-y-2">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Status Filter (تصفية بالحالة)</label>
+                <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold min-w-[170px]">
+                    <option value="all">All Statuses (الكل)</option>
+                    <option value="certified">Certified (ناجح بشهادة)</option>
+                    <option value="nocert">Passed No Cert (ناجح بدون شهادة)</option>
+                    <option value="failed">Failed (ساقط)</option>
+                    <option value="notattempted">Not Attempted (لم يمتحن)</option>
+                </select>
+            </div>
+
             <div class="flex items-center gap-2 mt-auto">
                 <button onclick="sendSelectedCerts(@selectedExamId)" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-lg flex items-center gap-2">
                     <i class="fas fa-certificate"></i> Send Selected Certs
@@ -90,9 +101,6 @@
                     <th>Wave</th>
                     <th>Branch</th>
                     <th>Status</th>
-                    <th>Start Time</th>
-                    <th>Finish Time</th>
-                    <th>Time (M)</th>
                     <th>Score</th>
                     <th>User Code</th>
                     <th>Certificate Code</th>
@@ -101,16 +109,45 @@
             </thead>
             <tbody>
                 @foreach (var s in Model) {
-                    var statusClass = s.Status.StartsWith("Completed") ? "bg-emerald-500" : "bg-slate-400";
-                    <tr class="student-row">
+                    bool hasCertCode = !string.IsNullOrEmpty(s.CertificateCode) && s.CertificateCode.Trim() != "/";
+                    string certStatus = "notattempted";
+                    string certStatusText = "لم يمتحن";
+                    string statusBadgeClass = "bg-amber-500 text-amber-700 bg-opacity-10 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800";
+                    
+                    if (hasCertCode)
+                    {
+                        certStatus = "certified";
+                        certStatusText = "ناجح بشهادة";
+                        statusBadgeClass = "bg-emerald-500 text-emerald-700 bg-opacity-10 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800";
+                    }
+                    else if (s.Score >= 70)
+                    {
+                        certStatus = "nocert";
+                        certStatusText = "ناجح بدون شهادة";
+                        statusBadgeClass = "bg-indigo-500 text-indigo-700 bg-opacity-10 dark:bg-indigo-950/30 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800";
+                    }
+                    else if (s.Score > 0)
+                    {
+                        certStatus = "failed";
+                        certStatusText = "ساقط";
+                        statusBadgeClass = "bg-rose-500 text-rose-700 bg-opacity-10 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800";
+                    }
+                    else
+                    {
+                        certStatus = "notattempted";
+                        certStatusText = "لم يمتحن";
+                        statusBadgeClass = "bg-amber-500 text-amber-700 bg-opacity-10 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800";
+                    }
+
+                    <tr class="student-row" data-cert-status="@certStatus">
                          <td class="px-4 text-center">
-                             @if(s.Status == "Completed") {
+                             @if(hasCertCode) {
                                  <input type="checkbox" class="student-checkbox" value="@s.Id" data-passed="true" />
                              }
                          </td>
                         <td>
                             <div class="flex items-center gap-3 px-4 py-3 flex-nowrap">
-                                <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase transition-transform hover:scale-105">@s.StudentName.Substring(0,1)</div>
+                                <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase transition-transform hover:scale-105">@(string.IsNullOrEmpty(s.StudentName) ? "?" : s.StudentName.Substring(0,1))</div>
                                 <div class="flex flex-col">
                                     <div class="flex items-center gap-2">
                                         <span class="font-bold text-slate-900 dark:text-white leading-tight">@s.StudentName</span>
@@ -125,28 +162,14 @@
                         <td><span class="text-[10px] font-black text-slate-400 uppercase">@s.WaveName</span></td>
                         <td><span class="text-[10px] font-black text-slate-400 uppercase">@(string.IsNullOrEmpty(s.BranchName) ? "--" : s.BranchName)</span></td>
                         <td>
-                            <div class="flex items-center gap-1.5 px-3 py-1 rounded-full @(statusClass.Replace("bg-", "bg-opacity-10 text-")) w-fit">
-                                <span class="text-[10px] font-black uppercase tracking-widest">@s.Status.ToUpper()</span>
+                            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg @statusBadgeClass w-fit shadow-sm">
+                                <span class="text-[10px] font-black tracking-wide">@certStatusText</span>
                             </div>
                         </td>
-                        <td class="text-center">
-                            <div class="flex flex-col">
-                                <span class="text-[9px] text-slate-400 font-bold mb-0.5">@(s.ActualStartTime.HasValue ? s.ActualStartTime.Value.ToString("dd/MM/yyyy") : "")</span>
-                                <span class="text-[10px] font-bold text-slate-500 uppercase">@(s.ActualStartTime.HasValue ? s.ActualStartTime.Value.ToString("hh:mm tt") : "--")</span>
-                            </div>
-                        </td>
-                        <td class="text-center">
-                            <div class="flex flex-col">
-                                <span class="text-[9px] text-slate-400 font-bold mb-0.5">@(s.ActualEndTime.HasValue ? s.ActualEndTime.Value.ToString("dd/MM/yyyy") : "")</span>
-                                <span class="text-[10px] font-bold text-slate-500 uppercase">@(s.ActualEndTime.HasValue ? s.ActualEndTime.Value.ToString("hh:mm tt") : "--")</span>
-                            </div>
-                        </td>
-                        <td class="text-xs font-bold text-slate-500">
-                            @(s.DurationInMinutes > 0 ? s.DurationInMinutes + " min" : "--")
-                        </td>
+
                         <td class="font-mono font-bold text-slate-700 dark:text-slate-300">
                             <div class="flex flex-col">
-                                <span class="text-brand-600 dark:text-brand-400 text-sm">@s.FinalScore.ToString("0") / @s.TotalScoreAvailable.ToString("0")</span>
+                                <span class="text-brand-600 dark:text-brand-400 text-sm">@(s.FinalScore > 0 ? $"{s.FinalScore.ToString("0")} / {s.TotalScoreAvailable.ToString("0")}" : "--")</span>
                                 <span class="text-[9px] text-slate-400 uppercase tracking-widest">@s.Score.ToString("0.0")% Achievement</span>
                             </div>
                         </td>
@@ -160,12 +183,22 @@
                         </td>
                         <td class="text-right px-8">
                             <div class="flex items-center justify-end gap-2">
-                                <button class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-xl view-review" data-student-id="@s.Id">
+                                <button class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 dark:bg-slate-800 rounded-xl view-review" data-student-id="@s.Id">
                                     <i class="fas fa-eye"></i>
                                 </button>
+                                @if (!hasCertCode)
+                                {
+                                    <button class="p-2.5 text-slate-400 hover:text-amber-600 bg-slate-50 dark:bg-slate-800 rounded-xl reassign-wave" 
+                                            data-user-id="@s.Id" 
+                                            data-username="@s.StudentName" 
+                                            data-old-wave-id="@selectedWaveId"
+                                            title="Move to another Wave">
+                                        <i class="fas fa-exchange-alt"></i>
+                                    </button>
+                                }
                                 @if (User.IsInRole("Admin"))
                                 {
-                                    <button class="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 rounded-xl wipe-data" data-student-id="@s.Id" data-student-name="@s.StudentName" title="Wipe Data & Reset">
+                                    <button class="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 dark:bg-slate-800 rounded-xl wipe-data" data-student-id="@s.Id" data-student-name="@s.StudentName" title="Wipe Data & Reset">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 }
@@ -345,6 +378,98 @@
                 });
             });
         }
+
+        const allWaves = @Html.Raw(Json.Serialize(waves.Select(w => new { id = w.Id, name = w.WaveName })));
+
+        $(document).ready(function() {
+            let table = $('.datatable').DataTable();
+
+            $.fn.dataTable.ext.search.push(
+                function(settings, data, dataIndex) {
+                    const selectedFilter = $('#certStatusFilter').val();
+                    if (selectedFilter === 'all') return true;
+
+                    const row = table.row(dataIndex).node();
+                    const rowStatus = $(row).attr('data-cert-status');
+                    return rowStatus === selectedFilter;
+                }
+            );
+
+            $('#certStatusFilter').on('change', function() {
+                table.draw();
+            });
+
+            $(document).on('click', '.reassign-wave', function() {
+                const userId = $(this).data('user-id');
+                const username = $(this).data('username');
+                const oldWaveId = $(this).data('old-wave-id');
+
+                let optionsHtml = '';
+                allWaves.forEach(w => {
+                    if (w.id != oldWaveId) {
+                        optionsHtml += `<option value="${w.id}">${w.name.toUpperCase()}</option>`;
+                    }
+                });
+
+                if (!optionsHtml) {
+                    Swal.fire('Warning', 'No other waves available for reassignment.', 'warning');
+                    return;
+                }
+
+                Swal.fire({
+                    title: 'Move student to another Wave',
+                    html: `
+                        <div class="text-left space-y-4 p-2">
+                            <p class="text-sm text-slate-600">Select the destination Wave to move <strong>${username}</strong>:</p>
+                            <select id="newWaveSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold">
+                                ${optionsHtml}
+                            </select>
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Reassign Wave <i class="fas fa-exchange-alt ml-2"></i>',
+                    cancelButtonText: 'Cancel',
+                    customClass: {
+                        confirmButton: 'bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md',
+                        cancelButton: 'bg-white hover:bg-slate-50 text-slate-400 font-bold py-3 px-6 rounded-xl transition-all border border-slate-200 ml-2'
+                    },
+                    buttonsStyling: false
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        const newWaveId = $('#newWaveSelect').val();
+                        
+                        Swal.fire({
+                            title: 'Reassigning...',
+                            didOpen: () => Swal.showLoading()
+                        });
+
+                        fetch('/Admin/MoveUserToWave', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded'
+                            },
+                            body: new URLSearchParams({
+                                userId: userId,
+                                oldWaveId: oldWaveId,
+                                newWaveId: newWaveId
+                            })
+                        })
+                        .then(r => r.json())
+                        .then(res => {
+                            if (res.success) {
+                                Swal.fire('Success', res.message, 'success').then(() => location.reload());
+                            } else {
+                                Swal.fire('Error', res.message, 'error');
+                            }
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            Swal.fire('Error', 'An error occurred.', 'error');
+                        });
+                    }
+                });
+            });
+        });
 
     </script>
 }

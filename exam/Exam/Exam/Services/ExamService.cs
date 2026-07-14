@@ -736,7 +736,7 @@ namespace Exam.Services
                     new { ExamIds = examIds })).ToList();
             }
 
-            // 3. All students assigned to this wave
+            // 3. All students assigned to this wave or having certificates in this wave
             var students = (await conn.QueryAsync<dynamic>(@"
                 SELECT DISTINCT
                     u.Id               AS UserId,
@@ -745,13 +745,13 @@ namespace Exam.Services
                     u.UserCode,
                     b.BranchName,
                     r.Name             AS RoleName
-                FROM UserWaves uw
-                INNER JOIN AspNetUsers u  ON u.Id = uw.UserId
-                LEFT  JOIN Branches b     ON b.Id = u.BranchId
-                LEFT  JOIN AspNetUserRoles ur ON ur.UserId = u.Id
-                LEFT  JOIN AspNetRoles r       ON r.Id = ur.RoleId
-                WHERE uw.WaveId = @WaveId
-                  AND (uw.IsDeactivated IS NULL OR uw.IsDeactivated = 0)",
+                FROM dbo.AspNetUsers u
+                LEFT JOIN dbo.UserWaves uw ON u.Id = uw.UserId AND uw.WaveId = @WaveId AND (uw.IsDeactivated IS NULL OR uw.IsDeactivated = 0)
+                LEFT JOIN dbo.UserWaveCertificates uwc ON u.Id = uwc.UserId AND uwc.WaveId = @WaveId
+                LEFT JOIN dbo.Branches b     ON b.Id = u.BranchId
+                LEFT JOIN dbo.AspNetUserRoles ur ON ur.UserId = u.Id
+                LEFT JOIN dbo.AspNetRoles r       ON r.Id = ur.RoleId
+                WHERE uw.UserId IS NOT NULL OR uwc.UserId IS NOT NULL",
                 new { WaveId = waveId })).ToList();
 
             // 4. All attempts for all exams in this wave (best attempt per student per exam)
@@ -790,6 +790,13 @@ namespace Exam.Services
                 x => (decimal)x.SeenPoints
             );
 
+            // Fetch all wave certificates for this wave
+            var waveCerts = (await conn.QueryAsync<dynamic>(@"
+                SELECT UserId, CertificateCode, Score 
+                FROM dbo.UserWaveCertificates 
+                WHERE WaveId = @WaveId",
+                new { WaveId = waveId })).ToList();
+
             var results = new List<Exam.DTOs.WaveStudentResultDto>();
 
             foreach (var student in students)
@@ -808,51 +815,102 @@ namespace Exam.Services
                     ? studentAttempts.FirstOrDefault(a => (int)a.ExamId == (int)targetExam.Id)
                     : null;
 
-                if (targetAttempt != null)
-                {
-                    if ((string)targetAttempt.Status == "Completed")
-                    {
-                        examsCompleted = 1;
-                    }
-                    totalScore = (decimal)targetAttempt.FinalScore;
+                var waveCert = waveCerts.FirstOrDefault(c => (string)c.UserId == userId);
+                string certCode = null;
+                double percentage = 0.0;
 
-                    if (attemptSeenPoints.TryGetValue((int)targetAttempt.AttemptId, out decimal sp))
+                if (waveCert != null)
+                {
+                    examsCompleted = 1;
+                    examsAssigned = 1;
+                    certCode = waveCert.CertificateCode;
+                    if (waveCert.Score != null)
                     {
-                        studentTotalAvailablePoints = sp;
+                        totalScore = (decimal)waveCert.Score;
+                        studentTotalAvailablePoints = 100.0m;
+                        percentage = (double)totalScore;
                     }
-                    else
+                    else if (targetAttempt != null)
+                    {
+                        if ((string)targetAttempt.Status == "Completed")
+                        {
+                            examsCompleted = 1;
+                        }
+                        totalScore = (decimal)targetAttempt.FinalScore;
+
+                        if (attemptSeenPoints.TryGetValue((int)targetAttempt.AttemptId, out decimal sp))
+                        {
+                            studentTotalAvailablePoints = sp;
+                        }
+                        else
+                        {
+                            int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
+                            studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
+                        }
+                        percentage = studentTotalAvailablePoints > 0 ? (double)(totalScore / studentTotalAvailablePoints) * 100 : 0;
+                    }
+                }
+                else
+                {
+                    if (targetAttempt != null)
+                    {
+                        if ((string)targetAttempt.Status == "Completed")
+                        {
+                            examsCompleted = 1;
+                        }
+                        totalScore = (decimal)targetAttempt.FinalScore;
+
+                        if (attemptSeenPoints.TryGetValue((int)targetAttempt.AttemptId, out decimal sp))
+                        {
+                            studentTotalAvailablePoints = sp;
+                        }
+                        else
+                        {
+                            int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
+                            studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
+                        }
+                    }
+                    else if (targetExam != null)
                     {
                         int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
                         studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
                     }
-                }
-                else if (targetExam != null)
-                {
-                    int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
-                    studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
+
+                    // Certificate code from any completed attempt (latest)
+                    certCode = studentAttempts
+                        .Where(a => (string)a.Status == "Completed" && !string.IsNullOrEmpty((string)a.CertificateCode))
+                        .Select(a => (string)a.CertificateCode)
+                        .FirstOrDefault();
+
+                    percentage = studentTotalAvailablePoints > 0
+                        ? (double)(totalScore / studentTotalAvailablePoints) * 100
+                        : 0;
                 }
 
-                // Certificate code from any completed attempt (latest)
-                string certCode = studentAttempts
-                    .Where(a => (string)a.Status == "Completed" && !string.IsNullOrEmpty((string)a.CertificateCode))
-                    .Select(a => (string)a.CertificateCode)
-                    .FirstOrDefault();
-
-                double percentage = studentTotalAvailablePoints > 0
-                    ? (double)(totalScore / studentTotalAvailablePoints) * 100
-                    : 0;
                 double certThreshold = 75.0;
                 double passThreshold = 70.0;
 
                 string waveStatus;
-                if (targetAttempt == null || (string)targetAttempt.Status != "Completed")
-                    waveStatus = "INCOMPLETE";
-                else if (percentage >= certThreshold)
-                    waveStatus = "CERTIFIED";
-                else if (percentage >= passThreshold)
-                    waveStatus = "PASS";
+                if (waveCert != null)
+                {
+                    if (percentage >= certThreshold)
+                        waveStatus = "CERTIFIED";
+                    else if (percentage >= passThreshold)
+                        waveStatus = "PASS";
+                    else
+                        waveStatus = "FAILED";
+                }
                 else
-                    waveStatus = "FAILED";
+                {
+                    if (targetAttempt == null || (string)targetAttempt.Status != "Completed")
+                        waveStatus = "INCOMPLETE";
+                    else if (percentage >= certThreshold)
+                        waveStatus = "CERTIFIED";
+                    else if (percentage >= passThreshold)
+                        waveStatus = "PASS";
+                    else
+                        waveStatus = "FAILED";
+                }
 
                 results.Add(new Exam.DTOs.WaveStudentResultDto
                 {

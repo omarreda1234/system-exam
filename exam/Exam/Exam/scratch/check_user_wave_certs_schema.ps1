@@ -2,11 +2,11 @@ $connString = "Server=192.168.1.111;Database=Eltarshouby-Exam;User Id=sa;Passwor
 $conn = New-Object System.Data.SqlClient.SqlConnection($connString)
 $conn.Open()
 $cmd = $conn.CreateCommand()
-$cmd.CommandText = "SELECT Id, Name FROM AspNetRoles"
+$cmd.CommandText = "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'UserWaveCertificates'"
 $reader = $cmd.ExecuteReader()
-Write-Output "Roles in database:"
+Write-Output "UserWaveCertificates columns:"
 while ($reader.Read()) {
-    Write-Output "ID: $($reader['Id']), Name: $($reader['Name'])"
+    Write-Output "$($reader['COLUMN_NAME']) ($($reader['DATA_TYPE']))"
 }
 $reader.Close()
 $conn.Close()
