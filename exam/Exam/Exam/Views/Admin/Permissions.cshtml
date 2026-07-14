@@ -1,0 +1,179 @@
+@model List<Exam.Controllers.AdminController.ModulePermissionViewModel>
+@{
+    ViewBag.Title = "Dynamic Role Permissions";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var roles = ViewBag.Roles as List<string> ?? new List<string>();
+    var selectedRole = ViewBag.SelectedRole as string ?? "";
+}
+
+<div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <!-- Header Card -->
+    <div class="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200/60 dark:border-slate-800/50 shadow-sm mb-8">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+                <span class="text-xs font-bold text-brand-600 dark:text-brand-400 tracking-[0.2em] uppercase">Security Settings</span>
+                <h2 class="text-2xl sm:text-3xl font-black tracking-tight mt-1">Role Permissions Console</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Configure database-driven access control list (ACL) dynamically for system roles.</p>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <label for="roleSelector" class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Configure Role:</label>
+                <select id="roleSelector" onchange="switchRole(this.value)" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl px-4 py-2.5 text-xs font-bold focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all">
+                    @foreach (var role in roles)
+                    {
+                        <!option value="@role" @(role == selectedRole ? "selected" : "")>@role</!option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Permissions Grid -->
+    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/60 dark:border-slate-800/50 shadow-sm overflow-hidden mb-8">
+        <div class="p-6 border-b border-slate-100 dark:border-slate-800/50 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+            <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Feature Matrix for "@selectedRole"</span>
+            <div class="flex gap-4">
+                <button type="button" onclick="toggleAllAccess(true)" class="text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider hover:underline">Select All Access</button>
+                <span class="text-slate-350 dark:text-slate-700">|</span>
+                <button type="button" onclick="toggleAllAccess(false)" class="text-[10px] font-bold text-red-500 uppercase tracking-wider hover:underline">Clear All</button>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-950 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                        <th class="py-4 px-6">Feature / Module</th>
+                        <th class="py-4 px-6 text-center w-32">Access (View)</th>
+                        <th class="py-4 px-6 text-center w-32">Create (Add)</th>
+                        <th class="py-4 px-6 text-center w-32">Edit (Update)</th>
+                        <th class="py-4 px-6 text-center w-32">Delete (Wipe)</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/50 text-sm">
+                    @for (int i = 0; i < Model.Count; i++)
+                    {
+                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors" data-module-key="@Model[i].ModuleKey">
+                            <td class="py-4 px-6">
+                                <div class="font-bold text-slate-800 dark:text-slate-200">@Model[i].DisplayName</div>
+                                <div class="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5">@Model[i].ControllerName/@Model[i].ActionName</div>
+                            </td>
+                            <td class="py-4 px-6 text-center">
+                                <label class="inline-flex items-center justify-center cursor-pointer">
+                                    <input type="checkbox" class="access-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(Model[i].CanAccess ? "checked" : "") onchange="onAccessChange(this)" />
+                                </label>
+                            </td>
+                            <td class="py-4 px-6 text-center">
+                                <label class="inline-flex items-center justify-center cursor-pointer">
+                                    <input type="checkbox" class="create-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(Model[i].CanCreate ? "checked" : "") @(!Model[i].CanAccess ? "disabled" : "") />
+                                </label>
+                            </td>
+                            <td class="py-4 px-6 text-center">
+                                <label class="inline-flex items-center justify-center cursor-pointer">
+                                    <input type="checkbox" class="edit-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(Model[i].CanEdit ? "checked" : "") @(!Model[i].CanAccess ? "disabled" : "") />
+                                </label>
+                            </td>
+                            <td class="py-4 px-6 text-center">
+                                <label class="inline-flex items-center justify-center cursor-pointer">
+                                    <input type="checkbox" class="delete-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(Model[i].CanDelete ? "checked" : "") @(!Model[i].CanAccess ? "disabled" : "") />
+                                </label>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center justify-end gap-4">
+        <a href="@Url.Action("Index")" class="px-6 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+            Cancel
+        </a>
+        <button type="button" onclick="savePermissions()" class="px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white rounded-2xl text-xs font-bold transition-all shadow-lg shadow-brand-500/20">
+            Save Permissions Setup
+        </button>
+    </div>
+</div>
+
+<script>
+    function switchRole(roleName) {
+        window.location.href = '@Url.Action("Permissions", "Admin")?roleName=' + encodeURIComponent(roleName);
+    }
+
+    function onAccessChange(chk) {
+        const row = chk.closest('tr');
+        const childChks = row.querySelectorAll('.create-chk, .edit-chk, .delete-chk');
+        childChks.forEach(c => {
+            c.disabled = !chk.checked;
+            if (!chk.checked) {
+                c.checked = false;
+            }
+        });
+    }
+
+    function toggleAllAccess(checked) {
+        document.querySelectorAll('.access-chk').forEach(chk => {
+            chk.checked = checked;
+            onAccessChange(chk);
+        });
+    }
+
+    async function savePermissions() {
+        const permissions = [];
+        document.querySelectorAll('tbody tr').forEach(row => {
+            const moduleKey = row.getAttribute('data-module-key');
+            const canAccess = row.querySelector('.access-chk').checked;
+            const canCreate = row.querySelector('.create-chk').checked;
+            const canEdit = row.querySelector('.edit-chk').checked;
+            const canDelete = row.querySelector('.delete-chk').checked;
+
+            permissions.push({
+                ModuleKey: moduleKey,
+                CanAccess: canAccess,
+                CanCreate: canCreate,
+                CanEdit: canEdit,
+                CanDelete: canDelete
+            });
+        });
+
+        Swal.fire({
+            title: 'Updating Permissions...',
+            html: 'Writing matrix rules to database',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        try {
+            const response = await fetch('@Url.Action("SavePermissions", "Admin")?roleName=' + encodeURIComponent('@selectedRole'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(permissions)
+            });
+            const res = await response.json();
+            if (res.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success!',
+                    text: res.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'System Error',
+                    text: res.message
+                });
+            }
+        } catch (err) {
+            Swal.fire({
+                icon: 'error',
+                title: 'System Error',
+                text: err.message
+            });
+        }
+    }
+</script>

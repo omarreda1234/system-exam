@@ -102,5 +102,8 @@ namespace Exam.Services
         Task<UserAttemptSummaryDto?> GetAttemptByIdAsync(int attemptId);
         Task<int> GetAssignmentCountAsync(int examId, string studentId);
         Task EnsureDatabaseSchemaUpdatedAsync(System.IServiceProvider serviceProvider = null);
+        Task<bool> HasPermissionAsync(IList<string> roles, string controller, string action);
+        Task<IEnumerable<RolePermission>> GetPermissionsForRoleAsync(string roleName);
+        Task SavePermissionsForRoleAsync(string roleName, List<RolePermission> permissions);
     }
 }

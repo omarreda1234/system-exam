@@ -111,7 +111,7 @@ namespace Exam.Controllers
                 FROM AspNetUsers U
                 JOIN AspNetUserRoles UR ON U.Id = UR.UserId
                 JOIN AspNetRoles R ON UR.RoleId = R.Id
-                WHERE R.Name = 'Branch Manager'
+                WHERE R.Name IN ('Branch Manager', 'Branch Supervisor', 'HR', 'Human Resources')
             ");
 
             int added = 0;

@@ -220,11 +220,12 @@ namespace Exam.Controllers
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId)) return Challenge();
 
-            // Restrict Result view to Admin/HR/Branch Manager roles
+            // Restrict Result view to Admin/HR/Branch Manager/Branch Supervisor roles
             var isAdmin = User.IsInRole("Admin") || 
                           User.IsInRole("HR") || 
                           User.IsInRole("Human Resources") || 
                           User.IsInRole("Branch Manager") || 
+                          User.IsInRole("Branch Supervisor") || 
                           User.IsInRole("SoftSkills Specialist");
 
             if (!isAdmin)

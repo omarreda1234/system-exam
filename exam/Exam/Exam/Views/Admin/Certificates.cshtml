@@ -21,34 +21,12 @@
         
         <div class="flex flex-wrap items-center gap-4">
             <div class="space-y-2">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Exam Type</label>
-                <select id="typeFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold min-w-[150px]">
-                    <option value="0">All Types</option>
-                    @foreach (var type in (IEnumerable<Exam.DTOs.ExamTypeDto>)ViewBag.ExamTypes)
-                    {
-                        <option value="@type.Id" selected="@(ViewBag.SelectedTypeId == type.Id ? "selected" : null)">@type.TypeName.ToUpper()</option>
-                    }
-                </select>
-            </div>
-
-            <div class="space-y-2">
                 <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Year</label>
                 <select id="yearFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold w-[100px]">
                     <option value="0">Year</option>
                     @for (int y = DateTime.Now.Year; y >= 2024; y--)
                     {
                         <option value="@y" selected="@(ViewBag.SelectedYear == y ? "selected" : null)">@y</option>
-                    }
-                </select>
-            </div>
-
-            <div class="space-y-2">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Month</label>
-                <select id="monthFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold w-[120px]">
-                    <option value="0">Month</option>
-                    @for (int m = 1; m <= 12; m++)
-                    {
-                        <option value="@m" selected="@(ViewBag.SelectedMonth == m ? "selected" : null)">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m)</option>
                     }
                 </select>
             </div>
@@ -155,7 +133,6 @@
                                             @s.RoleName
                                         </span>
                                     </div>
-                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">@s.ExamType</span>
                                 </div>
                             </div>
                         </td>
@@ -211,9 +188,9 @@
 @section Scripts {
     <script>
         function updateExamList() {
-            const type = $('#typeFilter').val();
+            const type = 0;
             const year = $('#yearFilter').val();
-            const month = $('#monthFilter').val();
+            const month = 0;
 
             $.get('/Admin/GetFilteredExams', { typeId: type, month: month, year: year, mode: 'cert' }, function (data) {
                 const $examFilter = $('#examFilter');
@@ -241,12 +218,12 @@
             });
         }
 
-        $('#typeFilter, #yearFilter, #monthFilter').change(updateExamList);
+        $('#yearFilter').change(updateExamList);
 
         $('#examFilter').change(function () { 
-            const type = $('#typeFilter').val();
+            const type = 0;
             const year = $('#yearFilter').val();
-            const month = $('#monthFilter').val();
+            const month = 0;
             let newUrl = '/Admin/Certificates?waveId=' + $(this).val() + '&typeId=' + type + '&year=' + year + '&month=' + month; 
             if (window.location.search.includes('iframe=true')) newUrl += '&iframe=true';
             window.location = newUrl;

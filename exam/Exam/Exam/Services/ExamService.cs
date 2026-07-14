@@ -3104,10 +3104,183 @@ DELETE FROM AspNetUsers WHERE Id = @UserId;",
                         ON Questions(CategoryId, TopicId);
                     END
                 ");
+
+                // 9. Seed "Branch Supervisor" role if not exists
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT 1 FROM AspNetRoles WHERE Name = 'Branch Supervisor')
+                    BEGIN
+                        INSERT INTO AspNetRoles (Id, Name, NormalizedName, ConcurrencyStamp) 
+                        VALUES (NEWID(), 'Branch Supervisor', 'BRANCH SUPERVISOR', NEWID());
+                    END");
+
+                // 10. Create RolePermissions Table and Seed default permissions
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'RolePermissions')
+                    BEGIN
+                        CREATE TABLE RolePermissions (
+                            Id INT IDENTITY(1,1) PRIMARY KEY,
+                            RoleName NVARCHAR(256) NOT NULL,
+                            ControllerName NVARCHAR(100) NOT NULL,
+                            ActionName NVARCHAR(100) NOT NULL,
+                            CanAccess BIT NOT NULL DEFAULT 1,
+                            CanCreate BIT NOT NULL DEFAULT 0,
+                            CanEdit BIT NOT NULL DEFAULT 0,
+                            CanDelete BIT NOT NULL DEFAULT 0,
+                            CONSTRAINT UQ_Role_Controller_Action UNIQUE (RoleName, ControllerName, ActionName)
+                        );
+                    END");
+
+                // Seed default permissions
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT 1 FROM RolePermissions)
+                    BEGIN
+                        -- Seeding HR permissions
+                        INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
+                        VALUES 
+                        ('HR', 'Admin', 'Index', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'AllUsers', 1, 1, 1, 1),
+                        ('HR', 'Admin', 'GetUsersPaged', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'PendingRequests', 1, 0, 1, 1),
+                        ('HR', 'Admin', 'ApproveRequest', 1, 1, 1, 0),
+                        ('HR', 'Admin', 'RejectRequest', 1, 0, 1, 1),
+                        ('HR', 'Admin', 'CheckExistence', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'DeactivateUser', 1, 0, 1, 0),
+                        ('HR', 'Admin', 'ActivateUser', 1, 0, 1, 0),
+                        ('HR', 'Admin', 'SendCustomEmail', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'ResetUserPassword', 1, 0, 1, 0),
+                        ('HR', 'Admin', 'GetUsersWithoutCertificate', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'Certificates', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'UploadCertificatesOnlyExcel', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'SendCertificates', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'AddUser', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'UpdateUserShift', 1, 0, 1, 0),
+                        ('HR', 'Admin', 'GetWaves', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'CreateWave', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'UpdateUserRole', 1, 0, 1, 0),
+                        ('HR', 'Admin', 'UpdateUserProfile', 1, 0, 1, 0),
+                        ('HR', 'Admin', 'DeactivatedUsers', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'DeactivateUserByCode', 1, 0, 1, 0),
+                        ('HR', 'Admin', 'ImportDeactivationsFromExcel', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'DeleteUserPermanently', 1, 0, 0, 1),
+                        ('HR', 'Admin', 'ImportUsersToWaveFromExcel', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'Companies', 1, 1, 1, 1),
+                        ('HR', 'Admin', 'AddCompany', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'EditCompany', 1, 0, 1, 0),
+                        ('HR', 'Admin', 'DeleteCompany', 1, 0, 0, 1),
+                        ('HR', 'Admin', 'ClearCompanyTrainees', 1, 0, 0, 1),
+                        ('HR', 'Admin', 'ImportCompanyTraineesFromExcel', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'DownloadTraineesTemplate', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'DownloadPersonnelTemplate', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'GetCompanyTrainees', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'DeleteCompanyTrainee', 1, 0, 0, 1),
+                        ('HR', 'Admin', 'AddCompanyTraineeManually', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'GetTraineeDetailsByCode', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'Waves', 1, 1, 1, 1),
+                        ('HR', 'Admin', 'WaveDetails', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'GetWaveUserIds', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'GetUsersByWaveId', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'AssignUsersToWave', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'RemoveStudentFromExam', 1, 0, 0, 1),
+                        ('HR', 'Admin', 'RemoveAllStudentsFromExam', 1, 0, 0, 1),
+                        ('HR', 'Admin', 'WipeStudentData', 1, 0, 0, 1),
+                        ('HR', 'Admin', 'ReassignExamToStudents', 1, 1, 1, 0),
+                        ('HR', 'Admin', 'AssignExamToStudents', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'GetEligibleUsersForExam', 1, 0, 0, 0),
+                        ('HR', 'Admin', 'ResendAssignmentEmail', 1, 1, 0, 0),
+                        ('HR', 'Admin', 'MoveUserToWave', 1, 0, 1, 0),
+                        ('HR', 'Attendance', 'Analytics', 1, 0, 0, 0);
+
+                        -- Seeding Human Resources permissions
+                        INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
+                        SELECT 'Human Resources', ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete
+                        FROM RolePermissions WHERE RoleName = 'HR';
+
+                        -- Seeding Branch Manager permissions
+                        INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
+                        VALUES 
+                        ('Branch Manager', 'Admin', 'Index', 1, 0, 0, 0),
+                        ('Branch Manager', 'Admin', 'Students', 1, 0, 0, 0),
+                        ('Branch Manager', 'Admin', 'WeeklyResults', 1, 0, 0, 0),
+                        ('Branch Manager', 'Admin', 'GetFilteredExams', 1, 0, 0, 0),
+                        ('Branch Manager', 'Admin', 'ExportStudentsToExcel', 1, 1, 0, 0),
+                        ('Branch Manager', 'Admin', 'SendCertificates', 1, 1, 0, 0),
+                        ('Branch Manager', 'Admin', 'SendFailEmails', 1, 1, 0, 0),
+                        ('Branch Manager', 'Admin', 'ReassignExamToStudents', 1, 1, 1, 0),
+                        ('Branch Manager', 'Admin', 'GetStudentExamReview', 1, 0, 0, 0),
+                        ('Branch Manager', 'Admin', 'GetWeeklyResultsPaged', 1, 0, 0, 0);
+
+                        -- Seeding Branch Supervisor permissions
+                        INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
+                        SELECT 'Branch Supervisor', ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete
+                        FROM RolePermissions WHERE RoleName = 'Branch Manager';
+
+                        -- Seeding SoftSkills Specialist permissions
+                        INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
+                        VALUES 
+                        ('SoftSkills Specialist', 'SkillTracks', 'Index', 1, 1, 1, 1);
+
+                        -- Seeding Reception permissions
+                        INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
+                        VALUES 
+                        ('Reception', 'Attendance', 'Analytics', 1, 0, 0, 0),
+                        ('Reception', 'Attendance', 'Index', 1, 1, 1, 1);
+                    END");
             }
             catch (Exception ex)
             {
                 System.Console.WriteLine("Database schema auto-migration failed: " + ex.Message);
+            }
+        }
+
+        public async Task<bool> HasPermissionAsync(IList<string> roles, string controller, string action)
+        {
+            if (roles == null || !roles.Any()) return false;
+            if (roles.Contains("Admin")) return true;
+
+            using var conn = new SqlConnection(_connectionString);
+            const string sql = @"
+                SELECT COUNT(1) 
+                FROM RolePermissions 
+                WHERE RoleName IN @Roles 
+                  AND LOWER(ControllerName) = LOWER(@Controller) 
+                  AND LOWER(ActionName) = LOWER(@Action) 
+                  AND CanAccess = 1";
+            
+            int count = await conn.ExecuteScalarAsync<int>(sql, new { Roles = roles, Controller = controller, Action = action });
+            return count > 0;
+        }
+
+        public async Task<IEnumerable<RolePermission>> GetPermissionsForRoleAsync(string roleName)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            return await conn.QueryAsync<RolePermission>(
+                "SELECT Id, RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete FROM RolePermissions WHERE RoleName = @RoleName",
+                new { RoleName = roleName });
+        }
+
+        public async Task SavePermissionsForRoleAsync(string roleName, List<RolePermission> permissions)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync();
+            using var transaction = conn.BeginTransaction();
+            try
+            {
+                await conn.ExecuteAsync("DELETE FROM RolePermissions WHERE RoleName = @RoleName", new { RoleName = roleName }, transaction);
+
+                if (permissions != null && permissions.Any())
+                {
+                    const string sql = @"
+                        INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
+                        VALUES (@RoleName, @ControllerName, @ActionName, @CanAccess, @CanCreate, @CanEdit, @CanDelete)";
+                    await conn.ExecuteAsync(sql, permissions, transaction);
+                }
+
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
             }
         }
     }

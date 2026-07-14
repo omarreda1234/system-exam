@@ -22,7 +22,7 @@ using Microsoft.DotNet.Scaffolding.Shared.Messaging;
 
 namespace Exam.Controllers
 {
-    [Authorize(Roles = "Admin,HR,Human Resources,Branch Manager,SoftSkills Specialist")]
+    [Authorize(Roles = "Admin,HR,Human Resources,Branch Manager,Branch Supervisor,SoftSkills Specialist")]
     public class AdminController : Controller
     {
         private readonly IExamService _examService;
@@ -54,95 +54,54 @@ namespace Exam.Controllers
             _connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
         }
 
+        // Shared utility actions that are always permitted if the user has any valid role
+        private static readonly HashSet<string> _sharedActions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "GetFilteredExams", "GetWeeklyExamsForFilter", "GetExamTypes", "GetBranches",
+            "Permissions", "SavePermissions", "GetPermissionsForRole",
+            "ResetAdminPasswordTemp", "Roles", "AddRole", "DeleteRole",
+            "SendFailEmails", "ReassignExamToStudents", "GetStudentExamReview",
+            "ExportStudentsToExcel", "ExportWaveResultsToExcel",
+            "MoveUserToWave", "CheckExistence", "GetUsersWithoutCertificate",
+            "ImportUsersToWaveFromExcel", "UpdateTopicSchema", "SyncFromLive"
+        };
+
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
         {
-            if (User.IsInRole("HR") || User.IsInRole("Human Resources"))
+            var userRoles = User.Claims
+                .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+                .Select(c => c.Value)
+                .ToList();
+
+            if (userRoles.Contains("Admin"))
             {
-                var allowedActions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    "Index",
-                    "AllUsers", 
-                    "GetUsersPaged",
-                    "PendingRequests", 
-                    "ApproveRequest", 
-                    "RejectRequest", 
-                    "CheckExistence",
-                    "DeactivateUser", 
-                    "ActivateUser", 
-                    "SendCustomEmail", 
-                    "ResetUserPassword", 
-                    "GetUsersWithoutCertificate", 
-                    "Certificates",
-                    "UploadCertificatesOnlyExcel",
-                    "SendCertificates",
-                    "AddUser", 
-                    "UpdateUserShift",
-                    "GetWaves",
-                    "CreateWave",
-                    "UpdateUserRole",
-                    "UpdateUserProfile",
-                    "DeactivatedUsers",
-                    "DeactivateUserByCode",
-                    "ImportDeactivationsFromExcel",
-                    "DeleteUserPermanently",
-                    "ImportUsersToWaveFromExcel",
-                    "Companies",
-                    "AddCompany",
-                    "EditCompany",
-                    "DeleteCompany",
-                    "ClearCompanyTrainees",
-                    "ImportCompanyTraineesFromExcel",
-                    "DownloadTraineesTemplate",
-                    "DownloadPersonnelTemplate",
-                    "GetCompanyTrainees",
-                    "DeleteCompanyTrainee",
-                    "AddCompanyTraineeManually",
-                    "GetTraineeDetailsByCode",
-                    "Waves",
-                    "WaveDetails",
-                    "GetWaveUserIds",
-                    "GetUsersByWaveId",
-                    "AssignUsersToWave",
-                    "RemoveStudentFromExam",
-                    "RemoveAllStudentsFromExam",
-                    "WipeStudentData",
-                    "ReassignExamToStudents",
-                    "AssignExamToStudents",
-                    "GetEligibleUsersForExam",
-                    "ResendAssignmentEmail",
-                    "MoveUserToWave"
-                };
-                
-                var actionName = context.RouteData.Values["action"]?.ToString();
-                if (!allowedActions.Contains(actionName))
-                {
-                    context.Result = Forbid();
-                    return;
-                }
+                base.OnActionExecuting(context);
+                return;
             }
-            if (User.IsInRole("Branch Manager"))
+
+            var controllerName = context.RouteData.Values["controller"]?.ToString() ?? "Admin";
+            var actionName = context.RouteData.Values["action"]?.ToString() ?? "Index";
+
+            // Always allow Index (used for role-based redirect) and shared utility actions
+            if (actionName.Equals("Index", StringComparison.OrdinalIgnoreCase) && controllerName.Equals("Admin", StringComparison.OrdinalIgnoreCase))
             {
-                var allowedActions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    "Index",
-                    "Students",
-                    "WeeklyResults",
-                    "GetFilteredExams",
-                    "ExportStudentsToExcel",
-                    "SendCertificates",
-                    "SendFailEmails",
-                    "ReassignExamToStudents",
-                    "GetStudentExamReview",
-                    "GetWeeklyResultsPaged"
-                };
-                
-                var actionName = context.RouteData.Values["action"]?.ToString();
-                if (!allowedActions.Contains(actionName))
-                {
-                    context.Result = Forbid();
-                    return;
-                }
+                base.OnActionExecuting(context);
+                return;
             }
+
+            if (_sharedActions.Contains(actionName))
+            {
+                base.OnActionExecuting(context);
+                return;
+            }
+
+            bool hasAccess = _examService.HasPermissionAsync(userRoles, controllerName, actionName).GetAwaiter().GetResult();
+            if (!hasAccess)
+            {
+                context.Result = Forbid();
+                return;
+            }
+
             base.OnActionExecuting(context);
         }
 
@@ -164,7 +123,7 @@ namespace Exam.Controllers
             {
                 return RedirectToAction("AllUsers");
             }
-            if (User.IsInRole("Branch Manager"))
+            if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
             {
                 return RedirectToAction("WeeklyResults");
             }
@@ -476,7 +435,7 @@ namespace Exam.Controllers
         {
             try
             {
-                if (User.IsInRole("Branch Manager"))
+                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
                     using var conn = new SqlConnection(_connectionString);
                     var examEndTime = await conn.QueryFirstOrDefaultAsync<DateTime?>(
@@ -490,7 +449,7 @@ namespace Exam.Controllers
                 }
 
                 var results = await _examService.GetExamResultsByExamIdAsync(examId);
-                if (User.IsInRole("Branch Manager"))
+                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
                     var currentUser = await _userManager.GetUserAsync(User);
                     if (currentUser != null && currentUser.BranchId.HasValue)
@@ -586,7 +545,7 @@ namespace Exam.Controllers
                 var results = (await _examService.GetWaveAggregateResultsAsync(waveId)).ToList();
 
                 // Branch manager restriction
-                if (User.IsInRole("Branch Manager"))
+                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
                     var currentUser = await _userManager.GetUserAsync(User);
                     if (currentUser != null && currentUser.BranchId.HasValue)
@@ -683,7 +642,8 @@ namespace Exam.Controllers
             }
             else if (forceMode == "weekly")
             {
-                if (!User.IsInRole("Branch Manager") && (!typeId.HasValue || typeId.Value == 0))
+                // Always exclude wave exams from weekly dropdown regardless of role
+                if (!typeId.HasValue || typeId.Value == 0)
                 {
                     exams = exams.Where(e => !((e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave"))).ToList();
                 }
@@ -716,7 +676,7 @@ namespace Exam.Controllers
                     if (isWavey)
                     {
                         var results = await _examService.GetExamResultsByExamIdAsync(selectedId);
-                        if (User.IsInRole("Branch Manager"))
+                        if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                         {
                             var currentUser = await _userManager.GetUserAsync(User);
                             if (currentUser != null && currentUser.BranchId.HasValue)
@@ -781,7 +741,7 @@ namespace Exam.Controllers
                 var results = (await _examService.GetWaveAggregateResultsAsync(selectedWaveId)).ToList();
 
                 // Branch manager restriction
-                if (User.IsInRole("Branch Manager"))
+                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
                     var currentUser = await _userManager.GetUserAsync(User);
                     if (currentUser != null && currentUser.BranchId.HasValue)
@@ -1327,7 +1287,7 @@ namespace Exam.Controllers
                 {
                     var results = await _examService.GetExamResultsByExamIdAsync(finalExamId);
                     
-                    if (User.IsInRole("Branch Manager"))
+                    if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                     {
                         var currentUser = await _userManager.GetUserAsync(User);
                         if (currentUser != null && currentUser.BranchId.HasValue)
@@ -1404,7 +1364,7 @@ namespace Exam.Controllers
 
                 var results = await conn.QueryAsync<Exam.DTOs.ExamResultRowDto>(fallbackSql, new { WaveId = selectedWaveId });
                 
-                if (User.IsInRole("Branch Manager"))
+                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
                     var currentUser = await _userManager.GetUserAsync(User);
                     if (currentUser != null && currentUser.BranchId.HasValue)
@@ -1748,7 +1708,8 @@ namespace Exam.Controllers
             }
             else if (mode == "weekly")
             {
-                if (!User.IsInRole("Branch Manager") && (!typeId.HasValue || typeId.Value == 0))
+                // Always exclude wave exams from the weekly dropdown, regardless of role
+                if (!typeId.HasValue || typeId.Value == 0)
                 {
                     exams = exams.Where(e => !((e.TypeName ?? "").ToLower().Contains("wave") || (e.Title ?? "").ToLower().Contains("wave"))).ToList();
                 }
@@ -1767,7 +1728,7 @@ namespace Exam.Controllers
         public async Task<IActionResult> SendFailEmails(int examId)
         {
             var results = await _examService.GetExamResultsByExamIdAsync(examId);
-            if (User.IsInRole("Branch Manager"))
+            if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
             {
                 var currentUser = await _userManager.GetUserAsync(User);
                 if (currentUser != null && currentUser.BranchId.HasValue)
@@ -1831,7 +1792,7 @@ namespace Exam.Controllers
             try
             {
                 var results = await _examService.GetExamResultsByExamIdAsync(examId);
-                if (User.IsInRole("Branch Manager"))
+                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
                     var currentUser = await _userManager.GetUserAsync(User);
                     if (currentUser != null && currentUser.BranchId.HasValue)
@@ -2219,7 +2180,7 @@ namespace Exam.Controllers
             if (request.StudentIds == null || !request.StudentIds.Any()) return BadRequest("No students selected.");
             try
             {
-                if (User.IsInRole("Branch Manager"))
+                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
                     var currentUser = await _userManager.GetUserAsync(User);
                     if (currentUser != null && currentUser.BranchId.HasValue)
@@ -2374,7 +2335,7 @@ namespace Exam.Controllers
                 return Json(new { draw = draw, recordsTotal = 0, recordsFiltered = 0, data = new List<object>() });
             }
 
-            if (User.IsInRole("Branch Manager"))
+            if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
             {
                 using var conn = new SqlConnection(_connectionString);
                 var examEndTime = await conn.QueryFirstOrDefaultAsync<DateTime?>(
@@ -2396,7 +2357,7 @@ namespace Exam.Controllers
             var results = await _examService.GetExamResultsByExamIdAsync(examId);
 
             // Apply Branch Manager filters if needed
-            if (User.IsInRole("Branch Manager"))
+            if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
             {
                 var currentUser = await _userManager.GetUserAsync(User);
                 if (currentUser != null && currentUser.BranchId.HasValue)
@@ -3882,7 +3843,161 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             }
         }
 
-        // --- ROLES MANAGEMENT ---
+        // --- ROLES & DYNAMIC PERMISSIONS MANAGEMENT ---
+        public class ModulePermissionViewModel
+        {
+            public string ModuleKey { get; set; } = string.Empty;
+            public string DisplayName { get; set; } = string.Empty;
+            public string ControllerName { get; set; } = string.Empty;
+            public string ActionName { get; set; } = string.Empty;
+            public bool CanAccess { get; set; }
+            public bool CanCreate { get; set; }
+            public bool CanEdit { get; set; }
+            public bool CanDelete { get; set; }
+        }
+
+        public class ModulePermissionInput
+        {
+            public string ModuleKey { get; set; } = string.Empty;
+            public bool CanAccess { get; set; }
+            public bool CanCreate { get; set; }
+            public bool CanEdit { get; set; }
+            public bool CanDelete { get; set; }
+        }
+
+        private static readonly List<(string Key, string Name, string Ctrl, string Act, string[] AddActs)> DashboardModules = new()
+        {
+            ("LMS_Overview", "LMS Overview", "Admin", "Index", new string[] { }),
+            ("Items", "Items Management", "Admin", "Items", new[] { "AddItem", "EditItem", "DeleteItem" }),
+            ("WeeklyExams", "Weekly Exams Matrix", "Admin", "WeeklyExams", new string[] { }),
+            ("WaveExams", "Wave Exams Matrix", "Admin", "WaveExams", new string[] { }),
+            ("Assignments", "Wave Assignments", "Admin", "Assignments", new string[] { }),
+            ("WeeklyAnalytics", "Weekly Analytics", "Admin", "WeeklyResults", new[] { "GetWeeklyResultsPaged" }),
+            ("WaveAnalytics", "Wave Analytics", "Admin", "WaveyResults", new string[] { }),
+            ("GeneralAnalytics", "General Analytics", "Admin", "Students", new[] { "ExportStudentsToExcel", "GetStudentExamReview" }),
+            ("LiveMonitor", "Live Monitor", "Admin", "LiveMonitor", new string[] { }),
+            ("Certificates", "Certificates Management", "Admin", "Certificates", new[] { "UploadCertificatesOnlyExcel", "SendCertificates", "MoveUserToWave" }),
+            ("NewCome", "New Come Requests (Pending)", "Admin", "PendingRequests", new[] { "ApproveRequest", "RejectRequest" }),
+            ("PersonnelRegistry", "Personnel Registry", "Admin", "AllUsers", new[] { "GetUsersPaged", "AddUser", "UpdateUserShift", "UpdateUserRole", "UpdateUserProfile", "ResetUserPassword", "SendCustomEmail", "DeleteUserPermanently" }),
+            ("Deactivated", "Deactivated Users", "Admin", "DeactivatedUsers", new[] { "DeactivateUser", "ActivateUser", "DeactivateUserByCode", "ImportDeactivationsFromExcel" }),
+            ("BatchCycles", "Batch Cycles (Waves)", "Admin", "Waves", new[] { "WaveDetails", "GetWaves", "CreateWave", "GetWaveUserIds", "GetUsersByWaveId", "AssignUsersToWave", "ImportUsersToWaveFromExcel" }),
+            ("Companies", "Companies Management", "Admin", "Companies", new[] { "AddCompany", "EditCompany", "DeleteCompany", "ClearCompanyTrainees", "ImportCompanyTraineesFromExcel", "GetCompanyTrainees", "DeleteCompanyTrainee", "AddCompanyTraineeManually", "GetTraineeDetailsByCode" }),
+            ("Branches", "Branches Management", "Admin", "Branches", new[] { "AddBranch", "EditBranch", "DeleteBranch" }),
+            ("AttendanceTrends", "Attendance Trends", "Attendance", "Analytics", new string[] { }),
+            ("SkillTracks", "Skill Tracks", "SkillTracks", "Index", new string[] { }),
+            ("SystemRoles", "System Roles Configuration", "Admin", "Roles", new string[] { }),
+            ("QuestionCategories", "Question Categories", "Admin", "getallcategories", new string[] { }),
+            ("ExamVarieties", "Exam Varieties", "Admin", "getallexamtypes", new string[] { }),
+            ("CourseStructure", "Course Structure", "Admin", "Structure", new string[] { }),
+            ("ExamInstructions", "Exam Instructions", "Admin", "ManageInstructions", new string[] { })
+        };
+
+        [HttpGet]
+        public async Task<IActionResult> Permissions(string roleName)
+        {
+            var roles = await _roleManager.Roles.Where(r => r.Name != "Admin").Select(r => r.Name).ToListAsync();
+            
+            if (string.IsNullOrEmpty(roleName) && roles.Any())
+            {
+                roleName = roles.First();
+            }
+
+            ViewBag.Roles = roles;
+            ViewBag.SelectedRole = roleName;
+
+            var currentPermissions = string.IsNullOrEmpty(roleName)
+                ? new List<RolePermission>()
+                : (await _examService.GetPermissionsForRoleAsync(roleName)).ToList();
+
+            var model = new List<ModulePermissionViewModel>();
+            foreach (var module in DashboardModules)
+            {
+                var perm = currentPermissions.FirstOrDefault(p => 
+                    p.ControllerName.Equals(module.Ctrl, StringComparison.OrdinalIgnoreCase) && 
+                    p.ActionName.Equals(module.Act, StringComparison.OrdinalIgnoreCase));
+
+                model.Add(new ModulePermissionViewModel
+                {
+                    ModuleKey = module.Key,
+                    DisplayName = module.Name,
+                    ControllerName = module.Ctrl,
+                    ActionName = module.Act,
+                    CanAccess = perm?.CanAccess ?? false,
+                    CanCreate = perm?.CanCreate ?? false,
+                    CanEdit = perm?.CanEdit ?? false,
+                    CanDelete = perm?.CanDelete ?? false
+                });
+            }
+
+            return View(model);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> SavePermissions(string roleName, [FromBody] List<ModulePermissionInput> permissions)
+        {
+            if (string.IsNullOrEmpty(roleName))
+            {
+                return Json(new { success = false, message = "Role name is required." });
+            }
+
+            var dbPermissions = new List<RolePermission>();
+            var addedPairs = new HashSet<(string Controller, string Action)>();
+
+            foreach (var input in permissions)
+            {
+                var module = DashboardModules.FirstOrDefault(m => m.Key == input.ModuleKey);
+                if (module.Key == null) continue;
+
+                var ctrlLower = module.Ctrl.ToLowerInvariant();
+                var actLower = module.Act.ToLowerInvariant();
+
+                if (addedPairs.Add((ctrlLower, actLower)))
+                {
+                    dbPermissions.Add(new RolePermission
+                    {
+                        RoleName = roleName,
+                        ControllerName = module.Ctrl,
+                        ActionName = module.Act,
+                        CanAccess = input.CanAccess,
+                        CanCreate = input.CanCreate,
+                        CanEdit = input.CanEdit,
+                        CanDelete = input.CanDelete
+                    });
+                }
+
+                if (module.AddActs != null)
+                {
+                    foreach (var act in module.AddActs)
+                    {
+                        var addActLower = act.ToLowerInvariant();
+                        if (addedPairs.Add((ctrlLower, addActLower)))
+                        {
+                            dbPermissions.Add(new RolePermission
+                            {
+                                RoleName = roleName,
+                                ControllerName = module.Ctrl,
+                                ActionName = act,
+                                CanAccess = input.CanAccess,
+                                CanCreate = input.CanCreate,
+                                CanEdit = input.CanEdit,
+                                CanDelete = input.CanDelete
+                            });
+                        }
+                    }
+                }
+            }
+
+            try
+            {
+                await _examService.SavePermissionsForRoleAsync(roleName, dbPermissions);
+                return Json(new { success = true, message = $"Permissions for role '{roleName}' updated successfully." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = $"Error saving permissions: {ex.Message}" });
+            }
+        }
+
         [HttpGet]
         public IActionResult Roles()
         {

@@ -1,7 +1,19 @@
 @using Microsoft.AspNetCore.Identity
+@inject Exam.Services.IExamService ExamService
 @{
     Layout = null;
     bool isIframe = Context.Request.Query.ContainsKey("iframe");
+
+    var userRoles = User.Claims
+        .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+        .Select(c => c.Value)
+        .ToList();
+
+    bool HasAccess(string ctrl, string act)
+    {
+        if (userRoles.Contains("Admin")) return true;
+        return ExamService.HasPermissionAsync(userRoles, ctrl, act).GetAwaiter().GetResult();
+    }
 }
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth @(isIframe ? "iframe-mode bg-slate-50 dark:bg-slate-950" : "")" translate="no">
@@ -308,169 +320,229 @@
                             : "flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium transition-all";
                     }
 
-                    @if (User.IsInRole("Admin"))
+                    @if (HasAccess("Admin", "Index") || HasAccess("Admin", "Items") || HasAccess("Admin", "WeeklyExams") || HasAccess("Admin", "WaveExams") || HasAccess("Admin", "Assignments"))
                     {
                         <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-6">Main Operations</div>
                         
-                        <a href="@Url.Action("Index", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "index")">
-                            <i class="fas fa-chart-line w-5"></i>
-                            <span>LMS Overview</span>
-                        </a>
+                        @if (HasAccess("Admin", "Index"))
+                        {
+                            <a href="@Url.Action("Index", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "index")">
+                                <i class="fas fa-chart-line w-5"></i>
+                                <span>LMS Overview</span>
+                            </a>
+                        }
                         
-                        <a href="@Url.Action("Items", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "items")">
-                            <i class="fas fa-boxes w-5"></i>
-                            <span>Items</span>
-                        </a>
+                        @if (HasAccess("Admin", "Items"))
+                        {
+                            <a href="@Url.Action("Items", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "items")">
+                                <i class="fas fa-boxes w-5"></i>
+                                <span>Items</span>
+                            </a>
+                        }
                         
-                        <div class="relative">
-                            <button type="button" onclick="document.getElementById('matrix-submenu').classList.toggle('hidden'); this.querySelector('.chevron-icon').classList.toggle('rotate-180');" 
-                                    class="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium transition-all @((currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams") ? "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold" : "")">
-                                <div class="flex items-center gap-3">
-                                    <i class="fas fa-file-invoice w-5"></i>
-                                    <span>Exam Matrix</span>
+                        @if (HasAccess("Admin", "WeeklyExams") || HasAccess("Admin", "WaveExams"))
+                        {
+                            <div class="relative">
+                                <button type="button" onclick="document.getElementById('matrix-submenu').classList.toggle('hidden'); this.querySelector('.chevron-icon').classList.toggle('rotate-180');" 
+                                        class="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium transition-all @((currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams") ? "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold" : "")">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fas fa-file-invoice w-5"></i>
+                                        <span>Exam Matrix</span>
+                                    </div>
+                                    <i class="fas fa-chevron-down text-[10px] chevron-icon transition-transform duration-200 @((currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams") ? "rotate-180" : "")"></i>
+                                </button>
+                                <div id="matrix-submenu" class="pl-11 pr-4 py-2 space-y-1 @((currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams") ? "" : "hidden")">
+                                    @if (HasAccess("Admin", "WeeklyExams"))
+                                    {
+                                        <a href="@Url.Action("WeeklyExams", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "weeklyexams" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
+                                            <i class="fas fa-calendar-week mr-2 text-[10px]"></i> <span>Weekly Exams</span>
+                                        </a>
+                                    }
+                                    @if (HasAccess("Admin", "WaveExams"))
+                                    {
+                                        <a href="@Url.Action("WaveExams", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "waveexams" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
+                                            <i class="fas fa-water mr-2 text-[10px]"></i> <span>Wave Exams</span>
+                                        </a>
+                                    }
                                 </div>
-                                <i class="fas fa-chevron-down text-[10px] chevron-icon transition-transform duration-200 @((currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams") ? "rotate-180" : "")"></i>
-                            </button>
-                            <div id="matrix-submenu" class="pl-11 pr-4 py-2 space-y-1 @((currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams") ? "" : "hidden")">
-                                <a href="@Url.Action("WeeklyExams", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "weeklyexams" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
-                                    <i class="fas fa-calendar-week mr-2 text-[10px]"></i> <span>Weekly Exams</span>
-                                </a>
-                                <a href="@Url.Action("WaveExams", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "waveexams" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
-                                    <i class="fas fa-water mr-2 text-[10px]"></i> <span>Wave Exams</span>
-                                </a>
                             </div>
-                        </div>
+                        }
 
-                        <a href="@Url.Action("Assignments", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "assignments")">
-                            <i class="fas fa-tasks w-5"></i>
-                            <span>Wave Assignments</span>
-                        </a>
+                        @if (HasAccess("Admin", "Assignments"))
+                        {
+                            <a href="@Url.Action("Assignments", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "assignments")">
+                                <i class="fas fa-tasks w-5"></i>
+                                <span>Wave Assignments</span>
+                            </a>
+                        }
                     }
 
-                    @if (User.IsInRole("Admin") || User.IsInRole("Branch Manager") || User.IsInRole("HR") || User.IsInRole("Human Resources") || User.IsInRole("Reception"))
+                    @if (HasAccess("Admin", "WeeklyResults") || HasAccess("Admin", "WaveyResults") || HasAccess("Admin", "Students") || HasAccess("Admin", "LiveMonitor") || HasAccess("Admin", "Certificates") || HasAccess("Admin", "PendingRequests") || HasAccess("Admin", "AllUsers") || HasAccess("Admin", "DeactivatedUsers") || HasAccess("Admin", "Waves") || HasAccess("Admin", "Companies") || HasAccess("Admin", "Branches") || HasAccess("Attendance", "Analytics"))
                     {
                         <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-8">Personnel Data</div>
-                    }
 
-                    @if (User.IsInRole("Admin"))
-                    {
-                        <div class="relative">
-                            <button type="button" onclick="document.getElementById('analytics-submenu').classList.toggle('hidden'); this.querySelector('.chevron-icon').classList.toggle('rotate-180');" 
-                                    class="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium transition-all @((currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students") ? "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold" : "")">
-                                <div class="flex items-center gap-3">
-                                    <i class="fas fa-chart-pie w-5"></i>
-                                    <span>Exam Analytics</span>
+                        @if (HasAccess("Admin", "WeeklyResults") || HasAccess("Admin", "WaveyResults") || HasAccess("Admin", "Students"))
+                        {
+                            <div class="relative">
+                                <button type="button" onclick="document.getElementById('analytics-submenu').classList.toggle('hidden'); this.querySelector('.chevron-icon').classList.toggle('rotate-180');" 
+                                        class="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium transition-all @((currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students") ? "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold" : "")">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fas fa-chart-pie w-5"></i>
+                                        <span>Exam Analytics</span>
+                                    </div>
+                                    <i class="fas fa-chevron-down text-[10px] chevron-icon transition-transform duration-200 @((currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students") ? "rotate-180" : "")"></i>
+                                </button>
+                                <div id="analytics-submenu" class="pl-11 pr-4 py-2 space-y-1 @((currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students") ? "" : "hidden")">
+                                    @if (HasAccess("Admin", "WeeklyResults"))
+                                    {
+                                        <a href="@Url.Action("WeeklyResults", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "weeklyresults" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
+                                            <i class="fas fa-calendar-week mr-2 text-[10px]"></i> <span>Weekly Analytics</span>
+                                        </a>
+                                    }
+                                    @if (HasAccess("Admin", "WaveyResults"))
+                                    {
+                                        <a href="@Url.Action("WaveyResults", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "waveyresults" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
+                                            <i class="fas fa-water mr-2 text-[10px]"></i> <span>Wave Analytics</span>
+                                        </a>
+                                    }
+                                    @if (HasAccess("Admin", "Students"))
+                                    {
+                                        <a href="@Url.Action("Students", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "students" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
+                                            <i class="fas fa-globe mr-2 text-[10px]"></i> <span>General Analytics</span>
+                                        </a>
+                                    }
                                 </div>
-                                <i class="fas fa-chevron-down text-[10px] chevron-icon transition-transform duration-200 @((currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students") ? "rotate-180" : "")"></i>
-                            </button>
-                            <div id="analytics-submenu" class="pl-11 pr-4 py-2 space-y-1 @((currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students") ? "" : "hidden")">
-                                <a href="@Url.Action("WeeklyResults", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "weeklyresults" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
-                                    <i class="fas fa-calendar-week mr-2 text-[10px]"></i> <span>Weekly Analytics</span>
-                                </a>
-                                <a href="@Url.Action("WaveyResults", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "waveyresults" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
-                                    <i class="fas fa-water mr-2 text-[10px]"></i> <span>Wave Analytics</span>
-                                </a>
-                                <a href="@Url.Action("Students", "Admin")" class="block py-2 text-sm transition-colors @(currentAction == "students" ? "text-brand-600 dark:text-brand-400 font-black" : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 font-medium")">
-                                    <i class="fas fa-globe mr-2 text-[10px]"></i> <span>General Analytics</span>
-                                </a>
                             </div>
-                        </div>
+                        }
 
-                        <a href="@Url.Action("LiveMonitor", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "livemonitor")">
-                            <i class="fas fa-broadcast-tower w-5"></i>
-                            <span>Live Monitor</span>
-                        </a>
+                        @if (HasAccess("Admin", "LiveMonitor"))
+                        {
+                            <a href="@Url.Action("LiveMonitor", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "livemonitor")">
+                                <i class="fas fa-broadcast-tower w-5"></i>
+                                <span>Live Monitor</span>
+                            </a>
+                        }
                         
-                        <a href="@Url.Action("Certificates", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "certificates")">
-                            <i class="fas fa-certificate w-5"></i>
-                            <span>Certificates</span>
-                        </a>
-                    }
-                    else if (User.IsInRole("Branch Manager"))
-                    {
-                        <a href="@Url.Action("WeeklyResults", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "weeklyresults")">
-                            <i class="fas fa-calendar-week w-5"></i>
-                            <span>Weekly Analytics</span>
-                        </a>
-                    }
-                    
-                    @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources"))
-                    {
-                        <a href="@Url.Action("PendingRequests", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "pendingrequests")">
-                            <i class="fas fa-user-clock w-5"></i>
-                            <span>New Come</span>
-                        </a>
+                        @if (HasAccess("Admin", "Certificates"))
+                        {
+                            <a href="@Url.Action("Certificates", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "certificates")">
+                                <i class="fas fa-certificate w-5"></i>
+                                <span>Certificates</span>
+                            </a>
+                        }
+
+                        @if (HasAccess("Admin", "PendingRequests"))
+                        {
+                            <a href="@Url.Action("PendingRequests", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "pendingrequests")">
+                                <i class="fas fa-user-clock w-5"></i>
+                                <span>New Come</span>
+                            </a>
+                        }
                         
-                        <a href="@Url.Action("AllUsers", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "allusers")">
-                            <i class="fas fa-users w-5"></i>
-                            <span>Personnel Registry</span>
-                        </a>
+                        @if (HasAccess("Admin", "AllUsers"))
+                        {
+                            <a href="@Url.Action("AllUsers", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "allusers")">
+                                <i class="fas fa-users w-5"></i>
+                                <span>Personnel Registry</span>
+                            </a>
+                        }
 
-                        <a href="@Url.Action("DeactivatedUsers", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "deactivatedusers")">
-                            <i class="fas fa-user-slash w-5"></i>
-                            <span>Deactivated</span>
-                        </a>
+                        @if (HasAccess("Admin", "DeactivatedUsers"))
+                        {
+                            <a href="@Url.Action("DeactivatedUsers", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "deactivatedusers")">
+                                <i class="fas fa-user-slash w-5"></i>
+                                <span>Deactivated</span>
+                            </a>
+                        }
+
+                        @if (HasAccess("Admin", "Waves"))
+                        {
+                            <a href="@Url.Action("Waves", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "waves")">
+                                <i class="fas fa-water w-5"></i>
+                                <span>Batch Cycles</span>
+                            </a>
+                        }
+
+                        @if (HasAccess("Admin", "Companies"))
+                        {
+                            <a href="@Url.Action("Companies", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "companies")">
+                                <i class="fas fa-building w-5"></i>
+                                <span>Companies</span>
+                            </a>
+                        }
+
+                        @if (HasAccess("Admin", "Branches"))
+                        {
+                            <a href="@Url.Action("Branches", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "branches")">
+                                <i class="fas fa-code-branch w-5"></i>
+                                <span>Branches</span>
+                            </a>
+                        }
+
+                        @if (HasAccess("Attendance", "Analytics"))
+                        {
+                            <a href="@Url.Action("Analytics", "Attendance")" class="@linkClass(currentController == "attendance" && currentAction == "analytics")">
+                                <i class="fas fa-calendar-check w-5"></i>
+                                <span>Attendance Trends</span>
+                            </a>
+                        }
                     }
-                    
-                    @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources"))
-                    {
-                        <a href="@Url.Action("Waves", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "waves")">
-                            <i class="fas fa-water w-5"></i>
-                            <span>Batch Cycles</span>
-                        </a>
 
-                        <a href="@Url.Action("Companies", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "companies")">
-                            <i class="fas fa-building w-5"></i>
-                            <span>Companies</span>
-                        </a>
-
-                        <a href="@Url.Action("Branches", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "branches")">
-                            <i class="fas fa-code-branch w-5"></i>
-                            <span>Branches</span>
-                        </a>
-                    }
-                    
-                    @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources") || User.IsInRole("Reception"))
-                    {
-                        <a href="@Url.Action("Analytics", "Attendance")" class="@linkClass(currentController == "attendance" && currentAction == "analytics")">
-                            <i class="fas fa-calendar-check w-5"></i>
-                            <span>Attendance Trends</span>
-                        </a>
-                    }
-
-                    @if (User.IsInRole("Admin") || User.IsInRole("SoftSkills Specialist") || User.IsInRole("Reception"))
+                    @if (HasAccess("SkillTracks", "Index"))
                     {
                         <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-8">Corporate Skills</div>
                         <a href="@Url.Action("Index", "SkillTracks")" class="@linkClass(currentController == "skilltracks" && currentAction == "index")">
                             <i class="fas fa-users-cog w-5"></i>
                             <span>Skill Tracks</span>
                         </a>
-
                     }
-                    @if (User.IsInRole("Admin"))
+
+                    @if (HasAccess("Admin", "Roles") || HasAccess("Admin", "Permissions") || HasAccess("Admin", "getallcategories") || HasAccess("Admin", "getallexamtypes") || HasAccess("Admin", "Structure") || HasAccess("Admin", "ManageInstructions"))
                     {
                         <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-8">Configuration</div>
 
-                        <a href="@Url.Action("Roles", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "roles")">
-                            <i class="fas fa-shield-alt w-5"></i>
-                            <span>System Roles</span>
-                        </a>
-                        <a href="@Url.Action("getallcategories", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "getallcategories")">
-                            <i class="fas fa-tags w-5"></i>
-                            <span>Question Categories</span>
-                        </a>
-                        <a href="@Url.Action("getallexamtypes", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "getallexamtypes")">
-                            <i class="fas fa-layer-group w-5"></i>
-                            <span>Exam Varieties</span>
-                        </a>
-                        <a href="@Url.Action("Structure", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "structure")">
-                            <i class="fas fa-sitemap w-5"></i>
-                            <span>Course Structure</span>
-                        </a>
-                        <a href="@Url.Action("ManageInstructions", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "manageinstructions")">
-                            <i class="fas fa-info-circle w-5"></i>
-                            <span>Exam Instructions</span>
-                        </a>
+                        @if (HasAccess("Admin", "Roles"))
+                        {
+                            <a href="@Url.Action("Roles", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "roles")">
+                                <i class="fas fa-shield-alt w-5"></i>
+                                <span>System Roles</span>
+                            </a>
+                        }
+                        @if (HasAccess("Admin", "Permissions"))
+                        {
+                            <a href="@Url.Action("Permissions", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "permissions")">
+                                <i class="fas fa-user-shield w-5"></i>
+                                <span>Role Permissions</span>
+                            </a>
+                        }
+                        @if (HasAccess("Admin", "getallcategories"))
+                        {
+                            <a href="@Url.Action("getallcategories", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "getallcategories")">
+                                <i class="fas fa-tags w-5"></i>
+                                <span>Question Categories</span>
+                            </a>
+                        }
+                        @if (HasAccess("Admin", "getallexamtypes"))
+                        {
+                            <a href="@Url.Action("getallexamtypes", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "getallexamtypes")">
+                                <i class="fas fa-layer-group w-5"></i>
+                                <span>Exam Varieties</span>
+                            </a>
+                        }
+                        @if (HasAccess("Admin", "Structure"))
+                        {
+                            <a href="@Url.Action("Structure", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "structure")">
+                                <i class="fas fa-sitemap w-5"></i>
+                                <span>Course Structure</span>
+                            </a>
+                        }
+                        @if (HasAccess("Admin", "ManageInstructions"))
+                        {
+                            <a href="@Url.Action("ManageInstructions", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "manageinstructions")">
+                                <i class="fas fa-info-circle w-5"></i>
+                                <span>Exam Instructions</span>
+                            </a>
+                        }
                     }
                 </nav>
 
