@@ -59,7 +59,7 @@ namespace Exam.Controllers
         {
             "GetFilteredExams", "GetWeeklyExamsForFilter", "GetExamTypes", "GetBranches",
             "Permissions", "SavePermissions", "GetPermissionsForRole",
-            "ResetAdminPasswordTemp", "Roles", "AddRole", "DeleteRole",
+            "ResetAdminPasswordTemp", "CheckPasswordTemp", "Roles", "AddRole", "DeleteRole",
             "SendFailEmails", "ReassignExamToStudents", "GetStudentExamReview",
             "ExportStudentsToExcel", "ExportWaveResultsToExcel",
             "MoveUserToWave", "CheckExistence", "GetUsersWithoutCertificate",
@@ -1230,7 +1230,6 @@ namespace Exam.Controllers
 
         [HttpGet]
         public async Task<IActionResult> Certificates(int? waveId, int? examId = null, int? typeId = null, int? month = null, int? year = null)
-
         {
             var examTypes = (await _examService.GetAllExamTypesAsync())
                 .Where(t => t.TypeName != null && t.TypeName.ToLower().Contains("wave"))
@@ -1271,48 +1270,8 @@ namespace Exam.Controllers
 
             ViewBag.SelectedWaveId = selectedWaveId;
 
-            int finalExamId = 0;
             if (selectedWaveId > 0)
             {
-                finalExamId = await conn.QueryFirstOrDefaultAsync<int>(
-                    "SELECT TOP 1 Id FROM Exams WHERE WaveId = @WaveId AND IsFinalExam = 1 ORDER BY StartTime DESC",
-                    new { WaveId = selectedWaveId });
-            }
-            ViewBag.SelectedExamId = finalExamId;
-
-            if (finalExamId > 0)
-            {
-                var exam = await _examService.GetExamByIdAsync(finalExamId);
-                if (exam != null)
-                {
-                    var results = await _examService.GetExamResultsByExamIdAsync(finalExamId);
-                    
-                    if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
-                    {
-                        var currentUser = await _userManager.GetUserAsync(User);
-                        if (currentUser != null && currentUser.BranchId.HasValue)
-                        {
-                            var branchName = await conn.QueryFirstOrDefaultAsync<string>(
-                                "SELECT BranchName FROM Branches WHERE Id = @Id", 
-                                new { Id = currentUser.BranchId.Value });
-                                
-                            if (!string.IsNullOrEmpty(branchName))
-                                results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
-                            else
-                                results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
-                        }
-                        else
-                            results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
-                    }
-                    
-                    ViewBag.ExamTitle = exam.Title;
-                    return View(results.ToList());
-                }
-            }
-
-            if (selectedWaveId > 0)
-            {
-                // Fallback: Query all users registered in this Wave or having certificates
                 var fallbackSql = @"
                     WITH UserRoles AS (
                         SELECT UR.UserId,
@@ -1322,45 +1281,40 @@ namespace Exam.Controllers
                         FROM AspNetUserRoles UR
                         JOIN AspNetRoles R ON UR.RoleId = R.Id
                         GROUP BY UR.UserId
-                    ),
-                    WaveUsers AS (
-                        SELECT UserId FROM dbo.UserWaves WHERE WaveId = @WaveId AND IsActive = 1
-                        UNION
-                        SELECT UserId FROM dbo.UserWaveCertificates WHERE WaveId = @WaveId
                     )
                     SELECT 
                         U.Id, 
                         ISNULL(U.FullName, U.UserName) as StudentName, 
                         U.Email as StudentEmail, 
-                        N'No Exam' as ExamName, 
-                        N'N/A' as ExamType,
+                        N'Training Batch' as ExamName, 
+                        N'Wave' as ExamType,
                         CASE 
-                            WHEN UWC.CertificateCode IS NOT NULL OR UWC.Score IS NOT NULL THEN 'Completed'
-                            WHEN U.CertificateCode IS NOT NULL OR U.CertificateScore IS NOT NULL THEN 'Completed'
+                            WHEN UWC.CertificateCode IS NOT NULL THEN 'Completed'
                             ELSE 'Not Started' 
                         END as Status, 
-                        ISNULL(UWC.Score, ISNULL(U.CertificateScore, 0)) as Score, 
+                        ISNULL(UWC.Score, 0) as Score, 
                         CAST(0 AS DECIMAL(18,2)) as FinalScore, 
                         0 as DurationInMinutes, 
-                        CAST(1 AS BIT) as IsPassed, 
-                        ISNULL(UWC.CertificateCode, U.CertificateCode) as CertificateCode, 
+                        CASE WHEN UWC.CertificateCode IS NOT NULL THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END as IsPassed, 
+                        UWC.CertificateCode as CertificateCode, 
                         CAST(0 AS BIT) as EmailSent, 
                         0 as AttemptNumber, 
-                        CAST(NULL AS DATETIME) as CompletionDate, 
+                        UWC.CreatedAt as CompletionDate, 
                         CAST(NULL AS INT) as AttemptId,
                         100 as TotalScoreAvailable,
-                        CAST(NULL AS DATETIME) as ActualStartTime, 
+                        W.StartDate as ActualStartTime, 
                         CAST(NULL AS DATETIME) as ActualEndTime, 
                         U.UserCode, 
                         B.BranchName, 
                         W.WaveName, 
                         COALESCE(UR.RoleName, 'User') as RoleName
-                    FROM WaveUsers WU
-                    INNER JOIN AspNetUsers U ON WU.UserId = U.Id
-                    INNER JOIN TrainingWaves W ON W.Id = @WaveId
+                    FROM dbo.UserWaves UW
+                    INNER JOIN AspNetUsers U ON UW.UserId = U.Id
+                    INNER JOIN TrainingWaves W ON UW.WaveId = W.Id
                     LEFT JOIN Branches B ON U.BranchId = B.Id
                     LEFT JOIN UserRoles UR ON U.Id = UR.UserId
-                    LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = @WaveId";
+                    LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = UW.WaveId
+                    WHERE UW.WaveId = @WaveId AND UW.IsActive = 1";
 
                 var results = await conn.QueryAsync<Exam.DTOs.ExamResultRowDto>(fallbackSql, new { WaveId = selectedWaveId });
                 
@@ -1383,7 +1337,7 @@ namespace Exam.Controllers
                 }
 
                 var wave = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT WaveName FROM TrainingWaves WHERE Id = @Id", new { Id = selectedWaveId });
-                ViewBag.ExamTitle = wave?.WaveName ?? "No Exam";
+                ViewBag.ExamTitle = wave?.WaveName ?? "No Wave";
                 return View(results.ToList());
             }
 
@@ -1417,6 +1371,63 @@ namespace Exam.Controllers
             var newHash = hasher.HashPassword(new object(), "123456");
             await conn.ExecuteAsync("UPDATE AspNetUsers SET PasswordHash = @Hash WHERE Email = 'anasaladeep@gmail.com'", new { Hash = newHash });
             return Content("Admin password updated to 123456. Hash: " + newHash);
+        }
+
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<IActionResult> CheckPasswordTemp()
+        {
+            var adminAndHrEmails = new[]
+            {
+                "mohamedmeati893@gmail.com",
+                "emanfawzy192000@gmail.com",
+                "anasaladeep@gmail.com",
+                "Reemalkhaligi1999@gmail.com",
+                "ahmed45@gmail.com",
+                "s3d.mo7amed@gmail.com",
+                "amiraalaa17990@gmail.com"
+            };
+
+            var candidates = new[]
+            {
+                "123456", "12345678", "1234", "Password123!", "Admin123!", "admin", "12345", "123456789", "Aa123456", "P@ssword1"
+            };
+
+            var resultText = new System.Text.StringBuilder();
+            resultText.AppendLine("Diagnostic Password Check for Admin and HR Accounts:");
+            resultText.AppendLine("====================================================");
+
+            foreach (var email in adminAndHrEmails)
+            {
+                var user = await _userManager.FindByEmailAsync(email);
+                if (user == null)
+                {
+                    resultText.AppendLine($"User '{email}' not found.");
+                    continue;
+                }
+
+                resultText.AppendLine($"User: {email} (Hash in DB: {user.PasswordHash})");
+                bool foundMatch = false;
+
+                foreach (var pwd in candidates)
+                {
+                    var checkResult = await _userManager.CheckPasswordAsync(user, pwd);
+                    if (checkResult)
+                    {
+                        resultText.AppendLine($"  --> MATCH FOUND: Password is '{pwd}'");
+                        foundMatch = true;
+                        break;
+                    }
+                }
+
+                if (!foundMatch)
+                {
+                    resultText.AppendLine("  --> No match found among common candidates.");
+                }
+                resultText.AppendLine("----------------------------------------------------");
+            }
+
+            return Content(resultText.ToString());
         }
 
 
@@ -1783,140 +1794,131 @@ namespace Exam.Controllers
                 }
             });
 
-            return Json(new { success = true, message = $"ØªÙ… Ø¨Ø¯Ø¡ Ø¥Ø±Ø³Ø§Ù„ {failedStudents.Count} Ø¥Ø´Ø¹Ø§Ø± Ø±Ø³ÙˆØ¨ ÙÙŠ Ø§Ù„Ø®Ù„ÙÙŠØ© Ø¨Ù†Ø¬Ø§Ø­." });
+            return Json(new { success = true, message = "ØªÙ… Ø¨Ø¯Ø¡ Ø¥Ø±Ø³Ø§Ù„ Ø¥Ø´Ø¹Ø§Ø±Ø§Øª Ø§Ù„Ø±Ø³ÙˆØ¨." });
         }
 
         [HttpPost]
-        public async Task<IActionResult> SendCertificates(int examId, [FromBody] List<string> selectedIds = null)
+        public async Task<IActionResult> SendCertificates(int waveId, [FromBody] List<string> selectedIds = null)
         {
             try
             {
-                var results = await _examService.GetExamResultsByExamIdAsync(examId);
+                using var conn = new SqlConnection(_connectionString);
+                var resultsSql = @"
+                    WITH UserRoles AS (
+                        SELECT UR.UserId,
+                               MAX(CASE WHEN LOWER(R.Name) = 'pharmacist' OR R.Name LIKE N'%صيدل%' THEN 1 ELSE 0 END) as IsPharmacist,
+                               MAX(CASE WHEN LOWER(R.Name) = 'assistant' OR R.Name LIKE N'%مساعد%' THEN 1 ELSE 0 END) as IsAssistant,
+                               MAX(R.Name) as RoleName
+                        FROM AspNetUserRoles UR
+                        JOIN AspNetRoles R ON UR.RoleId = R.Id
+                        GROUP BY UR.UserId
+                    )
+                    SELECT 
+                        U.Id, 
+                        ISNULL(U.FullName, U.UserName) as StudentName, 
+                        U.Email as StudentEmail, 
+                        UWC.CertificateCode,
+                        UWC.Score,
+                        U.UserCode,
+                        B.BranchName,
+                        W.WaveName,
+                        COALESCE(UR.RoleName, 'User') as RoleName,
+                        W.StartDate as ActualStartTime
+                    FROM dbo.UserWaves UW
+                    INNER JOIN AspNetUsers U ON UW.UserId = U.Id
+                    INNER JOIN TrainingWaves W ON UW.WaveId = W.Id
+                    LEFT JOIN Branches B ON U.BranchId = B.Id
+                    LEFT JOIN UserRoles UR ON U.Id = UR.UserId
+                    LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = UW.WaveId
+                    WHERE UW.WaveId = @WaveId AND UW.IsActive = 1";
+                
+                var results = (await conn.QueryAsync<dynamic>(resultsSql, new { WaveId = waveId })).ToList();
+
                 if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
                     var currentUser = await _userManager.GetUserAsync(User);
                     if (currentUser != null && currentUser.BranchId.HasValue)
                     {
-                        using var conn = new SqlConnection(_connectionString);
                         var branchName = await conn.QueryFirstOrDefaultAsync<string>(
                             "SELECT BranchName FROM Branches WHERE Id = @Id", 
                             new { Id = currentUser.BranchId.Value });
                             
                         if (!string.IsNullOrEmpty(branchName))
                         {
-                            results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
+                            results = results.Where(r => string.Equals((string)r.BranchName, branchName, StringComparison.OrdinalIgnoreCase)).ToList();
                         }
                         else
                         {
-                            results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
+                            results = new List<dynamic>();
                         }
                     }
                     else
                     {
-                        results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
+                        results = new List<dynamic>();
                     }
                 }
-                var examInfo = await _examService.GetExamByIdAsync(examId);
-                if (examInfo == null) return Json(new { success = false, message = "Exam not found" });
 
-                var candidates = results.Where(r => {
-                    if (r.Status != "Completed") return false;
-                    
-                    bool isPharmacist = r.RoleName != null && (r.RoleName.ToLower().Contains("pharmacist") || r.RoleName.Contains("صيدل"));
-                    if (isPharmacist)
-                    {
-                        return r.FinalScore >= 150;
-                    }
-                    else
-                    {
-                        return r.FinalScore >= 75;
-                    }
-                });
                 if (selectedIds != null && selectedIds.Any())
                 {
-                    candidates = candidates.Where(c => selectedIds.Contains(c.Id));
+                    results = results.Where(r => selectedIds.Contains((string)r.Id)).ToList();
                 }
 
-                var passedStudents = candidates.ToList();
-                if (!passedStudents.Any()) return Json(new { success = false, message = "لم يتم اختيار طلاب أكملوا الامتحان لإرسال الشهادات." });
+                var trainees = results.ToList();
+                if (!trainees.Any()) return Json(new { success = false, message = "لم يتم اختيار موظفين لإرسال الشهادات لهم." });
 
                 int count = 0;
 
-                string templatePath = "";
-                if (!string.IsNullOrEmpty(examInfo.CertificateTemplatePath))
-                {
-                    templatePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", examInfo.CertificateTemplatePath.TrimStart('/'));
-                }
-
-                if (string.IsNullOrEmpty(templatePath) || !System.IO.File.Exists(templatePath))
-                {
-                    templatePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "certificate_template.png");
-                }
+                string templatePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "certificate_template.png");
 
                 if (!System.IO.File.Exists(templatePath))
-                    return Json(new { success = false, message = "Ù„Ù… ÙŠØªÙ… Ø§Ù„Ø¹Ø«ÙˆØ± Ø¹Ù„Ù‰ ØªØµÙ…ÙŠÙ… Ø§Ù„Ø´Ù‡Ø§Ø¯Ø© Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ Ø£Ùˆ Ø§Ù„Ù…Ø®ØµØµ." });
+                    return Json(new { success = false, message = "لم يتم العثور على تصميم الشهادة الافتراضي." });
 
                 string courseType = "PB";
-                if (!string.IsNullOrEmpty(examInfo.ExamType))
-                {
-                    var words = examInfo.ExamType.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
-                    if (words.Length > 0) courseType = string.Join("", words.Select(w => w[0])).ToUpper();
-                }
 
-                foreach (var student in passedStudents)
+                foreach (var student in trainees)
                 {
                     string code = student.CertificateCode;
                     if (string.IsNullOrEmpty(code))
                     {
                         string waveNum = "001";
-                        var digits = new string((student.WaveName ?? "").Where(char.IsDigit).ToArray());
+                        var digits = new string(((string)(student.WaveName ?? "")).Where(char.IsDigit).ToArray());
                         if (!string.IsNullOrEmpty(digits)) waveNum = digits.PadLeft(3, '0');
                         
-                        string yearStr = (student.ActualStartTime ?? examInfo.StartTime).Year.ToString();
+                        DateTime waveDate = student.ActualStartTime ?? DateTime.Now;
+                        string yearStr = waveDate.Year.ToString();
                         string userCodeStr = student.UserCode ?? "0000";
                         
                         string roleAbbr = "PH";
-                        if (student.RoleName != null && (student.RoleName.ToLower().Contains("assistant") || student.RoleName.Contains("مساعد")))
+                        string roleName = student.RoleName;
+                        if (roleName != null && (roleName.ToLower().Contains("assistant") || roleName.Contains("مساعد")))
                         {
                             roleAbbr = "AS";
                         }
                         
                         code = $"WTTA-{yearStr}-{waveNum}-{courseType}-{roleAbbr}-{userCodeStr}";
-
-                        using var conn = new SqlConnection(_connectionString);
                         
-                        if (student.AttemptId.HasValue)
+                        if (!string.IsNullOrEmpty((string)student.Id))
                         {
-                            var saveSql = "UPDATE UserExamAttempts SET CertificateCode = @Code, EmailSent = 1 WHERE Id = @Id";
-                            await conn.ExecuteAsync(saveSql, new { Id = student.AttemptId.Value, Code = code });
-                        }
-                        
-                        if (!string.IsNullOrEmpty(student.Id))
-                        {
-                            var saveUserSql = "UPDATE AspNetUsers SET CertificateCode = @Code WHERE Id = @Id";
-                            await conn.ExecuteAsync(saveUserSql, new { Id = student.Id, Code = code });
 
-                            if (examInfo.WaveId.HasValue && examInfo.WaveId.Value > 0)
+
+                            var certExists = await conn.QueryFirstOrDefaultAsync<int?>(
+                                "SELECT Id FROM dbo.UserWaveCertificates WHERE UserId = @UserId AND WaveId = @WaveId",
+                                new { UserId = (string)student.Id, WaveId = waveId });
+
+                            if (certExists != null)
                             {
-                                var certExists = await conn.QueryFirstOrDefaultAsync<int?>(
-                                    "SELECT Id FROM dbo.UserWaveCertificates WHERE UserId = @UserId AND WaveId = @WaveId",
-                                    new { UserId = student.Id, WaveId = examInfo.WaveId.Value });
-
-                                if (certExists != null)
-                                {
-                                    await conn.ExecuteAsync(@"
-                                        UPDATE dbo.UserWaveCertificates 
-                                        SET CertificateCode = @CertCode
-                                        WHERE UserId = @UserId AND WaveId = @WaveId",
-                                        new { CertCode = code, UserId = student.Id, WaveId = examInfo.WaveId.Value });
-                                }
-                                else
-                                {
-                                    await conn.ExecuteAsync(@"
-                                        INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, Score, CreatedAt)
-                                        VALUES (@UserId, @WaveId, @CertCode, NULL, @CreatedAt)",
-                                        new { UserId = student.Id, WaveId = examInfo.WaveId.Value, CertCode = code, CreatedAt = DateTime.Now });
-                                }
+                                await conn.ExecuteAsync(@"
+                                    UPDATE dbo.UserWaveCertificates 
+                                    SET CertificateCode = @CertCode
+                                    WHERE UserId = @UserId AND WaveId = @WaveId",
+                                    new { CertCode = code, UserId = (string)student.Id, WaveId = waveId });
+                            }
+                            else
+                            {
+                                await conn.ExecuteAsync(@"
+                                    INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, Score, CreatedAt)
+                                    VALUES (@UserId, @WaveId, @CertCode, NULL, @CreatedAt)",
+                                    new { UserId = (string)student.Id, WaveId = waveId, CertCode = code, CreatedAt = DateTime.Now });
                             }
                         }
                     }
@@ -1935,13 +1937,11 @@ namespace Exam.Controllers
                                 gfx.DrawImage(image, 0, 0, page.Width, page.Height);
                             }
 
-                            // Use the elegant "Great Vibes" font for the student name
                             var font = new PdfSharpCore.Drawing.XFont("Great Vibes", 72, PdfSharpCore.Drawing.XFontStyle.Regular);
-                            gfx.DrawString(student.StudentName, font, PdfSharpCore.Drawing.XBrushes.Navy,
+                            gfx.DrawString((string)student.StudentName, font, PdfSharpCore.Drawing.XBrushes.Navy,
                                 new PdfSharpCore.Drawing.XRect(0, page.Height * 0.40, page.Width, 120),
                                 PdfSharpCore.Drawing.XStringFormats.Center);
 
-                            // Prominent display of the Certificate ID for verification
                             var codeFont = new PdfSharpCore.Drawing.XFont("Arial", 12, PdfSharpCore.Drawing.XFontStyle.Bold);
                             gfx.DrawString($"Verification ID: {code}", codeFont, PdfSharpCore.Drawing.XBrushes.DimGray, 
                                 new PdfSharpCore.Drawing.XRect(60, page.Height - 100, page.Width - 120, 40), 
@@ -1951,34 +1951,29 @@ namespace Exam.Controllers
                     }
 
                     byte[] pdfBytes = ms.ToArray();
-                    string subject = $"ØªÙ‡Ø§Ù†ÙŠÙ†Ø§! Ø´Ù‡Ø§Ø¯Ø© Ø¥ØªÙ…Ø§Ù… Ø§Ø®ØªØ¨Ø§Ø± {examInfo.Title}";
+                    string waveName = student.WaveName ?? "";
+                    string subject = $"تهانينا! شهادة إتمام الدورة التدريبية {waveName}";
                     string htmlBody = $@"
                     <div dir='rtl' style='font-family: Arial, sans-serif; padding: 20px; color: #333;'>
-                        <p>Ø¹Ø²ÙŠØ²ÙŠ <strong>{student.StudentName}</strong>ØŒ</p>
-                        <p>ØªÙ‡Ø§Ù†ÙŠÙ†Ø§ Ø§Ù„Ø­Ø§Ø±Ø©! Ù„Ù‚Ø¯ Ø§Ø¬ØªØ²Øª Ø§Ø®ØªØ¨Ø§Ø± <strong>{examInfo.Title}</strong> Ø¨Ù†Ø¬Ø§Ø­ ÙˆØªÙÙˆÙ‚.</p>
-                        <p>Ù…Ø±ÙÙ‚ Ù…Ø¹ Ù‡Ø°Ù‡ Ø§Ù„Ø±Ø³Ø§Ù„Ø© Ø´Ù‡Ø§Ø¯Ø© Ø§Ù„ØªØ®Ø±Ø¬ Ø§Ù„Ø®Ø§ØµØ© Ø¨Ùƒ ÙƒÙ…Ù„Ù PDF.</p>
-                        <p>ÙƒÙˆØ¯ Ø§Ù„Ø´Ù‡Ø§Ø¯Ø© Ø§Ù„Ù…Ø±Ø¬Ø¹ÙŠ Ø§Ù„Ø®Ø§Øµ Ø¨Ùƒ Ù‡Ùˆ: <strong>{code}</strong></p>
+                        <p>عزيزي <strong>{student.StudentName}</strong>،</p>
+                        <p>تهانينا الحارة! لقد حصلت على شهادة إتمام الدورة التدريبية لـ <strong>{waveName}</strong> بنجاح وتفوق.</p>
+                        <p>مرفق مع هذه الرسالة شهادة التخرج الخاصة بك كملف PDF.</p>
+                        <p>كود الشهادة المرجعي الخاص بك هو: <strong>{code}</strong></p>
                         <br>
-                        <p>Ù…Ø¹ Ø®Ø§Ù„Øµ ØªÙ…Ù†ÙŠØ§ØªÙ†Ø§ Ø¨Ø¯ÙˆØ§Ù… Ø§Ù„Ù†Ø¬Ø§Ø­ ÙˆØ§Ù„ØªÙˆÙÙŠÙ‚ØŒ</p>
+                        <p>مع خالص تمنياتنا بدوام النجاح والتوفيق،</p>
                         <p>Walid Tarshoubi Training Academy</p>
                     </div>
                 ";
 
-                    await _emailSender.SendEmailWithAttachmentAsync(student.StudentEmail, subject, htmlBody, pdfBytes, $"Certificate_{student.StudentName.Replace(" ", "_")}.pdf");
+                    await _emailSender.SendEmailWithAttachmentAsync((string)student.StudentEmail, subject, htmlBody, pdfBytes, $"Certificate_{((string)student.StudentName).Replace(" ", "_")}.pdf");
                     
-                    if (student.AttemptId.HasValue)
-                    {
-                        using var conn = new SqlConnection(_connectionString);
-                        await conn.ExecuteAsync("UPDATE UserExamAttempts SET EmailSent = 1 WHERE Id = @Id", new { Id = student.AttemptId.Value });
-                    }
-
                     count++;
                 }
-                return Json(new { success = true, message = $"ØªÙ… Ø¥Ø±Ø³Ø§Ù„ {count} Ø´Ù‡Ø§Ø¯Ø© Ø¨Ù†Ø¬Ø§Ø­!" });
+                return Json(new { success = true, message = $"تم إرسال {count} شهادة بنجاح!" });
             }
             catch (System.Exception ex)
             {
-                return Json(new { success = false, message = "Ø®Ø·Ø£ ÙÙŠ Ø§Ù„Ø³ÙŠØ±ÙØ±: " + ex.Message });
+                return Json(new { success = false, message = "خطأ في السيرفر: " + ex.Message });
             }
         }
 
@@ -5350,8 +5345,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                             UserCode = rawUserCode,
                             BranchId = resolvedBranchId,
                             IsActive = true,
-                            CertificateCode = rawCertCode,
-                            CertificateScore = parsedScore
+
                         };
 
                         var createResult = await _userManager.CreateAsync(newUser, "Test@123");
@@ -5419,10 +5413,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                             }
                         }
 
-                        // Always update certificate info
-                        user.CertificateCode = rawCertCode;
-                        user.CertificateScore = parsedScore;
-                        needsUpdate = true;
+                        // Do not update legacy global certificate fields on AspNetUsers table
 
                         if (needsUpdate)
                         {

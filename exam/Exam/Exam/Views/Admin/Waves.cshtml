@@ -84,6 +84,42 @@
     <script>
         const isAdmin = @(User.IsInRole("Admin").ToString().ToLower());
 
+        function showToast(message, type = 'success') {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                container.className = 'fixed top-6 right-6 z-[99999] flex flex-col gap-3 pointer-events-none';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `transform translate-x-full transition-all duration-300 ease-out flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl text-white font-bold text-xs tracking-wide uppercase pointer-events-auto min-w-[280px] ${
+                type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'
+            }`;
+            
+            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            toast.innerHTML = `
+                <i class="fas ${icon} text-lg"></i>
+                <span>${message}</span>
+            `;
+
+            container.appendChild(toast);
+
+            // Slide in
+            setTimeout(() => {
+                toast.classList.remove('translate-x-full');
+            }, 10);
+
+            // Slide out and remove
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+                toast.addEventListener('transitionend', () => {
+                    toast.remove();
+                });
+            }, 3000);
+        }
+
         async function cloneWave(wid, wname) {
             event.stopPropagation(); // prevent row double click
             const { value: formValues } = await Swal.fire({
@@ -314,23 +350,65 @@
                         window._waveFilterFn = null;
                     }
                 },
-                preConfirm: () => {
-                   const ids = [];
-                   $('#swalUserTable').DataTable().$('input.user-cb:checked').each(function() {
-                       ids.push($(this).val());
-                   });
-                   if(!ids.length) { Swal.showValidationMessage('Please select at least one User.'); return false; }
-                   return ids;
-                }
-            }).then(async (result) => {
-                if(result.isConfirmed) {
-                    Swal.fire({ title: 'Deploying...', didOpen: () => Swal.showLoading() });
-                    const r = await fetch(`/Admin/AssignUsersToWave?waveId=${wid}`, { 
-                        method: 'POST', 
-                        headers: { 'Content-Type': 'application/json' }, 
-                        body: JSON.stringify(result.value) 
+                preConfirm: async () => {
+                    const ids = [];
+                    $('#swalUserTable').DataTable().$('input.user-cb:checked').each(function() {
+                        ids.push($(this).val());
                     });
-                    if(r.ok) Swal.fire({ icon: 'success', title: 'Deployed', text: 'Personnel successfully assigned.', timer: 1500, showConfirmButton: false });
+                    if(!ids.length) { 
+                        Swal.showValidationMessage('Please select at least one User.'); 
+                        return false; 
+                    }
+                    
+                    Swal.showLoading();
+                    try {
+                        const r = await fetch(`/Admin/AssignUsersToWave?waveId=${wid}`, { 
+                            method: 'POST', 
+                            headers: { 'Content-Type': 'application/json' }, 
+                            body: JSON.stringify(ids) 
+                        });
+                        
+                        if(r.ok) {
+                            showToast('Personnel successfully assigned.', 'success');
+                            
+                            // Update the UI state inside the modal without closing it
+                            const table = $('#swalUserTable').DataTable();
+                            ids.forEach(id => {
+                                const cb = $(`#swalUserTable input.user-cb[value="${id}"]`);
+                                const row = cb.closest('tr');
+                                
+                                // Disable checkbox and uncheck
+                                cb.prop('checked', false).prop('disabled', true);
+                                
+                                // Add assigned style
+                                row.addClass('opacity-50 grayscale-[0.5]');
+                                row.attr('data-is-assigned', 'true');
+                                
+                                // Append "Enrolled" badge if not already there
+                                const nameSpan = row.find('span.font-bold.text-slate-900');
+                                if (nameSpan.length && !row.find('.enrolled-badge').length) {
+                                    nameSpan.after('<span class="enrolled-badge text-[7px] bg-slate-200 text-slate-500 px-1 rounded uppercase font-black ml-2">Enrolled</span>');
+                                }
+                            });
+                            
+                            // Uncheck select all header
+                            $('#selectAllSwal').prop('checked', false);
+                            
+                            // Re-filter and redraw table
+                            table.draw();
+                            
+                            Swal.hideLoading();
+                            return false; // Returning false prevents the modal from closing!
+                        } else {
+                            Swal.showValidationMessage('Failed to assign users. Please try again.');
+                            Swal.hideLoading();
+                            return false;
+                        }
+                    } catch (err) {
+                        Swal.showValidationMessage('Server error occurred.');
+                        Swal.hideLoading();
+                        return false;
+                    }
                 }
             });
         }

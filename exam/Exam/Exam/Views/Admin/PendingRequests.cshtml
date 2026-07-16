@@ -76,10 +76,10 @@
                                     <button onclick="scanUser('@req.Email', '@req.UserCode')" class="bg-blue-500 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-blue-500/20">
                                         <i class="fas fa-search mr-1"></i> Scan
                                     </button>
-                                    <button onclick="approveUser(@req.Id, '@req.FullName')" class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20">
+                                    <button onclick="approveUser(this, @req.Id, '@req.FullName')" class="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20">
                                         <i class="fas fa-check-circle mr-1"></i> Approve
                                     </button>
-                                    <button onclick="rejectUser(@req.Id, '@req.FullName')" class="bg-rose-500 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20">
+                                    <button onclick="rejectUser(this, @req.Id, '@req.FullName')" class="bg-rose-500 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20">
                                         <i class="fas fa-times-circle mr-1"></i> Reject
                                     </button>
                                 </div>
@@ -104,7 +104,19 @@
 
 @section Scripts {
     <script>
-        function approveUser(id, name) {
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        });
+
+        function approveUser(btn, id, name) {
             Swal.fire({
                 title: 'Approve Registration?',
                 text: `You are about to approve ${name}. An account will be created and a welcome email will be sent.`,
@@ -132,12 +144,23 @@
                 allowOutsideClick: () => !Swal.isLoading()
             }).then((result) => {
                 if (result.isConfirmed) {
-                    Swal.fire({
-                        title: 'Approved!',
-                        text: 'User account created and email sent successfully.',
-                        icon: 'success'
-                    }).then(() => {
-                        location.reload();
+                    Toast.fire({
+                        icon: 'success',
+                        title: 'User approved successfully'
+                    });
+
+                    // Remove row from UI without reload
+                    var row = $(btn).closest('tr');
+                    row.fadeOut(400, function() {
+                        if ($.fn.DataTable && $.fn.DataTable.isDataTable('.datatable')) {
+                            var table = $('.datatable').DataTable();
+                            table.row(row).remove().draw(false);
+                        } else {
+                            row.remove();
+                        }
+                        if ($('tbody tr').length === 0) {
+                            location.reload();
+                        }
                     });
                 }
             });
@@ -172,7 +195,7 @@
             });
         }
 
-        function rejectUser(id, name) {
+        function rejectUser(btn, id, name) {
             Swal.fire({
                 title: 'هل انت متأكد؟',
                 text: `هل تريد رفض طلب انضمام "${name}"؟ سيتم إرسال بريد إلكتروني بالرفض.`,
@@ -186,8 +209,23 @@
                 if (result.isConfirmed) {
                     $.post('/Admin/RejectRequest', { requestId: id }, function (res) {
                         if (res.success) {
-                            Swal.fire('تم الرفض!', 'تم رفض الطلب بنجاح.', 'success').then(() => {
-                                location.reload();
+                            Toast.fire({
+                                icon: 'success',
+                                title: 'تم رفض الطلب بنجاح'
+                            });
+
+                            // Remove row from UI without reload
+                            var row = $(btn).closest('tr');
+                            row.fadeOut(400, function() {
+                                if ($.fn.DataTable && $.fn.DataTable.isDataTable('.datatable')) {
+                                    var table = $('.datatable').DataTable();
+                                    table.row(row).remove().draw(false);
+                                } else {
+                                    row.remove();
+                                }
+                                if ($('tbody tr').length === 0) {
+                                    location.reload();
+                                }
                             });
                         } else {
                             Swal.fire('خطأ!', res.message, 'error');

@@ -7,64 +7,61 @@
     var selectedExamId = ViewBag.SelectedExamId as int? ?? 0;
 }
 
-<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-8">
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm space-y-6">
+    <!-- Header Row -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
         <div>
             <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Analytical Filter</h2>
             <div class="flex items-center gap-3">
                 <p class="text-xl font-bold">Certificates Management</p>
                 <span class="bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-200">
                      Advanced Mode Active
-                </span>
+                 </span>
             </div>
         </div>
         
-        <div class="flex flex-wrap items-center gap-4">
-            <div class="space-y-2">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Year</label>
-                <select id="yearFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold w-[100px]">
-                    <option value="0">Year</option>
-                    @for (int y = DateTime.Now.Year; y >= 2024; y--)
+        <div>
+            <button onclick="triggerExcelUpload()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-md shadow-emerald-600/10 flex items-center gap-2.5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-600/20 active:translate-y-0 border border-transparent">
+                <i class="fas fa-file-excel text-emerald-100"></i> Import Certificates Excel
+            </button>
+            <input type="file" id="certExcelInput" class="hidden" accept=".xlsx, .xls" onchange="uploadCertExcel(event)" />
+        </div>
+    </div>
+
+    <!-- Filter Bar Row -->
+    <div class="flex flex-wrap items-center gap-4">
+        <div class="space-y-2">
+            <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Year</label>
+            <select id="yearFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold w-[110px] transition-colors focus:border-brand-500 outline-none">
+                <option value="0">Year</option>
+                @for (int y = DateTime.Now.Year; y >= 2024; y--)
+                {
+                    <option value="@y" selected="@(ViewBag.SelectedYear == y ? "selected" : null)">@y</option>
+                }
+            </select>
+        </div>
+
+        <div class="space-y-2">
+            <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Selected Wave</label>
+            <select id="examFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[280px] transition-colors focus:border-brand-500 outline-none">
+                <optgroup label="TRAINING BATCHES">
+                    @foreach (var w in waves)
                     {
-                        <option value="@y" selected="@(ViewBag.SelectedYear == y ? "selected" : null)">@y</option>
+                        <option value="@w.Id" selected="@(w.Id == selectedWaveId ? "selected" : null)">
+                            @w.WaveName.ToUpper() @(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")
+                        </option>
                     }
-                </select>
-            </div>
+                </optgroup>
+            </select>
+        </div>
 
-            <div class="space-y-2">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Selected Wave</label>
-                <select id="examFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3 text-sm font-bold min-w-[280px]">
-                    <optgroup label="TRAINING BATCHES">
-                        @foreach (var w in waves)
-                        {
-                            <option value="@w.Id" selected="@(w.Id == selectedWaveId ? "selected" : null)">
-                                @w.WaveName.ToUpper() @(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")
-                            </option>
-                        }
-                    </optgroup>
-                </select>
-            </div>
-
-            <div class="space-y-2">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Status Filter (تصفية بالحالة)</label>
-                <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold min-w-[170px]">
-                    <option value="all">All Statuses (الكل)</option>
-                    <option value="certified">Certified (ناجح بشهادة)</option>
-                    <option value="nocert">Passed No Cert (ناجح بدون شهادة)</option>
-                    <option value="failed">Failed (ساقط)</option>
-                    <option value="notattempted">Not Attempted (لم يمتحن)</option>
-                </select>
-            </div>
-
-            <div class="flex items-center gap-2 mt-auto">
-                <button onclick="sendSelectedCerts(@selectedExamId)" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-lg flex items-center gap-2">
-                    <i class="fas fa-certificate"></i> Send Selected Certs
-                </button>
-                <button onclick="triggerExcelUpload()" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-sm flex items-center gap-2 border border-slate-200 dark:border-slate-700">
-                    <i class="fas fa-file-excel text-emerald-600"></i> Import Certificates Excel
-                </button>
-                <input type="file" id="certExcelInput" class="hidden" accept=".xlsx, .xls" onchange="uploadCertExcel(event)" />
-            </div>
+        <div class="space-y-2">
+            <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Status Filter (تصفية بالحالة)</label>
+            <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[190px] transition-colors focus:border-brand-500 outline-none">
+                <option value="all">All Statuses (الكل)</option>
+                <option value="certified">Certified (تم إصدار الشهادة)</option>
+                <option value="pending">Pending (لم تصدر شهادة)</option>
+            </select>
         </div>
     </div>
 </div>
@@ -74,7 +71,6 @@
         <table class="datatable saas-table">
             <thead>
                 <tr>
-                    <th class="w-10 px-4"><input type="checkbox" id="selectAll" /></th>
                     <th class="min-w-[280px]">Personnel</th>
                     <th>Wave</th>
                     <th>Branch</th>
@@ -88,41 +84,18 @@
             <tbody>
                 @foreach (var s in Model) {
                     bool hasCertCode = !string.IsNullOrEmpty(s.CertificateCode) && s.CertificateCode.Trim() != "/";
-                    string certStatus = "notattempted";
-                    string certStatusText = "لم يمتحن";
+                    string certStatus = "pending";
+                    string certStatusText = "لم تصدر شهادة";
                     string statusBadgeClass = "bg-amber-500 text-amber-700 bg-opacity-10 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800";
                     
                     if (hasCertCode)
                     {
                         certStatus = "certified";
-                        certStatusText = "ناجح بشهادة";
+                        certStatusText = "تم إصدار الشهادة";
                         statusBadgeClass = "bg-emerald-500 text-emerald-700 bg-opacity-10 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800";
-                    }
-                    else if (s.Score >= 70)
-                    {
-                        certStatus = "nocert";
-                        certStatusText = "ناجح بدون شهادة";
-                        statusBadgeClass = "bg-indigo-500 text-indigo-700 bg-opacity-10 dark:bg-indigo-950/30 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800";
-                    }
-                    else if (s.Score > 0)
-                    {
-                        certStatus = "failed";
-                        certStatusText = "ساقط";
-                        statusBadgeClass = "bg-rose-500 text-rose-700 bg-opacity-10 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800";
-                    }
-                    else
-                    {
-                        certStatus = "notattempted";
-                        certStatusText = "لم يمتحن";
-                        statusBadgeClass = "bg-amber-500 text-amber-700 bg-opacity-10 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800";
                     }
 
                     <tr class="student-row" data-cert-status="@certStatus">
-                         <td class="px-4 text-center">
-                             @if(hasCertCode) {
-                                 <input type="checkbox" class="student-checkbox" value="@s.Id" data-passed="true" />
-                             }
-                         </td>
                         <td>
                             <div class="flex items-center gap-3 px-4 py-3 flex-nowrap">
                                 <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase transition-transform hover:scale-105">@(string.IsNullOrEmpty(s.StudentName) ? "?" : s.StudentName.Substring(0,1))</div>
@@ -157,9 +130,6 @@
                         </td>
                         <td class="text-right px-8">
                             <div class="flex items-center justify-end gap-2">
-                                <button class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 dark:bg-slate-800 rounded-xl view-review" data-student-id="@s.Id">
-                                    <i class="fas fa-eye"></i>
-                                </button>
                                 @if (!hasCertCode)
                                 {
                                     <button class="p-2.5 text-slate-400 hover:text-amber-600 bg-slate-50 dark:bg-slate-800 rounded-xl reassign-wave" 
@@ -168,12 +138,6 @@
                                             data-old-wave-id="@selectedWaveId"
                                             title="Move to another Wave">
                                         <i class="fas fa-exchange-alt"></i>
-                                    </button>
-                                }
-                                @if (User.IsInRole("Admin"))
-                                {
-                                    <button class="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 dark:bg-slate-800 rounded-xl wipe-data" data-student-id="@s.Id" data-student-name="@s.StudentName" title="Wipe Data & Reset">
-                                        <i class="fas fa-trash-alt"></i>
                                     </button>
                                 }
                             </div>
@@ -229,23 +193,7 @@
             window.location = newUrl;
         });
 
-        $('#selectAll').on('change', function() { $('.student-checkbox').prop('checked', this.checked); });
 
-        function sendSelectedCerts(examId) {
-            var ids = [];
-            $('.student-checkbox:checked').each(function() { ids.push($(this).val()); });
-            if(ids.length === 0) { Swal.fire('Error', 'Select students first', 'error'); return; }
-            
-            Swal.fire({ title: 'Issuing...', didOpen: () => Swal.showLoading() });
-            fetch('/Admin/SendCertificates?examId=' + examId, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(ids)
-            }).then(r => r.json()).then(res => {
-                if(res.success) Swal.fire('Success', res.message, 'success').then(() => location.reload());
-                else Swal.fire('Error', res.message, 'error');
-            });
-        }
 
         function triggerExcelUpload() {
             Swal.fire({
