@@ -5961,6 +5961,11 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
         {
             if (currentUser == null) return new List<string>();
 
+            if (User.IsInRole("Admin"))
+            {
+                return null;
+            }
+
             var branchIds = new List<int>();
 
             if (User.IsInRole("Branch Supervisor"))
