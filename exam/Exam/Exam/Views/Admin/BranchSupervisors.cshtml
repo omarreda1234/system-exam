@@ -1,0 +1,294 @@
+@model IEnumerable<Exam.Controllers.BranchSupervisorViewModel>
+@using Exam.DTOs
+@{
+    ViewData["Title"] = "Branch Supervisors Management / إدارة مشرفي الفروع";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var allBranches = ViewBag.AllBranches as IEnumerable<BranchDto> ?? new List<BranchDto>();
+    var allSupervisorUsers = ViewBag.AllSupervisorUsers as IEnumerable<dynamic> ?? new List<dynamic>();
+}
+
+@Html.AntiForgeryToken()
+
+<div class="min-h-screen pb-20 bg-slate-50/50 dark:bg-slate-950/20">
+    <!-- Main Premium Header -->
+    <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 pt-24 pb-12">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                    <h1 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-3">
+                        <i class="fas fa-user-shield text-indigo-600"></i>
+                        <span>Branch Supervisors / إدارة مشرفي الفروع</span>
+                    </h1>
+                    <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-1">Assign multi-branch access and visibility for supervisors / تخصيص والتحكم في رؤية الفروع للمشرفين</p>
+                </div>
+                @if (User.IsInRole("Admin"))
+                {
+                    <div class="flex items-center gap-3">
+                        <button onclick="openAssignSupervisorModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2 group">
+                            <i class="fas fa-user-plus text-xs transition-transform group-hover:scale-110"></i>
+                            Assign Supervisor / تخصيص فروع لمشرف
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-6 mt-8">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <span class="text-xs font-black text-slate-400 uppercase tracking-wider">Supervisors & Assigned Branches / قائمة المشرفين والفروع المخصصة</span>
+                <span class="bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/40 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    @Model.Count() Supervisors / مشرفين
+                </span>
+            </div>
+            
+            <div class="overflow-x-auto w-full">
+                <table class="saas-table datatable">
+                    <thead>
+                        <tr>
+                            <th>Supervisor Name / اسم المشرف</th>
+                            <th>Code & Email / الكود والبريد</th>
+                            <th>Primary Branch / الفرع الرئيسي</th>
+                            <th>Supervised Branches / الفروع المخصصة</th>
+                            <th class="text-right">Actions / الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var sup in Model)
+                        {
+                            <tr id="row-@sup.UserId">
+                                <td>
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center font-black text-indigo-600 text-xs uppercase">
+                                            @(string.IsNullOrEmpty(sup.FullName) ? "S" : sup.FullName[0].ToString())
+                                        </div>
+                                        <div>
+                                            <p class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wide">@sup.FullName</p>
+                                            <span class="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                                                Branch Supervisor
+                                            </span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <p class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">@(string.IsNullOrEmpty(sup.Email) ? "N/A" : sup.Email)</p>
+                                    <p class="text-[10px] font-mono text-indigo-600">Code: @(string.IsNullOrEmpty(sup.UserCode) ? "N/A" : sup.UserCode)</p>
+                                </td>
+                                <td>
+                                    <span class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-3 py-1 rounded-xl text-[10px] font-black uppercase border border-slate-200 dark:border-slate-700">
+                                        @sup.MainBranchName
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="flex flex-wrap items-center gap-1.5 max-w-md">
+                                        @if (sup.AssignedBranchNames.Any())
+                                        {
+                                            @foreach (var bName in sup.AssignedBranchNames)
+                                            {
+                                                <span class="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-lg text-[10px] font-bold inline-flex items-center gap-1">
+                                                    <i class="fas fa-check text-[8px] text-emerald-500"></i> @bName
+                                                </span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-lg text-[10px] font-bold">
+                                                <i class="fas fa-exclamation-triangle text-[8px]"></i> No branches assigned (Primary branch only) / لم يتم تخصيص فروع (الرئيسي فقط)
+                                            </span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="flex items-center justify-end gap-2">
+                                        @if (User.IsInRole("Admin"))
+                                        {
+                                            <button onclick="editBranchesForUser('@sup.UserId', '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(sup.FullName))')" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shrink-0 border border-indigo-100 dark:border-indigo-900/30 flex items-center gap-1.5">
+                                                <i class="fas fa-sliders-h"></i> Edit Branches / تعديل الفروع
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (!Model.Any())
+            {
+                <div class="p-16 text-center">
+                    <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300 dark:text-slate-600">
+                        <i class="fas fa-user-shield text-2xl"></i>
+                    </div>
+                    <p class="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No branch supervisors configured yet / لا يوجد مشرفي فروع مضافين بعد.</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const allSystemBranches = @Html.Raw(Json.Serialize(allBranches.Select(b => new { b.Id, b.BranchName, b.BranchCode })));
+        const allSupervisorUsersList = @Html.Raw(Json.Serialize(allSupervisorUsers.Select(u => new { 
+            id = (string)u.UserId, 
+            name = !string.IsNullOrWhiteSpace((string)u.UserName) ? (string)u.UserName : (!string.IsNullOrWhiteSpace((string)u.FullName) ? (string)u.FullName : ""), 
+            code = (string)u.UserCode, 
+            email = (string)u.Email, 
+            role = (string)u.RoleName 
+        })));
+
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        });
+
+        async function editBranchesForUser(userId, userName) {
+            Swal.fire({
+                title: 'Loading Branches / جاري التحميل...',
+                didOpen: () => Swal.showLoading(),
+                allowOutsideClick: false
+            });
+
+            try {
+                const res = await $.get('@Url.Action("GetSupervisorBranches", "Admin")', { userId: userId });
+                if (!res.success) {
+                    Swal.fire('Error / خطأ', res.message || 'Could not load branches / تعذر تحميل بيانات الفروع', 'error');
+                    return;
+                }
+
+                const assignedBranchIds = res.branchIds || [];
+
+                let checkboxesHtml = `
+                    <div class="text-right space-y-3 max-h-72 overflow-y-auto p-2 border border-slate-100 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-950/50">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 mb-2">
+                            <span class="text-xs font-black text-slate-500 uppercase">Select Allowed Branches / اختر الفروع المسموحة:</span>
+                            <button type="button" onclick="selectAllBranches(true)" class="text-[10px] font-bold text-indigo-600 hover:underline">Select All / تحديد الكل</button>
+                        </div>
+                `;
+
+                allSystemBranches.forEach(b => {
+                    const isChecked = assignedBranchIds.includes(b.id) ? 'checked' : '';
+                    checkboxesHtml += `
+                        <label class="flex items-center justify-between p-2.5 rounded-xl hover:bg-white dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all">
+                            <div class="flex items-center gap-2.5">
+                                <input type="checkbox" class="branch-checkbox w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" value="${b.id}" ${isChecked}>
+                                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">${b.branchName}</span>
+                            </div>
+                            <span class="text-[9px] font-mono text-slate-400 bg-slate-200/50 dark:bg-slate-700/50 px-2 py-0.5 rounded">${b.branchCode || 'BR'}</span>
+                        </label>
+                    `;
+                });
+
+                checkboxesHtml += `</div>`;
+
+                Swal.fire({
+                    title: `Assign Branches / تخصيص الفروع<br><span class="text-sm font-normal text-slate-500">${userName}</span>`,
+                    html: checkboxesHtml,
+                    showCancelButton: true,
+                    confirmButtonText: 'Save Branches / حفظ الفروع',
+                    cancelButtonText: 'Cancel / إلغاء',
+                    customClass: {
+                        confirmButton: 'bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-wider',
+                        cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-wider px-8 py-3'
+                    },
+                    buttonsStyling: false,
+                    preConfirm: () => {
+                        const selectedIds = [];
+                        document.querySelectorAll('.branch-checkbox:checked').forEach(cb => {
+                            selectedIds.push(parseInt(cb.value));
+                        });
+                        return selectedIds;
+                    }
+                }).then(async (result) => {
+                    if (result.isConfirmed) {
+                        const selectedBranchIds = result.value;
+                        Swal.fire({ title: 'Saving / جاري الحفظ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+                        $.ajax({
+                            url: '@Url.Action("SaveSupervisorBranches", "Admin")',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ userId: userId, branchIds: selectedBranchIds }),
+                            headers: {
+                                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                            },
+                            success: function(saveRes) {
+                                if (saveRes.success) {
+                                    Toast.fire({ icon: 'success', title: saveRes.message });
+                                    setTimeout(() => location.reload(), 800);
+                                } else {
+                                    Swal.fire('Error / خطأ', saveRes.message, 'error');
+                                }
+                            },
+                            error: function() {
+                                Swal.fire('Error / خطأ', 'Unexpected error saving branches / حدث خطأ أثناء الحفظ.', 'error');
+                            }
+                        });
+                    }
+                });
+
+            } catch (err) {
+                Swal.fire('Error / خطأ', 'Could not complete request / تعذر تنفيذ الطلب', 'error');
+            }
+        }
+
+        function selectAllBranches(check) {
+            document.querySelectorAll('.branch-checkbox').forEach(cb => cb.checked = check);
+        }
+
+        function openAssignSupervisorModal() {
+            let optionsHtml = '<option value="">-- Select Supervisor / اختر المشرف --</option>';
+            allSupervisorUsersList.forEach(u => {
+                let displayName = u.name && u.name.trim() !== '' ? u.name : (u.code ? `User Code: ${u.code}` : u.email);
+                let extraDetails = u.code ? `Code: ${u.code}` : u.email;
+                optionsHtml += `<option value="${u.id}">${displayName} (${extraDetails})</option>`;
+            });
+
+            Swal.fire({
+                title: 'Assign Supervisor Branches / تخصيص فروع لمشرف',
+                html: `
+                    <div class="text-right space-y-4">
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Select Supervisor / اختر المشرف (Branch Supervisor Only)</label>
+                            <select id="selectedSupervisorId" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-indigo-500">
+                                ${optionsHtml}
+                            </select>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Next / متابعة لاختيار الفروع',
+                cancelButtonText: 'Cancel / إلغاء',
+                customClass: {
+                    confirmButton: 'bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-wider',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-wider px-8 py-3'
+                },
+                buttonsStyling: false,
+                preConfirm: () => {
+                    const selectedId = document.getElementById('selectedSupervisorId').value;
+                    if (!selectedId) {
+                        Swal.showValidationMessage('Please select a supervisor / يرجى اختيار مشرف من القائمة');
+                        return false;
+                    }
+                    const userObj = allSupervisorUsersList.find(u => u.id === selectedId);
+                    const selectedName = userObj ? (userObj.name || userObj.code || userObj.email) : 'Selected Supervisor';
+                    return { id: selectedId, name: selectedName };
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    editBranchesForUser(result.value.id, result.value.name);
+                }
+            });
+        }
+    </script>
+}

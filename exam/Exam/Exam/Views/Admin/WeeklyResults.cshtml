@@ -20,12 +20,29 @@
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Exam Type</label>
                     <select id="typeFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold min-w-[150px]">
                         <option value="0">All Types</option>
-                        @foreach (var type in (IEnumerable<Exam.DTOs.ExamTypeDto>)ViewBag.ExamTypes)
+                        @foreach (var type in ((IEnumerable<Exam.DTOs.ExamTypeDto>)ViewBag.ExamTypes).Where(t => !(t.TypeName ?? "").ToLower().Contains("wave")))
                         {
                             <option value="@type.Id" selected="@(ViewBag.SelectedTypeId == type.Id ? "selected" : null)">@type.TypeName.ToUpper()</option>
                         }
                     </select>
                 </div>
+
+                @{
+                    var userBranches = ViewBag.UserBranches as IEnumerable<string> ?? Enumerable.Empty<string>();
+                }
+                @if (userBranches.Any())
+                {
+                    <div class="space-y-2">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Branch</label>
+                        <select id="branchFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold min-w-[140px]">
+                            <option value="">All Branches</option>
+                            @foreach (var bName in userBranches)
+                            {
+                                <option value="@bName">@bName</option>
+                            }
+                        </select>
+                    </div>
+                }
 
                 <div class="space-y-2">
                     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Year</label>
@@ -128,6 +145,7 @@
                     type: 'POST',
                     data: function (d) {
                         d.examId = $('#examFilter').val();
+                        d.branchName = $('#branchFilter').val();
                     },
                     headers: {
                         'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
@@ -308,6 +326,9 @@
         }
 
         $('#typeFilter, #yearFilter, #monthFilter').change(updateExamList);
+        $(document).on('change', '#branchFilter', function () {
+            table.draw();
+        });
 
         $('#examFilter').change(function () {
             const val = $(this).val();

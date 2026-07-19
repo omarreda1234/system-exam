@@ -479,6 +479,14 @@
                             </a>
                         }
 
+                        @if (HasAccess("Admin", "BranchSupervisors") || User.IsInRole("Admin"))
+                        {
+                            <a href="@Url.Action("BranchSupervisors", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "branchsupervisors")">
+                                <i class="fas fa-user-shield w-5"></i>
+                                <span>Branch Supervisors</span>
+                            </a>
+                        }
+
                         @if (HasAccess("Attendance", "Analytics"))
                         {
                             <a href="@Url.Action("Analytics", "Attendance")" class="@linkClass(currentController == "attendance" && currentAction == "analytics")">

@@ -1,4 +1,5 @@
 @using Microsoft.AspNetCore.Identity
+@inject Exam.Services.IExamService ExamService
 @{
     Layout = null;
 }
@@ -176,6 +177,14 @@
                         string linkClass(bool active) => active 
                             ? "flex items-center gap-3 px-4 py-3 rounded-xl bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold transition-all"
                             : "flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium transition-all";
+
+                        var progUserRoles = User.Claims
+                            .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+                            .Select(c => c.Value)
+                            .ToList();
+
+                        bool hasAdminAccess = User.Identity.IsAuthenticated && 
+                            (ExamService != null && ExamService.HasPermissionAsync(progUserRoles, "Admin", "Index").GetAwaiter().GetResult());
                     }
 
                     <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-6">Program Directory</div>
@@ -204,7 +213,7 @@
                         </a>
                     }
 
-                    @if (User.IsInRole("Admin"))
+                    @if (hasAdminAccess)
                     {
                         <a href="@Url.Action("Index", "Admin")" class="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium transition-all">
                             <i class="fas fa-chart-line w-5 text-slate-400"></i>
@@ -227,6 +236,7 @@
                                 else if (User.IsInRole("HR") || User.IsInRole("Human Resources")) sidebarRole = "Human Resources";
                                 else if (User.IsInRole("Reception")) sidebarRole = "Receptionist";
                                 else if (User.IsInRole("Branch Manager")) sidebarRole = "Branch Manager";
+                                else if (User.IsInRole("Branch Supervisor")) sidebarRole = "Branch Supervisor";
                                 else if (User.IsInRole("pharmacist") || User.IsInRole("صيدلي") || User.IsInRole("Pharmacist")) sidebarRole = "Pharmacist";
                                 else if (User.IsInRole("assistant") || User.IsInRole("مساعد صيدلي") || User.IsInRole("Assistant")) sidebarRole = "Assistant";
                                 else if (User.IsInRole("Doctor")) sidebarRole = "Doctor";

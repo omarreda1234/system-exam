@@ -22,7 +22,7 @@ using Microsoft.DotNet.Scaffolding.Shared.Messaging;
 
 namespace Exam.Controllers
 {
-    [Authorize(Roles = "Admin,HR,Human Resources,Branch Manager,Branch Supervisor,SoftSkills Specialist")]
+    [Authorize]
     public class AdminController : Controller
     {
         private readonly IExamService _examService;
@@ -63,7 +63,8 @@ namespace Exam.Controllers
             "SendFailEmails", "ReassignExamToStudents", "GetStudentExamReview",
             "ExportStudentsToExcel", "ExportWaveResultsToExcel",
             "MoveUserToWave", "CheckExistence", "GetUsersWithoutCertificate",
-            "ImportUsersToWaveFromExcel", "UpdateTopicSchema", "SyncFromLive"
+            "ImportUsersToWaveFromExcel", "UpdateTopicSchema", "SyncFromLive",
+            "BranchSupervisors", "GetSupervisorBranches", "SaveSupervisorBranches"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
@@ -629,10 +630,27 @@ namespace Exam.Controllers
         public async Task<IActionResult> Students(int? examId, int? typeId = null, int? month = null, int? year = null, string forceMode = null)
         {
             var examTypes = await _examService.GetAllExamTypesAsync();
+
+            if (forceMode == "weekly")
+            {
+                examTypes = examTypes.Where(t => !(t.TypeName ?? "").ToLower().Contains("wave")).ToList();
+            }
+
             ViewBag.ExamTypes = examTypes;
             ViewBag.SelectedTypeId = typeId;
             ViewBag.SelectedMonth = month;
             ViewBag.SelectedYear = year;
+
+            var currentUser = await _userManager.GetUserAsync(User);
+            using (var conn = new SqlConnection(_connectionString))
+            {
+                var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+                if (allowedBranches == null && User.IsInRole("Admin"))
+                {
+                    allowedBranches = (await conn.QueryAsync<string>("SELECT BranchName FROM Branches WHERE IsActive = 1 AND BranchName IS NOT NULL AND BranchName != '' ORDER BY BranchName")).ToList();
+                }
+                ViewBag.UserBranches = allowedBranches ?? new List<string>();
+            }
 
             var exams = await _examService.GetActiveExamsForDropdownAsync(typeId, month, year);
 
@@ -678,22 +696,11 @@ namespace Exam.Controllers
                         var results = await _examService.GetExamResultsByExamIdAsync(selectedId);
                         if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                         {
-                            var currentUser = await _userManager.GetUserAsync(User);
-                            if (currentUser != null && currentUser.BranchId.HasValue)
+                            using var conn = new SqlConnection(_connectionString);
+                            var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+                            if (allowedBranches != null && allowedBranches.Any())
                             {
-                                using var conn = new SqlConnection(_connectionString);
-                                var branchName = await conn.QueryFirstOrDefaultAsync<string>(
-                                    "SELECT BranchName FROM Branches WHERE Id = @Id", 
-                                    new { Id = currentUser.BranchId.Value });
-                                    
-                                if (!string.IsNullOrEmpty(branchName))
-                                {
-                                    results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
-                                }
-                                else
-                                {
-                                    results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
-                                }
+                                results = results.Where(r => allowedBranches.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase)));
                             }
                             else
                             {
@@ -744,17 +751,10 @@ namespace Exam.Controllers
                 if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
                     var currentUser = await _userManager.GetUserAsync(User);
-                    if (currentUser != null && currentUser.BranchId.HasValue)
-                    {
-                        using var conn = new SqlConnection(_connectionString);
-                        var branchName = await conn.QueryFirstOrDefaultAsync<string>(
-                            "SELECT BranchName FROM Branches WHERE Id = @Id",
-                            new { Id = currentUser.BranchId.Value });
-                        if (!string.IsNullOrEmpty(branchName))
-                            results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase)).ToList();
-                        else
-                            results = new List<Exam.DTOs.WaveStudentResultDto>();
-                    }
+                    using var conn = new SqlConnection(_connectionString);
+                    var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+                    if (allowedBranches != null && allowedBranches.Any())
+                        results = results.Where(r => allowedBranches.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase))).ToList();
                     else
                         results = new List<Exam.DTOs.WaveStudentResultDto>();
                 }
@@ -2320,6 +2320,7 @@ namespace Exam.Controllers
             var orderColumnIndex = Request.Form["order[0][column]"].FirstOrDefault();
             var orderDir = Request.Form["order[0][dir]"].FirstOrDefault();
             var examIdStr = Request.Form["examId"].FirstOrDefault();
+            var selectedBranchName = Request.Form["branchName"].FirstOrDefault();
 
             int start = string.IsNullOrEmpty(startStr) ? 0 : int.Parse(startStr);
             int length = string.IsNullOrEmpty(lengthStr) ? 10 : int.Parse(lengthStr);
@@ -2355,26 +2356,22 @@ namespace Exam.Controllers
             if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
             {
                 var currentUser = await _userManager.GetUserAsync(User);
-                if (currentUser != null && currentUser.BranchId.HasValue)
+                using var conn = new SqlConnection(_connectionString);
+                var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+                if (allowedBranches != null && allowedBranches.Any())
                 {
-                    using var conn = new SqlConnection(_connectionString);
-                    var branchName = await conn.QueryFirstOrDefaultAsync<string>(
-                        "SELECT BranchName FROM Branches WHERE Id = @Id", 
-                        new { Id = currentUser.BranchId.Value });
-                        
-                    if (!string.IsNullOrEmpty(branchName))
-                    {
-                        results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
-                    }
-                    else
-                    {
-                        results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
-                    }
+                    results = results.Where(r => allowedBranches.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase)));
                 }
                 else
                 {
                     results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
                 }
+            }
+
+            // Apply user-selected branch dropdown filter if provided
+            if (!string.IsNullOrWhiteSpace(selectedBranchName))
+            {
+                results = results.Where(r => string.Equals(r.BranchName, selectedBranchName, StringComparison.OrdinalIgnoreCase));
             }
 
             int totalRecords = results.Count();
@@ -2661,48 +2658,50 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 if (isActive)
                 {
                     statusButton = $@"
-                        <button type='button' onclick=""deactivateUser('{userId}')"" class='w-full bg-white dark:bg-slate-900 text-rose-500 hover:bg-rose-500 hover:text-white p-1.5 rounded-xl transition-all border border-rose-100 dark:border-rose-900/50 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm'>
-                            <i class='fas fa-ban'></i> Deactivate
+                        <button type='button' onclick=""deactivateUser('{userId}')"" class='flex-1 bg-rose-50 hover:bg-rose-500 hover:text-white text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 py-1.5 px-2 rounded-xl transition-all border border-rose-100 dark:border-rose-900/50 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
+                            <i class='fas fa-ban text-[9px]'></i> Deactivate
                         </button>";
                 }
                 else
                 {
                     statusButton = $@"
-                        <button type='button' onclick=""activateUser('{userId}')"" class='w-full bg-white dark:bg-slate-900 text-emerald-500 hover:bg-emerald-500 hover:text-white p-1.5 rounded-xl transition-all border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm'>
-                            <i class='fas fa-check-circle'></i> Activate
+                        <button type='button' onclick=""activateUser('{userId}')"" class='flex-1 bg-emerald-50 hover:bg-emerald-500 hover:text-white text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 py-1.5 px-2 rounded-xl transition-all border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
+                            <i class='fas fa-check-circle text-[9px]'></i> Activate
                         </button>";
                 }
 
                 var userNameEscaped = userName.Replace("'", "\\'");
                 string actionsHtml = $@"
-                    <div class='flex flex-col gap-2 min-w-[220px]'>
-                        <div class='flex gap-1'>
-                            <button type='button' class='js-edit-personnel flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase hover:bg-brand-50 dark:hover:bg-brand-900/20'>
-                                <i class='fas fa-pen'></i> Edit
+                    <div class='flex flex-col gap-1.5 py-1 min-w-[240px] max-w-[260px] ml-auto'>
+                        <div class='flex items-center gap-1.5'>
+                            <button type='button' class='js-edit-personnel flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 py-1.5 px-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-900/20 transition-all flex items-center justify-center gap-1.5'>
+                                <i class='fas fa-pen text-[9px]'></i> Edit
                             </button>
-                            <button type='button' onclick=""deleteUser('{userId}')"" class='flex-1 bg-white dark:bg-slate-900 text-slate-500 hover:text-rose-600 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase'>
-                                <i class='fas fa-trash-alt'></i> Delete
+                            <button type='button' onclick=""deleteUser('{userId}')"" class='flex-1 bg-white dark:bg-slate-900 text-slate-500 hover:text-rose-600 py-1.5 px-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase transition-all flex items-center justify-center gap-1.5'>
+                                <i class='fas fa-trash-alt text-[9px]'></i> Delete
                             </button>
                         </div>
-                        <button type='button' onclick=""openSendMailModal('{userId}', '{userNameEscaped}')"" class='w-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 p-1.5 rounded-xl border border-brand-100 dark:border-brand-800 text-[9px] font-bold uppercase hover:bg-brand-600 hover:text-white transition-all flex items-center justify-center gap-2'>
-                            <i class='fas fa-paper-plane'></i> Send Custom Message
+                        <button type='button' onclick=""openSendMailModal('{userId}', '{userNameEscaped}')"" class='w-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 py-1.5 px-2 rounded-xl border border-brand-100 dark:border-brand-800 text-[9px] font-bold uppercase hover:bg-brand-600 hover:text-white transition-all flex items-center justify-center gap-1.5'>
+                            <i class='fas fa-paper-plane text-[9px]'></i> Send Custom Message
                         </button>
-                        <form action='/Admin/UpdateUserRole' method='post' class='flex gap-2 ajax-update-form' data-type='role'>
+                        <form action='/Admin/UpdateUserRole' method='post' class='ajax-update-form m-0 p-0' data-type='role'>
                             <input type='hidden' name='userId' value='{userId}' />
-                            <select name='roleId' onchange=""$(this).closest('form').submit();"" class='bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-brand-500 outline-none flex-1 transition-all'>
+                            <select name='roleId' onchange=""$(this).closest('form').submit();"" class='w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-600 dark:text-slate-300 focus:border-brand-500 outline-none transition-all cursor-pointer'>
                                 {roleSelectOptions}
                             </select>
                         </form>
-                        <form action='/Admin/UpdateUserShift' method='post' class='flex gap-2 ajax-update-form' data-type='shift'>
+                        <form action='/Admin/UpdateUserShift' method='post' class='ajax-update-form m-0 p-0' data-type='shift'>
                             <input type='hidden' name='userId' value='{userId}' />
-                            <select name='newShiftId' onchange=""$(this).closest('form').submit();"" class='bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-500 focus:border-amber-500 outline-none flex-1 transition-all'>
+                            <select name='newShiftId' onchange=""$(this).closest('form').submit();"" class='w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-600 dark:text-slate-300 focus:border-amber-500 outline-none transition-all cursor-pointer'>
                                 {shiftSelectOptions}
                             </select>
                         </form>
-                        {statusButton}
-                        <button type='button' onclick=""resetPassword('{userId}')"" class='w-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white p-1.5 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-2 text-[9px] font-bold uppercase shadow-sm'>
-                            <i class='fas fa-key'></i> Reset Password
-                        </button>
+                        <div class='flex items-center gap-1.5'>
+                            {statusButton}
+                            <button type='button' onclick=""resetPassword('{userId}')"" class='flex-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white py-1.5 px-2 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
+                                <i class='fas fa-key text-[9px]'></i> Reset Password
+                            </button>
+                        </div>
                     </div>";
 
                 dataList.Add(new {
@@ -5853,6 +5852,142 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 return Json(new { success = false, message = "Error: " + ex.Message });
             }
         }
+
+        [HttpGet]
+        public async Task<IActionResult> BranchSupervisors()
+        {
+            using var conn = new SqlConnection(_connectionString);
+            
+            var supervisorsSql = @"
+                SELECT DISTINCT u.Id as UserId, u.FullName, u.UserName, u.UserCode, u.Email, u.BranchId, b.BranchName as MainBranchName
+                FROM AspNetUsers u
+                LEFT JOIN Branches b ON u.BranchId = b.Id
+                JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+                JOIN AspNetRoles r ON ur.RoleId = r.Id
+                WHERE r.Name = 'Branch Supervisor' OR u.Id IN (SELECT UserId FROM SupervisorBranches)
+                ORDER BY u.FullName, u.UserName";
+
+            var supervisors = (await conn.QueryAsync<dynamic>(supervisorsSql)).ToList();
+            var branches = (await conn.QueryAsync<BranchDto>("SELECT Id, BranchName, BranchCode, IsActive FROM Branches WHERE IsActive = 1 ORDER BY BranchName")).ToList();
+
+            var mappings = (await conn.QueryAsync<dynamic>("SELECT UserId, BranchId FROM SupervisorBranches")).ToList();
+            var mappingsGrouped = mappings.GroupBy(m => (string)m.UserId).ToDictionary(g => g.Key, g => g.Select(x => (int)x.BranchId).ToList());
+
+            var viewModelList = new List<BranchSupervisorViewModel>();
+            foreach (var sup in supervisors)
+            {
+                string uId = (string)sup.UserId;
+                string fn = (string)(sup.FullName ?? "");
+                string un = (string)(sup.UserName ?? "");
+                string uc = (string)(sup.UserCode ?? "");
+                string em = (string)(sup.Email ?? "");
+                
+                string displayName = !string.IsNullOrWhiteSpace(fn) ? fn : (!string.IsNullOrWhiteSpace(un) ? un : (!string.IsNullOrWhiteSpace(uc) ? uc : em));
+
+                var assignedIds = mappingsGrouped.ContainsKey(uId) ? mappingsGrouped[uId] : new List<int>();
+                var assignedNames = branches.Where(b => int.TryParse(b.Id, out int bId) && assignedIds.Contains(bId)).Select(b => b.BranchName).ToList();
+
+                viewModelList.Add(new BranchSupervisorViewModel
+                {
+                    UserId = uId,
+                    FullName = displayName,
+                    UserCode = uc,
+                    Email = em,
+                    MainBranchName = (string)(sup.MainBranchName ?? "N/A"),
+                    AssignedBranchIds = assignedIds,
+                    AssignedBranchNames = assignedNames
+                });
+            }
+
+            ViewBag.AllBranches = branches;
+            
+            var allBranchSupervisors = (await conn.QueryAsync<dynamic>(@"
+                SELECT DISTINCT u.Id as UserId, u.FullName, u.UserName, u.UserCode, u.Email, r.Name as RoleName
+                FROM AspNetUsers u
+                JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+                JOIN AspNetRoles r ON ur.RoleId = r.Id
+                WHERE r.Name = 'Branch Supervisor'
+                ORDER BY u.FullName, u.UserName")).ToList();
+
+            ViewBag.AllSupervisorUsers = allBranchSupervisors;
+
+            return View(viewModelList);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetSupervisorBranches(string userId)
+        {
+            if (string.IsNullOrEmpty(userId)) return Json(new { success = false, message = "User ID is required" });
+            using var conn = new SqlConnection(_connectionString);
+            var branchIds = (await conn.QueryAsync<int>("SELECT BranchId FROM SupervisorBranches WHERE UserId = @UserId", new { UserId = userId })).ToList();
+            return Json(new { success = true, branchIds });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> SaveSupervisorBranches([FromBody] SaveSupervisorBranchesDto dto)
+        {
+            if (dto == null || string.IsNullOrEmpty(dto.UserId))
+                return Json(new { success = false, message = "بيانات غير صالحة" });
+
+            using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync();
+            using var tran = conn.BeginTransaction();
+            try
+            {
+                await conn.ExecuteAsync("DELETE FROM SupervisorBranches WHERE UserId = @UserId", new { UserId = dto.UserId }, tran);
+
+                if (dto.BranchIds != null && dto.BranchIds.Any())
+                {
+                    foreach (var bId in dto.BranchIds.Distinct())
+                    {
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO SupervisorBranches (UserId, BranchId, CreatedAt)
+                            VALUES (@UserId, @BranchId, GETDATE())",
+                            new { UserId = dto.UserId, BranchId = bId }, tran);
+                    }
+                }
+
+                tran.Commit();
+                return Json(new { success = true, message = "تم حفظ الفروع المخصصة للمشرف بنجاح!" });
+            }
+            catch (System.Exception ex)
+            {
+                tran.Rollback();
+                return Json(new { success = false, message = "حدث خطأ أثناء الحفظ: " + ex.Message });
+            }
+        }
+
+        private async Task<List<string>> GetAllowedBranchNamesForUserAsync(ApplicationUser currentUser, SqlConnection conn)
+        {
+            if (currentUser == null) return new List<string>();
+
+            var branchIds = new List<int>();
+
+            if (User.IsInRole("Branch Supervisor"))
+            {
+                var supervisorBranchIds = (await conn.QueryAsync<int>(
+                    "SELECT BranchId FROM SupervisorBranches WHERE UserId = @UserId", 
+                    new { UserId = currentUser.Id })).ToList();
+                branchIds.AddRange(supervisorBranchIds);
+            }
+            else if (currentUser.BranchId.HasValue && currentUser.BranchId.Value > 0)
+            {
+                branchIds.Add(currentUser.BranchId.Value);
+            }
+
+            branchIds = branchIds.Distinct().ToList();
+
+            if (!branchIds.Any())
+            {
+                return new List<string>();
+            }
+
+            var names = (await conn.QueryAsync<string>(
+                "SELECT BranchName FROM Branches WHERE Id IN @Ids AND BranchName IS NOT NULL AND BranchName != ''", 
+                new { Ids = branchIds })).ToList();
+
+            return names;
+        }
     }
 
     internal static class BranchNameResolver
@@ -5948,6 +6083,23 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 s = s.Substring(al.Length).TrimStart();
             return s.Trim();
         }
+    }
+
+    public class BranchSupervisorViewModel
+    {
+        public string UserId { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public string UserCode { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string MainBranchName { get; set; } = "";
+        public List<int> AssignedBranchIds { get; set; } = new();
+        public List<string> AssignedBranchNames { get; set; } = new();
+    }
+
+    public class SaveSupervisorBranchesDto
+    {
+        public string UserId { get; set; } = "";
+        public List<int> BranchIds { get; set; } = new();
     }
 
     public class CreateAssignmentDto

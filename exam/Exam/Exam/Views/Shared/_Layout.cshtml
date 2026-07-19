@@ -1,3 +1,4 @@
+@inject Exam.Services.IExamService ExamService
 <!DOCTYPE html>
 <html lang="en" translate="no" class="notranslate">
 <head>
@@ -274,11 +275,21 @@
                 <a href="#program" class="rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm transition-all">Program</a>
             </div>
 
+            @{
+                var layoutUserRoles = User.Claims
+                    .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+                    .Select(c => c.Value)
+                    .ToList();
+
+                bool hasAdminAccess = User.Identity.IsAuthenticated && 
+                    (ExamService != null && ExamService.HasPermissionAsync(layoutUserRoles, "Admin", "Index").GetAwaiter().GetResult());
+            }
+
             <div class="flex items-center gap-3">
                 @if (User.Identity.IsAuthenticated)
                 {
                     <div class="hidden md:flex items-center gap-2 mr-4 border-r border-slate-100 pr-4">
-                        @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Branch Manager") || User.IsInRole("SoftSkills Specialist"))
+                        @if (hasAdminAccess)
                         {
                             <a href="@Url.Action("Index", "Admin")" class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/20 hover:bg-brand-700 transition-all">
                                 <i class="fas fa-chart-pie mr-2"></i>Examination Dash
@@ -321,6 +332,7 @@
                             else if (User.IsInRole("HR") || User.IsInRole("Human Resources")) roleDisplay = "Human Resources";
                             else if (User.IsInRole("Reception")) roleDisplay = "Receptionist";
                             else if (User.IsInRole("Branch Manager")) roleDisplay = "Branch Manager";
+                            else if (User.IsInRole("Branch Supervisor")) roleDisplay = "Branch Supervisor";
                             else if (User.IsInRole("SoftSkills Specialist")) roleDisplay = "Soft Skills Specialist";
                         }
                         <button id="profileDropdownBtn" class="w-8 h-8 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 hover:bg-brand-100 dark:hover:bg-brand-500/20 font-black text-xs transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/20">
@@ -376,7 +388,7 @@
                 @if (User.Identity.IsAuthenticated)
                 {
                     <div class="h-px bg-slate-100 w-full my-2"></div>
-                    @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Branch Manager") || User.IsInRole("SoftSkills Specialist"))
+                    @if (hasAdminAccess)
                     {
                         <a href="@Url.Action("Index", "Admin")" class="text-xs font-black uppercase tracking-widest text-brand-600"><i class="fas fa-chart-pie mr-2"></i> Examination Dash</a>
                     }
