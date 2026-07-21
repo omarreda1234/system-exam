@@ -33,33 +33,36 @@
         </div>
         
         <div class="flex flex-wrap items-center gap-4">
-            <button type="button" onclick="openManualAddModal()" class="bg-brand-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg shadow-brand-600/20 flex items-center gap-3 hover:bg-brand-700">
-                <i class="fas fa-user-plus"></i>
-                Add Personnel Manually
-            </button>
-
-            <form id="importForm" asp-action="ImportUsersFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
-                @Html.AntiForgeryToken()
-                <div class="flex-1 min-w-[300px] space-y-2">
-                    <div class="flex justify-between items-center px-1">
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personnel Payload (.xlsx)</label>
-                        <a href="/Admin/DownloadPersonnelTemplate" class="text-[10px] font-extrabold text-brand-600 hover:text-brand-700 uppercase tracking-wider flex items-center gap-1">
-                            <i class="fas fa-download"></i> Download Template / تحميل النموذج
-                        </a>
-                    </div>
-                    <input id="excelFile" type="file" name="excelFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-slate-900 dark:file:bg-brand-500 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-white dark:bg-slate-950 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
-                </div>
-                <label class="flex items-center gap-2 cursor-pointer select-none text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    <input type="checkbox" name="sendWelcomeEmails" value="true" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
-                    Send welcome emails
-                </label>
-                <button type="submit" id="btnImport" class="bg-slate-900 dark:bg-brand-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg flex items-center gap-3 hover:opacity-90" style="min-width:180px;justify-content:center;">
-                    <span id="btnImportInner" style="display:flex;align-items:center;gap:10px;">
-                        <i class="fas fa-file-import"></i>
-                        Execute Ingestion
-                    </span>
+            @if (ViewBag.CanCreateUser == true)
+            {
+                <button type="button" onclick="openManualAddModal()" class="bg-brand-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg shadow-brand-600/20 flex items-center gap-3 hover:bg-brand-700">
+                    <i class="fas fa-user-plus"></i>
+                    Add Personnel Manually
                 </button>
-            </form>
+
+                <form id="importForm" asp-action="ImportUsersFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
+                    @Html.AntiForgeryToken()
+                    <div class="flex-1 min-w-[300px] space-y-2">
+                        <div class="flex justify-between items-center px-1">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personnel Payload (.xlsx)</label>
+                            <a href="/Admin/DownloadPersonnelTemplate" class="text-[10px] font-extrabold text-brand-600 hover:text-brand-700 uppercase tracking-wider flex items-center gap-1">
+                                <i class="fas fa-download"></i> Download Template / تحميل النموذج
+                            </a>
+                        </div>
+                        <input id="excelFile" type="file" name="excelFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-slate-900 dark:file:bg-brand-500 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-white dark:bg-slate-950 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
+                    </div>
+                    <label class="flex items-center gap-2 cursor-pointer select-none text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                        <input type="checkbox" name="sendWelcomeEmails" value="true" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                        Send welcome emails
+                    </label>
+                    <button type="submit" id="btnImport" class="bg-slate-900 dark:bg-brand-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg flex items-center gap-3 hover:opacity-90" style="min-width:180px;justify-content:center;">
+                        <span id="btnImportInner" style="display:flex;align-items:center;gap:10px;">
+                            <i class="fas fa-file-import"></i>
+                            Execute Ingestion
+                        </span>
+                    </button>
+                </form>
+            }
         </div>
     </div>
 
@@ -127,7 +130,9 @@
         const rolesData = @Html.Raw(Json.Serialize(roles));
         const shiftsData = @Html.Raw(Json.Serialize(shifts));
         const branchesData = @Html.Raw(Json.Serialize(ViewBag.Branches ?? new List<Exam.DTOs.BranchDto>()));
-        const isHR = @((User.IsInRole("HR") || User.IsInRole("Human Resources")).ToString().ToLower());
+        const canEditProfile = @((ViewBag.CanEditProfile ?? false).ToString().ToLower());
+        const canEditShift = @((ViewBag.CanEditShift ?? false).ToString().ToLower());
+        const canCreateUser = @((ViewBag.CanCreateUser ?? false).ToString().ToLower());
 
         let table;
         $(document).ready(function() {
@@ -580,7 +585,8 @@
                 shiftOptions += `<option value="${sid}"${sel}>${(name || '').toUpperCase()}</option>`;
             });
 
-            const disabledAttr = isHR ? 'disabled' : '';
+            const disabledProfileAttr = canEditProfile ? '' : 'disabled';
+            const disabledShiftAttr = canEditShift ? '' : 'disabled';
 
             Swal.fire({
                 title: 'Edit Personnel',
@@ -588,23 +594,23 @@
                     <div class="text-left space-y-3 p-2">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Email</label>
-                            <input id="editEmail" type="email" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledAttr} />
+                            <input id="editEmail" type="email" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledProfileAttr} />
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">User name</label>
-                            <input id="editUserName" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledAttr} />
+                            <input id="editUserName" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledProfileAttr} />
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">User code</label>
-                            <input id="editUserCode" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledAttr} />
+                            <input id="editUserCode" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledProfileAttr} />
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Branch</label>
-                            <select id="editBranchId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledAttr}>${branchOptions}</select>
+                            <select id="editBranchId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledProfileAttr}>${branchOptions}</select>
                         </div>
                         <div>
                             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Shift</label>
-                            <select id="editShiftId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">${shiftOptions}</select>
+                            <select id="editShiftId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledShiftAttr}>${shiftOptions}</select>
                         </div>
                     </div>`,
                 showCancelButton: true,
@@ -627,22 +633,15 @@
                 },
                 preConfirm: async () => {
                     const newShiftVal = document.getElementById('editShiftId').value || '0';
-                    if (isHR) {
-                        const r = await fetch('/Admin/UpdateUserShift', {
-                            method: 'POST',
-                            headers: { 
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
-                            },
-                            body: `userId=${userId}&newShiftId=${newShiftVal}`
-                        });
-                        const res = await r.json();
-                        if (!res.success) {
-                            Swal.showValidationMessage(res.message || 'Update failed');
-                            return false;
-                        }
-                        return { isShiftOnly: true, newShiftId: newShiftVal };
-                    } else {
+                    if (!canEditProfile && !canEditShift) {
+                        Swal.showValidationMessage('Permission denied for editing personnel.');
+                        return false;
+                    }
+
+                    let profilePromise = null;
+                    let shiftPromise = null;
+
+                    if (canEditProfile) {
                         const fd = new FormData();
                         fd.append('userId', userId);
                         fd.append('email', document.getElementById('editEmail').value.trim());
@@ -651,14 +650,16 @@
                         const newBr = document.getElementById('editBranchId').value || '';
                         if (newBr !== oldBranchKey)
                             fd.append('branchId', newBr);
-                        
-                        const profilePromise = fetch('/Admin/UpdateUserProfile', {
+
+                        profilePromise = fetch('/Admin/UpdateUserProfile', {
                             method: 'POST',
                             body: fd,
                             headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
                         }).then(r => r.json());
+                    }
 
-                        const shiftPromise = fetch('/Admin/UpdateUserShift', {
+                    if (canEditShift) {
+                        shiftPromise = fetch('/Admin/UpdateUserShift', {
                             method: 'POST',
                             headers: { 
                                 'Content-Type': 'application/x-www-form-urlencoded',
@@ -666,18 +667,22 @@
                             },
                             body: `userId=${userId}&newShiftId=${newShiftVal}`
                         }).then(r => r.json());
-
-                        const [profileRes, shiftRes] = await Promise.all([profilePromise, shiftPromise]);
-                        if (!profileRes.success) {
-                            Swal.showValidationMessage(profileRes.message || 'Profile update failed');
-                            return false;
-                        }
-                        if (!shiftRes.success) {
-                            Swal.showValidationMessage(shiftRes.message || 'Shift update failed');
-                            return false;
-                        }
-                        return { ...profileRes, newShiftId: newShiftVal };
                     }
+
+                    const [profileRes, shiftRes] = await Promise.all([
+                        profilePromise || Promise.resolve({ success: true }),
+                        shiftPromise || Promise.resolve({ success: true })
+                    ]);
+
+                    if (profileRes && !profileRes.success) {
+                        Swal.showValidationMessage(profileRes.message || 'Profile update failed');
+                        return false;
+                    }
+                    if (shiftRes && !shiftRes.success) {
+                        Swal.showValidationMessage(shiftRes.message || 'Shift update failed');
+                        return false;
+                    }
+                    return { ...(profileRes || {}), newShiftId: newShiftVal };
                 }
             }).then((result) => {
                 if (result.isConfirmed && result.value) {

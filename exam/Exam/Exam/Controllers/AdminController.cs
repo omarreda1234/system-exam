@@ -2463,9 +2463,23 @@ namespace Exam.Controllers
         {
             var allRoles = await _examService.GetAllRolesAsync();
             // English-only Role Filter
-            ViewBag.Roles = allRoles.Where(r => !System.Text.RegularExpressions.Regex.IsMatch(r.RoleName, @"\p{IsArabic}") && !r.RoleName.Contains("ØµÙŠØ¯Ù„ÙŠ") && !r.RoleName.Contains("Ù…Ø³Ø§Ø¹Ø¯")).ToList();
+            ViewBag.Roles = allRoles.Where(r => !System.Text.RegularExpressions.Regex.IsMatch(r.RoleName, @"\p{IsArabic}") && !r.RoleName.Contains("صيدلي") && !r.RoleName.Contains("مساعد")).ToList();
             ViewBag.Shifts = await _examService.GetAllShiftsAsync();
             ViewBag.Branches = await _examService.GetAllBranchesAsync();
+
+            var currentUser = await _userManager.GetUserAsync(User);
+            var userRoles = currentUser != null ? (await _userManager.GetRolesAsync(currentUser)).ToList() : new List<string>();
+            bool isAdmin = User.IsInRole("Admin");
+
+            ViewBag.CanEditProfile = isAdmin || (currentUser != null && await _examService.HasPermissionAsync(userRoles, "Admin", "UpdateUserProfile"));
+            ViewBag.CanEditShift = isAdmin || (currentUser != null && await _examService.HasPermissionAsync(userRoles, "Admin", "UpdateUserShift"));
+            ViewBag.CanChangeRole = isAdmin || (currentUser != null && await _examService.HasPermissionAsync(userRoles, "Admin", "UpdateUserRole"));
+            ViewBag.CanResetPassword = isAdmin || (currentUser != null && await _examService.HasPermissionAsync(userRoles, "Admin", "ResetUserPassword"));
+            ViewBag.CanSendMessage = isAdmin || (currentUser != null && await _examService.HasPermissionAsync(userRoles, "Admin", "SendCustomEmail"));
+            ViewBag.CanDeleteUser = isAdmin || (currentUser != null && (await _examService.HasPermissionAsync(userRoles, "Admin", "DeleteUser") || await _examService.HasPermissionAsync(userRoles, "Admin", "DeleteUserPermanently")));
+            ViewBag.CanToggleStatus = isAdmin || (currentUser != null && await _examService.HasPermissionAsync(userRoles, "Admin", "DeactivateUser"));
+            ViewBag.CanCreateUser = isAdmin || (currentUser != null && await _examService.HasPermissionAsync(userRoles, "Admin", "AddUser"));
+
             return View(Enumerable.Empty<Exam.DTOs.UserWithRoleDto>());
         }
 
@@ -2573,6 +2587,18 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             var allRoles = (await _examService.GetAllRolesAsync()).ToList();
             var allShifts = (await _examService.GetAllShiftsAsync()).ToList();
 
+            var currentLoggedInUser = await _userManager.GetUserAsync(User);
+            var loggedInUserRoles = currentLoggedInUser != null ? (await _userManager.GetRolesAsync(currentLoggedInUser)).ToList() : new List<string>();
+            bool isAdmin = User.IsInRole("Admin");
+
+            bool canEditProfile = isAdmin || (currentLoggedInUser != null && await _examService.HasPermissionAsync(loggedInUserRoles, "Admin", "UpdateUserProfile"));
+            bool canEditShift = isAdmin || (currentLoggedInUser != null && await _examService.HasPermissionAsync(loggedInUserRoles, "Admin", "UpdateUserShift"));
+            bool canChangeRole = isAdmin || (currentLoggedInUser != null && await _examService.HasPermissionAsync(loggedInUserRoles, "Admin", "UpdateUserRole"));
+            bool canResetPassword = isAdmin || (currentLoggedInUser != null && await _examService.HasPermissionAsync(loggedInUserRoles, "Admin", "ResetUserPassword"));
+            bool canSendMessage = isAdmin || (currentLoggedInUser != null && await _examService.HasPermissionAsync(loggedInUserRoles, "Admin", "SendCustomEmail"));
+            bool canDeleteUser = isAdmin || (currentLoggedInUser != null && (await _examService.HasPermissionAsync(loggedInUserRoles, "Admin", "DeleteUser") || await _examService.HasPermissionAsync(loggedInUserRoles, "Admin", "DeleteUserPermanently")));
+            bool canToggleStatus = isAdmin || (currentLoggedInUser != null && await _examService.HasPermissionAsync(loggedInUserRoles, "Admin", "DeactivateUser"));
+
             foreach (var u in users)
             {
                 string userId = u.Id;
@@ -2671,37 +2697,60 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 }
 
                 var userNameEscaped = userName.Replace("'", "\\'");
+
+                string editBtn = (canEditProfile || canEditShift) ? $@"
+                    <button type='button' class='js-edit-personnel flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 py-1.5 px-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-900/20 transition-all flex items-center justify-center gap-1.5'>
+                        <i class='fas fa-pen text-[9px]'></i> Edit
+                    </button>" : "";
+
+                string deleteBtn = canDeleteUser ? $@"
+                    <button type='button' onclick=""deleteUser('{userId}')"" class='flex-1 bg-white dark:bg-slate-900 text-slate-500 hover:text-rose-600 py-1.5 px-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase transition-all flex items-center justify-center gap-1.5'>
+                        <i class='fas fa-trash-alt text-[9px]'></i> Delete
+                    </button>" : "";
+
+                string sendMsgBtn = canSendMessage ? $@"
+                    <button type='button' onclick=""openSendMailModal('{userId}', '{userNameEscaped}')"" class='w-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 py-1.5 px-2 rounded-xl border border-brand-100 dark:border-brand-800 text-[9px] font-bold uppercase hover:bg-brand-600 hover:text-white transition-all flex items-center justify-center gap-1.5'>
+                        <i class='fas fa-paper-plane text-[9px]'></i> Send Custom Message
+                    </button>" : "";
+
+                string roleFormHtml = canChangeRole ? $@"
+                    <form action='/Admin/UpdateUserRole' method='post' class='ajax-update-form m-0 p-0' data-type='role'>
+                        <input type='hidden' name='userId' value='{userId}' />
+                        <select name='roleId' onchange=""$(this).closest('form').submit();"" class='w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-600 dark:text-slate-300 focus:border-brand-500 outline-none transition-all cursor-pointer'>
+                            {roleSelectOptions}
+                        </select>
+                    </form>" : "";
+
+                string shiftFormHtml = canEditShift ? $@"
+                    <form action='/Admin/UpdateUserShift' method='post' class='ajax-update-form m-0 p-0' data-type='shift'>
+                        <input type='hidden' name='userId' value='{userId}' />
+                        <select name='newShiftId' onchange=""$(this).closest('form').submit();"" class='w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-600 dark:text-slate-300 focus:border-amber-500 outline-none transition-all cursor-pointer'>
+                            {shiftSelectOptions}
+                        </select>
+                    </form>" : "";
+
+                string resetPassBtn = canResetPassword ? $@"
+                    <button type='button' onclick=""resetPassword('{userId}')"" class='flex-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white py-1.5 px-2 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
+                        <i class='fas fa-key text-[9px]'></i> Reset Password
+                    </button>" : "";
+
+                string statusBtnHtml = canToggleStatus ? statusButton : "";
+
+                string topRowActions = (string.IsNullOrEmpty(editBtn) && string.IsNullOrEmpty(deleteBtn))
+                    ? ""
+                    : $"<div class='flex items-center gap-1.5'>{editBtn}{deleteBtn}</div>";
+
+                string bottomRowActions = (string.IsNullOrEmpty(statusBtnHtml) && string.IsNullOrEmpty(resetPassBtn))
+                    ? ""
+                    : $"<div class='flex items-center gap-1.5'>{statusBtnHtml}{resetPassBtn}</div>";
+
                 string actionsHtml = $@"
                     <div class='flex flex-col gap-1.5 py-1 min-w-[240px] max-w-[260px] ml-auto'>
-                        <div class='flex items-center gap-1.5'>
-                            <button type='button' class='js-edit-personnel flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 py-1.5 px-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-900/20 transition-all flex items-center justify-center gap-1.5'>
-                                <i class='fas fa-pen text-[9px]'></i> Edit
-                            </button>
-                            <button type='button' onclick=""deleteUser('{userId}')"" class='flex-1 bg-white dark:bg-slate-900 text-slate-500 hover:text-rose-600 py-1.5 px-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase transition-all flex items-center justify-center gap-1.5'>
-                                <i class='fas fa-trash-alt text-[9px]'></i> Delete
-                            </button>
-                        </div>
-                        <button type='button' onclick=""openSendMailModal('{userId}', '{userNameEscaped}')"" class='w-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 py-1.5 px-2 rounded-xl border border-brand-100 dark:border-brand-800 text-[9px] font-bold uppercase hover:bg-brand-600 hover:text-white transition-all flex items-center justify-center gap-1.5'>
-                            <i class='fas fa-paper-plane text-[9px]'></i> Send Custom Message
-                        </button>
-                        <form action='/Admin/UpdateUserRole' method='post' class='ajax-update-form m-0 p-0' data-type='role'>
-                            <input type='hidden' name='userId' value='{userId}' />
-                            <select name='roleId' onchange=""$(this).closest('form').submit();"" class='w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-600 dark:text-slate-300 focus:border-brand-500 outline-none transition-all cursor-pointer'>
-                                {roleSelectOptions}
-                            </select>
-                        </form>
-                        <form action='/Admin/UpdateUserShift' method='post' class='ajax-update-form m-0 p-0' data-type='shift'>
-                            <input type='hidden' name='userId' value='{userId}' />
-                            <select name='newShiftId' onchange=""$(this).closest('form').submit();"" class='w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-600 dark:text-slate-300 focus:border-amber-500 outline-none transition-all cursor-pointer'>
-                                {shiftSelectOptions}
-                            </select>
-                        </form>
-                        <div class='flex items-center gap-1.5'>
-                            {statusButton}
-                            <button type='button' onclick=""resetPassword('{userId}')"" class='flex-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white py-1.5 px-2 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
-                                <i class='fas fa-key text-[9px]'></i> Reset Password
-                            </button>
-                        </div>
+                        {topRowActions}
+                        {sendMsgBtn}
+                        {roleFormHtml}
+                        {shiftFormHtml}
+                        {bottomRowActions}
                     </div>";
 
                 dataList.Add(new {
@@ -3872,7 +3921,13 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             ("LiveMonitor", "Live Monitor", "Admin", "LiveMonitor", new string[] { }),
             ("Certificates", "Certificates Management", "Admin", "Certificates", new[] { "UploadCertificatesOnlyExcel", "SendCertificates", "MoveUserToWave" }),
             ("NewCome", "New Come Requests (Pending)", "Admin", "PendingRequests", new[] { "ApproveRequest", "RejectRequest" }),
-            ("PersonnelRegistry", "Personnel Registry", "Admin", "AllUsers", new[] { "GetUsersPaged", "AddUser", "UpdateUserShift", "UpdateUserRole", "UpdateUserProfile", "ResetUserPassword", "SendCustomEmail", "DeleteUserPermanently" }),
+            ("PersonnelRegistry", "Personnel Registry (Main Access)", "Admin", "AllUsers", new[] { "GetUsersPaged", "AddUser" }),
+            ("Personnel_EditProfile", "Personnel Action: Edit Profile & Branch", "Admin", "UpdateUserProfile", new string[] { }),
+            ("Personnel_EditShift", "Personnel Action: Change Shift", "Admin", "UpdateUserShift", new string[] { }),
+            ("Personnel_EditRole", "Personnel Action: Change Role / Classification", "Admin", "UpdateUserRole", new string[] { }),
+            ("Personnel_ResetPassword", "Personnel Action: Reset Password", "Admin", "ResetUserPassword", new string[] { }),
+            ("Personnel_SendMessage", "Personnel Action: Send Custom Message", "Admin", "SendCustomEmail", new string[] { }),
+            ("Personnel_Delete", "Personnel Action: Delete / Deactivate User", "Admin", "DeleteUserPermanently", new[] { "DeactivateUser", "ActivateUser", "DeleteUser" }),
             ("Deactivated", "Deactivated Users", "Admin", "DeactivatedUsers", new[] { "DeactivateUser", "ActivateUser", "DeactivateUserByCode", "ImportDeactivationsFromExcel" }),
             ("BatchCycles", "Batch Cycles (Waves)", "Admin", "Waves", new[] { "WaveDetails", "GetWaves", "CreateWave", "GetWaveUserIds", "GetUsersByWaveId", "AssignUsersToWave", "ImportUsersToWaveFromExcel" }),
             ("Companies", "Companies Management", "Admin", "Companies", new[] { "AddCompany", "EditCompany", "DeleteCompany", "ClearCompanyTrainees", "ImportCompanyTraineesFromExcel", "GetCompanyTrainees", "DeleteCompanyTrainee", "AddCompanyTraineeManually", "GetTraineeDetailsByCode" }),

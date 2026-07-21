@@ -53,32 +53,112 @@
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800/50 text-sm">
                     @for (int i = 0; i < Model.Count; i++)
                     {
-                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors" data-module-key="@Model[i].ModuleKey">
-                            <td class="py-4 px-6">
-                                <div class="font-bold text-slate-800 dark:text-slate-200">@Model[i].DisplayName</div>
-                                <div class="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5">@Model[i].ControllerName/@Model[i].ActionName</div>
-                            </td>
-                            <td class="py-4 px-6 text-center">
-                                <label class="inline-flex items-center justify-center cursor-pointer">
-                                    <input type="checkbox" class="access-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(Model[i].CanAccess ? "checked" : "") onchange="onAccessChange(this)" />
-                                </label>
-                            </td>
-                            <td class="py-4 px-6 text-center">
-                                <label class="inline-flex items-center justify-center cursor-pointer">
-                                    <input type="checkbox" class="create-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(Model[i].CanCreate ? "checked" : "") @(!Model[i].CanAccess ? "disabled" : "") />
-                                </label>
-                            </td>
-                            <td class="py-4 px-6 text-center">
-                                <label class="inline-flex items-center justify-center cursor-pointer">
-                                    <input type="checkbox" class="edit-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(Model[i].CanEdit ? "checked" : "") @(!Model[i].CanAccess ? "disabled" : "") />
-                                </label>
-                            </td>
-                            <td class="py-4 px-6 text-center">
-                                <label class="inline-flex items-center justify-center cursor-pointer">
-                                    <input type="checkbox" class="delete-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(Model[i].CanDelete ? "checked" : "") @(!Model[i].CanAccess ? "disabled" : "") />
-                                </label>
-                            </td>
-                        </tr>
+                        var item = Model[i];
+                        var isPersonnelMain = item.ModuleKey == "PersonnelRegistry";
+                        var isPersonnelChild = item.ModuleKey.StartsWith("Personnel_");
+
+                        if (isPersonnelMain)
+                        {
+                            <tr class="bg-brand-50/40 dark:bg-brand-950/20 font-bold hover:bg-brand-50/80 dark:hover:bg-brand-900/30 transition-colors cursor-pointer select-none border-l-4 border-l-brand-600" data-module-key="@item.ModuleKey" onclick="togglePersonnelGroup(event)">
+                                <td class="py-4 px-6">
+                                    <div class="flex items-center gap-3">
+                                        <button type="button" id="personnelToggleBtn" class="w-6 h-6 rounded-lg bg-brand-600/10 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xs transition-transform duration-200" onclick="event.stopPropagation(); togglePersonnelGroup(event);">
+                                            <i class="fas fa-chevron-down transition-transform duration-200" id="personnelChevron"></i>
+                                        </button>
+                                        <div>
+                                            <div class="font-black text-slate-900 dark:text-white flex items-center gap-2 text-base">
+                                                <span>Personnel Registry</span>
+                                                <span class="text-[10px] bg-brand-600 text-white px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">6 Actions Dropdown</span>
+                                            </div>
+                                            <div class="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5">Admin/AllUsers — Click row to toggle permissions dropdown</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="py-4 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer" onclick="event.stopPropagation();">
+                                        <input type="checkbox" class="access-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanAccess ? "checked" : "") onchange="onAccessChange(this); togglePersonnelSubitems(this.checked);" />
+                                    </label>
+                                </td>
+                                <td class="py-4 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer" onclick="event.stopPropagation();">
+                                        <input type="checkbox" class="create-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanCreate ? "checked" : "") @(!item.CanAccess ? "disabled" : "") />
+                                    </label>
+                                </td>
+                                <td class="py-4 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer" onclick="event.stopPropagation();">
+                                        <input type="checkbox" class="edit-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanEdit ? "checked" : "") @(!item.CanAccess ? "disabled" : "") />
+                                    </label>
+                                </td>
+                                <td class="py-4 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer" onclick="event.stopPropagation();">
+                                        <input type="checkbox" class="delete-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanDelete ? "checked" : "") @(!item.CanAccess ? "disabled" : "") />
+                                    </label>
+                                </td>
+                            </tr>
+                        }
+                        else if (isPersonnelChild)
+                        {
+                            <tr class="personnel-child-row bg-slate-50/70 dark:bg-slate-950/40 border-l-4 border-l-brand-400 hover:bg-brand-50/40 dark:hover:bg-slate-800/40 transition-colors" data-module-key="@item.ModuleKey">
+                                <td class="py-3 px-6 pl-12">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-brand-500 dark:text-brand-400 font-black">↳</span>
+                                        <div>
+                                            <div class="font-bold text-xs text-slate-800 dark:text-slate-200">@item.DisplayName.Replace("Personnel Action: ", "")</div>
+                                            <div class="text-[9px] text-slate-400 dark:text-slate-500 font-mono">@item.ControllerName/@item.ActionName</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="py-3 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer">
+                                        <input type="checkbox" class="access-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanAccess ? "checked" : "") onchange="onAccessChange(this)" />
+                                    </label>
+                                </td>
+                                <td class="py-3 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer">
+                                        <input type="checkbox" class="create-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanCreate ? "checked" : "") @(!item.CanAccess ? "disabled" : "") />
+                                    </label>
+                                </td>
+                                <td class="py-3 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer">
+                                        <input type="checkbox" class="edit-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanEdit ? "checked" : "") @(!item.CanAccess ? "disabled" : "") />
+                                    </label>
+                                </td>
+                                <td class="py-3 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer">
+                                        <input type="checkbox" class="delete-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanDelete ? "checked" : "") @(!item.CanAccess ? "disabled" : "") />
+                                    </label>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors" data-module-key="@item.ModuleKey">
+                                <td class="py-4 px-6">
+                                    <div class="font-bold text-slate-800 dark:text-slate-200">@item.DisplayName</div>
+                                    <div class="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5">@item.ControllerName/@item.ActionName</div>
+                                </td>
+                                <td class="py-4 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer">
+                                        <input type="checkbox" class="access-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanAccess ? "checked" : "") onchange="onAccessChange(this)" />
+                                    </label>
+                                </td>
+                                <td class="py-4 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer">
+                                        <input type="checkbox" class="create-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanCreate ? "checked" : "") @(!item.CanAccess ? "disabled" : "") />
+                                    </label>
+                                </td>
+                                <td class="py-4 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer">
+                                        <input type="checkbox" class="edit-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanEdit ? "checked" : "") @(!item.CanAccess ? "disabled" : "") />
+                                    </label>
+                                </td>
+                                <td class="py-4 px-6 text-center">
+                                    <label class="inline-flex items-center justify-center cursor-pointer">
+                                        <input type="checkbox" class="delete-chk w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950" @(item.CanDelete ? "checked" : "") @(!item.CanAccess ? "disabled" : "") />
+                                    </label>
+                                </td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
@@ -99,6 +179,34 @@
 <script>
     function switchRole(roleName) {
         window.location.href = '@Url.Action("Permissions", "Admin")?roleName=' + encodeURIComponent(roleName);
+    }
+
+    function togglePersonnelGroup(e) {
+        if (e) e.stopPropagation();
+        const childRows = document.querySelectorAll('.personnel-child-row');
+        const chevron = document.getElementById('personnelChevron');
+        let willShow = false;
+        childRows.forEach(row => {
+            if (row.classList.contains('hidden')) {
+                row.classList.remove('hidden');
+                willShow = true;
+            } else {
+                row.classList.add('hidden');
+            }
+        });
+        if (chevron) {
+            chevron.style.transform = willShow ? 'rotate(0deg)' : 'rotate(-90deg)';
+        }
+    }
+
+    function togglePersonnelSubitems(checked) {
+        document.querySelectorAll('.personnel-child-row').forEach(row => {
+            const accessChk = row.querySelector('.access-chk');
+            if (accessChk) {
+                accessChk.checked = checked;
+                onAccessChange(accessChk);
+            }
+        });
     }
 
     function onAccessChange(chk) {
@@ -123,10 +231,11 @@
         const permissions = [];
         document.querySelectorAll('tbody tr').forEach(row => {
             const moduleKey = row.getAttribute('data-module-key');
-            const canAccess = row.querySelector('.access-chk').checked;
-            const canCreate = row.querySelector('.create-chk').checked;
-            const canEdit = row.querySelector('.edit-chk').checked;
-            const canDelete = row.querySelector('.delete-chk').checked;
+            if (!moduleKey) return;
+            const canAccess = row.querySelector('.access-chk')?.checked || false;
+            const canCreate = row.querySelector('.create-chk')?.checked || false;
+            const canEdit = row.querySelector('.edit-chk')?.checked || false;
+            const canDelete = row.querySelector('.delete-chk')?.checked || false;
 
             permissions.push({
                 ModuleKey: moduleKey,
