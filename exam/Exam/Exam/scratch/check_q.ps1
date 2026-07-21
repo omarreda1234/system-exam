@@ -3,10 +3,10 @@ $conn = New-Object System.Data.SqlClient.SqlConnection($connString)
 $conn.Open()
 $cmd = $conn.CreateCommand()
 $cmd.CommandText = "
-SELECT SQD.SelectedChoiceId, COUNT(*) AS StudentCount
-FROM StudentQuestionDetails SQD
-WHERE SQD.QuestionId = 7024
-GROUP BY SQD.SelectedChoiceId
+SELECT Q.Id AS QId, Q.QuestionText, C.Id AS ChoiceId, C.ChoiceText, C.IsCorrect
+FROM Questions Q
+JOIN Choices C ON Q.Id = C.QuestionId
+WHERE Q.ExamId = 5166 AND Q.QuestionText LIKE N'%البشرة الحساسة%'
 "
 $adapter = New-Object System.Data.SqlClient.SqlDataAdapter($cmd)
 $ds = New-Object System.Data.DataSet

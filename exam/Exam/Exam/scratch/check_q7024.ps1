@@ -3,10 +3,9 @@ $conn = New-Object System.Data.SqlClient.SqlConnection($connString)
 $conn.Open()
 $cmd = $conn.CreateCommand()
 $cmd.CommandText = "
-SELECT SQD.SelectedChoiceId, COUNT(*) AS StudentCount
-FROM StudentQuestionDetails SQD
-WHERE SQD.QuestionId = 7024
-GROUP BY SQD.SelectedChoiceId
+SELECT C.Id AS ChoiceId, C.ChoiceText, C.IsCorrect
+FROM Choices C
+WHERE C.QuestionId = 7024
 "
 $adapter = New-Object System.Data.SqlClient.SqlDataAdapter($cmd)
 $ds = New-Object System.Data.DataSet

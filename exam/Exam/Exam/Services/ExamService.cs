@@ -514,6 +514,54 @@ namespace Exam.Services
                     "UPDATE Choices SET ChoiceText = @ChoiceText, IsCorrect = @IsCorrect WHERE Id = @ChoiceId", 
                     new { ChoiceId = choiceId, ChoiceText = choiceText, IsCorrect = isCorrect }, 
                     transaction);
+
+                // Auto-recalculate student answers & exam scores for this question automatically (Microsoft Forms style)
+                string syncSql = @"
+                    -- 1. Sync StudentQuestionDetails correctness
+                    UPDATE SQD
+                    SET SQD.IsCorrect = CASE WHEN C.IsCorrect = 1 THEN 1 ELSE 0 END
+                    FROM StudentQuestionDetails SQD
+                    JOIN Choices C ON SQD.SelectedChoiceId = C.Id
+                    WHERE SQD.QuestionId = @QuestionId;
+
+                    -- 2. Recalculate affected student attempts
+                    UPDATE UEA
+                    SET 
+                        UEA.CorrectAnswers = ISNULL(NewScores.CorrectCount, 0),
+                        UEA.FinalScore = ISNULL(NewScores.TotalEarnedScore, 0),
+                        UEA.Score = CASE 
+                                        WHEN Total.TotalPossiblePoints > 0 
+                                        THEN (ISNULL(NewScores.TotalEarnedScore, 0) / Total.TotalPossiblePoints) * 100 
+                                        ELSE 0 
+                                    END,
+                        UEA.IsPassed = CASE 
+                            WHEN UEA.Status LIKE 'Fail_%' AND UEA.Status <> 'Fail_Timeout' THEN 0
+                            WHEN ISNULL(E.IsGraded, 1) = 0 THEN 1
+                            WHEN (CASE WHEN Total.TotalPossiblePoints > 0 THEN (ISNULL(NewScores.TotalEarnedScore, 0) / Total.TotalPossiblePoints) * 100 ELSE 0 END) >= E.PassPercentage THEN 1
+                            ELSE 0
+                        END
+                    FROM UserExamAttempts UEA
+                    JOIN Exams E ON UEA.ExamId = E.Id
+                    CROSS APPLY (
+                        SELECT 
+                            COUNT(*) AS CorrectCount,
+                            SUM(Q.Points) AS TotalEarnedScore
+                        FROM StudentQuestionDetails SQD
+                        JOIN Questions Q ON SQD.QuestionId = Q.Id
+                        WHERE SQD.UserExamAttemptId = UEA.Id AND SQD.IsCorrect = 1
+                    ) NewScores
+                    CROSS APPLY (
+                        SELECT 
+                            SUM(Q.Points) AS TotalPossiblePoints
+                        FROM UserSeenQuestions USQ
+                        JOIN Questions Q ON USQ.QuestionId = Q.Id
+                        WHERE USQ.AttemptId = UEA.Id
+                    ) Total
+                    WHERE UEA.Id IN (
+                        SELECT DISTINCT UserExamAttemptId FROM StudentQuestionDetails WHERE QuestionId = @QuestionId
+                    );";
+
+                await conn.ExecuteAsync(syncSql, new { QuestionId = questionId }, transaction);
                     
                 transaction.Commit();
             }
