@@ -432,7 +432,7 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> ExportStudentsToExcel(int examId)
+        public async Task<IActionResult> ExportStudentsToExcel(int examId, string branchName = null, string search = null)
         {
             try
             {
@@ -453,27 +453,35 @@ namespace Exam.Controllers
                 if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
                     var currentUser = await _userManager.GetUserAsync(User);
-                    if (currentUser != null && currentUser.BranchId.HasValue)
+                    using var conn = new SqlConnection(_connectionString);
+                    var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+                    if (allowedBranches != null && allowedBranches.Any())
                     {
-                        using var conn = new SqlConnection(_connectionString);
-                        var branchName = await conn.QueryFirstOrDefaultAsync<string>(
-                            "SELECT BranchName FROM Branches WHERE Id = @Id", 
-                            new { Id = currentUser.BranchId.Value });
-                            
-                        if (!string.IsNullOrEmpty(branchName))
-                        {
-                            results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
-                        }
-                        else
-                        {
-                            results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
-                        }
+                        results = results.Where(r => allowedBranches.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase)));
                     }
                     else
                     {
                         results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
                     }
                 }
+
+                if (!string.IsNullOrEmpty(branchName))
+                {
+                    results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (!string.IsNullOrEmpty(search))
+                {
+                    var searchLower = search.ToLower();
+                    results = results.Where(r => 
+                        (r.StudentName ?? "").ToLower().Contains(searchLower) ||
+                        (r.StudentEmail ?? "").ToLower().Contains(searchLower) ||
+                        (r.UserCode ?? "").ToLower().Contains(searchLower) ||
+                        (r.BranchName ?? "").ToLower().Contains(searchLower) ||
+                        (r.Status ?? "").ToLower().Contains(searchLower)
+                    );
+                }
+
                 var examInfo = await _examService.GetExamByIdAsync(examId);
                 string examTitle = examInfo?.Title ?? "Exam";
 

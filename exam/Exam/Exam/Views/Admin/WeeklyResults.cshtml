@@ -342,7 +342,12 @@
             table.draw();
         });
 
-        $('#btnExport').on('click', function () { window.location = '/Admin/ExportStudentsToExcel?examId=' + $('#examFilter').val(); });
+        $('#btnExport').on('click', function () { 
+            var examId = $('#examFilter').val();
+            var branch = $('#branchFilter').length ? $('#branchFilter').val() : '';
+            var search = table ? table.search() : '';
+            window.location = '/Admin/ExportStudentsToExcel?examId=' + examId + '&branchName=' + encodeURIComponent(branch) + '&search=' + encodeURIComponent(search); 
+        });
 
         $(document).on('click', '.view-review', function() {
             var id = $(this).data('student-id');
