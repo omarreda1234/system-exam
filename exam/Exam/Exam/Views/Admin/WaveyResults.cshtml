@@ -172,13 +172,37 @@
                         </td>
 
                         <td class="text-right px-8">
-                            <button type="button" 
-                                    class="p-2.5 text-slate-400 hover:text-blue-600 bg-slate-50 dark:bg-slate-800 rounded-xl view-wave-details" 
-                                    data-student-id="@s.UserId" 
-                                    data-wave-id="@s.WaveId" 
-                                    title="View Exam Details">
-                                <i class="fas fa-eye"></i>
-                            </button>
+                            <div class="flex items-center justify-end gap-2">
+                                @if (s.ExamId.HasValue)
+                                {
+                                    @if (s.WaveStatus != "INCOMPLETE")
+                                    {
+                                        <button type="button" 
+                                                class="p-2.5 text-slate-400 hover:text-indigo-600 bg-slate-50 dark:bg-slate-800 rounded-xl" 
+                                                onclick="viewIndividualExamReview(@s.ExamId, '@s.UserId', '@s.StudentName - @s.WaveName')" 
+                                                title="View User Question Answers">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    }
+                                    @if (s.WaveStatus != "INCOMPLETE" || s.TotalScore > 0 || s.ExamsCompleted > 0)
+                                    {
+                                        <button type="button" 
+                                                class="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 dark:bg-slate-800 rounded-xl" 
+                                                onclick="wipeStudentWaveExamDataDirect(@s.ExamId, '@s.UserId', @s.WaveId, '@s.StudentName')" 
+                                                title="Delete & Reset Attempt">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-slate-300 dark:text-slate-700 text-xs">-</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-slate-300 dark:text-slate-700 text-xs">-</span>
+                                }
+                            </div>
                         </td>
                     </tr>
                 }
@@ -259,6 +283,99 @@
                     $.get('/Admin/GetStudentExamReview', { examId: examId, studentId: studentId })
                      .done(h => $('#swalIndividualReview').html(h))
                      .fail(() => $('#swalIndividualReview').html('<div class="p-8 text-rose-500">Failed to load data.</div>'));
+                }
+            });
+        }
+
+        // Wipe / delete student exam attempt inside a wave
+        function wipeStudentWaveExamData(examId, studentId, waveId, examTitle) {
+            Swal.fire({
+                title: 'Are you absolutely sure?',
+                text: `This will PERMANENTLY delete all answers and attempts for ${examTitle}. The student will need to take the exam again.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Wipe Everything!',
+                cancelButtonText: 'Cancel',
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Wiping Data...',
+                        allowOutsideClick: false,
+                        didOpen: () => { Swal.showLoading(); }
+                    });
+
+                    $.post('/Admin/WipeStudentData', { examId: examId, studentId: studentId }, function(res) {
+                        if (res.success) {
+                            Swal.fire({
+                                title: 'Success!',
+                                text: res.message,
+                                icon: 'success',
+                                timer: 2000,
+                                showConfirmButton: false
+                            }).then(() => {
+                                // Refresh the details modal content in-place first, and then reload the parent page on close
+                                $('#swalWaveDetails').html('<div class="py-10 text-center"><i class="fas fa-sync fa-spin text-3xl text-brand-500"></i></div>');
+                                $.get('/Admin/GetStudentWaveDetails', { studentId: studentId, waveId: waveId })
+                                 .done(h => {
+                                     $('#swalWaveDetails').html(h);
+                                     // Also hook a reload to reload the parent page when the Swal modal closes so scores remain synchronized
+                                     const swalCloseButton = document.querySelector('.swal2-close');
+                                     if (swalCloseButton) {
+                                         swalCloseButton.addEventListener('click', () => {
+                                             location.reload();
+                                         }, { once: true });
+                                     }
+                                 })
+                                 .fail(() => $('#swalWaveDetails').html('<div class="p-8 text-rose-500">Failed to load data.</div>'));
+                            });
+                        } else {
+                            Swal.fire('Error', res.message, 'error');
+                        }
+                    });
+                }
+            });
+        }
+
+        // Direct wipe from the main Wave results table
+        function wipeStudentWaveExamDataDirect(examId, studentId, waveId, studentName) {
+            Swal.fire({
+                title: 'Are you absolutely sure?',
+                text: `This will PERMANENTLY delete all answers and attempts for ${studentName}. The student will need to take the exam again.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Wipe Everything!',
+                cancelButtonText: 'Cancel',
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Wiping Data...',
+                        allowOutsideClick: false,
+                        didOpen: () => { Swal.showLoading(); }
+                    });
+
+                    $.post('/Admin/WipeStudentData', { examId: examId, studentId: studentId }, function(res) {
+                        if (res.success) {
+                            Swal.fire({
+                                title: 'Success!',
+                                text: res.message,
+                                icon: 'success',
+                                timer: 2000,
+                                showConfirmButton: false
+                            }).then(() => {
+                                location.reload();
+                            });
+                        } else {
+                            Swal.fire('Error', res.message, 'error');
+                        }
+                    });
                 }
             });
         }

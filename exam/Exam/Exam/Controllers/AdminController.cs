@@ -931,12 +931,14 @@ namespace Exam.Controllers
                     Percentage = attempt != null ? (decimal)attempt.Percentage : 0,
                     AttemptNumber = attempt != null ? (int)attempt.AttemptNumber : 0,
                     IsPassed = attempt != null ? (bool?)attempt.IsPassed : null,
-                    AttemptId = attempt != null ? (int?)attempt.AttemptId : null
+                    AttemptId = attempt != null ? (int?)attempt.AttemptId : null,
+                    WaveId = waveId
                 });
             }
 
             ViewBag.StudentName = student.FullName ?? student.UserName;
             ViewBag.StudentId = studentId;
+            ViewBag.WaveId = waveId;
             return PartialView("GetStudentWaveDetails", details);
         }
 
@@ -5913,6 +5915,23 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             catch (Exception ex)
             {
                 return Json(new { success = false, message = "Error: " + ex.Message });
+            }
+        }
+
+        [HttpGet("Admin/GetAssignmentQuestions/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAssignmentQuestions(int id)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            try
+            {
+                var sql = "SELECT * FROM dbo.AssignmentQuestions WHERE AssignmentId = @AssignmentId";
+                var questions = (await conn.QueryAsync<dynamic>(sql, new { AssignmentId = id })).ToList();
+                return Json(questions);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest("Error: " + ex.Message);
             }
         }
 

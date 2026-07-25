@@ -970,6 +970,7 @@ namespace Exam.Services
                     RoleName          = roleName,
                     WaveName          = waveName ?? "",
                     WaveId            = waveId,
+                    ExamId            = targetExam != null ? (int?)targetExam.Id : null,
                     TotalExamsInWave  = 1,
                     ExamsCompleted    = examsCompleted,
                     ExamsAssigned     = examsAssigned,

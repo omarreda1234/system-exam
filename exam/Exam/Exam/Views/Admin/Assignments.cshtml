@@ -177,6 +177,32 @@
     </div>
 </div>
 
+<!-- View Questions Modal -->
+<div id="viewQuestionsModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col transition-all transform scale-95 opacity-0 duration-300">
+        <!-- Modal Header -->
+        <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
+            <div>
+                <h3 class="text-lg font-black text-slate-800 dark:text-white">Assignment Questions</h3>
+                <p class="text-xs text-slate-500">View detailed questions and criteria configured for this assignment</p>
+            </div>
+            <button onclick="closeQuestionsModal()" class="w-10 h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="overflow-y-auto p-6 flex-1 space-y-4 animate-fade-in" id="viewQuestionsModalBody">
+            <!-- Questions loaded here -->
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex justify-end gap-3 rounded-b-[32px]">
+            <button onclick="closeQuestionsModal()" type="button" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Close</button>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
         let appCategories = [];
@@ -206,6 +232,7 @@
                         render: function (data) {
                             return `
                                 <div class="flex items-center justify-end gap-2">
+                                    <button onclick="viewQuestions(${data})" class="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all" title="View Assignment Questions"><i class="fas fa-list-ol"></i></button>
                                     <button onclick="viewAttempts(${data})" class="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-all" title="View Attempts & Grades"><i class="fas fa-users-cog"></i></button>
                                     <button onclick="deleteAssignment(${data})" class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-xl transition-all" title="Delete Assignment"><i class="fas fa-trash-alt"></i></button>
                                 </div>
@@ -624,6 +651,120 @@
 
         function closeAttemptsModal() {
             const $modal = $('#attemptsModal');
+            $modal.find('> div').removeClass('scale-100 opacity-100').addClass('scale-95 opacity-0');
+            setTimeout(() => {
+                $modal.removeClass('flex').addClass('hidden');
+            }, 300);
+        }
+
+        function viewQuestions(id) {
+            const $body = $('#viewQuestionsModalBody');
+            $body.html('<div class="text-center py-12"><i class="fas fa-sync fa-spin text-brand-600 text-2xl mb-2 block"></i><span class="text-xs text-slate-400 font-bold uppercase tracking-widest">Loading Questions...</span></div>');
+
+            const $modal = $('#viewQuestionsModal');
+            $modal.removeClass('hidden').addClass('flex');
+            setTimeout(() => {
+                $modal.find('> div').removeClass('scale-95 opacity-0').addClass('scale-100 opacity-100');
+            }, 50);
+
+            $.get('/Admin/GetAssignmentQuestions/' + id, function (data) {
+                $body.empty();
+                if (data.length === 0) {
+                    $body.html(`
+                        <div class="text-center py-12 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                            <i class="fas fa-exclamation-circle text-slate-400 text-3xl mb-3"></i>
+                            <p class="text-slate-500 text-xs font-bold uppercase tracking-wider">No questions found for this assignment.</p>
+                        </div>
+                    `);
+                } else {
+                    data.forEach((q, index) => {
+                        // Support both camelCase and PascalCase
+                        const qType = q.questionType || q.QuestionType || '';
+                        const targetRole = q.targetRole || q.TargetRole || 'All';
+                        const points = q.points !== undefined ? q.points : (q.Points !== undefined ? q.Points : 0);
+                        const categoryName = q.categoryName || q.CategoryName || '';
+                        const groupName = q.groupName || q.GroupName || '';
+                        const subcategoryName = q.subcategoryName || q.SubcategoryName || '';
+                        const requiredItemsCount = q.requiredItemsCount !== undefined ? q.requiredItemsCount : (q.RequiredItemsCount !== undefined ? q.RequiredItemsCount : 0);
+                        const itemDefinition = q.itemDefinition || q.ItemDefinition || '';
+                        const correctItemNo = q.correctItemNo || q.CorrectItemNo || '';
+
+                        const typeLabel = qType === 'CategorySelect' 
+                            ? '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/20 dark:text-indigo-400 uppercase tracking-wider border border-indigo-100 dark:border-indigo-900/30">Category Select (Type 1)</span>'
+                            : '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 uppercase tracking-wider border border-emerald-100 dark:border-emerald-900/30">Item Definition Match (Type 2)</span>';
+
+                        const roleColor = targetRole === 'Pharmacist' 
+                            ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800/30'
+                            : targetRole === 'Assistant'
+                                ? 'bg-sky-50 text-sky-600 border-sky-200 dark:bg-sky-950/20 dark:text-sky-400 dark:border-sky-800/30'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-700/30';
+                        
+                        const roleLabel = `<span class="px-2.5 py-0.5 rounded-full text-[9px] font-black border uppercase ${roleColor}">Role: ${targetRole}</span>`;
+                        const pointsLabel = `<span class="px-2.5 py-0.5 rounded-full text-[9px] font-black border uppercase bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-800/30">Points: ${points}</span>`;
+
+                        let contentHtml = '';
+                        if (qType === 'CategorySelect') {
+                            contentHtml = `
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+                                    <div class="bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/50">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Category</span>
+                                        <span class="font-bold text-slate-700 dark:text-slate-300">${categoryName || '-'}</span>
+                                    </div>
+                                    <div class="bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/50">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Group</span>
+                                        <span class="font-bold text-slate-700 dark:text-slate-300">${groupName || '-'}</span>
+                                    </div>
+                                    <div class="bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/50">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Subcategory</span>
+                                        <span class="font-bold text-slate-700 dark:text-slate-300">${subcategoryName || '-'}</span>
+                                    </div>
+                                    <div class="bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/50 flex flex-col justify-center">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Req. Items Count</span>
+                                        <span class="font-black text-brand-600 dark:text-brand-400 font-mono text-base leading-none">${requiredItemsCount || 0}</span>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            contentHtml = `
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+                                    <div class="md:col-span-2">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Long Definition (Question Prompt)</span>
+                                        <p class="font-medium text-slate-700 dark:text-slate-300 italic bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-150 dark:border-slate-800/80 leading-relaxed">${itemDefinition || '-'}</p>
+                                    </div>
+                                    <div class="flex flex-col justify-start">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Correct Item Code</span>
+                                        <div class="bg-brand-50/30 dark:bg-brand-950/10 border border-brand-100 dark:border-brand-900/30 p-4 rounded-xl flex items-center justify-between">
+                                            <span class="font-mono font-bold text-brand-600 dark:text-brand-400 text-sm">${correctItemNo || '-'}</span>
+                                            <i class="fas fa-barcode text-brand-500/50 text-xl"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+
+                        const cardHtml = `
+                            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div class="flex items-center gap-2.5">
+                                        <span class="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-black text-slate-500 border border-slate-200 dark:border-slate-700/50">${index + 1}</span>
+                                        ${typeLabel}
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        ${roleLabel}
+                                        ${pointsLabel}
+                                    </div>
+                                </div>
+                                ${contentHtml}
+                            </div>
+                        `;
+                        $body.append(cardHtml);
+                    });
+                }
+            });
+        }
+
+        function closeQuestionsModal() {
+            const $modal = $('#viewQuestionsModal');
             $modal.find('> div').removeClass('scale-100 opacity-100').addClass('scale-95 opacity-0');
             setTimeout(() => {
                 $modal.removeClass('flex').addClass('hidden');

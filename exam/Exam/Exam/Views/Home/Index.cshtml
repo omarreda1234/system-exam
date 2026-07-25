@@ -71,13 +71,47 @@
     .reveal-rest {
         animation: autoRevealTextLoop 20s cubic-bezier(0.16, 1, 0.3, 1) infinite;
     }
+
+    /* Slide-in from Left Animation */
+    @@keyframes slideInLeft {
+        0% {
+            opacity: 0;
+            transform: translateX(-60px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    /* Slide-in from Right Animation */
+    @@keyframes slideInRight {
+        0% {
+            opacity: 0;
+            transform: translateX(60px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    .animate-slide-in-left {
+        animation: slideInLeft 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
+
+    .animate-slide-in-right {
+        animation: slideInRight 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
 </style>
 
 <div class="space-y-32 mb-32">
     <!-- Section 1: Our Story -->
     <section id="about" class="pt-20 px-6 max-w-7xl mx-auto">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <div class="order-2 lg:order-1">
+            <div id="story-left-col" class="order-2 lg:order-1 opacity-0">
                 <h2 class="text-xs font-black text-brand-600 uppercase tracking-[0.3em] mb-4">Our Story</h2>
                 <h1 class="text-5xl md:text-7xl font-black text-slate-900 leading-[1.1] mb-8 tracking-tighter flex flex-col md:block">
                     Eltarshoubi 
@@ -103,7 +137,7 @@
                 </div>
             </div>
             
-            <div class="order-1 lg:order-2 relative flex items-center justify-center min-h-[480px] lg:sticky lg:top-28 lg:self-start">
+            <div id="story-right-col" class="order-1 lg:order-2 relative flex items-center justify-center min-h-[480px] lg:sticky lg:top-28 lg:self-start opacity-0">
                 <!-- Decorative Glowing Background Blurs -->
                 <div class="absolute -bottom-8 -left-8 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl opacity-70 animate-pulse"></div>
                 <div class="absolute -top-8 -right-8 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl opacity-70 animate-pulse" style="animation-delay: 2.5s;"></div>
@@ -357,3 +391,31 @@ coming soon....
         </div>
     </section>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const leftCol = document.getElementById("story-left-col");
+        const rightCol = document.getElementById("story-right-col");
+        
+        function triggerAnimations() {
+            if (leftCol) {
+                leftCol.classList.remove("opacity-0");
+                leftCol.classList.add("animate-slide-in-left");
+            }
+            if (rightCol) {
+                rightCol.classList.remove("opacity-0");
+                rightCol.classList.add("animate-slide-in-right");
+            }
+        }
+
+        const splash = document.getElementById("splash-screen");
+        // In layout.cshtml:
+        // if splash is not display:none, it runs animations for 2600ms, then fades out for 800ms.
+        // We will trigger our slide-in animations at 2500ms so it starts nicely during the fade-out.
+        if (splash && splash.style.display !== "none") {
+            setTimeout(triggerAnimations, 2500);
+        } else {
+            triggerAnimations();
+        }
+    });
+</script>

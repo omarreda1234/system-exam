@@ -345,6 +345,7 @@ namespace Exam.DTOs
         public string RoleName { get; set; }
         public string WaveName { get; set; }
         public int WaveId { get; set; }
+        public int? ExamId { get; set; }
 
         // Aggregated exam data
         public int TotalExamsInWave { get; set; }         // total exams in the wave

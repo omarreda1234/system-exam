@@ -19,23 +19,26 @@ jobs:
     - name: Publish Application
       run: dotnet publish exam/Exam/Exam/Exam.csproj -c Release -o ./publish
 
-    - name: Stop Existing Application Process
+    - name: Stop App and Show Maintenance Page
       shell: powershell
       run: |
-        # Stop any running instances of the application to prevent file lock
+        # Stop any running instances of the application
         Stop-Process -Name "Exam" -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        
+        # Start maintenance page on the SAME port as the app (9099)
+        $scriptPath = Resolve-Path "ServeOfflinePage.ps1"
+        $htmlPath = Resolve-Path "exam/Exam/Exam/app_offline.htm"
+        Start-Process powershell.exe -ArgumentList "-NoProfile -File `"$scriptPath`" -Port 9099 -FilePath `"$htmlPath`"" -WindowStyle Hidden
         Start-Sleep -Seconds 2
 
     - name: Copy Files to Deploy Directory
       shell: powershell
       run: |
-        # Ensure the destination folder exists (adjust C:\exam-prod if you want another path)
         $deployDir = "C:\exam-prod"
         if (!(Test-Path -Path $deployDir)) {
             New-Item -ItemType Directory -Path $deployDir -Force
         }
-        
-        # Copy published files to the server's deployment directory
         Copy-Item -Path "./publish/*" -Destination $deployDir -Recurse -Force
 
     - name: Start Application in Background
@@ -43,6 +46,12 @@ jobs:
       env:
         RUNNER_TRACKING_ID: ""
       run: |
-        # Start the application in the background
+        # Stop the maintenance page listener
+        $stopFile = Join-Path $env:TEMP "stop_listener_9099.txt"
+        New-Item -Path $stopFile -ItemType File -Force | Out-Null
+        Start-Sleep -Seconds 2
+        
+        # Start the new application
         $deployDir = "C:\exam-prod"
         Start-Process -FilePath "$deployDir\Exam.exe" -WorkingDirectory $deployDir -WindowStyle Hidden
+
