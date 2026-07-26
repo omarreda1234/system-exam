@@ -485,10 +485,11 @@
 
             $('#cloneRulesBtn').on('click', async function() {
                 try {
-                    // Fetch list of exams
-                    const exams = await $.getJSON('/Admin/GetFilteredExams');
+                    // Fetch list of exams based on context
+                    const modeParam = defaultType === 'wave' ? 'wavey' : 'weekly';
+                    const exams = await $.getJSON('/Admin/GetFilteredExams?mode=' + modeParam);
                     if (!exams || exams.length === 0) {
-                        Swal.fire('No Exams Found', 'There are no recent exams to clone from.', 'info');
+                        Swal.fire('No Exams Found', 'There are no recent exams of this type to clone from.', 'info');
                         return;
                     }
                     

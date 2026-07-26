@@ -605,10 +605,18 @@
                 } else {
                     data.forEach(att => {
                         const scoreStr = att.status === 'Completed' ? `${att.score} pts` : '--';
-                        const statusClass = att.status === 'Completed' 
-                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800/30' 
-                            : 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800/30';
-                        const statusLabel = att.status === 'Completed' ? 'COMPLETED' : 'IN PROGRESS';
+                        let statusClass = '';
+                        let statusLabel = '';
+                        if (att.status === 'Completed') {
+                            statusClass = 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800/30';
+                            statusLabel = 'COMPLETED';
+                        } else if (att.status === 'InProgress') {
+                            statusClass = 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800/30';
+                            statusLabel = 'IN PROGRESS';
+                        } else {
+                            statusClass = 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
+                            statusLabel = 'NOT STARTED';
+                        }
 
                         const actionBtn = att.status === 'Completed'
                             ? `<a href="/Assignments/Result/${att.attemptId}" target="_blank" class="inline-flex items-center gap-1 bg-slate-50 hover:bg-brand-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[10px] font-bold transition-all"><i class="fas fa-eye"></i> View Details</a>`

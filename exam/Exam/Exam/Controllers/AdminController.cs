@@ -5638,17 +5638,26 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
         public async Task<IActionResult> GetAssignmentAttempts(int id)
         {
             using var conn = new SqlConnection(_connectionString);
+
+            var assignment = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT WaveId FROM dbo.Assignments WHERE Id = @AssignmentId", new { AssignmentId = id });
+            if (assignment == null) return NotFound();
+            int waveId = (int)assignment.WaveId;
+
             var attempts = await conn.QueryAsync<dynamic>(@"
-                SELECT att.Id AS AttemptId, att.Score, att.Status, att.StartTime, att.EndTime, 
+                SELECT att.Id AS AttemptId, att.Score, 
+                       COALESCE(att.Status, 'Not Started') AS Status, 
+                       att.StartTime, att.EndTime, 
                        u.FullName, u.Email, u.UserName, u.UserCode,
                        r.Name AS RoleName
-                FROM dbo.StudentAssignmentAttempts att
-                INNER JOIN dbo.AspNetUsers u ON att.UserId = u.Id
+                FROM dbo.UserWaves uw
+                INNER JOIN dbo.AspNetUsers u ON uw.UserId = u.Id
                 LEFT JOIN dbo.AspNetUserRoles ur ON u.Id = ur.UserId
                 LEFT JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id
-                WHERE att.AssignmentId = @AssignmentId
-                ORDER BY att.StartTime DESC",
-                new { AssignmentId = id });
+                LEFT JOIN dbo.StudentAssignmentAttempts att ON att.AssignmentId = @AssignmentId AND att.UserId = u.Id
+                WHERE uw.WaveId = @WaveId AND uw.IsActive = 1
+                ORDER BY CASE WHEN att.Status = 'Completed' THEN 1 WHEN att.Status = 'InProgress' THEN 2 ELSE 3 END, u.FullName",
+                new { AssignmentId = id, WaveId = waveId });
 
             var result = attempts.Select(x => new {
                 attemptId = x.AttemptId,
@@ -5675,20 +5684,25 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 using var conn = new SqlConnection(_connectionString);
                 
                 var assignment = await conn.QueryFirstOrDefaultAsync<dynamic>(
-                    "SELECT Title FROM dbo.Assignments WHERE Id = @Id", new { Id = id });
-                string assignmentTitle = assignment?.Title ?? "Assignment";
+                    "SELECT Title, WaveId FROM dbo.Assignments WHERE Id = @Id", new { Id = id });
+                if (assignment == null) return NotFound();
+                string assignmentTitle = assignment.Title ?? "Assignment";
+                int waveId = (int)assignment.WaveId;
 
                 var attempts = await conn.QueryAsync<dynamic>(@"
-                    SELECT att.Id AS AttemptId, att.Score, att.Status, att.StartTime, att.EndTime, 
+                    SELECT att.Id AS AttemptId, att.Score, 
+                           COALESCE(att.Status, 'Not Started') AS Status, 
+                           att.StartTime, att.EndTime, 
                            u.FullName, u.Email, u.UserName, u.UserCode,
                            r.Name AS RoleName
-                    FROM dbo.StudentAssignmentAttempts att
-                    INNER JOIN dbo.AspNetUsers u ON att.UserId = u.Id
+                    FROM dbo.UserWaves uw
+                    INNER JOIN dbo.AspNetUsers u ON uw.UserId = u.Id
                     LEFT JOIN dbo.AspNetUserRoles ur ON u.Id = ur.UserId
                     LEFT JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id
-                    WHERE att.AssignmentId = @AssignmentId
-                    ORDER BY att.StartTime DESC",
-                    new { AssignmentId = id });
+                    LEFT JOIN dbo.StudentAssignmentAttempts att ON att.AssignmentId = @AssignmentId AND att.UserId = u.Id
+                    WHERE uw.WaveId = @WaveId AND uw.IsActive = 1
+                    ORDER BY CASE WHEN att.Status = 'Completed' THEN 1 WHEN att.Status = 'InProgress' THEN 2 ELSE 3 END, u.FullName",
+                    new { AssignmentId = id, WaveId = waveId });
 
                 using (var workbook = new ClosedXML.Excel.XLWorkbook())
                 {
