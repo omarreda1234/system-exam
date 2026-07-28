@@ -551,6 +551,13 @@
                                 <span>Exam Instructions</span>
                             </a>
                         }
+                        @if (User.IsInRole("Admin") || HasAccess("Admin", "ManageHome"))
+                        {
+                            <a href="@Url.Action("ManageHome", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "managehome")">
+                                <i class="fas fa-home w-5"></i>
+                                <span>Homepage CMS</span>
+                            </a>
+                        }
                     }
                 </nav>
 

@@ -33,6 +33,8 @@ namespace Exam.Controllers
         private readonly string _connectionString;
         private readonly IHubContext<ImportHub> _hub2Context;
         private readonly IAuthService _authService;
+        private readonly IHomeCmsService _homeCmsService;
+        private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _env;
 
         public AdminController(
             IExamService examService,
@@ -42,6 +44,8 @@ namespace Exam.Controllers
             UserManager<ApplicationUser> userManager,
             RoleManager<IdentityRole> roleManager,
             IAuthService authService,
+            IHomeCmsService homeCmsService,
+            Microsoft.AspNetCore.Hosting.IWebHostEnvironment env,
             IConfiguration configuration)
         {
             _examService = examService;
@@ -51,6 +55,8 @@ namespace Exam.Controllers
             _userManager = userManager;
             _roleManager = roleManager;
             _authService = authService;
+            _homeCmsService = homeCmsService;
+            _env = env;
             _connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
         }
 
@@ -6088,6 +6094,91 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 new { Ids = branchIds })).ToList();
 
             return names;
+        }
+
+        [HttpGet("Admin/ManageHome")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> ManageHome()
+        {
+            var cmsData = await _homeCmsService.GetHomeCmsDataAsync(activeOnly: false);
+            return View(cmsData);
+        }
+
+        [HttpPost("Admin/UploadSliderImage")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UploadSliderImage(IFormFile file, string title, string subtitle)
+        {
+            if (file == null || file.Length == 0) return BadRequest(new { success = false, message = "Please select a valid image file." });
+            
+            bool success = await _homeCmsService.AddSliderImageAsync(file, title, subtitle);
+            if (success) return Json(new { success = true, message = "Slider image uploaded successfully." });
+            return BadRequest(new { success = false, message = "Failed to upload image." });
+        }
+
+        [HttpPost("Admin/DeleteSliderImage/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteSliderImage(int id)
+        {
+            bool success = await _homeCmsService.DeleteSliderImageAsync(id, _env.WebRootPath);
+            return Json(new { success, message = success ? "Slider image deleted." : "Failed to delete slider image." });
+        }
+
+        [HttpPost("Admin/ToggleSliderImage/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> ToggleSliderImage(int id)
+        {
+            bool success = await _homeCmsService.ToggleSliderImageAsync(id);
+            return Json(new { success, message = success ? "Slider image state updated." : "Failed to update slider state." });
+        }
+
+        [HttpPost("Admin/SaveHomeSection")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> SaveHomeSection(HomeSection model, IFormFile imageFile)
+        {
+            if (model == null) return BadRequest(new { success = false, message = "Invalid data." });
+            bool success = await _homeCmsService.SaveSectionAsync(model, imageFile, _env.WebRootPath);
+            return Json(new { success, message = success ? "Section saved successfully." : "Failed to save section." });
+        }
+
+        [HttpPost("Admin/DeleteHomeSection/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteHomeSection(int id)
+        {
+            bool success = await _homeCmsService.DeleteSectionAsync(id);
+            return Json(new { success, message = success ? "Section deleted." : "Failed to delete section." });
+        }
+
+        [HttpPost("Admin/ToggleHomeSection/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> ToggleHomeSection(int id)
+        {
+            bool success = await _homeCmsService.ToggleSectionVisibilityAsync(id);
+            return Json(new { success, message = success ? "Section visibility updated." : "Failed to update section visibility." });
+        }
+
+        [HttpPost("Admin/SaveFacultyMember")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> SaveFacultyMember(HomeFacultyMember model, IFormFile imageFile)
+        {
+            if (model == null) return BadRequest(new { success = false, message = "Invalid data." });
+            bool success = await _homeCmsService.SaveFacultyMemberAsync(model, imageFile, _env.WebRootPath);
+            return Json(new { success, message = success ? "Faculty member saved successfully." : "Failed to save faculty member." });
+        }
+
+        [HttpPost("Admin/DeleteFacultyMember/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteFacultyMember(int id)
+        {
+            bool success = await _homeCmsService.DeleteFacultyMemberAsync(id, _env.WebRootPath);
+            return Json(new { success, message = success ? "Faculty member deleted." : "Failed to delete faculty member." });
+        }
+
+        [HttpPost("Admin/ToggleFacultyMember/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> ToggleFacultyMember(int id)
+        {
+            bool success = await _homeCmsService.ToggleFacultyActiveAsync(id);
+            return Json(new { success, message = success ? "Faculty status updated." : "Failed to update status." });
         }
     }
 

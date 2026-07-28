@@ -13,15 +13,18 @@ namespace Exam.Controllers
     public class HomeController : Controller
     {
         private readonly IExamService _examService;
+        private readonly IHomeCmsService _homeCmsService;
 
-        public HomeController(IExamService examService)
+        public HomeController(IExamService examService, IHomeCmsService homeCmsService)
         {
             _examService = examService;
+            _homeCmsService = homeCmsService;
         }
 
-        public IActionResult Index()
+        public async Task<IActionResult> Index()
         {
-            return View();
+            var cmsData = await _homeCmsService.GetHomeCmsDataAsync(activeOnly: true);
+            return View(cmsData);
         }
 
         public IActionResult Privacy()

@@ -49,6 +49,8 @@ builder.Services.AddTransient<IAuthService, AuthService>();
 builder.Services.AddSingleton<Exam.Services.IEmailSender, Exam.Services.SmtpEmailSender>();
 // exam service
 builder.Services.AddScoped<IExamService, ExamService>();
+// home cms service
+builder.Services.AddScoped<IHomeCmsService, HomeCmsService>();
 // SignalR
 builder.Services.AddSignalR();
 
@@ -64,11 +66,14 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 var app = builder.Build();
 
-// Run database schema updates cleanly through ExamService
+// Run database schema updates cleanly through ExamService & HomeCmsService
 using (var scope = app.Services.CreateScope())
 {
     var examService = scope.ServiceProvider.GetRequiredService<IExamService>();
     await examService.EnsureDatabaseSchemaUpdatedAsync(scope.ServiceProvider);
+
+    var cmsService = scope.ServiceProvider.GetRequiredService<IHomeCmsService>();
+    await cmsService.EnsureTablesCreatedAsync();
 }
 
 // Global exception middleware

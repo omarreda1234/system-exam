@@ -1,0 +1,496 @@
+@model Exam.Models.HomeCmsViewModel
+@{
+    ViewData["Title"] = "Manage Homepage CMS";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+
+    var story = Model.Sections.TryGetValue("story", out var s1) ? s1 : new Exam.Models.HomeSection { Title = "Our Story", Subtitle = "Knowledge into Performance", ContentHtml = "Eltarshoubi Training Academy..." };
+    var storyBadge = Model.Sections.TryGetValue("story_badge", out var s2) ? s2 : new Exam.Models.HomeSection { Title = "Established 2026 Founded In Mansoura", Subtitle = "Founded in Cairo" };
+    var vision = Model.Sections.TryGetValue("vision", out var s3) ? s3 : new Exam.Models.HomeSection { Title = "Our Vision", Subtitle = "Global Pioneer", ContentHtml = "To develop highly qualified pharmaceutical professionals..." };
+    var mission = Model.Sections.TryGetValue("mission", out var s4) ? s4 : new Exam.Models.HomeSection { Title = "Our Mission", Subtitle = "Innovation, Safety, Impact" };
+    var facultySec = Model.Sections.TryGetValue("faculty", out var s5) ? s5 : new Exam.Models.HomeSection { Title = "Meet Our Faculty", Subtitle = "Empowering Pharmacists" };
+}
+
+<div class="p-6 space-y-8 max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
+        <div>
+            <div class="flex items-center gap-3 mb-1">
+                <div class="w-10 h-10 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold">
+                    <i class="fas fa-home text-lg"></i>
+                </div>
+                <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">إدارة الصفحة الرئيسية (CMS)</h1>
+            </div>
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">التحكم الكامل في نصوص الصفحة الرئيسية، سلايدر الصور، السيكشنز، والمحاضرين.</p>
+        </div>
+        <a href="/" target="_blank" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 text-xs font-bold transition-all shadow-md">
+            <i class="fas fa-external-link-alt"></i> معاينة الصفحة الرئيسية
+        </a>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex border-b border-slate-200 dark:border-slate-800 gap-2">
+        <button onclick="switchTab('slider')" id="tab-btn-slider" class="tab-btn px-6 py-3 font-bold text-xs rounded-t-2xl transition-all border-b-2 border-brand-600 text-brand-600 dark:text-brand-400 bg-white dark:bg-slate-900">
+            <i class="fas fa-images mr-2"></i> سلايدر الصور (Hero Slider)
+        </button>
+        <button onclick="switchTab('sections')" id="tab-btn-sections" class="tab-btn px-6 py-3 font-bold text-xs rounded-t-2xl transition-all border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400">
+            <i class="fas fa-layer-group mr-2"></i> أقسام الصفحة (Page Sections)
+        </button>
+        <button onclick="switchTab('faculty')" id="tab-btn-faculty" class="tab-btn px-6 py-3 font-bold text-xs rounded-t-2xl transition-all border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400">
+            <i class="fas fa-user-graduate mr-2"></i> أعضاء هيئة التدريس (Faculty)
+        </button>
+    </div>
+
+    <!-- Tab 1: Hero Slider Images -->
+    <div id="tab-content-slider" class="tab-content space-y-6">
+        <!-- Upload Form Card -->
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+            <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-cloud-upload-alt text-brand-500"></i> رفع صورة جديدة للسلايدر
+            </h3>
+            <form id="uploadSliderForm" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">اختيار الصورة *</label>
+                    <input type="file" name="file" accept="image/*" required class="w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-brand-50 file:text-brand-600 hover:file:bg-brand-100" />
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">العنوان الرئيسي (Title)</label>
+                    <input type="text" name="title" placeholder="مثال: Digital Powerhouse" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium focus:ring-2 focus:ring-brand-500 outline-none" />
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">العنوان الفرعي (Subtitle)</label>
+                    <input type="text" name="subtitle" placeholder="مثال: Eltarshoubi Academy" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium focus:ring-2 focus:ring-brand-500 outline-none" />
+                </div>
+                <div class="md:col-span-3 flex justify-end">
+                    <button type="submit" class="px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-all shadow-lg shadow-brand-600/20">
+                        <i class="fas fa-upload mr-1"></i> رفع الصورة
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Current Slider Images Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            @foreach (var img in Model.SliderImages)
+            {
+                <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm flex flex-col justify-between group">
+                    <div class="relative aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <img src="@img.ImageUrl" alt="@img.Title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <div class="absolute top-3 right-3">
+                            <button onclick="toggleSlider(@img.Id)" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md @(img.IsActive ? "bg-emerald-500/90 text-white" : "bg-slate-700/90 text-slate-300")">
+                                @(img.IsActive ? "مفعل" : "معطل")
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-4 space-y-2">
+                        <p class="font-bold text-sm text-slate-900 dark:text-white truncate">@(string.IsNullOrEmpty(img.Title) ? "بدون عنوان" : img.Title)</p>
+                        <p class="text-xs text-slate-400 font-medium truncate">@img.Subtitle</p>
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <span class="text-[10px] font-bold text-slate-400">ترتيب العرض: #@img.DisplayOrder</span>
+                            <button onclick="deleteSlider(@img.Id)" class="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-xs font-bold transition-all">
+                                <i class="fas fa-trash-alt mr-1"></i> مسح
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Tab 2: Page Sections Management -->
+    <div id="tab-content-sections" class="tab-content space-y-6 hidden">
+        <!-- Section 1: Our Story Form -->
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-history text-brand-500"></i> قسم قتنا (Our Story Section)
+                </h3>
+                <button onclick="toggleSection(@story.Id)" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(story.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")">
+                    @(story.IsVisible ? "ظاهر في الصفحة" : "مخفي")
+                </button>
+            </div>
+            <form class="section-form space-y-4" data-id="@story.Id" data-key="story">
+                <input type="hidden" name="Id" value="@story.Id" />
+                <input type="hidden" name="SectionKey" value="story" />
+                <input type="hidden" name="IsVisible" value="@(story.IsVisible ? "true" : "false")" />
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">العنوان الأبرز (Tag/Subtitle)</label>
+                        <input type="text" name="Subtitle" value="@story.Subtitle" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">العنوان الرئيسي (Title)</label>
+                        <input type="text" name="Title" value="@story.Title" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">الوصف التفصيلي (Paragraph)</label>
+                    <textarea name="ContentHtml" rows="3" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500">@story.ContentHtml</textarea>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="px-6 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-all shadow-md">
+                        <i class="fas fa-save mr-1"></i> حفظ التعديلات
+                    </button>
+                </div>
+            </form>
+
+            <!-- Story Badge details -->
+            <form class="section-form border-t border-slate-100 dark:border-slate-800 pt-4 space-y-4" data-id="@storyBadge.Id" data-key="story_badge">
+                <input type="hidden" name="Id" value="@storyBadge.Id" />
+                <input type="hidden" name="SectionKey" value="story_badge" />
+                <input type="hidden" name="IsVisible" value="true" />
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">نص الشارة السفلية (مثال: Established 2026...)</label>
+                        <input type="text" name="Title" value="@storyBadge.Title" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">النص الفرعي للشارة (مثال: Founded in Cairo)</label>
+                        <input type="text" name="Subtitle" value="@storyBadge.Subtitle" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="px-6 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-all">
+                        <i class="fas fa-save mr-1"></i> حفظ الشارة
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Section 2: Vision & Mission Form -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Vision -->
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fas fa-eye text-brand-500"></i> قسم الرؤية (Our Vision)
+                    </h3>
+                    <button onclick="toggleSection(@vision.Id)" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(vision.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")">
+                        @(vision.IsVisible ? "ظاهر" : "مخفي")
+                    </button>
+                </div>
+                <form class="section-form space-y-4" data-id="@vision.Id" data-key="vision">
+                    <input type="hidden" name="Id" value="@vision.Id" />
+                    <input type="hidden" name="SectionKey" value="vision" />
+                    <input type="hidden" name="IsVisible" value="@(vision.IsVisible ? "true" : "false")" />
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">العنوان</label>
+                        <input type="text" name="Title" value="@vision.Title" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">نص الرؤية</label>
+                        <textarea name="ContentHtml" rows="4" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500">@vision.ContentHtml</textarea>
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="submit" class="px-6 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-all">
+                            <i class="fas fa-save mr-1"></i> حفظ
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Mission -->
+            <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fas fa-rocket text-brand-500"></i> قسم المهمة (Our Mission)
+                    </h3>
+                    <button onclick="toggleSection(@mission.Id)" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(mission.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")">
+                        @(mission.IsVisible ? "ظاهر" : "مخفي")
+                    </button>
+                </div>
+                <form class="section-form space-y-4" data-id="@mission.Id" data-key="mission">
+                    <input type="hidden" name="Id" value="@mission.Id" />
+                    <input type="hidden" name="SectionKey" value="mission" />
+                    <input type="hidden" name="IsVisible" value="@(mission.IsVisible ? "true" : "false")" />
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">العنوان</label>
+                        <input type="text" name="Title" value="@mission.Title" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">نقاط المهمة (افصل بين النقاط بـ || )</label>
+                        <textarea name="ContentHtml" rows="4" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500">@mission.ContentHtml</textarea>
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="submit" class="px-6 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-all">
+                            <i class="fas fa-save mr-1"></i> حفظ
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Custom Additional Sections -->
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-plus-circle text-brand-500"></i> أجزاء وسيكشنز إضافية مخصصة
+                </h3>
+                <button onclick="openCustomSectionModal()" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-all shadow-md">
+                    <i class="fas fa-plus mr-1"></i> إضافة سيكشن جديد
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                @foreach (var csec in Model.CustomSections)
+                {
+                    <div class="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-sm text-slate-900 dark:text-white">@csec.Title</span>
+                            <div class="flex items-center gap-2">
+                                <button onclick="toggleSection(@csec.Id)" class="px-2.5 py-1 rounded-full text-[9px] font-bold @(csec.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600")">
+                                    @(csec.IsVisible ? "ظاهر" : "مخفي")
+                                </button>
+                                <button onclick="deleteSection(@csec.Id)" class="text-red-500 hover:text-red-700 p-1">
+                                    <i class="fas fa-trash-alt text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">@csec.ContentHtml</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 3: Faculty Members Management -->
+    <div id="tab-content-faculty" class="tab-content space-y-6 hidden">
+        <!-- Faculty Section Header Form -->
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+            <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-heading text-brand-500"></i> عنوان وتفاصيل سيكشن المحاضرين (Meet Our Faculty)
+            </h3>
+            <form class="section-form space-y-4" data-id="@facultySec.Id" data-key="faculty">
+                <input type="hidden" name="Id" value="@facultySec.Id" />
+                <input type="hidden" name="SectionKey" value="faculty" />
+                <input type="hidden" name="IsVisible" value="@(facultySec.IsVisible ? "true" : "false")" />
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">العنوان الرئيسي</label>
+                        <input type="text" name="Title" value="@facultySec.Title" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">الوصف الفرعي</label>
+                        <input type="text" name="ContentHtml" value="@facultySec.ContentHtml" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="px-6 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-all">
+                        <i class="fas fa-save mr-1"></i> حفظ عنوان السيكشن
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Add Faculty Form Card -->
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+            <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-user-plus text-brand-500"></i> إضافة محاضر / عضو جديد
+            </h3>
+            <form id="addFacultyForm" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">اسم المحاضر *</label>
+                    <input type="text" name="Name" required placeholder="د. أحمد ممدوح" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">المسمى الوظيفي / التخصص</label>
+                    <input type="text" name="RoleTitle" placeholder="مثال: Clinical Research Director" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">الصورة الشخصية</label>
+                    <input type="file" name="imageFile" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-brand-50 file:text-brand-600" />
+                </div>
+                <div class="md:col-span-3">
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">نبذة مختصرة (Bio)</label>
+                    <input type="text" name="Bio" placeholder="خبرة 10 سنوات في الأبحاث الإكلينيكية والصيدلانية..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+                </div>
+                <div class="md:col-span-3 flex justify-end">
+                    <button type="submit" class="px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-all shadow-md">
+                        <i class="fas fa-plus mr-1"></i> إضافة المحاضر
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Faculty Members Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+            @foreach (var member in Model.FacultyMembers)
+            {
+                <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 text-center space-y-4 shadow-sm relative group">
+                    <div class="w-24 h-24 rounded-2xl overflow-hidden mx-auto bg-slate-100 dark:bg-slate-800 shadow-md">
+                        <img src="@(string.IsNullOrEmpty(member.ImageUrl) ? "https://i.pravatar.cc/300?u=" + member.Id : member.ImageUrl)" alt="@member.Name" class="w-full h-full object-cover" />
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm text-slate-900 dark:text-white">@member.Name</h4>
+                        <p class="text-[10px] font-black text-brand-600 dark:text-brand-400 uppercase tracking-widest mt-0.5">@member.RoleTitle</p>
+                        <p class="text-xs text-slate-400 mt-2 font-medium leading-relaxed line-clamp-2">@member.Bio</p>
+                    </div>
+                    <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <button onclick="toggleFaculty(@member.Id)" class="px-2.5 py-1 rounded-full text-[9px] font-bold @(member.IsActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600")">
+                            @(member.IsActive ? "مفعل" : "معطل")
+                        </button>
+                        <button onclick="deleteFaculty(@member.Id)" class="text-red-500 hover:text-red-700 p-1">
+                            <i class="fas fa-trash-alt text-xs"></i> مسح
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Modal for New Custom Section -->
+<div id="customSectionModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h3 class="text-base font-black text-slate-900 dark:text-white">إضافة سيكشن مخصص جديد</h3>
+            <button onclick="closeCustomSectionModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+        </div>
+        <form id="newSectionForm" class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">عنوان السيكشن *</label>
+                <input type="text" name="Title" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">العنوان الفرعي (Subtitle)</label>
+                <input type="text" name="Subtitle" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">محتوى السيكشن</label>
+                <textarea name="ContentHtml" rows="4" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500"></textarea>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="closeCustomSectionModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold">إلغاء</button>
+                <button type="submit" class="px-6 py-2 rounded-xl bg-brand-600 text-white text-xs font-bold">حفظ السيكشن</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('border-brand-600', 'text-brand-600', 'dark:text-brand-400', 'bg-white', 'dark:bg-slate-900');
+            btn.classList.add('border-transparent', 'text-slate-500');
+        });
+
+        document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
+        const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+        activeBtn.classList.remove('border-transparent', 'text-slate-500');
+        activeBtn.classList.add('border-brand-600', 'text-brand-600', 'dark:text-brand-400', 'bg-white', 'dark:bg-slate-900');
+    }
+
+    // Slider upload
+    $('#uploadSliderForm').on('submit', function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        $.ajax({
+            url: '/Admin/UploadSliderImage',
+            type: 'POST',
+            data: formData,
+            contentType: false,
+            processData: false,
+            success: function (res) {
+                Swal.fire({ icon: 'success', title: 'تم الرفع!', text: res.message, timer: 1500, showConfirmButton: false })
+                    .then(() => location.reload());
+            },
+            error: function (err) {
+                Swal.fire({ icon: 'error', title: 'خطأ', text: err.responseJSON?.message || 'فشل رفع الصورة' });
+            }
+        });
+    });
+
+    function deleteSlider(id) {
+        Swal.fire({
+            title: 'هل انت متأكد من مسح هذه الصورة؟',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'نعم، امسح',
+            cancelButtonText: 'إلغاء'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.post(`/Admin/DeleteSliderImage/${id}`, function (res) {
+                    location.reload();
+                });
+            }
+        });
+    }
+
+    function toggleSlider(id) {
+        $.post(`/Admin/ToggleSliderImage/${id}`, function () { location.reload(); });
+    }
+
+    // Section Form Submit
+    $('.section-form').on('submit', function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        $.ajax({
+            url: '/Admin/SaveHomeSection',
+            type: 'POST',
+            data: formData,
+            contentType: false,
+            processData: false,
+            success: function (res) {
+                Swal.fire({ icon: 'success', title: 'تم الحفظ!', text: res.message, timer: 1500, showConfirmButton: false });
+            }
+        });
+    });
+
+    function toggleSection(id) {
+        $.post(`/Admin/ToggleHomeSection/${id}`, function () { location.reload(); });
+    }
+
+    function deleteSection(id) {
+        $.post(`/Admin/DeleteHomeSection/${id}`, function () { location.reload(); });
+    }
+
+    function openCustomSectionModal() { $('#customSectionModal').removeClass('hidden'); }
+    function closeCustomSectionModal() { $('#customSectionModal').addClass('hidden'); }
+
+    $('#newSectionForm').on('submit', function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        $.ajax({
+            url: '/Admin/SaveHomeSection',
+            type: 'POST',
+            data: formData,
+            contentType: false,
+            processData: false,
+            success: function () { location.reload(); }
+        });
+    });
+
+    // Faculty Submit
+    $('#addFacultyForm').on('submit', function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        $.ajax({
+            url: '/Admin/SaveFacultyMember',
+            type: 'POST',
+            data: formData,
+            contentType: false,
+            processData: false,
+            success: function (res) {
+                Swal.fire({ icon: 'success', title: 'تمت الإضافة!', timer: 1500, showConfirmButton: false }).then(() => location.reload());
+            }
+        });
+    });
+
+    function deleteFaculty(id) {
+        Swal.fire({
+            title: 'مسح هذا المحاضر؟',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'مسح',
+            cancelButtonText: 'إلغاء'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.post(`/Admin/DeleteFacultyMember/${id}`, function () { location.reload(); });
+            }
+        });
+    }
+
+    function toggleFaculty(id) {
+        $.post(`/Admin/ToggleFacultyMember/${id}`, function () { location.reload(); });
+    }
+</script>
