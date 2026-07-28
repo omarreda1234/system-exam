@@ -69,14 +69,14 @@
         </div>
 
         <!-- Current Slider Images Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        <div id="sliderGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             @foreach (var img in Model.SliderImages)
             {
-                <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm flex flex-col justify-between group">
+                <div class="slider-card bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm flex flex-col justify-between group">
                     <div class="relative aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden">
                         <img src="@img.ImageUrl" alt="@img.Title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                         <div class="absolute top-3 right-3">
-                            <button onclick="toggleSlider(@img.Id)" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md @(img.IsActive ? "bg-emerald-500/90 text-white" : "bg-slate-700/90 text-slate-300")">
+                            <button onclick="toggleSlider(@img.Id, this)" class="slider-status-btn px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md @(img.IsActive ? "bg-emerald-500/90 text-white" : "bg-slate-700/90 text-slate-300")">
                                 @(img.IsActive ? "مفعل" : "معطل")
                             </button>
                         </div>
@@ -86,7 +86,7 @@
                         <p class="text-xs text-slate-400 font-medium truncate">@img.Subtitle</p>
                         <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
                             <span class="text-[10px] font-bold text-slate-400">ترتيب العرض: #@img.DisplayOrder</span>
-                            <button onclick="deleteSlider(@img.Id)" class="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-xs font-bold transition-all">
+                            <button onclick="deleteSlider(@img.Id, this)" class="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-xs font-bold transition-all">
                                 <i class="fas fa-trash-alt mr-1"></i> مسح
                             </button>
                         </div>
@@ -102,9 +102,9 @@
         <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
             <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                 <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                    <i class="fas fa-history text-brand-500"></i> قسم قتنا (Our Story Section)
+                    <i class="fas fa-history text-brand-500"></i> قسم قصتنا (Our Story Section)
                 </h3>
-                <button onclick="toggleSection(@story.Id)" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(story.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")">
+                <button onclick="toggleSection(@story.Id, this)" class="section-status-btn px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(story.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")">
                     @(story.IsVisible ? "ظاهر في الصفحة" : "مخفي")
                 </button>
             </div>
@@ -164,7 +164,7 @@
                     <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                         <i class="fas fa-eye text-brand-500"></i> قسم الرؤية (Our Vision)
                     </h3>
-                    <button onclick="toggleSection(@vision.Id)" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(vision.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")">
+                    <button onclick="toggleSection(@vision.Id, this)" class="section-status-btn px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(vision.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")">
                         @(vision.IsVisible ? "ظاهر" : "مخفي")
                     </button>
                 </div>
@@ -194,7 +194,7 @@
                     <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                         <i class="fas fa-rocket text-brand-500"></i> قسم المهمة (Our Mission)
                     </h3>
-                    <button onclick="toggleSection(@mission.Id)" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(mission.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")">
+                    <button onclick="toggleSection(@mission.Id, this)" class="section-status-btn px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(mission.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")">
                         @(mission.IsVisible ? "ظاهر" : "مخفي")
                     </button>
                 </div>
@@ -230,17 +230,17 @@
                 </button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div id="customSectionsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 @foreach (var csec in Model.CustomSections)
                 {
-                    <div class="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 space-y-2">
+                    <div class="custom-section-card p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 space-y-2">
                         <div class="flex items-center justify-between">
                             <span class="font-bold text-sm text-slate-900 dark:text-white">@csec.Title</span>
                             <div class="flex items-center gap-2">
-                                <button onclick="toggleSection(@csec.Id)" class="px-2.5 py-1 rounded-full text-[9px] font-bold @(csec.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600")">
+                                <button onclick="toggleSection(@csec.Id, this)" class="section-status-btn px-2.5 py-1 rounded-full text-[9px] font-bold @(csec.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600")">
                                     @(csec.IsVisible ? "ظاهر" : "مخفي")
                                 </button>
-                                <button onclick="deleteSection(@csec.Id)" class="text-red-500 hover:text-red-700 p-1">
+                                <button onclick="deleteSection(@csec.Id, this)" class="text-red-500 hover:text-red-700 p-1">
                                     <i class="fas fa-trash-alt text-xs"></i>
                                 </button>
                             </div>
@@ -312,10 +312,10 @@
         </div>
 
         <!-- Faculty Members Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+        <div id="facultyGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
             @foreach (var member in Model.FacultyMembers)
             {
-                <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 text-center space-y-4 shadow-sm relative group">
+                <div class="faculty-card bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 text-center space-y-4 shadow-sm relative group">
                     <div class="w-24 h-24 rounded-2xl overflow-hidden mx-auto bg-slate-100 dark:bg-slate-800 shadow-md">
                         <img src="@(string.IsNullOrEmpty(member.ImageUrl) ? "https://i.pravatar.cc/300?u=" + member.Id : member.ImageUrl)" alt="@member.Name" class="w-full h-full object-cover" />
                     </div>
@@ -325,10 +325,10 @@
                         <p class="text-xs text-slate-400 mt-2 font-medium leading-relaxed line-clamp-2">@member.Bio</p>
                     </div>
                     <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                        <button onclick="toggleFaculty(@member.Id)" class="px-2.5 py-1 rounded-full text-[9px] font-bold @(member.IsActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600")">
+                        <button onclick="toggleFaculty(@member.Id, this)" class="faculty-status-btn px-2.5 py-1 rounded-full text-[9px] font-bold @(member.IsActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600")">
                             @(member.IsActive ? "مفعل" : "معطل")
                         </button>
-                        <button onclick="deleteFaculty(@member.Id)" class="text-red-500 hover:text-red-700 p-1">
+                        <button onclick="deleteFaculty(@member.Id, this)" class="text-red-500 hover:text-red-700 p-1">
                             <i class="fas fa-trash-alt text-xs"></i> مسح
                         </button>
                     </div>
@@ -367,6 +367,33 @@
 </div>
 
 <script>
+    // Top-Right Toast Notification Helper
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer);
+            toast.addEventListener('mouseleave', Swal.resumeTimer);
+        }
+    });
+
+    function notifySuccess(msg) {
+        Toast.fire({
+            icon: 'success',
+            title: msg || 'تم حفظ التعديلات بنجاح!'
+        });
+    }
+
+    function notifyError(msg) {
+        Toast.fire({
+            icon: 'error',
+            title: msg || 'حدث خطأ أثناء التنفيذ'
+        });
+    }
+
     function switchTab(tabName) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
         document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -384,6 +411,7 @@
     $('#uploadSliderForm').on('submit', function (e) {
         e.preventDefault();
         const formData = new FormData(this);
+        const form = this;
         $.ajax({
             url: '/Admin/UploadSliderImage',
             type: 'POST',
@@ -391,16 +419,17 @@
             contentType: false,
             processData: false,
             success: function (res) {
-                Swal.fire({ icon: 'success', title: 'تم الرفع!', text: res.message, timer: 1500, showConfirmButton: false })
-                    .then(() => location.reload());
+                form.reset();
+                notifySuccess(res.message || 'تم رفع الصورة بنجاح!');
+                setTimeout(() => location.reload(), 1000);
             },
             error: function (err) {
-                Swal.fire({ icon: 'error', title: 'خطأ', text: err.responseJSON?.message || 'فشل رفع الصورة' });
+                notifyError(err.responseJSON?.message || 'فشل رفع الصورة');
             }
         });
     });
 
-    function deleteSlider(id) {
+    function deleteSlider(id, btn) {
         Swal.fire({
             title: 'هل انت متأكد من مسح هذه الصورة؟',
             icon: 'warning',
@@ -410,14 +439,31 @@
         }).then((result) => {
             if (result.isConfirmed) {
                 $.post(`/Admin/DeleteSliderImage/${id}`, function (res) {
-                    location.reload();
+                    if (res.success) {
+                        $(btn).closest('.slider-card').fadeOut(300, function () { $(this).remove(); });
+                        notifySuccess(res.message || 'تم مسح الصورة بنجاح!');
+                    } else {
+                        notifyError(res.message || 'فشل المسح');
+                    }
                 });
             }
         });
     }
 
-    function toggleSlider(id) {
-        $.post(`/Admin/ToggleSliderImage/${id}`, function () { location.reload(); });
+    function toggleSlider(id, btn) {
+        $.post(`/Admin/ToggleSliderImage/${id}`, function (res) {
+            if (res.success) {
+                const $btn = $(btn);
+                if ($btn.text().trim() === 'مفعل') {
+                    $btn.text('معطل').removeClass('bg-emerald-500/90 text-white').addClass('bg-slate-700/90 text-slate-300');
+                } else {
+                    $btn.text('مفعل').removeClass('bg-slate-700/90 text-slate-300').addClass('bg-emerald-500/90 text-white');
+                }
+                notifySuccess('تم تحديث حالة الصورة بنجاح!');
+            } else {
+                notifyError('فشل تحديث الحالة');
+            }
+        });
     }
 
     // Section Form Submit
@@ -431,17 +477,50 @@
             contentType: false,
             processData: false,
             success: function (res) {
-                Swal.fire({ icon: 'success', title: 'تم الحفظ!', text: res.message, timer: 1500, showConfirmButton: false });
+                notifySuccess(res.message || 'تم حفظ التعديلات بنجاح!');
+            },
+            error: function () {
+                notifyError('حدث خطأ أثناء الحفظ');
             }
         });
     });
 
-    function toggleSection(id) {
-        $.post(`/Admin/ToggleHomeSection/${id}`, function () { location.reload(); });
+    function toggleSection(id, btn) {
+        $.post(`/Admin/ToggleHomeSection/${id}`, function (res) {
+            if (res.success) {
+                const $btn = $(btn);
+                const isStoryOrVision = $btn.text().includes('ظاهر');
+                if ($btn.text().trim().startsWith('ظاهر')) {
+                    $btn.text($btn.text().includes('في الصفحة') ? 'مخفي' : 'مخفي').removeClass('bg-emerald-100 text-emerald-700').addClass('bg-slate-100 text-slate-500 bg-slate-200 text-slate-600');
+                } else {
+                    $btn.text($btn.text().includes('في الصفحة') ? 'ظاهر في الصفحة' : 'ظاهر').removeClass('bg-slate-100 text-slate-500 bg-slate-200 text-slate-600').addClass('bg-emerald-100 text-emerald-700');
+                }
+                notifySuccess('تم تحديث حالة السيكشن بنجاح!');
+            } else {
+                notifyError('فشل تحديث الحالة');
+            }
+        });
     }
 
-    function deleteSection(id) {
-        $.post(`/Admin/DeleteHomeSection/${id}`, function () { location.reload(); });
+    function deleteSection(id, btn) {
+        Swal.fire({
+            title: 'هل انت متأكد من مسح هذا السيكشن؟',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'نعم، امسح',
+            cancelButtonText: 'إلغاء'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.post(`/Admin/DeleteHomeSection/${id}`, function (res) {
+                    if (res.success) {
+                        $(btn).closest('.custom-section-card').fadeOut(300, function () { $(this).remove(); });
+                        notifySuccess(res.message || 'تم مسح السيكشن بنجاح!');
+                    } else {
+                        notifyError(res.message || 'فشل المسح');
+                    }
+                });
+            }
+        });
     }
 
     function openCustomSectionModal() { $('#customSectionModal').removeClass('hidden'); }
@@ -450,13 +529,22 @@
     $('#newSectionForm').on('submit', function (e) {
         e.preventDefault();
         const formData = new FormData(this);
+        const form = this;
         $.ajax({
             url: '/Admin/SaveHomeSection',
             type: 'POST',
             data: formData,
             contentType: false,
             processData: false,
-            success: function () { location.reload(); }
+            success: function (res) {
+                closeCustomSectionModal();
+                form.reset();
+                notifySuccess('تمت إضافة السيكشن بنجاح!');
+                setTimeout(() => location.reload(), 1000);
+            },
+            error: function () {
+                notifyError('فشل حفظ السيكشن');
+            }
         });
     });
 
@@ -464,6 +552,7 @@
     $('#addFacultyForm').on('submit', function (e) {
         e.preventDefault();
         const formData = new FormData(this);
+        const form = this;
         $.ajax({
             url: '/Admin/SaveFacultyMember',
             type: 'POST',
@@ -471,12 +560,17 @@
             contentType: false,
             processData: false,
             success: function (res) {
-                Swal.fire({ icon: 'success', title: 'تمت الإضافة!', timer: 1500, showConfirmButton: false }).then(() => location.reload());
+                form.reset();
+                notifySuccess('تمت إضافة المحاضر بنجاح!');
+                setTimeout(() => location.reload(), 1000);
+            },
+            error: function () {
+                notifyError('فشل إضافة المحاضر');
             }
         });
     });
 
-    function deleteFaculty(id) {
+    function deleteFaculty(id, btn) {
         Swal.fire({
             title: 'مسح هذا المحاضر؟',
             icon: 'warning',
@@ -485,12 +579,31 @@
             cancelButtonText: 'إلغاء'
         }).then((result) => {
             if (result.isConfirmed) {
-                $.post(`/Admin/DeleteFacultyMember/${id}`, function () { location.reload(); });
+                $.post(`/Admin/DeleteFacultyMember/${id}`, function (res) {
+                    if (res.success) {
+                        $(btn).closest('.faculty-card').fadeOut(300, function () { $(this).remove(); });
+                        notifySuccess(res.message || 'تم مسح المحاضر بنجاح!');
+                    } else {
+                        notifyError('فشل المسح');
+                    }
+                });
             }
         });
     }
 
-    function toggleFaculty(id) {
-        $.post(`/Admin/ToggleFacultyMember/${id}`, function () { location.reload(); });
+    function toggleFaculty(id, btn) {
+        $.post(`/Admin/ToggleFacultyMember/${id}`, function (res) {
+            if (res.success) {
+                const $btn = $(btn);
+                if ($btn.text().trim() === 'مفعل') {
+                    $btn.text('معطل').removeClass('bg-emerald-100 text-emerald-700').addClass('bg-slate-200 text-slate-600');
+                } else {
+                    $btn.text('مفعل').removeClass('bg-slate-200 text-slate-600').addClass('bg-emerald-100 text-emerald-700');
+                }
+                notifySuccess('تم تحديث حالة المحاضر بنجاح!');
+            } else {
+                notifyError('فشل تحديث الحالة');
+            }
+        });
     }
 </script>
