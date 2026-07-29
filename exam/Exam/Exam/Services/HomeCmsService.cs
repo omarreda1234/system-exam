@@ -117,20 +117,26 @@ namespace Exam.Services
                 : "SELECT * FROM dbo.HomeSliderImages ORDER BY DisplayOrder ASC, Id ASC";
             model.SliderImages = (await conn.QueryAsync<HomeSliderImage>(sliderSql)).ToList();
 
-            string sectionSql = activeOnly
-                ? "SELECT * FROM dbo.HomeSections WHERE IsVisible = 1 ORDER BY DisplayOrder ASC, Id ASC"
-                : "SELECT * FROM dbo.HomeSections ORDER BY DisplayOrder ASC, Id ASC";
+            string sectionSql = "SELECT * FROM dbo.HomeSections ORDER BY DisplayOrder ASC, Id ASC";
             var sections = (await conn.QueryAsync<HomeSection>(sectionSql)).ToList();
+
+            var predefinedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "story", "story_badge", "vision", "mission", "faculty" };
 
             foreach (var sec in sections)
             {
-                if (!string.IsNullOrEmpty(sec.SectionKey) && !model.Sections.ContainsKey(sec.SectionKey))
+                if (!string.IsNullOrEmpty(sec.SectionKey) && predefinedKeys.Contains(sec.SectionKey))
                 {
-                    model.Sections[sec.SectionKey] = sec;
+                    if (!model.Sections.ContainsKey(sec.SectionKey))
+                    {
+                        model.Sections[sec.SectionKey] = sec;
+                    }
                 }
                 else
                 {
-                    model.CustomSections.Add(sec);
+                    if (!activeOnly || sec.IsVisible)
+                    {
+                        model.CustomSections.Add(sec);
+                    }
                 }
             }
 
