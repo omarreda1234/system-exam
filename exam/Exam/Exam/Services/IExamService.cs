@@ -103,6 +103,7 @@ namespace Exam.Services
         Task<int> GetAssignmentCountAsync(int examId, string studentId);
         Task EnsureDatabaseSchemaUpdatedAsync(System.IServiceProvider serviceProvider = null);
         Task<bool> HasPermissionAsync(IList<string> roles, string controller, string action);
+        Task<bool> HasSpecificPermissionAsync(IList<string> roles, string controller, string action, string permissionType);
         Task<IEnumerable<RolePermission>> GetPermissionsForRoleAsync(string roleName);
         Task SavePermissionsForRoleAsync(string roleName, List<RolePermission> permissions);
     }

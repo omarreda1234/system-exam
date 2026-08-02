@@ -3299,6 +3299,32 @@ DELETE FROM AspNetUsers WHERE Id = @UserId;",
             return count > 0;
         }
 
+        public async Task<bool> HasSpecificPermissionAsync(IList<string> roles, string controller, string action, string permissionType)
+        {
+            if (roles == null || !roles.Any()) return false;
+            if (roles.Contains("Admin")) return true;
+
+            string column = permissionType.ToLower() switch
+            {
+                "create" => "CanCreate",
+                "edit" => "CanEdit",
+                "delete" => "CanDelete",
+                _ => "CanAccess"
+            };
+
+            using var conn = new SqlConnection(_connectionString);
+            string sql = $@"
+                SELECT COUNT(1) 
+                FROM RolePermissions 
+                WHERE RoleName IN @Roles 
+                  AND LOWER(ControllerName) = LOWER(@Controller) 
+                  AND LOWER(ActionName) = LOWER(@Action) 
+                  AND {column} = 1";
+            
+            int count = await conn.ExecuteScalarAsync<int>(sql, new { Roles = roles, Controller = controller, Action = action });
+            return count > 0;
+        }
+
         public async Task<IEnumerable<RolePermission>> GetPermissionsForRoleAsync(string roleName)
         {
             using var conn = new SqlConnection(_connectionString);

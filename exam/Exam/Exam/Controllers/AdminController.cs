@@ -5156,6 +5156,12 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddBranch(string name, string code)
         {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Branches", "create"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
             if (string.IsNullOrWhiteSpace(name))
                 return Json(new { success = false, message = "Branch name is required." });
 
@@ -5182,6 +5188,12 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditBranch(int id, string name, string code)
         {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Branches", "edit"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
             if (string.IsNullOrWhiteSpace(name))
                 return Json(new { success = false, message = "Branch name is required." });
 
@@ -5207,6 +5219,12 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteBranch(int id)
         {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Branches", "delete"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
             try
             {
                 using var conn = new SqlConnection(_connectionString);
@@ -5231,6 +5249,12 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> MergeBranch(int sourceId, int targetId)
         {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Branches", "edit"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
             if (sourceId == targetId)
                 return Json(new { success = false, message = "Cannot merge a branch into itself." });
 
