@@ -22,9 +22,17 @@ jobs:
     - name: Stop App and Show Maintenance Page
       shell: powershell
       run: |
-        # Stop any running instances of the application
+        # Stop the Windows Service if it exists and is running
+        $serviceName = "ExamAppService"
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($null -ne $service -and $service.Status -eq 'Running') {
+            Write-Host "Stopping Windows Service '$serviceName'..."
+            Stop-Service -Name $serviceName -Force
+        }
+        
+        # Stop any other running instances of the application
         Stop-Process -Name "Exam" -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 2
+        Start-Sleep -Seconds 5
         
         # Start maintenance page on the SAME port as the app (9099)
         $scriptPath = Resolve-Path "ServeOfflinePage.ps1"
@@ -41,17 +49,25 @@ jobs:
         }
         Copy-Item -Path "./publish/*" -Destination $deployDir -Recurse -Force
 
-    - name: Start Application in Background
+    - name: Start Application as Windows Service
       shell: powershell
-      env:
-        RUNNER_TRACKING_ID: ""
       run: |
         # Stop the maintenance page listener
         $stopFile = Join-Path $env:TEMP "stop_listener_9099.txt"
         New-Item -Path $stopFile -ItemType File -Force | Out-Null
         Start-Sleep -Seconds 2
         
-        # Start the new application
+        # Ensure the Windows Service is registered and started
+        $serviceName = "ExamAppService"
         $deployDir = "C:\exam-prod"
-        Start-Process -FilePath "$deployDir\Exam.exe" -WorkingDirectory $deployDir -WindowStyle Hidden
+        $exePath = Join-Path $deployDir "Exam.exe"
+        
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($null -eq $service) {
+            Write-Host "Registering Windows Service '$serviceName'..."
+            New-Service -Name $serviceName -BinaryPathName $exePath -DisplayName "Exam Application Service" -StartupType Automatic
+        }
+        
+        Write-Host "Starting Windows Service '$serviceName'..."
+        Start-Service -Name $serviceName
 

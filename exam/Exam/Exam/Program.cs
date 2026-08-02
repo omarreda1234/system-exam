@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseWindowsService();
 
 // Add services to the container.
 PdfSharpCore.Fonts.GlobalFontSettings.FontResolver = new Exam.Services.FileFontResolver();
