@@ -127,9 +127,9 @@
                                 <input type="text" id="checkin-time-@user.Id" 
                                        placeholder="--:--" 
                                        value="@user.CheckInTime"
-                                       @(User.IsInRole("Admin") ? "" : "readonly")
+                                       @(User.IsInRole("Admin") || string.IsNullOrEmpty(user.CheckInTime) ? "" : "readonly")
                                        onchange="saveDetailedAttendance('@user.Id')"
-                                       class="w-20 px-2 py-1.5 text-[10px] font-bold text-center rounded-lg focus:outline-none @(User.IsInRole("Admin") ? "bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500" : "bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none")" />
+                                       class="time-input-field w-20 px-2 py-1.5 text-[10px] font-bold text-center rounded-lg focus:outline-none @(User.IsInRole("Admin") || string.IsNullOrEmpty(user.CheckInTime) ? "bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500" : "bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none")" />
                             </div>
 
                             <!-- Departure (انصراف) -->
@@ -145,9 +145,9 @@
                                 <input type="text" id="checkout-time-@user.Id" 
                                        placeholder="--:--" 
                                        value="@user.CheckOutTime"
-                                       @(User.IsInRole("Admin") ? "" : "readonly")
+                                       @(User.IsInRole("Admin") || string.IsNullOrEmpty(user.CheckOutTime) ? "" : "readonly")
                                        onchange="saveDetailedAttendance('@user.Id')"
-                                       class="w-20 px-2 py-1.5 text-[10px] font-bold text-center rounded-lg focus:outline-none @(User.IsInRole("Admin") ? "bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500" : "bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none")" />
+                                       class="time-input-field w-20 px-2 py-1.5 text-[10px] font-bold text-center rounded-lg focus:outline-none @(User.IsInRole("Admin") || string.IsNullOrEmpty(user.CheckOutTime) ? "bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500" : "bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none")" />
                             </div>
                         </div>
                     </div>
@@ -158,6 +158,9 @@
 </div>
 
 @section Scripts {
+    <!-- Flatpickr CSS & JS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script>
         // Double-check dark mode is cleared on load
         document.documentElement.classList.remove('dark');
@@ -206,10 +209,25 @@
         const isAdmin = @(User.IsInRole("Admin").ToString().ToLower());
 
         function saveDetailedAttendance(userId) {
-            const isPresent = document.getElementById(`checkin-chk-${userId}`).checked;
-            const checkInTime = document.getElementById(`checkin-time-${userId}`).value.trim();
+            let isPresent = document.getElementById(`checkin-chk-${userId}`).checked;
+            let checkInTime = document.getElementById(`checkin-time-${userId}`).value.trim();
             const checkOutTime = document.getElementById(`checkout-time-${userId}`).value.trim();
             const sessionId = '@session.Id';
+
+            if (checkInTime && !isPresent) {
+                document.getElementById(`checkin-chk-${userId}`).checked = true;
+                isPresent = true;
+            }
+
+            if (checkOutTime && !isPresent) {
+                document.getElementById(`checkin-chk-${userId}`).checked = true;
+                isPresent = true;
+                const checkInInput = document.getElementById(`checkin-time-${userId}`);
+                if (!checkInInput.value.trim()) {
+                    checkInInput.value = getFormattedTime();
+                    checkInTime = checkInInput.value;
+                }
+            }
 
             // Visually fade the row to indicate saving
             $(`#checkin-chk-${userId}, #checkout-chk-${userId}`).prop('disabled', true);
@@ -234,8 +252,21 @@
                             $(`#checkin-chk-${userId}`).prop('disabled', false).closest('label').removeClass('opacity-60 cursor-not-allowed pointer-events-none');
                         }
 
+                        if (checkInTime) {
+                            const input = document.getElementById(`checkin-time-${userId}`);
+                            $(input).prop('readonly', true).addClass('bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none').removeClass('bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500');
+                            if (input._flatpickr) {
+                                input._flatpickr.destroy();
+                            }
+                        }
+
                         if (checkOutTime) {
                             $(`#checkout-chk-${userId}`).prop('disabled', true).closest('label').addClass('opacity-60 cursor-not-allowed pointer-events-none');
+                            const input = document.getElementById(`checkout-time-${userId}`);
+                            $(input).prop('readonly', true).addClass('bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none').removeClass('bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500');
+                            if (input._flatpickr) {
+                                input._flatpickr.destroy();
+                            }
                         } else {
                             $(`#checkout-chk-${userId}`).prop('disabled', false).closest('label').removeClass('opacity-60 cursor-not-allowed pointer-events-none');
                         }
@@ -337,5 +368,14 @@
             $('.class-filter-btn').removeClass('bg-white text-slate-900 shadow-sm').addClass('text-slate-500 hover:text-slate-900');
             $(activeBtn).addClass('bg-white text-slate-900 shadow-sm').removeClass('text-slate-500');
         }
+
+        $(function() {
+            flatpickr(".time-input-field:not([readonly])", {
+                enableTime: true,
+                noCalendar: true,
+                dateFormat: "h:i K",
+                clickOpens: true
+            });
+        });
     </script>
 }

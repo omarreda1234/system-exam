@@ -2,13 +2,10 @@ $connString = "Server=192.168.1.111;Database=Eltarshouby-Exam;User Id=sa;Passwor
 $conn = New-Object System.Data.SqlClient.SqlConnection($connString)
 $conn.Open()
 $cmd = $conn.CreateCommand()
-$cmd.CommandText = "SELECT Name, COUNT(ur.UserId) as UserCount FROM AspNetRoles r LEFT JOIN AspNetUserRoles ur ON r.Id = ur.RoleId GROUP BY r.Name"
+$cmd.CommandText = "SELECT Name FROM AspNetRoles"
 $reader = $cmd.ExecuteReader()
 while ($reader.Read()) {
-    [PSCustomObject]@{
-        RoleName = $reader["Name"]
-        UserCount = $reader["UserCount"]
-    }
+    $reader["Name"]
 }
 $reader.Close()
 $conn.Close()

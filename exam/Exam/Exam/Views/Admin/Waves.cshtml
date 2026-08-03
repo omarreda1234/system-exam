@@ -1,7 +1,25 @@
 @model IEnumerable<Exam.DTOs.WaveDto>
+@inject Exam.Services.IExamService ExamService
 @{
     ViewData["Title"] = "Training Batches";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+
+    var userRoles = User.Claims
+        .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+        .Select(c => c.Value)
+        .ToList();
+
+    bool HasWavesDeletePermission()
+    {
+        if (userRoles.Contains("Admin")) return true;
+        return ExamService.HasSpecificPermissionAsync(userRoles, "Admin", "Waves", "delete").GetAwaiter().GetResult();
+    }
+
+    bool HasRemoveUserFromWavePermission()
+    {
+        if (userRoles.Contains("Admin")) return true;
+        return ExamService.HasSpecificPermissionAsync(userRoles, "Admin", "RemoveUserFromWave", "delete").GetAwaiter().GetResult();
+    }
 }
 
 @Html.AntiForgeryToken()
@@ -58,7 +76,7 @@
                                         Import Excel
                                     </button>
                                 }
-                                @if (User.IsInRole("Admin"))
+                                @if (HasWavesDeletePermission())
                                 {
                                     <button onclick="cloneWave(@wave.Id, '@wave.WaveName')" class="bg-indigo-50 hover:bg-indigo-600 text-indigo-500 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-indigo-100 hover:border-indigo-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
                                         <i class="fas fa-copy text-xs"></i>
@@ -83,6 +101,7 @@
     <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
     <script>
         const isAdmin = @(User.IsInRole("Admin").ToString().ToLower());
+        const canDeleteWaveAssign = @(HasRemoveUserFromWavePermission().ToString().ToLower());
 
         function showToast(message, type = 'success') {
             let container = document.getElementById('toast-container');
@@ -591,7 +610,7 @@
                                                 </td>
                                                 <td class="font-bold text-slate-400 text-[10px] uppercase">${u.branchName ?? u.BranchName ?? 'N/A'}</td>
                                                 <td class="text-right">
-                                                    ${isAdmin ? `
+                                                    ${canDeleteWaveAssign ? `
                                                         <button class="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg remove-user-btn" 
                                                                 data-waveid="${wid}" 
                                                                 data-userid="${u.id ?? u.Id}"

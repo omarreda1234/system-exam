@@ -549,15 +549,35 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> ExportWaveResultsToExcel(int waveId)
+        public async Task<IActionResult> ExportWaveResultsToExcel(int waveId, int? month = null, int? year = null)
         {
             try
             {
-                var waves = await _examService.GetAllWavesAsync();
-                var waveInfo = waves.FirstOrDefault(w => w.Id == waveId);
-                string waveName = waveInfo?.WaveName ?? "Wave";
+                var waves = (await _examService.GetAllWavesAsync()).ToList();
+                string waveName = "Wave";
+                List<Exam.DTOs.WaveStudentResultDto> results = new List<Exam.DTOs.WaveStudentResultDto>();
 
-                var results = (await _examService.GetWaveAggregateResultsAsync(waveId)).ToList();
+                if (waveId == -1)
+                {
+                    waveName = "All_Waves";
+                    var targetWaves = waves;
+                    if (year.HasValue && year.Value > 0)
+                        targetWaves = targetWaves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Year == year.Value).ToList();
+                    if (month.HasValue && month.Value > 0)
+                        targetWaves = targetWaves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Month == month.Value).ToList();
+
+                    foreach (var w in targetWaves)
+                    {
+                        var res = await _examService.GetWaveAggregateResultsAsync(w.Id);
+                        results.AddRange(res);
+                    }
+                }
+                else
+                {
+                    var waveInfo = waves.FirstOrDefault(w => w.Id == waveId);
+                    waveName = waveInfo?.WaveName ?? "Wave";
+                    results = (await _examService.GetWaveAggregateResultsAsync(waveId)).ToList();
+                }
 
                 // Branch manager restriction
                 if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
@@ -753,11 +773,34 @@ namespace Exam.Controllers
             ViewBag.SelectedYear = year;
 
             int selectedWaveId = waveId ?? 0;
-            if (selectedWaveId <= 0)
+            if (selectedWaveId == 0)
                 selectedWaveId = waves.FirstOrDefault()?.Id ?? 0;
             ViewBag.SelectedWaveId = selectedWaveId;
 
-            if (selectedWaveId > 0)
+            if (selectedWaveId == -1)
+            {
+                var allResults = new List<Exam.DTOs.WaveStudentResultDto>();
+                foreach (var w in waves)
+                {
+                    var results = await _examService.GetWaveAggregateResultsAsync(w.Id);
+                    allResults.AddRange(results);
+                }
+
+                // Branch manager restriction
+                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
+                {
+                    var currentUser = await _userManager.GetUserAsync(User);
+                    using var conn = new SqlConnection(_connectionString);
+                    var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+                    if (allowedBranches != null && allowedBranches.Any())
+                        allResults = allResults.Where(r => allowedBranches.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase))).ToList();
+                    else
+                        allResults = new List<Exam.DTOs.WaveStudentResultDto>();
+                }
+
+                return View(allResults);
+            }
+            else if (selectedWaveId > 0)
             {
                 var results = (await _examService.GetWaveAggregateResultsAsync(selectedWaveId)).ToList();
 
@@ -1271,23 +1314,34 @@ namespace Exam.Controllers
 
             using var conn = new SqlConnection(_connectionString);
             int selectedWaveId = waveId ?? 0;
-            if (selectedWaveId <= 0 && examId.HasValue && examId.Value > 0)
+            if (selectedWaveId == 0)
             {
-                // Try to find the WaveId from the examId
-                selectedWaveId = await conn.QueryFirstOrDefaultAsync<int>(
-                    "SELECT WaveId FROM Exams WHERE Id = @ExamId",
-                    new { ExamId = examId.Value });
-            }
+                if (examId.HasValue && examId.Value > 0)
+                {
+                    // Try to find the WaveId from the examId
+                    selectedWaveId = await conn.QueryFirstOrDefaultAsync<int>(
+                        "SELECT WaveId FROM Exams WHERE Id = @ExamId",
+                        new { ExamId = examId.Value });
+                }
 
-            if (selectedWaveId <= 0)
-            {
-                selectedWaveId = waves.FirstOrDefault()?.Id ?? 0;
+                if (selectedWaveId == 0)
+                {
+                    selectedWaveId = waves.FirstOrDefault()?.Id ?? 0;
+                }
             }
 
             ViewBag.SelectedWaveId = selectedWaveId;
 
-            if (selectedWaveId > 0)
+            if (selectedWaveId == -1 || selectedWaveId > 0)
             {
+                var waveIds = selectedWaveId == -1 ? waves.Select(w => w.Id).ToList() : new List<int> { selectedWaveId };
+
+                if (!waveIds.Any())
+                {
+                    ViewBag.ExamTitle = selectedWaveId == -1 ? "All Waves" : "No Wave";
+                    return View(new List<Exam.DTOs.ExamResultRowDto>());
+                }
+
                 var fallbackSql = @"
                     WITH UserRoles AS (
                         SELECT UR.UserId,
@@ -1330,9 +1384,9 @@ namespace Exam.Controllers
                     LEFT JOIN Branches B ON U.BranchId = B.Id
                     LEFT JOIN UserRoles UR ON U.Id = UR.UserId
                     LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = UW.WaveId
-                    WHERE UW.WaveId = @WaveId AND UW.IsActive = 1";
+                    WHERE UW.WaveId IN @WaveIds AND UW.IsActive = 1";
 
-                var results = await conn.QueryAsync<Exam.DTOs.ExamResultRowDto>(fallbackSql, new { WaveId = selectedWaveId });
+                var results = await conn.QueryAsync<Exam.DTOs.ExamResultRowDto>(fallbackSql, new { WaveIds = waveIds });
                 
                 if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
@@ -1352,8 +1406,7 @@ namespace Exam.Controllers
                         results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
                 }
 
-                var wave = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT WaveName FROM TrainingWaves WHERE Id = @Id", new { Id = selectedWaveId });
-                ViewBag.ExamTitle = wave?.WaveName ?? "No Wave";
+                ViewBag.ExamTitle = selectedWaveId == -1 ? "All Waves" : (waves.FirstOrDefault(w => w.Id == selectedWaveId)?.WaveName ?? "No Wave");
                 return View(results.ToList());
             }
 
@@ -2050,15 +2103,19 @@ namespace Exam.Controllers
                     SELECT 
                         U.Id, U.UserName, ISNULL(U.FullName, U.UserName) as FullName, U.Email, U.PhoneNumber as Phone, 
                         U.UserCode,
-                        ISNULL(R.Name, 'User') as RoleName,
+                        ISNULL(R_CTE.RoleNames, 'User') as RoleName,
                         ISNULL(W.WaveName, 'GLOBAL') as WaveName,
                         ISNULL(B.BranchName, 'N/A') as BranchName,
                         ISNULL(A.Status, '') as LastExamStatus,
                         CASE WHEN EA.Id IS NOT NULL THEN 1 ELSE 0 END AS IsAlreadyAssigned,
                         ISNULL(ABS_CTE.AbsCount, 0) as AbsenceCount
                     FROM AspNetUsers U WITH(NOLOCK)
-                    LEFT JOIN AspNetUserRoles UR ON U.Id = UR.UserId
-                    LEFT JOIN AspNetRoles R WITH(NOLOCK) ON UR.RoleId = R.Id
+                    LEFT JOIN (
+                        SELECT UR.UserId, STRING_AGG(R.Name, ', ') as RoleNames
+                        FROM AspNetUserRoles UR WITH(NOLOCK)
+                        JOIN AspNetRoles R WITH(NOLOCK) ON UR.RoleId = R.Id
+                        GROUP BY UR.UserId
+                    ) R_CTE ON U.Id = R_CTE.UserId
                     LEFT JOIN (
                         SELECT UW.UserId, TW.WaveName, TW.Id as WaveId,
                                ROW_NUMBER() OVER(PARTITION BY UW.UserId ORDER BY UW.Id DESC) as rn
@@ -2081,7 +2138,11 @@ namespace Exam.Controllers
                         GROUP BY UA.UserId, S.WaveId
                     ) ABS_CTE ON ABS_CTE.UserId = U.Id AND ABS_CTE.WaveId = W.WaveId
                     WHERE U.IsActive = 1
-                    AND (R.Name IS NULL OR LOWER(R.Name) NOT IN ('admin', 'superadmin'))
+                    AND NOT EXISTS (
+                        SELECT 1 FROM AspNetUserRoles UR2 WITH(NOLOCK) 
+                        JOIN AspNetRoles R2 WITH(NOLOCK) ON UR2.RoleId = R2.Id 
+                        WHERE UR2.UserId = U.Id AND LOWER(R2.Name) IN ('admin', 'superadmin')
+                    )
                     ";
 
                 // If exam is wave-specific, restrict to that wave
@@ -2850,6 +2911,12 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
         [HttpDelete]
         public async Task<IActionResult> DeleteWave(int waveid)
         {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Waves", "delete"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
             await _examService.DeleteWaveAsync(waveid);
             return Json(new { success = true, Message = "Delete wave success" }); 
         }
@@ -3778,6 +3845,12 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             if (string.IsNullOrWhiteSpace(userId) || waveId <= 0)
                 return Json(new { success = false, message = "Invalid parameters." });
 
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "RemoveUserFromWave", "delete"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
             try
             {
                 using var conn = new SqlConnection(_connectionString);
@@ -3945,7 +4018,8 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             ("Personnel_SendMessage", "Personnel Action: Send Custom Message", "Admin", "SendCustomEmail", new string[] { }),
             ("Personnel_Delete", "Personnel Action: Delete / Deactivate User", "Admin", "DeleteUserPermanently", new[] { "DeactivateUser", "ActivateUser", "DeleteUser" }),
             ("Deactivated", "Deactivated Users", "Admin", "DeactivatedUsers", new[] { "DeactivateUser", "ActivateUser", "DeactivateUserByCode", "ImportDeactivationsFromExcel" }),
-            ("BatchCycles", "Batch Cycles (Waves)", "Admin", "Waves", new[] { "WaveDetails", "GetWaves", "CreateWave", "GetWaveUserIds", "GetUsersByWaveId", "AssignUsersToWave", "ImportUsersToWaveFromExcel" }),
+            ("BatchCycles", "Batch Cycles (Waves)", "Admin", "Waves", new[] { "WaveDetails", "GetWaves", "CreateWave", "GetWaveUserIds", "GetUsersByWaveId", "AssignUsersToWave", "ImportUsersToWaveFromExcel", "DeleteWave" }),
+            ("BatchCycles_RemoveUser", "Batch Cycles Action: Remove User from Wave", "Admin", "RemoveUserFromWave", new string[] { }),
             ("Companies", "Companies Management", "Admin", "Companies", new[] { "AddCompany", "EditCompany", "DeleteCompany", "ClearCompanyTrainees", "ImportCompanyTraineesFromExcel", "GetCompanyTrainees", "DeleteCompanyTrainee", "AddCompanyTraineeManually", "GetTraineeDetailsByCode" }),
             ("Branches", "Branches Management", "Admin", "Branches", new[] { "AddBranch", "EditBranch", "DeleteBranch" }),
             ("AttendanceTrends", "Attendance Trends", "Attendance", "Analytics", new string[] { }),

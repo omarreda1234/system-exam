@@ -44,6 +44,7 @@
         <div class="space-y-2">
             <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Selected Wave</label>
             <select id="examFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[280px] transition-colors focus:border-brand-500 outline-none">
+                <option value="-1" selected="@(-1 == selectedWaveId ? "selected" : null)">ALL WAVES</option>
                 <optgroup label="TRAINING BATCHES">
                     @foreach (var w in waves)
                     {
@@ -159,26 +160,24 @@
             $.get('/Admin/GetFilteredExams', { typeId: type, month: month, year: year, mode: 'cert' }, function (data) {
                 const $examFilter = $('#examFilter');
                 $examFilter.empty();
+                $examFilter.append('<option value="-1">ALL WAVES</option>');
 
-                if (data.length === 0) {
-                    $examFilter.append('<option value="0">No waves found</option>');
-                    return;
-                }
-
-                // Group by typeName
-                const grouped = {};
-                data.forEach(e => {
-                    if (!grouped[e.typeName]) grouped[e.typeName] = [];
-                    grouped[e.typeName].push(e);
-                });
-
-                Object.keys(grouped).sort().reverse().forEach(type => {
-                    const $group = $('<optgroup>').attr('label', type.toUpperCase());
-                    grouped[type].forEach(e => {
-                        $group.append($('<option>').val(e.id).text(e.title));
+                if (data.length > 0) {
+                    // Group by typeName
+                    const grouped = {};
+                    data.forEach(e => {
+                        if (!grouped[e.typeName]) grouped[e.typeName] = [];
+                        grouped[e.typeName].push(e);
                     });
-                    $examFilter.append($group);
-                });
+
+                    Object.keys(grouped).sort().reverse().forEach(type => {
+                        const $group = $('<optgroup>').attr('label', type.toUpperCase());
+                        grouped[type].forEach(e => {
+                            $group.append($('<option>').val(e.id).text(e.title));
+                        });
+                        $examFilter.append($group);
+                    });
+                }
             });
         }
 

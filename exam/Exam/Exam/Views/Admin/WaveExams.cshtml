@@ -466,13 +466,27 @@
                             });
 
                             function isPharmacistRole(role) {
-                                const r = (role || '').trim().toLowerCase();
-                                return r === 'pharmacist' || r === 'صيدلي';
-                            }
-                            function isAssistantRole(role) {
-                                const r = (role || '').trim().toLowerCase();
-                                return r === 'assistant' || r === 'مساعد صيدلي';
-                            }
+
+
+                                                             const r = (role || '').trim().toLowerCase();
+
+
+                                                             return r.split(',').map(x => x.trim()).some(x => x === 'pharmacist' || x === 'صيدلي');
+
+
+                                                         }
+
+
+                                                         function isAssistantRole(role) {
+
+
+                                                             const r = (role || '').trim().toLowerCase();
+
+
+                                                             return r.split(',').map(x => x.trim()).some(x => x === 'assistant' || x === 'مساعد صيدلي');
+
+
+                                                         }
 
                             const otherRoles = [...new Set(users.map(u => u.roleName || u.RoleName || 'User'))]
                                 .filter(r => !isPharmacistRole(r) && !isAssistantRole(r));
@@ -500,33 +514,153 @@
                             }
 
                             function syncFilteredCheckedState() {
-                                const isPharmacistChecked = $('#bulkRolePharmacist').is(':checked');
-                                const isAssistantChecked = $('#bulkRoleAssistant').is(':checked');
-                                const isOtherChecked = $('#bulkRoleOther').is(':checked');
 
-                                table.rows().every(function() {
-                                    const rowNode = this.node();
-                                    const rowRole = $(rowNode).find('.bulk-js-role-name').text().trim();
-                                    const isPharmacist = isPharmacistRole(rowRole);
-                                    const isAssistant = isAssistantRole(rowRole);
 
-                                    let matchesRole = true;
-                                    if (isPharmacist) matchesRole = isPharmacistChecked;
-                                    else if (isAssistant) matchesRole = isAssistantChecked;
-                                    else {
-                                        if (!isOtherChecked) matchesRole = false;
-                                        else {
-                                            const specCb = $(`.bulk-swal-specific-other-cb[data-role="${rowRole}"]`);
-                                            matchesRole = specCb.length ? specCb.is(':checked') : false;
-                                        }
-                                    }
+                                                             const allRowsData = table.rows().data().toArray();
 
-                                    if (!matchesRole) {
-                                        $(rowNode).find('input.bulk-user-cb').prop('checked', false);
-                                    }
-                                });
-                                updateSelectAllState();
-                            }
+
+                                                             
+
+
+                                                             const isPharmacistChecked = $('#rolePharmacist').is(':checked');
+
+
+                                                             const isAssistantChecked = $('#roleAssistant').is(':checked');
+
+
+                                                             const isOtherChecked = $('#roleOther').is(':checked');
+
+
+                                                             const isFailedOnly = $('#filterFailedOnly').is(':checked');
+
+
+                                                             
+
+
+                                                             allRowsData.forEach(row => {
+
+
+                                                                  const studentId = row.id ?? row.Id;
+
+
+                                                                  if (selectedStudentIds.has(studentId)) {
+
+
+                                                                      const rowRole = (row.roleName || row.RoleName || 'User').trim();
+
+
+                                                                      const userRoles = rowRole.split(',').map(x => x.trim());
+
+
+                                                                      const status = row.lastExamStatus || row.LastExamStatus || '';
+
+
+                                                                      const isFailed = status && (status.startsWith('Fail') || status === 'Cheating' || status.toLowerCase().includes('fail'));
+
+
+                                                                      
+
+
+                                                                      let matchesRole = false;
+
+
+                                                                      userRoles.forEach(role => {
+
+
+                                                                          if (isPharmacistRole(role)) {
+
+
+                                                                              if (isPharmacistChecked) matchesRole = true;
+
+
+                                                                          } else if (isAssistantRole(role)) {
+
+
+                                                                              if (isAssistantChecked) matchesRole = true;
+
+
+                                                                          } else {
+
+
+                                                                              if (isOtherChecked) {
+
+
+                                                                                  const specCb = $(`.swal-specific-other-cb[data-role="${role}"]`);
+
+
+                                                                                  if (specCb.length && specCb.is(':checked')) matchesRole = true;
+
+
+                                                                              }
+
+
+                                                                          }
+
+
+                                                                      });
+
+
+                                                                      
+
+
+                                                                      let matchesFailed = true;
+
+
+                                                                      if (isFailedOnly) matchesFailed = isFailed;
+
+
+                                                                      
+
+
+                                                                      if (!matchesRole || !matchesFailed) {
+
+
+                                                                          selectedStudentIds.delete(studentId);
+
+
+                                                                      }
+
+
+                                                                  }
+
+
+                                                              });
+
+
+                                                              
+
+
+                                                              table.rows().every(function() {
+
+
+                                                                  const rowNode = this.node();
+
+
+                                                                  if (rowNode) {
+
+
+                                                                      const cb = $(rowNode).find('input.exam-user-cb');
+
+
+                                                                      if (cb.length) {
+
+
+                                                                          cb.prop('checked', selectedStudentIds.has(cb.val()));
+
+
+                                                                      }
+
+
+                                                                  }
+
+
+                                                              });
+
+
+                                                              updateSelectAllState();
+
+
+                                                         }
 
                             window._bulkSwalRoleFilterFn = function(settings, data, dataIndex) {
                                 if (settings.nTable.id !== 'bulkSwalUserTable') return true;
@@ -769,25 +903,84 @@
                             }
 
                             window._swalRoleFilterFn = function(settings, searchData, dataIndex, rowData) {
-                                if (settings.nTable.id !== 'swalExamUserTable') return true;
-                                
-                                const isPharmacistChecked = $('#rolePharmacist').is(':checked');
-                                const isAssistantChecked = $('#roleAssistant').is(':checked');
-                                const isOtherChecked = $('#roleOther').is(':checked');
-                                
-                                const rowRole = (rowData.roleName || rowData.RoleName || 'User').trim().toLowerCase();
-                                
-                                if (isPharmacistRole(rowRole)) {
-                                    return isPharmacistChecked;
-                                }
-                                if (isAssistantRole(rowRole)) {
-                                    return isAssistantChecked;
-                                }
-                                if (!isOtherChecked) return false;
-                                const specCb = $(`.swal-specific-other-cb[data-role="${rowRole}"]`);
-                                return specCb.length ? specCb.is(':checked') : false;
-                            };
-                            $.fn.dataTable.ext.search.push(window._swalRoleFilterFn);
+
+
+                                                             if (settings.nTable.id !== 'swalExamUserTable') return true;
+
+
+                                                             
+
+
+                                                             const isPharmacistChecked = $('#rolePharmacist').is(':checked');
+
+
+                                                             const isAssistantChecked = $('#roleAssistant').is(':checked');
+
+
+                                                             const isOtherChecked = $('#roleOther').is(':checked');
+
+
+                                                             
+
+
+                                                             const rowRole = $(settings.aoData[dataIndex].nTr).find('.js-role-name').text().trim();
+
+
+                                                             const userRoles = rowRole.split(',').map(x => x.trim());
+
+
+                                                             
+
+
+                                                             let showRow = false;
+
+
+                                                             userRoles.forEach(role => {
+
+
+                                                                 if (isPharmacistRole(role)) {
+
+
+                                                                     if (isPharmacistChecked) showRow = true;
+
+
+                                                                 } else if (isAssistantRole(role)) {
+
+
+                                                                     if (isAssistantChecked) showRow = true;
+
+
+                                                                 } else {
+
+
+                                                                     if (isOtherChecked) {
+
+
+                                                                         const specCb = `${role}`;
+
+
+                                                                         const specCbElem = $(`.swal-specific-other-cb[data-role="${role}"]`);
+
+
+                                                                         if (specCbElem.length && specCbElem.is(':checked')) showRow = true;
+
+
+                                                                     }
+
+
+                                                                 }
+
+
+                                                             });
+
+
+                                                             return showRow;
+
+
+                                                         };
+
+
+                                                         $.fn.dataTable.ext.search.push(window._swalRoleFilterFn);
 
                             const table = $('#swalExamUserTable').DataTable({
                                 data: eligibleUsers,
@@ -855,8 +1048,16 @@
                                 }
                             });
 
-                            const otherRoles = [...new Set(eligibleUsers.map(u => u.roleName || u.RoleName || 'User'))]
-                                .filter(r => !isPharmacistRole(r) && !isAssistantRole(r));
+                            const otherRoles = [...new Set(eligibleUsers.flatMap(u => {
+
+
+                                                             const rName = u.roleName || u.RoleName || 'User';
+
+
+                                                             return rName.split(',').map(r => r.trim());
+
+
+                                                         }))].filter(r => !isPharmacistRole(r) && !isAssistantRole(r));
 
                             if (otherRoles.length > 0) {
                                 let otherHtml = '';

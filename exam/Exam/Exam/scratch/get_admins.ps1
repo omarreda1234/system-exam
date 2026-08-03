@@ -2,12 +2,12 @@ $connString = "Server=192.168.1.111;Database=Eltarshouby-Exam;User Id=sa;Passwor
 $conn = New-Object System.Data.SqlClient.SqlConnection($connString)
 $conn.Open()
 $cmd = $conn.CreateCommand()
-$cmd.CommandText = "SELECT Name, COUNT(ur.UserId) as UserCount FROM AspNetRoles r LEFT JOIN AspNetUserRoles ur ON r.Id = ur.RoleId GROUP BY r.Name"
+$cmd.CommandText = "SELECT u.Email, u.UserName FROM AspNetUsers u JOIN AspNetUserRoles ur ON u.Id = ur.UserId JOIN AspNetRoles r ON ur.RoleId = r.Id WHERE r.Name = 'Admin'"
 $reader = $cmd.ExecuteReader()
 while ($reader.Read()) {
     [PSCustomObject]@{
-        RoleName = $reader["Name"]
-        UserCount = $reader["UserCount"]
+        Email = $reader["Email"]
+        UserName = $reader["UserName"]
     }
 }
 $reader.Close()

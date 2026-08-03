@@ -367,14 +367,17 @@
             // Init global chart
             renderDoughnut(globalPassed, globalFailed, "Global Outcome");
 
+            // Pre-store original indices to avoid O(N) indexOf calls inside loops
+            allBranches.forEach((b, idx) => {
+                b.originalIdx = idx;
+            });
+
             function renderTable(data) {
                 const tbody = $('#branchListBody');
-                tbody.empty();
+                let rowsHtml = '';
                 data.forEach((b) => {
-                    // find original index to allow clicking properly even when filtered
-                    const originalIdx = allBranches.indexOf(b);
-                    const rowHtml = `
-                        <tr class="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group" onclick="selectBranch(${originalIdx})">
+                    rowsHtml += `
+                        <tr class="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group" data-idx="${b.originalIdx}" onclick="selectBranch(${b.originalIdx})">
                             <td class="py-4 px-8 font-bold text-slate-900 dark:text-white text-[11px] whitespace-nowrap">
                                 <i class="fas fa-building text-brand-500/50 mr-2 group-hover:text-brand-500 transition-colors"></i>${b.BranchName}
                             </td>
@@ -385,8 +388,8 @@
                             <td class="py-4 pr-8 text-right text-rose-500 font-black text-xs">${b.Failed}</td>
                         </tr>
                     `;
-                    tbody.append(rowHtml);
                 });
+                tbody.html(rowsHtml);
             }
 
             renderTable(allBranches);
@@ -398,10 +401,7 @@
                 
                 // Highlight row
                 $('#branchListBody tr').removeClass('bg-brand-50/50 dark:bg-brand-900/20');
-                const rowObj = $('#branchListBody tr').filter(function() {
-                    return $(this).attr('onclick').includes(`(${idx})`);
-                });
-                rowObj.addClass('bg-brand-50/50 dark:bg-brand-900/20');
+                $(`#branchListBody tr[data-idx="${idx}"]`).addClass('bg-brand-50/50 dark:bg-brand-900/20');
             };
 
             $('#resetBranchBtn').on('click', function() {

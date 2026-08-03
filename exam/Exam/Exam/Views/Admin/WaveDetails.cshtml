@@ -1,10 +1,28 @@
 @model IEnumerable<Exam.Models.UserDto>
+@inject Exam.Services.IExamService ExamService
 @{
     var wave = ViewBag.Wave as Exam.DTOs.WaveDto;
     ViewData["Title"] = wave?.WaveName ?? "Wave Details";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
     var usersList = Model?.ToList() ?? new List<Exam.Models.UserDto>();
     var waveId = wave?.Id ?? 0;
+
+    var userRoles = User.Claims
+        .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+        .Select(c => c.Value)
+        .ToList();
+
+    bool HasWavesDeletePermission()
+    {
+        if (userRoles.Contains("Admin")) return true;
+        return ExamService.HasSpecificPermissionAsync(userRoles, "Admin", "Waves", "delete").GetAwaiter().GetResult();
+    }
+
+    bool HasRemoveUserFromWavePermission()
+    {
+        if (userRoles.Contains("Admin")) return true;
+        return ExamService.HasSpecificPermissionAsync(userRoles, "Admin", "RemoveUserFromWave", "delete").GetAwaiter().GetResult();
+    }
 }
 
 <!-- Back Button + Header -->
@@ -121,11 +139,18 @@
                             </span>
                         </td>
                         <td class="text-right pr-8">
-                            <button class="remove-wave-btn bg-rose-50 hover:bg-rose-600 text-rose-500 hover:text-white px-4 py-2 rounded-xl transition-all border border-rose-100 hover:border-rose-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 ml-auto"
-                                    data-userid="@u.Id" data-username="@u.UserName">
-                                <i class="fas fa-user-minus text-xs"></i>
-                                Remove
-                            </button>
+                             @if (HasRemoveUserFromWavePermission())
+                             {
+                                 <button class="remove-wave-btn bg-rose-50 hover:bg-rose-600 text-rose-500 hover:text-white px-4 py-2 rounded-xl transition-all border border-rose-100 hover:border-rose-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 ml-auto"
+                                         data-userid="@u.Id" data-username="@u.UserName">
+                                     <i class="fas fa-user-minus text-xs"></i>
+                                     Remove
+                                 </button>
+                             }
+                            else
+                            {
+                                <span>--</span>
+                            }
                         </td>
                     </tr>
                 }

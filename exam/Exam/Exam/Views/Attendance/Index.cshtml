@@ -46,6 +46,14 @@
 
     <!-- Content -->
     <div class="max-w-7xl mx-auto px-6 mt-8">
+        <!-- Premium Search Bar -->
+        <div class="mb-8 relative max-w-md">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                <i class="fas fa-search text-sm"></i>
+            </div>
+            <input type="text" id="attendanceSearchInput" oninput="filterAttendanceCards()" placeholder="Search / ابحث..." class="w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold text-slate-950 dark:text-white placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 shadow-sm transition-all" />
+        </div>
+
         <!-- Waves Content -->
         @if (!User.IsInRole("SoftSkills Specialist") || User.IsInRole("Admin") || User.IsInRole("Reception"))
         {
@@ -207,6 +215,47 @@
 
             $('#tabBtn-waves, #tabBtn-companies, #tabBtn-softskills').removeClass('border-brand-600 text-brand-600').addClass('border-transparent text-slate-400 hover:text-slate-600');
             $(`#tabBtn-${tabId}`).addClass('border-brand-600 text-brand-600').removeClass('border-transparent text-slate-400 hover:text-slate-600');
+            
+            // Clear search when switching tabs
+            document.getElementById('attendanceSearchInput').value = '';
+            filterAttendanceCards();
+        }
+
+        function filterAttendanceCards() {
+            const query = document.getElementById('attendanceSearchInput').value.toLowerCase().trim();
+            
+            // Filter waves
+            document.querySelectorAll('#tabContent-waves .grid > a').forEach(card => {
+                const title = card.querySelector('h3').textContent.toLowerCase();
+                if (title.includes(query)) {
+                    card.classList.remove('hidden');
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+
+            // Filter companies
+            document.querySelectorAll('#tabContent-companies .grid > a').forEach(card => {
+                const title = card.querySelector('h3').textContent.toLowerCase();
+                if (title.includes(query)) {
+                    card.classList.remove('hidden');
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+
+            // Filter soft skills
+            document.querySelectorAll('#tabContent-softskills .grid > div, #tabContent-softskills .grid > a').forEach(card => {
+                const titleEl = card.querySelector('h3');
+                if (titleEl) {
+                    const title = titleEl.textContent.toLowerCase();
+                    if (title.includes(query)) {
+                        card.classList.remove('hidden');
+                    } else {
+                        card.classList.add('hidden');
+                    }
+                }
+            });
         }
     </script>
 }

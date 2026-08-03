@@ -53,6 +53,7 @@
             <div class="space-y-2">
                 <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Training Wave</label>
                 <select id="waveFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3 text-sm font-bold min-w-[260px]">
+                    <option value="-1" selected="@(-1 == selectedWaveId ? "selected" : null)">ALL WAVES</option>
                     <optgroup label="TRAINING BATCHES">
                         @foreach (var w in waves)
                         {
@@ -231,9 +232,8 @@
             $.get('/Admin/GetFilteredExams', { month: month, year: year, mode: 'cert' }, function (data) {
                 const $wf = $('#waveFilter');
                 $wf.empty();
-                if (data.length === 0) {
-                    $wf.append('<option value="0">No waves found</option>');
-                } else {
+                $wf.append('<option value="-1">ALL WAVES</option>');
+                if (data.length > 0) {
                     const $grp = $('<optgroup>').attr('label', 'TRAINING BATCHES');
                     data.forEach(w => $grp.append($('<option>').val(w.id).text(w.title)));
                     $wf.append($grp);
@@ -246,7 +246,7 @@
 
         // Export
         $('#btnExport').on('click', function () {
-            window.location = '/Admin/ExportWaveResultsToExcel?waveId=' + $('#waveFilter').val();
+            window.location = '/Admin/ExportWaveResultsToExcel?waveId=' + $('#waveFilter').val() + '&year=' + $('#yearFilter').val() + '&month=' + $('#monthFilter').val();
         });
 
         // View wave breakdown details
