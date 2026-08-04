@@ -283,6 +283,14 @@
 
                 bool hasAdminAccess = User.Identity.IsAuthenticated && 
                     (ExamService != null && ExamService.HasPermissionAsync(layoutUserRoles, "Admin", "Index").GetAwaiter().GetResult());
+
+                bool hasAttendanceAccess = User.Identity.IsAuthenticated && 
+                    (User.IsInRole("Admin") || User.IsInRole("Reception") || User.IsInRole("SoftSkills Specialist") || 
+                    (ExamService != null && ExamService.HasPermissionAsync(layoutUserRoles, "Attendance", "Index").GetAwaiter().GetResult()));
+
+                bool hasProgramDashAccess = User.Identity.IsAuthenticated && 
+                    (User.IsInRole("Admin") || User.IsInRole("pharmacist") || User.IsInRole("assistant") || User.IsInRole("صيدلي") || User.IsInRole("مساعد صيدلي") || User.IsInRole("Pharmacist") || User.IsInRole("Assistant") || User.IsInRole("Doctor") ||
+                    (ExamService != null && ExamService.HasPermissionAsync(layoutUserRoles, "Materials", "Index").GetAwaiter().GetResult()));
             }
 
             <div class="flex items-center gap-3">
@@ -295,25 +303,19 @@
                                 <i class="fas fa-chart-pie mr-2"></i>Examination Dash
                             </a>
                         }
-                        @if (User.IsInRole("Admin") || User.IsInRole("Reception") || User.IsInRole("SoftSkills Specialist"))
+                        @if (hasAttendanceAccess)
                         {
                             <a href="@Url.Action("Index", "Attendance")" class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all">
                                 <i class="fas fa-calendar-check mr-2"></i>Attendance
                             </a>
                         }
-                        @if (User.IsInRole("Admin"))
+                        @if (hasProgramDashAccess)
                         {
                             <a href="@Url.Action("Index", "Materials")" class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition-all">
                                 <i class="fas fa-project-diagram mr-2"></i>Program Dash
                             </a>
                         }
 
-                        @if (User.IsInRole("pharmacist") || User.IsInRole("assistant") || User.IsInRole("صيدلي") || User.IsInRole("مساعد صيدلي") || User.IsInRole("Pharmacist") || User.IsInRole("Assistant") || User.IsInRole("Doctor"))
-                        {
-                            <a href="@Url.Action("Index", "Materials")" class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all">
-                                <i class="fas fa-project-diagram mr-2"></i>Program Dash
-                            </a>
-                        }
                         @if (User.IsInRole("pharmacist") || User.IsInRole("assistant") || User.IsInRole("صيدلي") || User.IsInRole("مساعد صيدلي") || User.IsInRole("Pharmacist") || User.IsInRole("Assistant") || User.IsInRole("Doctor"))
                         {
                             <a href="@Url.Action("StudentExams", "Home")" class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/20 hover:bg-brand-700 transition-all">
@@ -392,11 +394,11 @@
                     {
                         <a href="@Url.Action("Index", "Admin")" class="text-xs font-black uppercase tracking-widest text-brand-600"><i class="fas fa-chart-pie mr-2"></i> Examination Dash</a>
                     }
-                    @if (User.IsInRole("Admin") || User.IsInRole("Reception") || User.IsInRole("SoftSkills Specialist"))
+                    @if (hasAttendanceAccess)
                     {
                         <a href="@Url.Action("Index", "Attendance")" class="text-xs font-black uppercase tracking-widest text-indigo-600"><i class="fas fa-calendar-check mr-2"></i> Attendance</a>
                     }
-                    @if (User.IsInRole("Admin"))
+                    @if (hasProgramDashAccess)
                     {
                         <a href="@Url.Action("Index", "Materials")" class="text-xs font-black uppercase tracking-widest text-slate-900"><i class="fas fa-project-diagram mr-2"></i> Program Dash</a>
                     }

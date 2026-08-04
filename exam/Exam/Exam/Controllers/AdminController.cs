@@ -4034,7 +4034,9 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
         private static readonly List<(string Key, string Name, string Ctrl, string Act, string[] AddActs)> DashboardModules = new()
         {
-            ("LMS_Overview", "LMS Overview", "Admin", "Index", new string[] { }),
+            ("LMS_Overview", "LMS Overview (Examination Dash)", "Admin", "Index", new string[] { }),
+            ("AttendanceDash", "Attendance Dashboard", "Attendance", "Index", new string[] { }),
+            ("ProgramDash", "Program Dashboard", "Materials", "Index", new string[] { }),
             ("Items", "Items Management", "Admin", "Items", new[] { "AddItem", "EditItem", "DeleteItem" }),
             ("WeeklyExams", "Weekly Exams Matrix", "Admin", "WeeklyExams", new string[] { }),
             ("WaveExams", "Wave Exams Matrix", "Admin", "WaveExams", new string[] { }),
