@@ -4012,7 +4012,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             ("WaveAnalytics", "Wave Analytics", "Admin", "WaveyResults", new string[] { }),
             ("GeneralAnalytics", "General Analytics", "Admin", "Students", new[] { "ExportStudentsToExcel", "GetStudentExamReview" }),
             ("LiveMonitor", "Live Monitor", "Admin", "LiveMonitor", new string[] { }),
-            ("Certificates", "Certificates Management", "Admin", "Certificates", new[] { "UploadCertificatesOnlyExcel", "SendCertificates", "MoveUserToWave" }),
+            ("Certificates", "Certificates Management", "Admin", "Certificates", new[] { "UploadCertificatesOnlyExcel", "SendCertificates", "MoveUserToWave", "UploadCertificatesPdfs" }),
             ("NewCome", "New Come Requests (Pending)", "Admin", "PendingRequests", new[] { "ApproveRequest", "RejectRequest" }),
             ("PersonnelRegistry", "Personnel Registry (Main Access)", "Admin", "AllUsers", new[] { "GetUsersPaged", "AddUser" }),
             ("Personnel_EditProfile", "Personnel Action: Edit Profile & Branch", "Admin", "UpdateUserProfile", new string[] { }),
@@ -5695,6 +5695,180 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             catch (Exception ex)
             {
                 return Json(new { success = false, message = "حدث خطأ أثناء قراءة الملف: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UploadCertificatesPdfs(List<IFormFile> pdfFiles, int? waveId = null)
+        {
+            if (pdfFiles == null || !pdfFiles.Any())
+            {
+                return Json(new { success = false, message = "يرجى اختيار ملفات PDF للرفع." });
+            }
+
+            if (!waveId.HasValue || waveId.Value <= 0)
+            {
+                return Json(new { success = false, message = "يرجى تحديد الـ Wave أولاً قبل رفع الشهادات." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                // 1. Get Wave info for building certificate code
+                var waveObj = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                    "SELECT WaveName, StartDate FROM TrainingWaves WHERE Id = @WaveId",
+                    new { WaveId = waveId.Value });
+
+                if (waveObj == null)
+                {
+                    return Json(new { success = false, message = "الـ Wave المحدد غير موجود في النظام." });
+                }
+
+                string waveName = (string)waveObj.WaveName ?? "";
+                string waveNumStr = "001";
+                var digits = new string(waveName.Where(char.IsDigit).ToArray());
+                if (!string.IsNullOrEmpty(digits))
+                {
+                    waveNumStr = digits.PadLeft(3, '0');
+                }
+                else
+                {
+                    waveNumStr = waveId.Value.ToString().PadLeft(3, '0');
+                }
+
+                DateTime waveDate = waveObj.StartDate ?? DateTime.Now;
+                string yearStr = waveDate.Year.ToString();
+
+                string uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "certificates", waveId.Value.ToString());
+                if (!Directory.Exists(uploadDir))
+                {
+                    Directory.CreateDirectory(uploadDir);
+                }
+
+                int successCount = 0;
+                int emailSentCount = 0;
+                var skippedCodes = new List<string>();
+
+                foreach (var file in pdfFiles)
+                {
+                    if (file == null || file.Length == 0) continue;
+
+                    string extension = Path.GetExtension(file.FileName);
+                    if (!string.Equals(extension, ".pdf", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    string userCodeStr = Path.GetFileNameWithoutExtension(file.FileName).Trim();
+                    if (string.IsNullOrEmpty(userCodeStr)) continue;
+
+                    // Find student in DB by UserCode
+                    var user = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                        SELECT U.Id, ISNULL(U.FullName, U.UserName) as StudentName, U.Email, U.UserCode
+                        FROM AspNetUsers U
+                        WHERE U.UserCode = @UserCode",
+                        new { UserCode = userCodeStr });
+
+                    if (user == null)
+                    {
+                        skippedCodes.Add(userCodeStr);
+                        continue;
+                    }
+
+                    string studentId = (string)user.Id;
+                    string certCode = $"WTTA-{yearStr}-{waveNumStr}-PB-Off-{userCodeStr}";
+
+                    // Save PDF file on disk
+                    string filePath = Path.Combine(uploadDir, $"{userCodeStr}.pdf");
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await file.CopyToAsync(stream);
+                    }
+
+                    // Send Email to student if email is available
+                    string userEmail = user.Email;
+                    if (!string.IsNullOrWhiteSpace(userEmail))
+                    {
+                        try
+                        {
+                            byte[] pdfBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+                            string emailSubject = $"شهادة التخرج الرسمية - أكاديمية الطرشوبي ({waveName})";
+                            string emailBody = $@"
+                                <div dir='rtl' style='font-family: Arial, sans-serif; padding: 25px; color: #1e293b; background-color: #f8fafc; border-radius: 16px;'>
+                                    <div style='max-width: 600px; margin: 0 auto; background: #ffffff; padding: 30px; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0;'>
+                                        <h2 style='color: #059669; font-size: 22px; margin-bottom: 15px;'>تهانينا لك! 🎓</h2>
+                                        <p style='font-size: 15px; line-height: 1.6;'>عزيزي/عزيزتي <strong>{user.StudentName}</strong>،</p>
+                                        <p style='font-size: 14px; line-height: 1.6; color: #475569;'>نحيطكم علماً بأنه قد تم إصدار شهادة التخرج الرسمية الخاصة بكم لدورة <strong>{waveName}</strong> بنجاح. تجدون نسخة الشهادة بصيغة (PDF) مرفقة مع هذا البريد.</p>
+                                        
+                                        <div style='margin: 20px 0; padding: 15px; background: #ecfdf5; border: 1px border #a7f3d0; border-radius: 12px;'>
+                                            <p style='margin: 0; font-size: 12px; color: #047857; font-weight: bold;'>كود الشهادة التسلسلي (Serial Code):</p>
+                                            <p style='margin: 5px 0 0 0; font-family: monospace; font-size: 16px; font-weight: bold; color: #065f46; letter-spacing: 1px;'>{certCode}</p>
+                                        </div>
+
+                                        <p style='font-size: 13px; color: #64748b; margin-top: 25px;'>مع أطيب التمنيات لكم بدوام التوفيق والنجاح،<br/><strong>أكاديمية الطرشوبي</strong></p>
+                                    </div>
+                                </div>";
+
+                            await _emailSender.SendEmailWithAttachmentAsync(userEmail, emailSubject, emailBody, pdfBytes, $"{userCodeStr}_Certificate.pdf");
+                            emailSentCount++;
+                        }
+                        catch
+                        {
+                            // If email fails, process continues so DB record is saved
+                        }
+                    }
+
+                    // Update UserWaves table (ensure active)
+                    var uwExists = await conn.QueryFirstOrDefaultAsync<int?>(
+                        "SELECT 1 FROM dbo.UserWaves WHERE UserId = @UserId AND WaveId = @WaveId",
+                        new { UserId = studentId, WaveId = waveId.Value });
+
+                    if (uwExists == null)
+                    {
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.UserWaves (UserId, WaveId, JoinDate, IsActive)
+                            VALUES (@UserId, @WaveId, GETDATE(), 1)",
+                            new { UserId = studentId, WaveId = waveId.Value });
+                    }
+
+                    // Save / Update UserWaveCertificates in DB
+                    var certExists = await conn.QueryFirstOrDefaultAsync<int?>(
+                        "SELECT Id FROM dbo.UserWaveCertificates WHERE UserId = @UserId AND WaveId = @WaveId",
+                        new { UserId = studentId, WaveId = waveId.Value });
+
+                    if (certExists != null)
+                    {
+                        await conn.ExecuteAsync(@"
+                            UPDATE dbo.UserWaveCertificates 
+                            SET CertificateCode = @CertCode, CreatedAt = GETDATE()
+                            WHERE UserId = @UserId AND WaveId = @WaveId",
+                            new { CertCode = certCode, UserId = studentId, WaveId = waveId.Value });
+                    }
+                    else
+                    {
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, Score, CreatedAt)
+                            VALUES (@UserId, @WaveId, @CertCode, NULL, GETDATE())",
+                            new { UserId = studentId, WaveId = waveId.Value, CertCode = certCode });
+                    }
+
+                    successCount++;
+                }
+
+                string msg = $"تم حفظ الشهادات وتوليد الأكواد بنجاح لعدد {successCount} طالب (وتم إرسال {emailSentCount} بريد إلكتروني).";
+                if (skippedCodes.Any())
+                {
+                    msg += $" تعذر العثور على المستخدمين للأكواد التالية: {string.Join(", ", skippedCodes.Take(10))}";
+                    if (skippedCodes.Count > 10) msg += " (وآخرين...)";
+                }
+
+                return Json(new { success = true, message = msg });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ أثناء معالجة ملفات الشهادات: " + ex.Message });
             }
         }
 

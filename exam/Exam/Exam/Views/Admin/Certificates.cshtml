@@ -20,7 +20,12 @@
             </div>
         </div>
         
-        <div>
+        <div class="flex items-center gap-3">
+            <button onclick="triggerPdfUpload()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-md shadow-indigo-600/10 flex items-center gap-2.5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-indigo-600/20 active:translate-y-0 border border-transparent">
+                <i class="fas fa-file-pdf text-indigo-100"></i> Upload PDF Certificates
+            </button>
+            <input type="file" id="certPdfInput" class="hidden" accept=".pdf" multiple onchange="uploadCertPdfs(event)" />
+
             <button onclick="triggerExcelUpload()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-md shadow-emerald-600/10 flex items-center gap-2.5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-600/20 active:translate-y-0 border border-transparent">
                 <i class="fas fa-file-excel text-emerald-100"></i> Import Certificates Excel
             </button>
@@ -313,6 +318,112 @@
                     icon: 'error',
                     title: 'Error',
                     text: 'An error occurred during upload.'
+                });
+            });
+        }
+
+        function triggerPdfUpload() {
+            const selectedWaveId = $('#examFilter').val();
+            if (!selectedWaveId || selectedWaveId == "-1" || selectedWaveId == "0") {
+                Swal.fire('تنبيـه', 'يرجى اختيار الـ Wave المطلوبة أولاً من القائمة قبل رفع الشهادات.', 'warning');
+                return;
+            }
+
+            Swal.fire({
+                title: '<div class="flex flex-col items-center gap-2 pt-4 px-6"><i class="fas fa-file-pdf text-indigo-500 text-3xl mb-2"></i><span class="text-lg font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">تعليمات رفع شهادات PDF الجاهزة</span></div>',
+                html: `
+                    <div class="text-right px-6 py-4 space-y-4" dir="rtl">
+                        <p class="text-xs text-slate-600 dark:text-slate-400 font-bold mb-3">لرفع شهادات الطلاب وتوليد السيريال تلقائياً ورسائل البريد:</p>
+                        <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3 font-sans">
+                            <div class="flex items-start gap-3">
+                                <span class="bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider mt-0.5">اسم الملف</span>
+                                <div class="flex-1 pr-2">
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200">اسم كل ملف PDF يجب أن يكون كود المستخدم (UserCode)</p>
+                                    <p class="text-[10px] text-slate-400 dark:text-slate-500">مثال: <code class="bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 px-1 py-0.5 rounded">5671.pdf</code> أو <code class="bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 px-1 py-0.5 rounded">6013.pdf</code></p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-3 border-t border-slate-200 dark:border-slate-800 pt-3">
+                                <span class="bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider mt-0.5">تعدد الملفات</span>
+                                <div class="flex-1 pr-2">
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200">يمكنك تحديد عدة ملفات PDF دفعة واحدة</p>
+                                    <p class="text-[10px] text-slate-400 dark:text-slate-500">سيقوم النظام بربط كل شهادة بالطالب المناسب حسب الكود وتوليد كود السيريال <code class="bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1 py-0.5 rounded">WTTA-2026-011-PB-Off-5671</code> وإرسال البريد الإلكتروني المرفق تلقائياً.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'اختيار ملفات الـ PDF <i class="fas fa-upload mr-2"></i>',
+                cancelButtonText: 'إلغاء',
+                width: '600px',
+                customClass: {
+                    popup: 'rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900',
+                    confirmButton: 'bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 px-10 rounded-2xl transition-all shadow-xl shadow-indigo-600/10 text-xs uppercase tracking-widest ml-3',
+                    cancelButton: 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-400 font-bold py-4 px-10 rounded-2xl transition-all text-xs uppercase'
+                },
+                buttonsStyling: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $('#certPdfInput').click();
+                }
+            });
+        }
+
+        function uploadCertPdfs(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            const selectedWaveId = $('#examFilter').val();
+            if (!selectedWaveId || selectedWaveId == "-1" || selectedWaveId == "0") {
+                Swal.fire('تنبيـه', 'يرجى اختيار الـ Wave المطلوبة أولاً من القائمة قبل رفع الشهادات.', 'warning');
+                return;
+            }
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('pdfFiles', files[i]);
+            }
+
+            Swal.fire({
+                title: 'جاري رفع ومعالجة الشهادات...',
+                text: `جاري رفع ${files.length} ملف PDF وتوليد السيريال وإرسال البريد الإلكتروني...`,
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            fetch(`/Admin/UploadCertificatesPdfs?waveId=${selectedWaveId}`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(res => {
+                $('#certPdfInput').val('');
+                if (res.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'تم التجهيز والإرسال بنجاح',
+                        text: res.message,
+                        confirmButtonText: 'إعادة تحميل الصفحة'
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'فشل الرفع',
+                        text: res.message
+                    });
+                }
+            })
+            .catch(err => {
+                $('#certPdfInput').val('');
+                console.error(err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'خطأ',
+                    text: 'حدث خطأ أثناء رفع ومعالجة الملفات.'
                 });
             });
         }
