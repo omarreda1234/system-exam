@@ -106,6 +106,10 @@
                     <th class="min-w-[240px]">Personnel</th>
                     <th>Branch</th>
                     <th>Role</th>
+                    <th>Status</th>
+                    <th>Start Time</th>
+                    <th>Finish Time</th>
+                    <th>Time (M)</th>
                     <th>Score</th>
                     <th>Percentage</th>
                     <th class="text-right px-8">Actions</th>
@@ -115,7 +119,7 @@
                 @if (!Model.Any())
                 {
                     <tr>
-                        <td colspan="5" class="text-center py-12 text-slate-400">
+                        <td colspan="10" class="text-center py-12 text-slate-400">
                             <div class="flex flex-col items-center justify-center gap-3">
                                 <div class="w-16 h-16 bg-slate-50 dark:bg-slate-900 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-600 shadow-inner">
                                     <i class="fas fa-inbox text-2xl"></i>
@@ -155,6 +159,63 @@
                             else
                             {
                                 <span class="text-slate-400 text-xs">--</span>
+                            }
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(s.Status))
+                            {
+                                var statusLower = s.Status.ToLower();
+                                var isCompleted = statusLower.StartsWith("completed");
+                                var isInProgress = statusLower.StartsWith("inprogress");
+                                var statusClass = isCompleted ? "text-emerald-600 bg-emerald-500/10" : isInProgress ? "text-amber-600 bg-amber-500/10" : "text-slate-500 bg-slate-400/10";
+                                <div class="flex items-center gap-1.5 px-3 py-1 rounded-full @statusClass w-fit">
+                                    <span class="text-[10px] font-black uppercase">@s.Status.ToUpper()</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="text-slate-400 text-xs">--</span>
+                            }
+                        </td>
+                        <td>
+                            @if (s.ActualStartTime.HasValue)
+                            {
+                                <div class="flex flex-col text-center">
+                                    <span class="text-[9px] text-slate-400 font-bold mb-0.5">@s.ActualStartTime.Value.ToString("dd MMM yyyy")</span>
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase">@s.ActualStartTime.Value.ToString("hh:mm tt")</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="text-slate-300 dark:text-slate-700 text-xs">--</span>
+                            }
+                        </td>
+                        <td>
+                            @if (s.ActualEndTime.HasValue)
+                            {
+                                <div class="flex flex-col text-center">
+                                    <span class="text-[9px] text-slate-400 font-bold mb-0.5">@s.ActualEndTime.Value.ToString("dd MMM yyyy")</span>
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase">@s.ActualEndTime.Value.ToString("hh:mm tt")</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="text-slate-300 dark:text-slate-700 text-xs">--</span>
+                            }
+                        </td>
+                        <td>
+                            @if (s.DurationInMinutes > 0)
+                            {
+                                <span class="text-xs font-bold text-slate-500">@s.DurationInMinutes m</span>
+                            }
+                            else if (s.ActualStartTime.HasValue && s.ActualEndTime.HasValue)
+                            {
+                                var dur = (int)(s.ActualEndTime.Value - s.ActualStartTime.Value).TotalMinutes;
+                                <span class="text-xs font-bold text-slate-500">@(dur > 0 ? dur : 1) m</span>
+                            }
+                            else
+                            {
+                                <span class="text-slate-300 dark:text-slate-700 text-xs">--</span>
                             }
                         </td>
                         <td>

@@ -813,6 +813,9 @@ namespace Exam.Services
                     uea.CertificateCode,
                     uea.AttemptNumber,
                     uea.Id AS AttemptId,
+                    uea.StartTime,
+                    uea.EndTime,
+                    uea.DurationInMinutes,
                     ROW_NUMBER() OVER (PARTITION BY uea.UserId, uea.ExamId ORDER BY uea.AttemptNumber DESC) AS rn
                 FROM UserExamAttempts uea
                 INNER JOIN Exams e ON e.Id = uea.ExamId
@@ -867,11 +870,35 @@ namespace Exam.Services
                 string certCode = null;
                 double percentage = 0.0;
 
+                DateTime? actualStart = null;
+                DateTime? actualEnd = null;
+                int durationMins = 0;
+                string attemptStatus = "Not Started";
+
+                if (targetAttempt != null)
+                {
+                    attemptStatus = (string)targetAttempt.Status ?? "Not Started";
+                    if (targetAttempt.StartTime != null) actualStart = (DateTime?)targetAttempt.StartTime;
+                    if (targetAttempt.EndTime != null) actualEnd = (DateTime?)targetAttempt.EndTime;
+                    if (targetAttempt.DurationInMinutes != null)
+                    {
+                        durationMins = Convert.ToInt32(targetAttempt.DurationInMinutes);
+                    }
+                    else if (actualStart.HasValue && actualEnd.HasValue)
+                    {
+                        durationMins = (int)(actualEnd.Value - actualStart.Value).TotalMinutes;
+                    }
+                }
+
+                if (durationMins < 0) durationMins = 0;
+
                 if (waveCert != null)
                 {
                     examsCompleted = 1;
                     examsAssigned = 1;
                     certCode = waveCert.CertificateCode;
+                    if (attemptStatus == "Not Started") attemptStatus = "Completed";
+
                     if (waveCert.Score != null)
                     {
                         totalScore = (decimal)waveCert.Score;
@@ -971,6 +998,10 @@ namespace Exam.Services
                     WaveName          = waveName ?? "",
                     WaveId            = waveId,
                     ExamId            = targetExam != null ? (int?)targetExam.Id : null,
+                    ActualStartTime   = actualStart,
+                    ActualEndTime     = actualEnd,
+                    DurationInMinutes = durationMins,
+                    Status            = attemptStatus,
                     TotalExamsInWave  = 1,
                     ExamsCompleted    = examsCompleted,
                     ExamsAssigned     = examsAssigned,

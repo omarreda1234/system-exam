@@ -347,6 +347,12 @@ namespace Exam.DTOs
         public int WaveId { get; set; }
         public int? ExamId { get; set; }
 
+        // Timing & Attempt Details
+        public DateTime? ActualStartTime { get; set; }
+        public DateTime? ActualEndTime { get; set; }
+        public int DurationInMinutes { get; set; }
+        public string Status { get; set; }
+
         // Aggregated exam data
         public int TotalExamsInWave { get; set; }         // total exams in the wave
         public int ExamsCompleted { get; set; }           // how many the student completed

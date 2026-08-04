@@ -617,7 +617,7 @@ namespace Exam.Controllers
                     worksheet.Cell(currentRow, 2).Value = DateTime.Now.ToString("g");
                     currentRow += 2;
 
-                    string[] headers = { "Student Name", "Email", "User Code", "Role", "Batch/Wave", "Branch", "Exams Completed", "Exams Assigned", "Total Score", "Total Available", "Aggregate (%)", "Wave Status" };
+                    string[] headers = { "Student Name", "Email", "User Code", "Role", "Batch/Wave", "Branch", "Attempt Status", "Start Time", "Finish Time", "Time (M)", "Exams Completed", "Exams Assigned", "Total Score", "Total Available", "Aggregate (%)", "Wave Status" };
                     for (int i = 0; i < headers.Length; i++)
                     {
                         var cell = worksheet.Cell(currentRow, i + 1);
@@ -636,12 +636,16 @@ namespace Exam.Controllers
                         worksheet.Cell(currentRow, 4).Value = item.RoleName;
                         worksheet.Cell(currentRow, 5).Value = item.WaveName ?? "Global";
                         worksheet.Cell(currentRow, 6).Value = item.BranchName ?? "Global";
-                        worksheet.Cell(currentRow, 7).Value = item.ExamsCompleted;
-                        worksheet.Cell(currentRow, 8).Value = item.ExamsAssigned;
-                        worksheet.Cell(currentRow, 9).Value = item.TotalScore;
-                        worksheet.Cell(currentRow, 10).Value = item.TotalAvailable;
-                        worksheet.Cell(currentRow, 11).Value = item.AggregatePercentage;
-                        worksheet.Cell(currentRow, 12).Value = item.WaveStatus;
+                        worksheet.Cell(currentRow, 7).Value = item.Status ?? "--";
+                        worksheet.Cell(currentRow, 8).Value = item.ActualStartTime.HasValue ? item.ActualStartTime.Value.ToString("dd MMM yyyy hh:mm tt") : "--";
+                        worksheet.Cell(currentRow, 9).Value = item.ActualEndTime.HasValue ? item.ActualEndTime.Value.ToString("dd MMM yyyy hh:mm tt") : "--";
+                        worksheet.Cell(currentRow, 10).Value = item.DurationInMinutes > 0 ? $"{item.DurationInMinutes} m" : (item.ActualStartTime.HasValue && item.ActualEndTime.HasValue ? $"{(int)(item.ActualEndTime.Value - item.ActualStartTime.Value).TotalMinutes} m" : "--");
+                        worksheet.Cell(currentRow, 11).Value = item.ExamsCompleted;
+                        worksheet.Cell(currentRow, 12).Value = item.ExamsAssigned;
+                        worksheet.Cell(currentRow, 13).Value = item.TotalScore;
+                        worksheet.Cell(currentRow, 14).Value = item.TotalAvailable;
+                        worksheet.Cell(currentRow, 15).Value = item.AggregatePercentage;
+                        worksheet.Cell(currentRow, 16).Value = item.WaveStatus;
                     }
 
                     worksheet.Columns().AdjustToContents();
