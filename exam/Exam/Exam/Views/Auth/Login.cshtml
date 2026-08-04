@@ -72,6 +72,9 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
+        if (window.self !== window.top) {
+            window.top.location.href = window.location.href;
+        }
         $(document).ready(function() {
             $('#togglePassword').on('click', function() {
                 const passwordInput = $('#passwordInput');

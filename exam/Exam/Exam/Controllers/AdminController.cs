@@ -2925,6 +2925,37 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             return Json(new { success = true, Message = "Delete wave success" }); 
         }
 
+        [HttpPost]
+        public async Task<IActionResult> EditWave([FromBody] Exam.DTOs.WaveDto wave)
+        {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Waves", "edit"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
+            if (wave == null || wave.Id <= 0 || string.IsNullOrWhiteSpace(wave.WaveName))
+            {
+                return Json(new { success = false, message = "Batch name is required." });
+            }
+
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                int rows = await connection.ExecuteAsync(
+                    "UPDATE dbo.TrainingWaves SET WaveName = @WaveName, StartDate = @StartDate WHERE Id = @Id",
+                    new { WaveName = wave.WaveName.Trim(), StartDate = wave.StartDate, Id = wave.Id }
+                );
+
+                if (rows > 0)
+                {
+                    return Json(new { success = true, message = "Batch updated successfully." });
+                }
+
+                return Json(new { success = false, message = "Batch not found." });
+            }
+        }
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -4022,7 +4053,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             ("Personnel_SendMessage", "Personnel Action: Send Custom Message", "Admin", "SendCustomEmail", new string[] { }),
             ("Personnel_Delete", "Personnel Action: Delete / Deactivate User", "Admin", "DeleteUserPermanently", new[] { "DeactivateUser", "ActivateUser", "DeleteUser" }),
             ("Deactivated", "Deactivated Users", "Admin", "DeactivatedUsers", new[] { "DeactivateUser", "ActivateUser", "DeactivateUserByCode", "ImportDeactivationsFromExcel" }),
-            ("BatchCycles", "Batch Cycles (Waves)", "Admin", "Waves", new[] { "WaveDetails", "GetWaves", "CreateWave", "GetWaveUserIds", "GetUsersByWaveId", "AssignUsersToWave", "ImportUsersToWaveFromExcel", "DeleteWave" }),
+            ("BatchCycles", "Batch Cycles (Waves)", "Admin", "Waves", new[] { "WaveDetails", "GetWaves", "CreateWave", "EditWave", "GetWaveUserIds", "GetUsersByWaveId", "AssignUsersToWave", "ImportUsersToWaveFromExcel", "DeleteWave" }),
             ("BatchCycles_RemoveUser", "Batch Cycles Action: Remove User from Wave", "Admin", "RemoveUserFromWave", new string[] { }),
             ("Companies", "Companies Management", "Admin", "Companies", new[] { "AddCompany", "EditCompany", "DeleteCompany", "ClearCompanyTrainees", "ImportCompanyTraineesFromExcel", "GetCompanyTrainees", "DeleteCompanyTrainee", "AddCompanyTraineeManually", "GetTraineeDetailsByCode" }),
             ("Branches", "Branches Management", "Admin", "Branches", new[] { "AddBranch", "EditBranch", "DeleteBranch" }),

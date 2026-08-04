@@ -9,6 +9,12 @@
         .Select(c => c.Value)
         .ToList();
 
+    bool HasWavesEditPermission()
+    {
+        if (userRoles.Contains("Admin")) return true;
+        return ExamService.HasSpecificPermissionAsync(userRoles, "Admin", "Waves", "edit").GetAwaiter().GetResult();
+    }
+
     bool HasWavesDeletePermission()
     {
         if (userRoles.Contains("Admin")) return true;
@@ -76,6 +82,13 @@
                                         Import Excel
                                     </button>
                                 }
+                                @if (HasWavesEditPermission())
+                                {
+                                    <button onclick="editWave(event, @wave.Id, '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(wave.WaveName))', '@(wave.StartDate.HasValue ? wave.StartDate.Value.ToString("yyyy-MM-dd") : "")')" class="bg-amber-50 hover:bg-amber-600 text-amber-600 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-amber-100 hover:border-amber-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
+                                        <i class="fas fa-edit text-xs"></i>
+                                        Edit
+                                    </button>
+                                }
                                 @if (HasWavesDeletePermission())
                                 {
                                     <button onclick="cloneWave(@wave.Id, '@wave.WaveName')" class="bg-indigo-50 hover:bg-indigo-600 text-indigo-500 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-indigo-100 hover:border-indigo-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
@@ -137,6 +150,59 @@
                     toast.remove();
                 });
             }, 3000);
+        }
+
+        async function editWave(evt, id, currentName, currentDate) {
+            if (evt) evt.stopPropagation();
+            const { value: formValues } = await Swal.fire({
+                title: 'Edit Batch',
+                html:
+                    '<div class="text-left space-y-4">' +
+                    `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Batch Name</label><input id="edit-sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold" value="${currentName}"></div>` +
+                    `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Start Date</label><input id="edit-sw-date" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold" value="${currentDate}"></div>` +
+                    '</div>',
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Save Changes',
+                cancelButtonText: 'Cancel',
+                customClass: {
+                    confirmButton: 'bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-xl font-bold uppercase text-xs tracking-widest ml-2',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-6 py-3'
+                },
+                buttonsStyling: false,
+                preConfirm: () => {
+                    const name = document.getElementById('edit-sw-name').value;
+                    const date = document.getElementById('edit-sw-date').value;
+                    if (!name) {
+                        Swal.showValidationMessage('Batch Name is required');
+                        return false;
+                    }
+                    return { name: name, startDate: date || null };
+                }
+            });
+
+            if (formValues) {
+                try {
+                    showToast('Updating batch...', 'success');
+                    const res = await fetch('/Admin/EditWave', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                        },
+                        body: JSON.stringify({ id: id, waveName: formValues.name, startDate: formValues.startDate })
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                        showToast('Batch updated successfully!', 'success');
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        showToast(json.message || 'Failed to update batch', 'error');
+                    }
+                } catch (e) {
+                    showToast('An error occurred during update.', 'error');
+                }
+            }
         }
 
         async function cloneWave(wid, wname) {
