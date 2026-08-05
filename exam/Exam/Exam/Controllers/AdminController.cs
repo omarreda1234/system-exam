@@ -1371,7 +1371,7 @@ namespace Exam.Controllers
                         0 as DurationInMinutes, 
                         CASE WHEN UWC.CertificateCode IS NOT NULL THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END as IsPassed, 
                         UWC.CertificateCode as CertificateCode, 
-                        CAST(0 AS BIT) as EmailSent, 
+                        ISNULL(UWC.EmailSent, 0) as EmailSent, 
                         0 as AttemptNumber, 
                         UWC.CreatedAt as CompletionDate, 
                         CAST(NULL AS INT) as AttemptId,
@@ -5811,7 +5811,8 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     }
 
                     string studentId = (string)user.Id;
-                    string certCode = $"WTTA-{yearStr}-{waveNumStr}-PB-Off-{userCodeStr}";
+                    string modeCode = (waveName.ToLower().Contains("online") || waveName.Contains("أونلاين") || waveName.Contains("اونلاين") || waveNumStr == "009" || waveName.Contains("9")) ? "Online" : "Off";
+                    string certCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{userCodeStr}";
 
                     // Save PDF file on disk
                     string filePath = Path.Combine(uploadDir, $"{userCodeStr}.pdf");
@@ -5821,6 +5822,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     }
 
                     // Send Email to student if email is available
+                    bool isEmailSent = false;
                     string userEmail = user.Email;
                     if (!string.IsNullOrWhiteSpace(userEmail))
                     {
@@ -5846,10 +5848,12 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
                             await _emailSender.SendEmailWithAttachmentAsync(userEmail, emailSubject, emailBody, pdfBytes, $"{userCodeStr}_Certificate.pdf");
                             emailSentCount++;
+                            isEmailSent = true;
                         }
                         catch
                         {
                             // If email fails, process continues so DB record is saved
+                            isEmailSent = false;
                         }
                     }
 
@@ -5875,16 +5879,16 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     {
                         await conn.ExecuteAsync(@"
                             UPDATE dbo.UserWaveCertificates 
-                            SET CertificateCode = @CertCode, CreatedAt = GETDATE()
+                            SET CertificateCode = @CertCode, EmailSent = @EmailSent, CreatedAt = GETDATE()
                             WHERE UserId = @UserId AND WaveId = @WaveId",
-                            new { CertCode = certCode, UserId = studentId, WaveId = waveId.Value });
+                            new { CertCode = certCode, EmailSent = isEmailSent ? 1 : 0, UserId = studentId, WaveId = waveId.Value });
                     }
                     else
                     {
                         await conn.ExecuteAsync(@"
-                            INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, Score, CreatedAt)
-                            VALUES (@UserId, @WaveId, @CertCode, NULL, GETDATE())",
-                            new { UserId = studentId, WaveId = waveId.Value, CertCode = certCode });
+                            INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, EmailSent, Score, CreatedAt)
+                            VALUES (@UserId, @WaveId, @CertCode, @EmailSent, NULL, GETDATE())",
+                            new { UserId = studentId, WaveId = waveId.Value, CertCode = certCode, EmailSent = isEmailSent ? 1 : 0 });
                     }
 
                     successCount++;
@@ -5897,11 +5901,107 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     if (skippedCodes.Count > 10) msg += " (وآخرين...)";
                 }
 
-                return Json(new { success = true, message = msg });
+                return Json(new { 
+                    success = true, 
+                    message = msg,
+                    successCount = successCount,
+                    emailSentCount = emailSentCount,
+                    skippedCount = skippedCodes.Count,
+                    skippedCodes = skippedCodes
+                });
             }
             catch (Exception ex)
             {
                 return Json(new { success = false, message = "حدث خطأ أثناء معالجة ملفات الشهادات: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ResendCertificateEmail(string userId, int waveId, IFormFile? pdfFile)
+        {
+            if (string.IsNullOrEmpty(userId) || waveId <= 0)
+            {
+                return Json(new { success = false, message = "بيانات غير صالحة." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                var user = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT U.Id, ISNULL(U.FullName, U.UserName) as StudentName, U.Email, U.UserCode, UWC.CertificateCode, W.WaveName
+                    FROM AspNetUsers U
+                    JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = @WaveId
+                    JOIN TrainingWaves W ON W.Id = @WaveId
+                    WHERE U.Id = @UserId", new { UserId = userId, WaveId = waveId });
+
+                if (user == null)
+                {
+                    return Json(new { success = false, message = "لم يتم العثور على بيانات المستخدم أو الشهادة." });
+                }
+
+                string userEmail = user.Email;
+                if (string.IsNullOrWhiteSpace(userEmail))
+                {
+                    return Json(new { success = false, message = "هذا المستخدم ليس لديه بريد إلكتروني مسجل." });
+                }
+
+                string userCodeStr = user.UserCode;
+                string certCode = user.CertificateCode;
+                string waveName = user.WaveName;
+
+                string waveUploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "certificates", waveId.ToString());
+                if (!Directory.Exists(waveUploadDir))
+                {
+                    Directory.CreateDirectory(waveUploadDir);
+                }
+
+                string filePath = Path.Combine(waveUploadDir, $"{userCodeStr}.pdf");
+
+                // If a new PDF file was provided, save/overwrite it first
+                if (pdfFile != null && pdfFile.Length > 0)
+                {
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await pdfFile.CopyToAsync(stream);
+                    }
+                }
+
+                if (!System.IO.File.Exists(filePath))
+                {
+                    return Json(new { success = false, message = $"ملف الـ PDF غير موجود للمستخدم ({userCodeStr}). يرجى رفع ملف PDF لهذا الطالب أولاً أو اختياره من نافذة الإرسال." });
+                }
+
+                byte[] pdfBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+                string emailSubject = $"شهادة التخرج الرسمية - أكاديمية الطرشوبي ({waveName})";
+                string emailBody = $@"
+                    <div dir='rtl' style='font-family: Arial, sans-serif; padding: 25px; color: #1e293b; background-color: #f8fafc; border-radius: 16px;'>
+                        <div style='max-width: 600px; margin: 0 auto; background: #ffffff; padding: 30px; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0;'>
+                            <h2 style='color: #059669; font-size: 22px; margin-bottom: 15px;'>تهانينا لك! 🎓</h2>
+                            <p style='font-size: 15px; line-height: 1.6;'>عزيزي/عزيزتي <strong>{user.StudentName}</strong>،</p>
+                            <p style='font-size: 14px; line-height: 1.6; color: #475569;'>نحيطكم علماً بأنه قد تم إرسال شهادة التخرج الرسمية الخاصة بكم لدورة <strong>{waveName}</strong> بنجاح. تجدون نسخة الشهادة بصيغة (PDF) مرفقة مع هذا البريد.</p>
+                            
+                            <div style='margin: 20px 0; padding: 15px; background: #ecfdf5; border: 1px border #a7f3d0; border-radius: 12px;'>
+                                <p style='margin: 0; font-size: 12px; color: #047857; font-weight: bold;'>كود الشهادة التسلسلي (Serial Code):</p>
+                                <p style='margin: 5px 0 0 0; font-family: monospace; font-size: 16px; font-weight: bold; color: #065f46; letter-spacing: 1px;'>{certCode}</p>
+                            </div>
+
+                            <p style='font-size: 13px; color: #64748b; margin-top: 25px;'>مع أطيب التمنيات لكم بدوام التوفيق والنجاح،<br/><strong>أكاديمية الطرشوبي</strong></p>
+                        </div>
+                    </div>";
+
+                await _emailSender.SendEmailWithAttachmentAsync(userEmail, emailSubject, emailBody, pdfBytes, $"{userCodeStr}_Certificate.pdf");
+
+                await conn.ExecuteAsync(@"
+                    UPDATE dbo.UserWaveCertificates SET EmailSent = 1 WHERE UserId = @UserId AND WaveId = @WaveId",
+                    new { UserId = userId, WaveId = waveId });
+
+                return Json(new { success = true, message = $"تم إرسال البريد الإلكتروني بنجاح إلى {userEmail}." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "فشل إرسال البريد الإلكتروني: " + ex.Message });
             }
         }
 
@@ -6264,6 +6364,118 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             }
         }
 
+        [HttpGet("Admin/GetAssignmentDetails/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAssignmentDetails(int id)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            try
+            {
+                var assignSql = "SELECT * FROM dbo.Assignments WHERE Id = @Id";
+                var assignment = await conn.QueryFirstOrDefaultAsync<dynamic>(assignSql, new { Id = id });
+                if (assignment == null)
+                {
+                    return Json(new { success = false, message = "Assignment not found." });
+                }
+
+                var qSql = "SELECT * FROM dbo.AssignmentQuestions WHERE AssignmentId = @AssignmentId ORDER BY Id ASC";
+                var questions = (await conn.QueryAsync<dynamic>(qSql, new { AssignmentId = id })).ToList();
+
+                return Json(new
+                {
+                    success = true,
+                    assignment = new
+                    {
+                        id = assignment.Id,
+                        title = assignment.Title,
+                        waveId = assignment.WaveId,
+                        pharmacistMaxScore = assignment.PharmacistMaxScore,
+                        assistantMaxScore = assignment.AssistantMaxScore,
+                        scheduledStartTime = assignment.ScheduledStartTime != null ? ((DateTime)assignment.ScheduledStartTime).ToString("yyyy-MM-ddTHH:mm") : null,
+                        scheduledEndTime = assignment.ScheduledEndTime != null ? ((DateTime)assignment.ScheduledEndTime).ToString("yyyy-MM-ddTHH:mm") : null
+                    },
+                    questions = questions
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Error: " + ex.Message });
+            }
+        }
+
+        [HttpPost("Admin/UpdateAssignment")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateAssignment([FromBody] UpdateAssignmentDto model)
+        {
+            if (model == null || model.Id <= 0 || string.IsNullOrWhiteSpace(model.Title) || model.WaveId <= 0)
+            {
+                return Json(new { success = false, message = "Invalid data. Please fill required fields." });
+            }
+
+            using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync();
+            using var transaction = conn.BeginTransaction();
+            try
+            {
+                // Update Assignment Header
+                string updateAssignSql = @"
+                    UPDATE dbo.Assignments 
+                    SET Title = @Title,
+                        WaveId = @WaveId,
+                        PharmacistMaxScore = @PharmacistMaxScore,
+                        AssistantMaxScore = @AssistantMaxScore,
+                        ScheduledStartTime = @ScheduledStartTime,
+                        ScheduledEndTime = @ScheduledEndTime
+                    WHERE Id = @Id;";
+
+                await conn.ExecuteAsync(updateAssignSql, new
+                {
+                    model.Id,
+                    model.Title,
+                    model.WaveId,
+                    model.PharmacistMaxScore,
+                    model.AssistantMaxScore,
+                    model.ScheduledStartTime,
+                    model.ScheduledEndTime
+                }, transaction: transaction);
+
+                // Replace Questions
+                await conn.ExecuteAsync("DELETE FROM dbo.AssignmentQuestions WHERE AssignmentId = @AssignmentId", new { AssignmentId = model.Id }, transaction: transaction);
+
+                if (model.Questions != null && model.Questions.Any())
+                {
+                    string insertQuestionSql = @"
+                        INSERT INTO dbo.AssignmentQuestions (AssignmentId, QuestionType, TargetRole, Points, CategoryName, GroupName, SubcategoryName, RequiredItemsCount, ItemDefinition, CorrectItemNo)
+                        VALUES (@AssignmentId, @QuestionType, @TargetRole, @Points, @CategoryName, @GroupName, @SubcategoryName, @RequiredItemsCount, @ItemDefinition, @CorrectItemNo);";
+
+                    foreach (var q in model.Questions)
+                    {
+                        await conn.ExecuteAsync(insertQuestionSql, new
+                        {
+                            AssignmentId = model.Id,
+                            q.QuestionType,
+                            q.TargetRole,
+                            q.Points,
+                            q.CategoryName,
+                            q.GroupName,
+                            q.SubcategoryName,
+                            q.RequiredItemsCount,
+                            q.ItemDefinition,
+                            q.CorrectItemNo
+                        }, transaction: transaction);
+                    }
+                }
+
+                transaction.Commit();
+                return Json(new { success = true, message = "Assignment updated successfully!" });
+            }
+            catch (Exception ex)
+            {
+                transaction.Rollback();
+                return Json(new { success = false, message = "Error: " + ex.Message });
+            }
+        }
+
         [HttpGet]
         public async Task<IActionResult> BranchSupervisors()
         {
@@ -6612,6 +6824,11 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
         public DateTime ScheduledStartTime { get; set; }
         public DateTime ScheduledEndTime { get; set; }
         public List<CreateAssignmentQuestionDto> Questions { get; set; } = new();
+    }
+
+    public class UpdateAssignmentDto : CreateAssignmentDto
+    {
+        public int Id { get; set; }
     }
 
     public class CreateAssignmentQuestionDto

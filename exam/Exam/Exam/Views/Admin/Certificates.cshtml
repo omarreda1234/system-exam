@@ -63,10 +63,12 @@
 
         <div class="space-y-2">
             <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Status Filter (تصفية بالحالة)</label>
-            <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[190px] transition-colors focus:border-brand-500 outline-none">
+            <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[210px] transition-colors focus:border-brand-500 outline-none">
                 <option value="all">All Statuses (الكل)</option>
                 <option value="certified">Certified (تم إصدار الشهادة)</option>
                 <option value="pending">Pending (لم تصدر شهادة)</option>
+                <option value="email_sent">Email Sent (تم إرسال الإيميل ✉️)</option>
+                <option value="email_failed">Email Failed (فشل إرسال الإيميل ⚠️)</option>
             </select>
         </div>
     </div>
@@ -93,6 +95,7 @@
                     string certStatus = "pending";
                     string certStatusText = "لم تصدر شهادة";
                     string statusBadgeClass = "bg-amber-500 text-amber-700 bg-opacity-10 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800";
+                    string emailStatusAttr = hasCertCode ? (s.EmailSent ? "email_sent" : "email_failed") : "no_email";
                     
                     if (hasCertCode)
                     {
@@ -101,7 +104,7 @@
                         statusBadgeClass = "bg-emerald-500 text-emerald-700 bg-opacity-10 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800";
                     }
 
-                    <tr class="student-row" data-cert-status="@certStatus">
+                    <tr class="student-row" data-cert-status="@certStatus" data-email-status="@emailStatusAttr">
                         <td>
                             <div class="flex items-center gap-3 px-4 py-3 flex-nowrap">
                                 <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase transition-transform hover:scale-105">@(string.IsNullOrEmpty(s.StudentName) ? "?" : s.StudentName.Substring(0,1))</div>
@@ -118,8 +121,25 @@
                         <td><span class="text-[10px] font-black text-slate-400 uppercase">@s.WaveName</span></td>
                         <td><span class="text-[10px] font-black text-slate-400 uppercase">@(string.IsNullOrEmpty(s.BranchName) ? "--" : s.BranchName)</span></td>
                         <td>
-                            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg @statusBadgeClass w-fit shadow-sm">
-                                <span class="text-[10px] font-black tracking-wide">@certStatusText</span>
+                            <div class="flex flex-col gap-1.5 w-fit">
+                                <div class="flex items-center gap-1.5 px-3 py-1 rounded-lg @statusBadgeClass shadow-sm">
+                                    <span class="text-[10px] font-black tracking-wide">@certStatusText</span>
+                                </div>
+                                @if (hasCertCode)
+                                {
+                                    if (s.EmailSent)
+                                    {
+                                        <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 text-[9px] font-black border border-emerald-200 dark:border-emerald-800">
+                                            <i class="fas fa-envelope-circle-check text-emerald-500"></i> تم إرسال الإيميل
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 text-[9px] font-black border border-rose-200 dark:border-rose-800">
+                                            <i class="fas fa-envelope-circle-xmark text-rose-500"></i> فشل إرسال الإيميل
+                                        </div>
+                                    }
+                                }
                             </div>
                         </td>
 
@@ -136,7 +156,17 @@
                         </td>
                         <td class="text-right px-8">
                             <div class="flex items-center justify-end gap-2">
-                                @if (!hasCertCode)
+                                @if (hasCertCode)
+                                {
+                                    <button class="p-2 text-slate-400 hover:text-emerald-600 bg-slate-50 dark:bg-slate-800 rounded-xl resend-email-btn" 
+                                            data-user-id="@s.Id" 
+                                            data-username="@s.StudentName" 
+                                            data-wave-id="@selectedWaveId"
+                                            title="إعادة إرسال الإيميل">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
+                                }
+                                else
                                 {
                                     <button class="p-2.5 text-slate-400 hover:text-amber-600 bg-slate-50 dark:bg-slate-800 rounded-xl reassign-wave" 
                                             data-user-id="@s.Id" 
@@ -436,11 +466,19 @@
             $.fn.dataTable.ext.search.push(
                 function(settings, data, dataIndex) {
                     const selectedFilter = $('#certStatusFilter').val();
-                    if (selectedFilter === 'all') return true;
+                    if (!selectedFilter || selectedFilter === 'all') return true;
 
                     const row = table.row(dataIndex).node();
-                    const rowStatus = $(row).attr('data-cert-status');
-                    return rowStatus === selectedFilter;
+                    const rowCertStatus = $(row).attr('data-cert-status');
+                    const rowEmailStatus = $(row).attr('data-email-status');
+
+                    if (selectedFilter === 'certified' || selectedFilter === 'pending') {
+                        return rowCertStatus === selectedFilter;
+                    }
+                    if (selectedFilter === 'email_sent' || selectedFilter === 'email_failed') {
+                        return rowEmailStatus === selectedFilter;
+                    }
+                    return true;
                 }
             );
 
@@ -514,6 +552,72 @@
                         .catch(err => {
                             console.error(err);
                             Swal.fire('Error', 'An error occurred.', 'error');
+                        });
+                    }
+                });
+            });
+
+            $(document).on('click', '.resend-email-btn', function() {
+                const userId = $(this).data('user-id');
+                const waveId = $(this).data('wave-id');
+                const username = $(this).data('username');
+
+                Swal.fire({
+                    title: 'إرسال البريد الإلكتروني للشهادة',
+                    html: `
+                        <div class="text-right space-y-4 p-2" dir="rtl">
+                            <p class="text-xs text-slate-600 font-bold">هل ترغب في إرسال شهادة الـ PDF للمستخدم <strong>(${username})</strong>؟</p>
+                            <div class="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 space-y-2 text-right">
+                                <label class="block text-xs font-bold text-indigo-900 mb-1">إرفاق / استبدال ملف PDF لهذا الطالب (اختياري):</label>
+                                <input type="file" id="resendPdfInput" accept=".pdf" class="w-full text-xs text-slate-500 file:ml-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer" />
+                                <p class="text-[10px] text-slate-400 mt-1">إذا لم تقم باختيار ملف، سيتم استخدام ملف الـ PDF المحفوظ سابقاً لهذا الطالب تلقائياً.</p>
+                            </div>
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'إرسال الآن <i class="fas fa-paper-plane mr-2"></i>',
+                    cancelButtonText: 'إلغاء'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        const formData = new FormData();
+                        formData.append('userId', userId);
+                        formData.append('waveId', waveId);
+
+                        const fileInput = document.getElementById('resendPdfInput');
+                        if (fileInput && fileInput.files.length > 0) {
+                            formData.append('pdfFile', fileInput.files[0]);
+                        }
+
+                        Swal.fire({
+                            title: 'جاري إرسال البريد الإلكتروني...',
+                            text: 'يرجى الانتظار...',
+                            allowOutsideClick: false,
+                            didOpen: () => Swal.showLoading()
+                        });
+
+                        fetch('/Admin/ResendCertificateEmail', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(r => r.json())
+                        .then(res => {
+                            if (res.success) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'تم الإرسال بنجاح',
+                                    text: res.message
+                                }).then(() => location.reload());
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'فشل الإرسال',
+                                    text: res.message
+                                });
+                            }
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            Swal.fire('خطأ', 'حدث خطأ أثناء التواصل مع السيرفر.', 'error');
                         });
                     }
                 });

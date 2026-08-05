@@ -259,9 +259,14 @@
     <div id="tab-content-faculty" class="tab-content space-y-6 hidden">
         <!-- Faculty Section Header Form -->
         <div class="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
-            <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <i class="fas fa-heading text-brand-500"></i> عنوان وتفاصيل سيكشن المحاضرين (Meet Our Faculty)
-            </h3>
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-heading text-brand-500"></i> عنوان وتفاصيل سيكشن المحاضرين (Meet Our Faculty)
+                </h3>
+                <button type="button" onclick="toggleSection(@facultySec.Id, this)" class="section-status-btn px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(facultySec.IsVisible ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")">
+                    @(facultySec.IsVisible ? "ظاهر في الصفحة" : "مخفي")
+                </button>
+            </div>
             <form action="/Admin/SaveHomeSection" method="post" class="section-form space-y-4" onsubmit="return submitSectionForm(event, this)">
                 <input type="hidden" name="Id" value="@facultySec.Id" />
                 <input type="hidden" name="SectionKey" value="faculty" />
@@ -318,9 +323,9 @@
         <div id="facultyGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
             @foreach (var member in Model.FacultyMembers)
             {
-                <div class="faculty-card bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 text-center space-y-4 shadow-sm relative group">
-                    <div class="w-24 h-24 rounded-2xl overflow-hidden mx-auto bg-slate-100 dark:bg-slate-800 shadow-md">
-                        <img src="@(string.IsNullOrEmpty(member.ImageUrl) ? "https://i.pravatar.cc/300?u=" + member.Id : member.ImageUrl)" alt="@member.Name" class="w-full h-full object-cover" />
+                <div class="faculty-card bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 text-center space-y-4 shadow-sm relative group hover:shadow-md transition-all">
+                    <div class="w-28 h-28 rounded-full overflow-hidden mx-auto bg-slate-100 dark:bg-slate-800 shadow-md ring-4 ring-brand-500/10">
+                        <img src="@(string.IsNullOrEmpty(member.ImageUrl) ? "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2301443c'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm0 14c-2.03 0-3.8-1.04-4.84-2.6.04-1.6 3.22-2.4 4.84-2.4s4.8 0.8 4.84 2.4C15.8 18.96 14.03 20 12 20z'/%3E%3C/svg%3E" : member.ImageUrl)" alt="@member.Name" class="w-full h-full object-cover rounded-full" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%2301443c\'%3E%3Cpath d=\'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm0 14c-2.03 0-3.8-1.04-4.84-2.6.04-1.6 3.22-2.4 4.84-2.4s4.8 0.8 4.84 2.4C15.8 18.96 14.03 20 12 20z\'/%3E%3C/svg%3E';" />
                     </div>
                     <div>
                         <h4 class="font-bold text-sm text-slate-900 dark:text-white">@member.Name</h4>
@@ -331,13 +336,63 @@
                         <button type="button" onclick="toggleFaculty(@member.Id, this)" class="faculty-status-btn px-2.5 py-1 rounded-full text-[9px] font-bold @(member.IsActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600")">
                             @(member.IsActive ? "مفعل" : "معطل")
                         </button>
-                        <button type="button" onclick="deleteFaculty(@member.Id, this)" class="text-red-500 hover:text-red-700 p-1">
-                            <i class="fas fa-trash-alt text-xs"></i> مسح
-                        </button>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" 
+                                    data-id="@member.Id" 
+                                    data-name="@member.Name" 
+                                    data-role="@member.RoleTitle" 
+                                    data-bio="@member.Bio" 
+                                    data-active="@(member.IsActive ? "true" : "false")" 
+                                    onclick="openEditFacultyModalFromBtn(this)" 
+                                    class="px-2.5 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950/30 dark:hover:bg-blue-900/50 text-[11px] font-bold transition-all flex items-center gap-1">
+                                <i class="fas fa-edit text-xs"></i> تعديل
+                            </button>
+                            <button type="button" onclick="deleteFaculty(@member.Id, this)" class="text-red-500 hover:text-red-700 p-1" title="مسح">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             }
         </div>
+    </div>
+</div>
+
+<!-- Modal for Edit Faculty Member -->
+<div id="editFacultyModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-user-edit text-brand-500"></i> تعديل بيانات المحاضر
+            </h3>
+            <button type="button" onclick="closeEditFacultyModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form id="editFacultyForm" action="/Admin/SaveFacultyMember" method="post" enctype="multipart/form-data" onsubmit="return submitEditFacultyForm(event, this)" class="space-y-4">
+            <input type="hidden" name="Id" id="editFacultyId" />
+            <input type="hidden" name="IsActive" id="editFacultyIsActive" value="true" />
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">اسم المحاضر *</label>
+                <input type="text" name="Name" id="editFacultyName" required class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">المسمى الوظيفي / التخصص</label>
+                <input type="text" name="RoleTitle" id="editFacultyRoleTitle" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">تغيير الصورة الشخصية (اختياري)</label>
+                <input type="file" name="imageFile" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-brand-50 file:text-brand-600" />
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">نبذة مختصرة (Bio)</label>
+                <textarea name="Bio" id="editFacultyBio" rows="3" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-xs font-medium outline-none focus:ring-2 focus:ring-brand-500"></textarea>
+            </div>
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onclick="closeEditFacultyModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300">إلغاء</button>
+                <button type="submit" class="px-6 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow-md">حفظ التعديلات</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -467,6 +522,7 @@
                 success: function (res) {
                     form.reset();
                     notifySuccess(res.message || 'تم رفع الصورة بنجاح!');
+                    setTimeout(function () { location.reload(); }, 800);
                 },
                 error: function (err) {
                     notifyError(err.responseJSON?.message || 'فشل رفع الصورة');
@@ -489,6 +545,7 @@
                     closeCustomSectionModal();
                     form.reset();
                     notifySuccess('تمت إضافة السيكشن بنجاح!');
+                    setTimeout(function () { location.reload(); }, 800);
                 },
                 error: function (err) {
                     notifyError(err.responseJSON?.message || 'فشل حفظ السيكشن');
@@ -510,9 +567,46 @@
                 success: function (res) {
                     form.reset();
                     notifySuccess('تمت إضافة المحاضر بنجاح!');
+                    setTimeout(function () { location.reload(); }, 800);
                 },
                 error: function (err) {
                     notifyError(err.responseJSON?.message || 'فشل إضافة المحاضر');
+                }
+            });
+            return false;
+        }
+
+        function openEditFacultyModalFromBtn(btn) {
+            const $btn = $(btn);
+            $('#editFacultyId').val($btn.data('id'));
+            $('#editFacultyName').val($btn.data('name'));
+            $('#editFacultyRoleTitle').val($btn.data('role'));
+            $('#editFacultyBio').val($btn.data('bio'));
+            $('#editFacultyIsActive').val($btn.data('active'));
+            $('#editFacultyModal').removeClass('hidden');
+        }
+
+        function closeEditFacultyModal() {
+            $('#editFacultyModal').addClass('hidden');
+        }
+
+        function submitEditFacultyForm(e, form) {
+            e.preventDefault();
+            e.stopPropagation();
+            const formData = new FormData(form);
+            $.ajax({
+                url: '/Admin/SaveFacultyMember',
+                type: 'POST',
+                data: formData,
+                contentType: false,
+                processData: false,
+                success: function (res) {
+                    closeEditFacultyModal();
+                    notifySuccess('تم تحديث بيانات المحاضر بنجاح!');
+                    setTimeout(function () { location.reload(); }, 800);
+                },
+                error: function (err) {
+                    notifyError(err.responseJSON?.message || 'فشل تحديث البيانات');
                 }
             });
             return false;

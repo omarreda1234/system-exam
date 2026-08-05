@@ -311,7 +311,7 @@
     }
 
     <!-- Section: Faculty -->
-    @if (facultySec.IsVisible)
+    @if (facultySec.IsVisible || (Model?.FacultyMembers?.Any(x => x.IsActive) == true))
     {
         <section id="program" class="max-w-7xl mx-auto px-6">
             <div class="text-center max-w-2xl mx-auto mb-20">
@@ -333,8 +333,8 @@
                     @foreach (var member in Model.FacultyMembers.Where(x => x.IsActive))
                     {
                         <div class="bg-white border border-slate-100 rounded-[32px] p-8 shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all group text-center">
-                            <div class="w-32 h-32 rounded-3xl overflow-hidden mx-auto mb-6 shadow-lg shadow-brand-600/10 grayscale group-hover:grayscale-0 transition-all duration-500">
-                                <img src="@(string.IsNullOrEmpty(member.ImageUrl) ? "https://i.pravatar.cc/300?u=" + member.Id : member.ImageUrl)" alt="@member.Name" class="w-full h-full object-cover" />
+                            <div class="w-32 h-32 rounded-full overflow-hidden mx-auto mb-6 shadow-lg shadow-brand-600/10 ring-4 ring-brand-500/20 transition-all duration-500 hover:scale-105">
+                                <img src="@(string.IsNullOrEmpty(member.ImageUrl) ? "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2301443c'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm0 14c-2.03 0-3.8-1.04-4.84-2.6.04-1.6 3.22-2.4 4.84-2.4s4.8 0.8 4.84 2.4C15.8 18.96 14.03 20 12 20z'/%3E%3C/svg%3E" : member.ImageUrl)" alt="@member.Name" class="w-full h-full object-cover rounded-full" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%2301443c\'%3E%3Cpath d=\'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm0 14c-2.03 0-3.8-1.04-4.84-2.6.04-1.6 3.22-2.4 4.84-2.4s4.8 0.8 4.84 2.4C15.8 18.96 14.03 20 12 20z\'/%3E%3C/svg%3E';" />
                             </div>
                             <h4 class="text-lg font-black text-slate-900 mb-1">@member.Name</h4>
                             <p class="text-[10px] font-bold text-brand-600 uppercase tracking-widest mb-4">@member.RoleTitle</p>

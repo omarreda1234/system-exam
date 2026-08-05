@@ -82,11 +82,38 @@ namespace Exam.Controllers
             if (string.IsNullOrEmpty(request.FullName) || string.IsNullOrEmpty(request.Email))
             {
                 ViewBag.Branches = await _examService.GetAllBranchesAsync();
-                ModelState.AddModelError("", "Please fill in all required fields.");
+                ModelState.AddModelError("", "رجاءً ملء جميع الحقول المطلوبة.");
                 return View(request);
             }
 
             using var conn = new Microsoft.Data.SqlClient.SqlConnection(_connectionString);
+
+            // Check if user already exists in AspNetUsers
+            var existingUserCount = await conn.QueryFirstOrDefaultAsync<int>(@"
+                SELECT COUNT(1) FROM AspNetUsers 
+                WHERE (Email IS NOT NULL AND LOWER(Email) = LOWER(@Email)) 
+                   OR (UserCode IS NOT NULL AND UserCode <> '' AND UserCode = @UserCode)", request);
+
+            if (existingUserCount > 0)
+            {
+                ViewBag.Branches = await _examService.GetAllBranchesAsync();
+                ModelState.AddModelError("", "هذا البريد الإلكتروني أو كود المستخدم (UserCode) مسجل بالفعل بالنظام. يمكنك تسجيل الدخول مباشرة بدلاً من إنشاء حساب جديد.");
+                return View(request);
+            }
+
+            // Check if there is already a Pending request
+            var existingReqCount = await conn.QueryFirstOrDefaultAsync<int>(@"
+                SELECT COUNT(1) FROM RegistrationRequests 
+                WHERE Status = 'Pending' AND ((Email IS NOT NULL AND LOWER(Email) = LOWER(@Email)) 
+                   OR (UserCode IS NOT NULL AND UserCode <> '' AND UserCode = @UserCode))", request);
+
+            if (existingReqCount > 0)
+            {
+                ViewBag.Branches = await _examService.GetAllBranchesAsync();
+                ModelState.AddModelError("", "يوجد طلب تسجيل معلق بالفعل بنفس البريد الإلكتروني أو كود المستخدم تحت المراجعة.");
+                return View(request);
+            }
+
             var sql = @"
                 INSERT INTO RegistrationRequests (FullName, Email, Gmail, UserCode, PasswordHash, JobTitle, Shift, PhoneNumber, BranchId, Notes, Status)
                 VALUES (@FullName, @Email, @Gmail, @UserCode, @Password, @JobTitle, @Shift, @PhoneNumber, @BranchId, @Notes, 'Pending')";
@@ -102,18 +129,34 @@ namespace Exam.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Register(RegisterDTO registerDto)
         {
-            //if (!ModelState.IsValid)
-            //{
-            //    ViewBag.Branches = await _examService.GetAllBranchesAsync();
-            //    return View(registerDto);
-            //}
+            if (string.IsNullOrEmpty(registerDto.Email))
+            {
+                ViewBag.Branches = await _examService.GetAllBranchesAsync();
+                ModelState.AddModelError(string.Empty, "يرجى أدخال البريد الإلكتروني.");
+                return View(registerDto);
+            }
+
+            using (var conn = new Microsoft.Data.SqlClient.SqlConnection(_connectionString))
+            {
+                var existingCount = await conn.QueryFirstOrDefaultAsync<int>(@"
+                    SELECT COUNT(1) FROM AspNetUsers 
+                    WHERE (Email IS NOT NULL AND LOWER(Email) = LOWER(@Email)) 
+                       OR (UserCode IS NOT NULL AND UserCode <> '' AND UserCode = @UserCode)", registerDto);
+
+                if (existingCount > 0)
+                {
+                    ViewBag.Branches = await _examService.GetAllBranchesAsync();
+                    ModelState.AddModelError(string.Empty, "هذا الحساب أو البريد الإلكتروني أو كود المستخدم مسجل بالفعل.");
+                    return View(registerDto);
+                }
+            }
 
             var result = await _authService.RegisterAsync(registerDto);
             if (result.Succeeded)
             {
                 if (User.Identity.IsAuthenticated && User.IsInRole("Admin"))
                 {
-                    TempData["SuccessMessage"] = $"User '{registerDto.UserName}' created successfully.";
+                    TempData["SuccessMessage"] = $"تم إنشاء الحساب '{registerDto.UserName}' بنجاح.";
                     return RedirectToAction("Register"); // Keep admin on the same page to add more if needed
                 }
 

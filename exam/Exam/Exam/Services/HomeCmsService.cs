@@ -100,6 +100,11 @@ namespace Exam.Services
                     CreatedAt DATETIME NOT NULL DEFAULT GETDATE()
                 );
             END;
+
+            IF EXISTS (SELECT * FROM dbo.HomeSections WHERE SectionKey = 'faculty' AND IsVisible = 0)
+            BEGIN
+                UPDATE dbo.HomeSections SET IsVisible = 1 WHERE SectionKey = 'faculty';
+            END;
             ";
 
             await conn.ExecuteAsync(sql);
@@ -227,9 +232,11 @@ namespace Exam.Services
         {
             await EnsureTablesCreatedAsync();
 
-            if (imageFile != null && imageFile.Length > 0 && !string.IsNullOrEmpty(webRootPath))
+            string rootPath = !string.IsNullOrEmpty(webRootPath) ? webRootPath : Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+
+            if (imageFile != null && imageFile.Length > 0)
             {
-                string uploadsFolder = Path.Combine(webRootPath, "uploads", "home");
+                string uploadsFolder = Path.Combine(rootPath, "uploads", "home");
                 if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
 
                 string fileExt = Path.GetExtension(imageFile.FileName);
@@ -296,9 +303,11 @@ namespace Exam.Services
         {
             await EnsureTablesCreatedAsync();
 
-            if (imageFile != null && imageFile.Length > 0 && !string.IsNullOrEmpty(webRootPath))
+            string rootPath = !string.IsNullOrEmpty(webRootPath) ? webRootPath : Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+
+            if (imageFile != null && imageFile.Length > 0)
             {
-                string uploadsFolder = Path.Combine(webRootPath, "uploads", "home");
+                string uploadsFolder = Path.Combine(rootPath, "uploads", "home");
                 if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
 
                 string fileExt = Path.GetExtension(imageFile.FileName);
@@ -342,9 +351,10 @@ namespace Exam.Services
             var item = await conn.QueryFirstOrDefaultAsync<HomeFacultyMember>("SELECT * FROM dbo.HomeFacultyMembers WHERE Id = @Id", new { Id = id });
             if (item == null) return false;
 
-            if (!string.IsNullOrEmpty(webRootPath) && !string.IsNullOrEmpty(item.ImageUrl) && item.ImageUrl.StartsWith("/uploads/"))
+            string rootPath = !string.IsNullOrEmpty(webRootPath) ? webRootPath : Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            if (!string.IsNullOrEmpty(item.ImageUrl) && item.ImageUrl.StartsWith("/uploads/"))
             {
-                string fullPath = Path.Combine(webRootPath, item.ImageUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                string fullPath = Path.Combine(rootPath, item.ImageUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
                 if (File.Exists(fullPath))
                 {
                     try { File.Delete(fullPath); } catch { }
