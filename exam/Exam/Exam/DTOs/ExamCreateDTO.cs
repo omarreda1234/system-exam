@@ -332,6 +332,7 @@ namespace Exam.DTOs
         public int Id { get; set; }
         public string WaveName { get; set; }
         public DateTime? StartDate { get; set; }
+        public bool IsOnline { get; set; }
     }
 
     // Aggregate result per student for an entire wave (all 12 exams)

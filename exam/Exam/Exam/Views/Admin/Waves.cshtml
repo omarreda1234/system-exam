@@ -55,6 +55,7 @@
             <thead>
                 <tr>
                     <th class="pl-8">Batch Name</th>
+                    <th>Type</th>
                     <th>Start Date</th>
                     <th class="text-right pr-8">Actions</th>
                 </tr>
@@ -67,6 +68,12 @@
                                 <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"><i class="fas fa-water"></i></div>
                                 <span class="font-bold text-slate-900 dark:text-white">@wave.WaveName</span>
                             </div>
+                        </td>
+                        <td>
+                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(wave.IsOnline ? "bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800" : "bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700")">
+                                <i class="fas @(wave.IsOnline ? "fa-globe text-emerald-500 mr-1" : "fa-building text-slate-400 mr-1")"></i>
+                                @(wave.IsOnline ? "Online" : "Offline")
+                            </span>
                         </td>
                         <td><span class="text-xs font-medium text-slate-500 uppercase">@wave.StartDate?.ToString("MMMM dd, yyyy")</span></td>
                         <td class="text-right pr-8">
@@ -84,7 +91,7 @@
                                 }
                                 @if (HasWavesEditPermission())
                                 {
-                                    <button onclick="editWave(event, @wave.Id, '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(wave.WaveName))', '@(wave.StartDate.HasValue ? wave.StartDate.Value.ToString("yyyy-MM-dd") : "")')" class="bg-amber-50 hover:bg-amber-600 text-amber-600 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-amber-100 hover:border-amber-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
+                                    <button onclick="editWave(event, @wave.Id, '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(wave.WaveName))', '@(wave.StartDate.HasValue ? wave.StartDate.Value.ToString("yyyy-MM-dd") : "")', @(wave.IsOnline.ToString().ToLower()))" class="bg-amber-50 hover:bg-amber-600 text-amber-600 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-amber-100 hover:border-amber-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
                                         <i class="fas fa-edit text-xs"></i>
                                         Edit
                                     </button>
@@ -152,13 +159,14 @@
             }, 3000);
         }
 
-        async function editWave(evt, id, currentName, currentDate) {
+        async function editWave(evt, id, currentName, currentDate, currentIsOnline) {
             if (evt) evt.stopPropagation();
             const { value: formValues } = await Swal.fire({
                 title: 'Edit Batch',
                 html:
                     '<div class="text-left space-y-4">' +
                     `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Batch Name</label><input id="edit-sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold" value="${currentName}"></div>` +
+                    `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Batch Type (Mode)</label><select id="edit-sw-isonline" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold"><option value="false" ${!currentIsOnline ? 'selected' : ''}>Offline (Off)</option><option value="true" ${currentIsOnline ? 'selected' : ''}>Online</option></select></div>` +
                     `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Start Date</label><input id="edit-sw-date" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold" value="${currentDate}"></div>` +
                     '</div>',
                 focusConfirm: false,
@@ -173,11 +181,12 @@
                 preConfirm: () => {
                     const name = document.getElementById('edit-sw-name').value;
                     const date = document.getElementById('edit-sw-date').value;
+                    const isOnline = document.getElementById('edit-sw-isonline').value === 'true';
                     if (!name) {
                         Swal.showValidationMessage('Batch Name is required');
                         return false;
                     }
-                    return { name: name, startDate: date || null };
+                    return { name: name, startDate: date || null, isOnline: isOnline };
                 }
             });
 
@@ -190,7 +199,7 @@
                             'Content-Type': 'application/json',
                             'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
                         },
-                        body: JSON.stringify({ id: id, waveName: formValues.name, startDate: formValues.startDate })
+                        body: JSON.stringify({ id: id, waveName: formValues.name, startDate: formValues.startDate, isOnline: formValues.isOnline })
                     });
                     const json = await res.json();
                     if (json.success) {
@@ -595,6 +604,7 @@
                     html:
                         '<div class="text-left space-y-4">' +
                         '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Batch Name</label><input id="sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold"></div>' +
+                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Batch Type (Mode)</label><select id="sw-isonline" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold"><option value="false">Offline (Off)</option><option value="true">Online</option></select></div>' +
                         '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Start Date</label><input id="sw-date" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold"></div>' +
                         '</div>',
                     focusConfirm: false,
@@ -604,7 +614,8 @@
                     preConfirm: () => {
                         return {
                             name: document.getElementById('sw-name').value,
-                            date: document.getElementById('sw-date').value
+                            date: document.getElementById('sw-date').value,
+                            isOnline: document.getElementById('sw-isonline').value === 'true'
                         }
                     },
                     customClass: {
@@ -618,7 +629,7 @@
                     const res = await fetch('/Admin/CreateWave', { 
                         method: 'POST', 
                         headers: { 'Content-Type': 'application/json' }, 
-                        body: JSON.stringify({ WaveName: formValues.name, StartDate: formValues.date || null }) 
+                        body: JSON.stringify({ WaveName: formValues.name, StartDate: formValues.date || null, IsOnline: formValues.isOnline }) 
                     });
                     if(res.ok) {
                         Swal.fire({ icon: 'success', title: 'Success', text: 'Batch created successfully.', timer: 1500, showConfirmButton: false });

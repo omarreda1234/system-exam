@@ -2943,8 +2943,8 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             {
                 await connection.OpenAsync();
                 int rows = await connection.ExecuteAsync(
-                    "UPDATE dbo.TrainingWaves SET WaveName = @WaveName, StartDate = @StartDate WHERE Id = @Id",
-                    new { WaveName = wave.WaveName.Trim(), StartDate = wave.StartDate, Id = wave.Id }
+                    "UPDATE dbo.TrainingWaves SET WaveName = @WaveName, StartDate = @StartDate, IsOnline = @IsOnline WHERE Id = @Id",
+                    new { WaveName = wave.WaveName.Trim(), StartDate = wave.StartDate, IsOnline = wave.IsOnline, Id = wave.Id }
                 );
 
                 if (rows > 0)
@@ -3986,7 +3986,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 await connection.OpenAsync();
                 var newWaveId = await connection.ExecuteScalarAsync<int>(
                     "dbo.sp_Admin_CreateWave",
-                    new { wave.WaveName, wave.StartDate },
+                    new { wave.WaveName, wave.StartDate, wave.IsOnline },
                     commandType: System.Data.CommandType.StoredProcedure
                 );
 
@@ -5751,7 +5751,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
                 // 1. Get Wave info for building certificate code
                 var waveObj = await conn.QueryFirstOrDefaultAsync<dynamic>(
-                    "SELECT WaveName, StartDate FROM TrainingWaves WHERE Id = @WaveId",
+                    "SELECT WaveName, StartDate, ISNULL(IsOnline, 0) AS IsOnline FROM TrainingWaves WHERE Id = @WaveId",
                     new { WaveId = waveId.Value });
 
                 if (waveObj == null)
@@ -5811,7 +5811,8 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     }
 
                     string studentId = (string)user.Id;
-                    string modeCode = (waveName.ToLower().Contains("online") || waveName.Contains("أونلاين") || waveName.Contains("اونلاين") || waveNumStr == "009" || waveName.Contains("9")) ? "Online" : "Off";
+                    bool isWaveOnline = waveObj.IsOnline != null && Convert.ToBoolean(waveObj.IsOnline);
+                    string modeCode = (isWaveOnline || waveName.ToLower().Contains("online") || waveName.Contains("أونلاين") || waveName.Contains("اونلاين") || waveNumStr == "009") ? "Online" : "Off";
                     string certCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{userCodeStr}";
 
                     // Save PDF file on disk
@@ -5930,15 +5931,15 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 await conn.OpenAsync();
 
                 var user = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                    SELECT U.Id, ISNULL(U.FullName, U.UserName) as StudentName, U.Email, U.UserCode, UWC.CertificateCode, W.WaveName
+                    SELECT U.Id, ISNULL(U.FullName, U.UserName) as StudentName, U.Email, U.UserCode, UWC.CertificateCode, W.WaveName, W.StartDate, ISNULL(W.IsOnline, 0) AS IsOnline
                     FROM AspNetUsers U
-                    JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = @WaveId
+                    LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = @WaveId
                     JOIN TrainingWaves W ON W.Id = @WaveId
                     WHERE U.Id = @UserId", new { UserId = userId, WaveId = waveId });
 
                 if (user == null)
                 {
-                    return Json(new { success = false, message = "لم يتم العثور على بيانات المستخدم أو الشهادة." });
+                    return Json(new { success = false, message = "لم يتم العثور على بيانات المستخدم أو الـ Wave." });
                 }
 
                 string userEmail = user.Email;
@@ -5947,9 +5948,31 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     return Json(new { success = false, message = "هذا المستخدم ليس لديه بريد إلكتروني مسجل." });
                 }
 
-                string userCodeStr = user.UserCode;
-                string certCode = user.CertificateCode;
-                string waveName = user.WaveName;
+                string userCodeStr = (string)user.UserCode ?? "";
+                string certCode = (string)user.CertificateCode;
+                string waveName = (string)user.WaveName ?? "";
+
+                // Auto-generate CertificateCode if missing/null
+                if (string.IsNullOrWhiteSpace(certCode))
+                {
+                    string waveNumStr = "001";
+                    var digits = new string(waveName.Where(char.IsDigit).ToArray());
+                    if (!string.IsNullOrEmpty(digits))
+                    {
+                        waveNumStr = digits.PadLeft(3, '0');
+                    }
+                    else
+                    {
+                        waveNumStr = waveId.ToString().PadLeft(3, '0');
+                    }
+
+                    DateTime waveDate = user.StartDate ?? DateTime.Now;
+                    string yearStr = waveDate.Year.ToString();
+                    bool isWaveOnline = user.IsOnline != null && Convert.ToBoolean(user.IsOnline);
+                    string modeCode = (isWaveOnline || waveName.ToLower().Contains("online") || waveName.Contains("أونلاين") || waveName.Contains("اونلاين") || waveNumStr == "009") ? "Online" : "Off";
+
+                    certCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{userCodeStr}";
+                }
 
                 string waveUploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "certificates", waveId.ToString());
                 if (!Directory.Exists(waveUploadDir))
@@ -5993,11 +6016,41 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
                 await _emailSender.SendEmailWithAttachmentAsync(userEmail, emailSubject, emailBody, pdfBytes, $"{userCodeStr}_Certificate.pdf");
 
-                await conn.ExecuteAsync(@"
-                    UPDATE dbo.UserWaveCertificates SET EmailSent = 1 WHERE UserId = @UserId AND WaveId = @WaveId",
+                // Ensure UserWaves active record exists
+                var uwExists = await conn.QueryFirstOrDefaultAsync<int?>(
+                    "SELECT 1 FROM dbo.UserWaves WHERE UserId = @UserId AND WaveId = @WaveId",
                     new { UserId = userId, WaveId = waveId });
 
-                return Json(new { success = true, message = $"تم إرسال البريد الإلكتروني بنجاح إلى {userEmail}." });
+                if (uwExists == null)
+                {
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO dbo.UserWaves (UserId, WaveId, JoinDate, IsActive)
+                        VALUES (@UserId, @WaveId, GETDATE(), 1)",
+                        new { UserId = userId, WaveId = waveId });
+                }
+
+                // Save / Update UserWaveCertificates in DB
+                var certExists = await conn.QueryFirstOrDefaultAsync<int?>(
+                    "SELECT Id FROM dbo.UserWaveCertificates WHERE UserId = @UserId AND WaveId = @WaveId",
+                    new { UserId = userId, WaveId = waveId });
+
+                if (certExists != null)
+                {
+                    await conn.ExecuteAsync(@"
+                        UPDATE dbo.UserWaveCertificates 
+                        SET CertificateCode = @CertCode, EmailSent = 1, CreatedAt = GETDATE()
+                        WHERE UserId = @UserId AND WaveId = @WaveId",
+                        new { CertCode = certCode, UserId = userId, WaveId = waveId });
+                }
+                else
+                {
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, EmailSent, Score, CreatedAt)
+                        VALUES (@UserId, @WaveId, @CertCode, 1, NULL, GETDATE())",
+                        new { UserId = userId, WaveId = waveId, CertCode = certCode });
+                }
+
+                return Json(new { success = true, message = $"تم إرسال البريد الإلكتروني بنجاح لحساب {userEmail} وتوليد/حفظ كود الشهادة ({certCode}) في النظام." });
             }
             catch (Exception ex)
             {
