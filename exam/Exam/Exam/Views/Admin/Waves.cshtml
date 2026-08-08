@@ -57,6 +57,7 @@
                     <th class="pl-8">Batch Name</th>
                     <th>Type</th>
                     <th>Start Date</th>
+                    <th>End Date</th>
                     <th class="text-right pr-8">Actions</th>
                 </tr>
             </thead>
@@ -70,12 +71,13 @@
                             </div>
                         </td>
                         <td>
-                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(wave.IsOnline ? "bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800" : "bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700")">
-                                <i class="fas @(wave.IsOnline ? "fa-globe text-emerald-500 mr-1" : "fa-building text-slate-400 mr-1")"></i>
-                                @(wave.IsOnline ? "Online" : "Offline")
+                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(wave.IsOnline || (wave.Mode != null && wave.Mode.ToLower() == "online") ? "bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800" : "bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700")">
+                                <i class="fas @(wave.IsOnline || (wave.Mode != null && wave.Mode.ToLower() == "online") ? "fa-globe text-emerald-500 mr-1" : "fa-building text-slate-400 mr-1")"></i>
+                                @(!string.IsNullOrEmpty(wave.Mode) ? wave.Mode : (wave.IsOnline ? "Online" : "Off"))
                             </span>
                         </td>
-                        <td><span class="text-xs font-medium text-slate-500 uppercase">@wave.StartDate?.ToString("MMMM dd, yyyy")</span></td>
+                        <td><span class="text-xs font-medium text-slate-500 uppercase">@(wave.StartDate?.ToString("MMMM dd, yyyy") ?? "-")</span></td>
+                        <td><span class="text-xs font-medium text-slate-500 uppercase">@(wave.EndDate?.ToString("MMMM dd, yyyy") ?? "-")</span></td>
                         <td class="text-right pr-8">
                             <div class="flex items-center justify-end gap-2">
                                 @if (User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources"))
@@ -91,7 +93,7 @@
                                 }
                                 @if (HasWavesEditPermission())
                                 {
-                                    <button onclick="editWave(event, @wave.Id, '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(wave.WaveName))', '@(wave.StartDate.HasValue ? wave.StartDate.Value.ToString("yyyy-MM-dd") : "")', @(wave.IsOnline.ToString().ToLower()))" class="bg-amber-50 hover:bg-amber-600 text-amber-600 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-amber-100 hover:border-amber-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
+                                    <button onclick="editWave(event, @wave.Id, '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(wave.WaveName))', '@(wave.StartDate.HasValue ? wave.StartDate.Value.ToString("yyyy-MM-dd") : "")', '@(wave.EndDate.HasValue ? wave.EndDate.Value.ToString("yyyy-MM-dd") : "")', @(wave.IsOnline.ToString().ToLower()), '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(wave.Mode ?? (wave.IsOnline ? "Online" : "Off")))')" class="bg-amber-50 hover:bg-amber-600 text-amber-600 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-amber-100 hover:border-amber-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
                                         <i class="fas fa-edit text-xs"></i>
                                         Edit
                                     </button>
@@ -123,99 +125,362 @@
         const isAdmin = @(User.IsInRole("Admin").ToString().ToLower());
         const canDeleteWaveAssign = @(HasRemoveUserFromWavePermission().ToString().ToLower());
 
-        function showToast(message, type = 'success') {
-            let container = document.getElementById('toast-container');
+        function showToast(message, type = 'success', duration = 3500) {
+            let container = document.getElementById('toast-notification-container');
             if (!container) {
                 container = document.createElement('div');
-                container.id = 'toast-container';
-                container.className = 'fixed top-6 right-6 z-[99999] flex flex-col gap-3 pointer-events-none';
+                container.id = 'toast-notification-container';
+                container.className = 'fixed top-5 right-5 z-[999999] flex flex-col gap-2.5 pointer-events-none max-w-sm w-full';
                 document.body.appendChild(container);
             }
 
             const toast = document.createElement('div');
-            toast.className = `transform translate-x-full transition-all duration-300 ease-out flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl text-white font-bold text-xs tracking-wide uppercase pointer-events-auto min-w-[280px] ${
-                type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'
+            toast.className = `pointer-events-auto flex items-center justify-between gap-3 px-4 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md border text-xs font-bold transition-all duration-300 transform translate-x-full opacity-0 ${
+                type === 'success'
+                    ? 'bg-emerald-600/95 text-white border-emerald-400/30 shadow-emerald-900/20'
+                    : type === 'error'
+                    ? 'bg-rose-600/95 text-white border-rose-400/30 shadow-rose-900/20'
+                    : type === 'warning'
+                    ? 'bg-amber-600/95 text-white border-amber-400/30 shadow-amber-900/20'
+                    : 'bg-slate-900/95 text-white border-slate-700/50 shadow-slate-950/30'
             }`;
-            
-            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+
+            const icon = type === 'success' ? 'fa-circle-check text-emerald-200' 
+                       : type === 'error' ? 'fa-circle-exclamation text-rose-200' 
+                       : type === 'warning' ? 'fa-triangle-exclamation text-amber-200' 
+                       : 'fa-circle-info text-sky-200';
+
             toast.innerHTML = `
-                <i class="fas ${icon} text-lg"></i>
-                <span>${message}</span>
+                <div class="flex items-center gap-2.5">
+                    <i class="fas ${icon} text-base"></i>
+                    <span class="leading-snug">${message}</span>
+                </div>
+                <button type="button" class="text-white/70 hover:text-white transition-colors p-1" onclick="this.parentElement.remove()">
+                    <i class="fas fa-times text-xs"></i>
+                </button>
             `;
 
             container.appendChild(toast);
 
-            // Slide in
-            setTimeout(() => {
-                toast.classList.remove('translate-x-full');
-            }, 10);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-full', 'opacity-0');
+                toast.classList.add('translate-x-0', 'opacity-100');
+            });
 
-            // Slide out and remove
             setTimeout(() => {
-                toast.classList.add('translate-x-full');
-                toast.addEventListener('transitionend', () => {
-                    toast.remove();
-                });
-            }, 3000);
+                toast.classList.remove('translate-x-0', 'opacity-100');
+                toast.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
         }
 
-        async function editWave(evt, id, currentName, currentDate, currentIsOnline) {
+        const defaultModes = ['Offline (Off)', 'Online (ON)', 'Onsite (ONS)', 'Hybrid (HYB)', 'VIP (VIP)'];
+
+        function getCustomModes() {
+            try {
+                const stored = localStorage.getItem('custom_batch_modes');
+                return stored ? JSON.parse(stored) : [];
+            } catch(e) {
+                return [];
+            }
+        }
+
+        function saveCustomMode(mode) {
+            if (!mode || !mode.trim()) return;
+            const custom = getCustomModes();
+            if (!custom.includes(mode.trim()) && !defaultModes.includes(mode.trim())) {
+                custom.push(mode.trim());
+                localStorage.setItem('custom_batch_modes', JSON.stringify(custom));
+            }
+        }
+
+        function removeCustomMode(mode) {
+            if (!mode) return;
+            let custom = getCustomModes();
+            custom = custom.filter(m => m.trim().toLowerCase() !== mode.trim().toLowerCase());
+            localStorage.setItem('custom_batch_modes', JSON.stringify(custom));
+        }
+
+        function renderModePillButtons(containerId, inputId, codeSpanId, fullCodeId, activeMode) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const allModes = [...new Set([...defaultModes, ...getCustomModes()])];
+            let html = '<span class="text-[10px] font-bold text-slate-400">خيارات سريعة:</span>';
+            allModes.forEach(m => {
+                const isSelected = activeMode && activeMode.trim().toLowerCase() === m.trim().toLowerCase();
+                const btnClass = isSelected 
+                    ? 'px-2.5 py-1 text-[11px] font-bold bg-amber-500 text-white rounded-lg shadow-sm border border-amber-600 transition-colors'
+                    : 'px-2.5 py-1 text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/40 hover:text-amber-700 border border-slate-200 dark:border-slate-700 transition-colors';
+                html += `<button type="button" onclick="setSwMode('${inputId}', '${m.replace(/'/g, "\\'")}', '${codeSpanId}', '${fullCodeId}', '${containerId}')" class="${btnClass}">${m}</button>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function extractModePreview(mode) {
+            if (!mode || !mode.trim()) return 'Off';
+            const match = mode.match(/\(([^)]+)\)/);
+            if (match && match[1] && match[1].trim()) {
+                return match[1].trim();
+            }
+            if (mode.trim().toLowerCase() === 'online') return 'ON';
+            if (mode.trim().toLowerCase() === 'offline') return 'Off';
+            if (mode.trim().toLowerCase() === 'onsite') return 'ONS';
+            return mode.trim();
+        }
+
+        function updateModeSerialPreview(inputId, codeSpanId, fullCodeId) {
+            const input = document.getElementById(inputId);
+            const val = input ? input.value : '';
+            const code = extractModePreview(val);
+            const span = document.getElementById(codeSpanId);
+            const full = document.getElementById(fullCodeId);
+            if (span) span.innerText = code;
+            if (full) full.innerText = `WTTA-2026-001-PB-${code}-XXXX`;
+        }
+
+        function setSwMode(inputId, modeValue, codeSpanId, fullCodeId, containerId) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.value = modeValue;
+                updateModeSerialPreview(inputId, codeSpanId, fullCodeId);
+                if (containerId) {
+                    renderModePillButtons(containerId, inputId, codeSpanId, fullCodeId, modeValue);
+                }
+            }
+        }
+
+        async function promptAddNewMode(inputId, codeSpanId, fullCodeId, containerId) {
+            const { value: newMode } = await Swal.fire({
+                title: '<div class="text-base font-black uppercase text-emerald-600">إضافة نمط حالة جديد (Add Mode)</div>',
+                html: '<p class="text-xs text-slate-500 mb-3">اكتب مسمى الحالة مع الرمز داخل الأقواس <code>(...)</code> ليظهر بالسيريال:</p>',
+                input: 'text',
+                inputPlaceholder: 'مثال: Onsite (ONS) أو Weekend (WKND) أو VIP (VIP)...',
+                showCancelButton: true,
+                confirmButtonText: 'إضافة وتطبيق <i class="fas fa-plus ml-1"></i>',
+                cancelButtonText: 'إلغاء',
+                customClass: {
+                    popup: 'rounded-[28px]',
+                    confirmButton: 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-xl text-xs uppercase ml-2 shadow-md',
+                    cancelButton: 'bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold py-2.5 px-6 rounded-xl text-xs uppercase'
+                },
+                buttonsStyling: false,
+                inputValidator: (val) => {
+                    if (!val || !val.trim()) return 'يرجى كتابة مسمى الحالة!';
+                }
+            });
+
+            if (newMode && newMode.trim()) {
+                const trimmed = newMode.trim();
+                saveCustomMode(trimmed);
+                setSwMode(inputId, trimmed, codeSpanId, fullCodeId, containerId);
+                showToast(`تمت إضافة نمط (${trimmed}) وتطبيقه بنجاح`, 'success');
+            }
+        }
+
+        async function promptEditCurrentMode(inputId, codeSpanId, fullCodeId, containerId) {
+            const input = document.getElementById(inputId);
+            const currentVal = input ? input.value.trim() : '';
+            if (!currentVal) {
+                showToast('يرجى اختيار أو كتابة حالة أولاً لتعديلها', 'warning');
+                return;
+            }
+
+            const { value: editedMode } = await Swal.fire({
+                title: '<div class="text-base font-black uppercase text-amber-600">تعديل مسمى الحالة (Edit Mode)</div>',
+                html: `<p class="text-xs text-slate-500 mb-3">المسمى الحالي: <b>${currentVal}</b></p>`,
+                input: 'text',
+                inputValue: currentVal,
+                showCancelButton: true,
+                confirmButtonText: 'حفظ التعديل <i class="fas fa-check ml-1"></i>',
+                cancelButtonText: 'إلغاء',
+                customClass: {
+                    popup: 'rounded-[28px]',
+                    confirmButton: 'bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 px-6 rounded-xl text-xs uppercase ml-2 shadow-md',
+                    cancelButton: 'bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold py-2.5 px-6 rounded-xl text-xs uppercase'
+                },
+                buttonsStyling: false,
+                inputValidator: (val) => {
+                    if (!val || !val.trim()) return 'يرجى كتابة المسمى الجديد!';
+                }
+            });
+
+            if (editedMode && editedMode.trim()) {
+                const trimmed = editedMode.trim();
+                removeCustomMode(currentVal);
+                saveCustomMode(trimmed);
+                setSwMode(inputId, trimmed, codeSpanId, fullCodeId, containerId);
+
+                // Update in database in background
+                try {
+                    const apiRes = await fetch('/Admin/RenameWaveMode', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `oldMode=${encodeURIComponent(currentVal)}&newMode=${encodeURIComponent(trimmed)}`
+                    });
+                    const data = await apiRes.json();
+                    if (data.success) {
+                        showToast(`تم تعديل مسمى الحالة من (${currentVal}) إلى (${trimmed}) وتحديث السيريال بنجاح`, 'success');
+                    } else {
+                        showToast(data.message || 'تم تحديث المسمى محلياً', 'info');
+                    }
+                } catch(e) {
+                    showToast(`تم تعديل مسمى الحالة محلياً إلى (${trimmed})`, 'success');
+                }
+            }
+        }
+
+        async function promptDeleteCurrentMode(inputId, codeSpanId, fullCodeId, containerId) {
+            const input = document.getElementById(inputId);
+            const currentVal = input ? input.value.trim() : '';
+            if (!currentVal) {
+                showToast('لا توجد حالة محددة لمسحها', 'warning');
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: '<div class="text-base font-black uppercase text-rose-600">مسح / تفريغ الحالة (Delete / Clear)</div>',
+                html: `هل تريد مسح نمط (<b>${currentVal}</b>)؟`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'مسح وتفريغ <i class="fas fa-trash-alt ml-1"></i>',
+                cancelButtonText: 'إلغاء',
+                customClass: {
+                    popup: 'rounded-[28px]',
+                    confirmButton: 'bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-6 rounded-xl text-xs uppercase ml-2 shadow-md',
+                    cancelButton: 'bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold py-2.5 px-6 rounded-xl text-xs uppercase'
+                },
+                buttonsStyling: false
+            });
+
+            if (result.isConfirmed) {
+                removeCustomMode(currentVal);
+                setSwMode(inputId, 'Offline (Off)', codeSpanId, fullCodeId, containerId);
+                try {
+                    fetch('/Admin/DeleteWaveMode', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `mode=${encodeURIComponent(currentVal)}`
+                    });
+                } catch(e) {}
+                showToast(`تم مسح نمط (${currentVal}) وتفريغ الحقل بنجاح`, 'success');
+            }
+        }
+
+        async function editWave(evt, id, currentName, currentDate, currentEndDate, currentIsOnline, currentMode) {
             if (evt) evt.stopPropagation();
+            const initialMode = currentMode || (currentIsOnline ? 'Online (ON)' : 'Offline (Off)');
+            const initialExtracted = extractModePreview(initialMode);
+
             const { value: formValues } = await Swal.fire({
-                title: 'Edit Batch',
+                title: '<div class="text-lg font-black uppercase text-slate-800 dark:text-slate-100">تعديل الويف (Edit Batch)</div>',
                 html:
-                    '<div class="text-left space-y-4">' +
-                    `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Batch Name</label><input id="edit-sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold" value="${currentName}"></div>` +
-                    `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Batch Type (Mode)</label><select id="edit-sw-isonline" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold"><option value="false" ${!currentIsOnline ? 'selected' : ''}>Offline (Off)</option><option value="true" ${currentIsOnline ? 'selected' : ''}>Online</option></select></div>` +
-                    `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Start Date</label><input id="edit-sw-date" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold" value="${currentDate}"></div>` +
+                    '<div class="text-right space-y-4" dir="rtl">' +
+                    `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">اسم الويف (Batch Name):</label><input id="edit-sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-amber-500 transition-all font-bold text-sm" value="${currentName}"></div>` +
+                    `<div class="space-y-2">` +
+                    `<div class="flex items-center justify-between mb-1">` +
+                    `<label class="block text-xs font-bold text-slate-500 uppercase text-right">حالة السيريال / نوع الويف (Mode):</label>` +
+                    `<div class="flex items-center gap-1">` +
+                    `<button type="button" onclick="promptAddNewMode('edit-sw-mode', 'edit-sw-preview-code', 'edit-sw-preview-full', 'edit-mode-pills')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800" title="إضافة نمط جديد"><i class="fas fa-plus"></i></button>` +
+                    `<button type="button" onclick="promptEditCurrentMode('edit-sw-mode', 'edit-sw-preview-code', 'edit-sw-preview-full', 'edit-mode-pills')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 rounded-lg transition-colors border border-amber-200 dark:border-amber-800" title="تعديل مسمى الحالة"><i class="fas fa-pen"></i></button>` +
+                    `<button type="button" onclick="promptDeleteCurrentMode('edit-sw-mode', 'edit-sw-preview-code', 'edit-sw-preview-full', 'edit-mode-pills')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 rounded-lg transition-colors border border-rose-200 dark:border-rose-800" title="مسح الحالة"><i class="fas fa-trash-alt"></i></button>` +
+                    `</div>` +
+                    `</div>` +
+                    `<input id="edit-sw-mode" oninput="updateModeSerialPreview('edit-sw-mode', 'edit-sw-preview-code', 'edit-sw-preview-full')" class="w-full bg-slate-50 dark:bg-slate-900 border border-amber-300 dark:border-amber-700 p-3.5 rounded-xl outline-none focus:border-amber-500 transition-all font-bold text-sm text-left" dir="ltr" placeholder="مثال: Offline (Off) أو Online (ON)" value="${initialMode}">` +
+                    `<div class="flex flex-wrap items-center gap-1.5 pt-1" id="edit-mode-pills"></div>` +
+                    `</div>` +
+                    `<div class="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-3 text-right">` +
+                    `<div class="text-[11px] font-bold text-amber-800 dark:text-amber-300 flex items-center justify-between">` +
+                    `<span><i class="fas fa-certificate text-amber-500 ml-1"></i> الرمز المستخرج داخل القوسين للسيريال:</span>` +
+                    `<span id="edit-sw-preview-code" class="font-mono bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-100 px-2 py-0.5 rounded font-black text-xs">${initialExtracted}</span>` +
+                    `</div>` +
+                    `<div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 flex items-center justify-between font-mono" dir="ltr">` +
+                    `<span class="text-slate-400">Preview:</span>` +
+                    `<code id="edit-sw-preview-full" class="font-bold text-amber-700 dark:text-amber-400">WTTA-2026-001-PB-${initialExtracted}-XXXX</code>` +
+                    `</div>` +
+                    `</div>` +
+                    `<div class="grid grid-cols-2 gap-3 mt-4 text-right">` +
+                    `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">تاريخ البدء (Start Date):</label><input id="edit-sw-date" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-amber-500 transition-all font-bold text-sm" value="${currentDate}"></div>` +
+                    `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">تاريخ الانتهاء (End Date):</label><input id="edit-sw-enddate" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-amber-500 transition-all font-bold text-sm" value="${currentEndDate}"></div>` +
+                    `</div>` +
                     '</div>',
                 focusConfirm: false,
                 showCancelButton: true,
-                confirmButtonText: 'Save Changes',
-                cancelButtonText: 'Cancel',
+                confirmButtonText: 'حفظ التعديلات <i class="fas fa-save mr-1"></i>',
+                cancelButtonText: 'إلغاء',
                 customClass: {
-                    confirmButton: 'bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-xl font-bold uppercase text-xs tracking-widest ml-2',
-                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-6 py-3'
+                    popup: 'rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900',
+                    confirmButton: 'bg-amber-600 hover:bg-amber-700 text-white px-8 py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider ml-2 shadow-md',
+                    cancelButton: 'bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-400 font-bold uppercase text-xs px-8 py-3.5 rounded-xl border border-slate-200'
                 },
                 buttonsStyling: false,
+                didOpen: () => {
+                    renderModePillButtons('edit-mode-pills', 'edit-sw-mode', 'edit-sw-preview-code', 'edit-sw-preview-full', initialMode);
+                },
                 preConfirm: () => {
                     const name = document.getElementById('edit-sw-name').value;
                     const date = document.getElementById('edit-sw-date').value;
-                    const isOnline = document.getElementById('edit-sw-isonline').value === 'true';
-                    if (!name) {
-                        Swal.showValidationMessage('Batch Name is required');
+                    const endDate = document.getElementById('edit-sw-enddate').value;
+                    const finalMode = document.getElementById('edit-sw-mode').value || 'Offline (Off)';
+                    const isOnline = finalMode.toLowerCase().includes('online');
+                    if (!name || !name.trim()) {
+                        Swal.showValidationMessage('اسم الويف مطلوب');
                         return false;
                     }
-                    return { name: name, startDate: date || null, isOnline: isOnline };
+                    return { name: name.trim(), startDate: date || null, endDate: endDate || null, isOnline: isOnline, mode: finalMode.trim() };
                 }
             });
 
             if (formValues) {
                 try {
-                    showToast('Updating batch...', 'success');
                     const res = await fetch('/Admin/EditWave', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                            'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ id: id, waveName: formValues.name, startDate: formValues.startDate, isOnline: formValues.isOnline })
+                        body: JSON.stringify({ id: id, waveName: formValues.name, startDate: formValues.startDate, endDate: formValues.endDate, isOnline: formValues.isOnline, mode: formValues.mode })
                     });
                     const json = await res.json();
                     if (json.success) {
-                        showToast('Batch updated successfully!', 'success');
-                        setTimeout(() => location.reload(), 1000);
+                        // Dynamically update the row in the table without reloading the page
+                        const tr = $(`tr[data-waveid="${id}"]`);
+                        if (tr.length) {
+                            tr.find('td:nth-child(1) span.font-bold').text(formValues.name);
+                            const isOnline = formValues.isOnline || formValues.mode.toLowerCase().includes('online');
+                            const modeBadge = isOnline 
+                                ? `<span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"><i class="fas fa-globe text-emerald-500 mr-1"></i>${formValues.mode}</span>`
+                                : `<span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"><i class="fas fa-building text-slate-400 mr-1"></i>${formValues.mode}</span>`;
+                            tr.find('td:nth-child(2)').html(modeBadge);
+                            
+                            if (formValues.startDate) {
+                                const d = new Date(formValues.startDate);
+                                const formattedDate = d.toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' });
+                                tr.find('td:nth-child(3) span').text(formattedDate);
+                            }
+                            if (formValues.endDate) {
+                                const d = new Date(formValues.endDate);
+                                const formattedDate = d.toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' });
+                                tr.find('td:nth-child(4) span').text(formattedDate);
+                            }
+                            
+                            const editBtn = tr.find('button[onclick^="editWave"]');
+                            if (editBtn.length) {
+                                editBtn.attr('onclick', `editWave(event, ${id}, '${formValues.name.replace(/'/g, "\\'")}', '${formValues.startDate || ""}', '${formValues.endDate || ""}', ${isOnline}, '${formValues.mode.replace(/'/g, "\\'")}')`);
+                            }
+                        }
+
+                        showToast(json.message || 'تم تحديث بيانات الويف بنجاح', 'success');
                     } else {
-                        showToast(json.message || 'Failed to update batch', 'error');
+                        showToast(json.message || 'تعذر تحديث بيانات الويف', 'error');
                     }
                 } catch (e) {
-                    showToast('An error occurred during update.', 'error');
+                    console.error(e);
+                    showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
                 }
             }
         }
 
         async function cloneWave(wid, wname) {
-            event.stopPropagation(); // prevent row double click
+            event.stopPropagation();
             const { value: formValues } = await Swal.fire({
                 title: 'Clone Batch',
                 html:
@@ -235,6 +500,7 @@
                     }
                 },
                 customClass: {
+                    popup: 'rounded-[32px]',
                     confirmButton: 'bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
                     cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
                 },
@@ -242,19 +508,21 @@
             });
 
             if (formValues && formValues.name) {
-                Swal.fire({ title: 'Cloning Batch...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-
-                const res = await fetch('/Admin/CloneWave', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, 
-                    body: `waveId=${wid}&newWaveName=${encodeURIComponent(formValues.name)}&newStartDate=${formValues.date || ''}`
-                });
-                const data = await res.json();
-                if (data.success) {
-                    Swal.fire({ icon: 'success', title: 'Success', text: 'Batch cloned successfully.', timer: 1500, showConfirmButton: false });
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    Swal.fire('Error', data.message || 'Could not clone batch', 'error');
+                try {
+                    const res = await fetch('/Admin/CloneWave', { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, 
+                        body: `waveId=${wid}&newWaveName=${encodeURIComponent(formValues.name)}&newStartDate=${formValues.date || ''}`
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('تم استنساخ الويف بنجاح', 'success');
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        showToast(data.message || 'تعذر استنساخ الويف', 'error');
+                    }
+                } catch(e) {
+                    showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
                 }
             }
         }
@@ -268,6 +536,7 @@
                 confirmButtonText: 'Yes, delete it!',
                 cancelButtonText: 'Cancel',
                 customClass: {
+                    popup: 'rounded-[32px]',
                     confirmButton: 'bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
                     cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
                 },
@@ -276,38 +545,29 @@
             });
 
             if (result.isConfirmed) {
-                // إظهار حالة التحميل
-                Swal.fire({
-                    title: 'Deleting...',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false,
-                    showConfirmButton: false
-                });
-
                 try {
                     const response = await fetch(`/Admin/DeleteWave?waveid=${wid}`, {
-                        method: 'DELETE', // تأكد أن الـ Action يقبل HttpDelete
+                        method: 'DELETE',
                         headers: {
-                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() // لو مفعل الـ Anti-Forgery
+                            'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
                         }
                     });
 
                     const data = await response.json();
 
                     if (data.success) {
-                        await Swal.fire({
-                            icon: 'success',
-                            title: 'Deleted!',
-                            text: data.message || 'The wave has been deleted.',
-                            timer: 1500,
-                            showConfirmButton: false
-                        });
-                        location.reload(); // إعادة تحميل الصفحة لتحديث الجدول
+                        const tr = $(`tr[data-waveid="${wid}"]`);
+                        if ($.fn.DataTable && $.fn.DataTable.isDataTable('#wavesTable')) {
+                            $('#wavesTable').DataTable().row(tr).remove().draw(false);
+                        } else {
+                            tr.fadeOut(300, function() { $(this).remove(); });
+                        }
+                        showToast(data.message || 'تم حذف الويف بنجاح', 'success');
                     } else {
-                        Swal.fire('Error!', data.message || 'Something went wrong.', 'error');
+                        showToast(data.message || 'فشل حذف الويف', 'error');
                     }
                 } catch (error) {
-                    Swal.fire('Error!', 'Failed to connect to the server.', 'error');
+                    showToast('فشل الاتصال بالسيرفر', 'error');
                 }
             }
         }
@@ -575,70 +835,97 @@
                     const result = await response.json();
 
                     if (result.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Enrolled Successfully',
-                            text: result.message
-                        });
+                        showToast(result.message || 'تم استيراد وتسجيل الطلاب بنجاح', 'success');
                     } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Enrollment Failed',
-                            text: result.message
-                        });
+                        showToast(result.message || 'فشل استيراد الطلاب من الملف', 'error');
                     }
                 } catch (error) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Upload Error',
-                        text: 'Failed to communicate with the enrollment server.'
-                    });
+                    showToast('فشل الاتصال بسيرفر التسجيل والاستيراد', 'error');
                 }
             }
         }
 
         $(function () {
             $('#createWaveButton').on('click', async function () {
+                const initialMode = 'Offline (Off)';
+                const initialExtracted = 'Off';
                 const { value: formValues } = await Swal.fire({
-                    title: 'Create New Batch',
+                    title: '<div class="text-lg font-black uppercase text-slate-800 dark:text-slate-100">إنشاء ويف جديد (Create New Batch)</div>',
                     html:
-                        '<div class="text-left space-y-4">' +
-                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Batch Name</label><input id="sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold"></div>' +
-                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Batch Type (Mode)</label><select id="sw-isonline" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold"><option value="false">Offline (Off)</option><option value="true">Online</option></select></div>' +
-                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2">Start Date</label><input id="sw-date" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl outline-none focus:border-brand-500 transition-all font-bold"></div>' +
+                        '<div class="text-right space-y-4" dir="rtl">' +
+                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">اسم الويف (Batch Name):</label><input id="sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm" placeholder="مثال: Wave 12"></div>' +
+                        '<div class="space-y-2">' +
+                        '<div class="flex items-center justify-between mb-1">' +
+                        '<label class="block text-xs font-bold text-slate-500 uppercase text-right">حالة السيريال / نوع الويف (Mode):</label>' +
+                        '<div class="flex items-center gap-1">' +
+                        '<button type="button" onclick="promptAddNewMode(\'sw-mode\', \'sw-preview-code\', \'sw-preview-full\', \'create-mode-pills\')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800" title="إضافة نمط جديد"><i class="fas fa-plus"></i></button>' +
+                        '<button type="button" onclick="promptEditCurrentMode(\'sw-mode\', \'sw-preview-code\', \'sw-preview-full\', \'create-mode-pills\')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 rounded-lg transition-colors border border-amber-200 dark:border-amber-800" title="تعديل مسمى الحالة"><i class="fas fa-pen"></i></button>' +
+                        '<button type="button" onclick="promptDeleteCurrentMode(\'sw-mode\', \'sw-preview-code\', \'sw-preview-full\', \'create-mode-pills\')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 rounded-lg transition-colors border border-rose-200 dark:border-rose-800" title="مسح الحالة"><i class="fas fa-trash-alt"></i></button>' +
+                        '</div>' +
+                        '</div>' +
+                        '<input id="sw-mode" oninput="updateModeSerialPreview(\'sw-mode\', \'sw-preview-code\', \'sw-preview-full\')" class="w-full bg-slate-50 dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm text-left" dir="ltr" placeholder="مثال: Offline (Off) أو Online (ON)" value="Offline (Off)">' +
+                        '<div class="flex flex-wrap items-center gap-1.5 pt-1" id="create-mode-pills"></div>' +
+                        '</div>' +
+                        '<div class="bg-brand-50/80 dark:bg-brand-950/30 border border-brand-200 dark:border-brand-800/50 rounded-2xl p-3 text-right">' +
+                        '<div class="text-[11px] font-bold text-brand-800 dark:text-brand-300 flex items-center justify-between">' +
+                        '<span><i class="fas fa-certificate text-brand-500 ml-1"></i> الرمز المستخرج داخل القوسين للسيريال:</span>' +
+                        '<span id="sw-preview-code" class="font-mono bg-brand-200 dark:bg-brand-900/60 text-brand-900 dark:text-brand-100 px-2 py-0.5 rounded font-black text-xs">Off</span>' +
+                        '</div>' +
+                        '<div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 flex items-center justify-between font-mono" dir="ltr">' +
+                        '<span class="text-slate-400">Preview:</span>' +
+                        '<code id="sw-preview-full" class="font-bold text-brand-700 dark:text-brand-400">WTTA-2026-001-PB-Off-XXXX</code>' +
+                        '</div>' +
+                        '</div>' +
+                        '<div class="grid grid-cols-2 gap-3 mt-4 text-right">' +
+                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">تاريخ البدء (Start Date):</label><input id="sw-date" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm"></div>' +
+                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">تاريخ الانتهاء (End Date):</label><input id="sw-enddate" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm"></div>' +
+                        '</div>' +
                         '</div>',
                     focusConfirm: false,
                     showCancelButton: true,
-                    confirmButtonText: 'Create Batch',
-                    cancelButtonText: 'Cancel',
-                    preConfirm: () => {
-                        return {
-                            name: document.getElementById('sw-name').value,
-                            date: document.getElementById('sw-date').value,
-                            isOnline: document.getElementById('sw-isonline').value === 'true'
-                        }
-                    },
+                    confirmButtonText: 'إنشاء الويف <i class="fas fa-plus-circle mr-1"></i>',
+                    cancelButtonText: 'إلغاء',
                     customClass: {
-                        confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
-                        cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                        popup: 'rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900',
+                        confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-8 py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider ml-2 shadow-md',
+                        cancelButton: 'bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-400 font-bold uppercase text-xs px-8 py-3.5 rounded-xl border border-slate-200'
                     },
-                    buttonsStyling: false
+                    buttonsStyling: false,
+                    didOpen: () => {
+                        renderModePillButtons('create-mode-pills', 'sw-mode', 'sw-preview-code', 'sw-preview-full', initialMode);
+                    },
+                    preConfirm: () => {
+                        const name = document.getElementById('sw-name').value;
+                        const date = document.getElementById('sw-date').value;
+                        const endDate = document.getElementById('sw-enddate').value;
+                        const finalMode = document.getElementById('sw-mode').value || 'Offline (Off)';
+                        const isOnline = finalMode.toLowerCase().includes('online');
+                        if (!name || !name.trim()) {
+                            Swal.showValidationMessage('اسم الويف مطلوب');
+                            return false;
+                        }
+                        return { name: name.trim(), date: date || null, endDate: endDate || null, isOnline: isOnline, mode: finalMode.trim() };
+                    }
                 });
 
                 if (formValues && formValues.name) {
-                    const res = await fetch('/Admin/CreateWave', { 
-                        method: 'POST', 
-                        headers: { 'Content-Type': 'application/json' }, 
-                        body: JSON.stringify({ WaveName: formValues.name, StartDate: formValues.date || null, IsOnline: formValues.isOnline }) 
-                    });
-                    if(res.ok) {
-                        Swal.fire({ icon: 'success', title: 'Success', text: 'Batch created successfully.', timer: 1500, showConfirmButton: false });
-                        setTimeout(() => location.reload(), 1500);
+                    try {
+                        const res = await fetch('/Admin/CreateWave', { 
+                            method: 'POST', 
+                            headers: { 'Content-Type': 'application/json' }, 
+                            body: JSON.stringify({ WaveName: formValues.name, StartDate: formValues.date || null, EndDate: formValues.endDate || null, IsOnline: formValues.isOnline, Mode: formValues.mode }) 
+                        });
+                        if(res.ok) {
+                            showToast('تم إنشاء الويف بنجاح', 'success');
+                            setTimeout(() => location.reload(), 1000);
+                        } else {
+                            showToast('تعذر إنشاء الويف', 'error');
+                        }
+                    } catch(e) {
+                        showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
                     }
                 }
             });
-
-            // No-op for old event handlers
 
             // Double-click on row navigates to Wave details
             $('#wavesTable tbody').on('dblclick', 'tr', function() {
@@ -727,21 +1014,28 @@
                                     showCancelButton: true,
                                     confirmButtonText: 'Yes, Remove',
                                     customClass: {
+                                        popup: 'rounded-[28px]',
                                         confirmButton: 'bg-rose-600 text-white px-6 py-2 rounded-lg font-bold mr-2',
                                         cancelButton: 'bg-slate-200 text-slate-700 px-6 py-2 rounded-lg font-bold'
                                     },
                                     buttonsStyling: false
                                 }).then(async (r) => {
                                     if(r.isConfirmed) {
-                                        const res = await fetch('/Admin/RemoveUserFromWave', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                                            body: `waveId=${waveId}&userId=${uid}`
-                                        });
-                                        const data = await res.json();
-                                        if(data.success) {
-                                            table.row($(`button[data-userid="${uid}"]`).parents('tr')).remove().draw();
-                                            Swal.fire({ icon: 'success', title: 'Removed', timer: 1000, showConfirmButton: false });
+                                        try {
+                                            const res = await fetch('/Admin/RemoveUserFromWave', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                                body: `waveId=${waveId}&userId=${uid}`
+                                            });
+                                            const data = await res.json();
+                                            if(data.success) {
+                                                table.row($(`button[data-userid="${uid}"]`).parents('tr')).remove().draw();
+                                                showToast('تمت إزالة المستخدم بنجاح', 'success');
+                                            } else {
+                                                showToast(data.message || 'تعذر إزالة المستخدم', 'error');
+                                            }
+                                        } catch(e) {
+                                            showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
                                         }
                                     }
                                 });
@@ -749,7 +1043,7 @@
                         }
                     });
                 } catch (err) {
-                    Swal.fire('Error', 'Failed to load wave personnel', 'error');
+                    showToast('فشل تحميل قائمة الطلاب', 'error');
                 }
             }
         });

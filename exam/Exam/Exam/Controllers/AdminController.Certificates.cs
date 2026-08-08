@@ -36,7 +36,8 @@ namespace Exam.Controllers
             ViewBag.SelectedMonth = month;
             ViewBag.SelectedYear = year;
 
-            var waves = (await _examService.GetAllWavesAsync()).ToList();
+            var allWaves = (await _examService.GetAllWavesAsync()).ToList();
+            var waves = allWaves;
 
             // Apply year/month filters on Wave StartDate if provided
             if (year.HasValue && year.Value > 0)
@@ -51,6 +52,7 @@ namespace Exam.Controllers
             ViewBag.Waves = waves;
 
             using var conn = new SqlConnection(_connectionString);
+            await conn.ExecuteAsync("DELETE FROM dbo.UserWaveCertificates WHERE Score IS NULL AND EmailSent = 0 AND CreatedAt >= CAST(GETDATE() AS DATE)");
             int selectedWaveId = waveId ?? 0;
             if (selectedWaveId == 0)
             {
@@ -144,8 +146,45 @@ namespace Exam.Controllers
                         results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
                 }
 
+                var resultList = results.ToList();
+                foreach (var row in resultList)
+                {
+                    if (!string.IsNullOrWhiteSpace(row.CertificateCode) && row.CertificateCode.Trim() != "/")
+                    {
+                        string wName = row.WaveName ?? "";
+                        DateTime wDate = row.ActualStartTime ?? DateTime.Now;
+                        string yearStr = wDate.Year.ToString();
+                        string waveNumStr = "001";
+                        var digits = new string(wName.Where(char.IsDigit).ToArray());
+                        if (!string.IsNullOrEmpty(digits))
+                        {
+                            waveNumStr = digits.PadLeft(3, '0');
+                        }
+                        else if (selectedWaveId > 0)
+                        {
+                            waveNumStr = selectedWaveId.ToString().PadLeft(3, '0');
+                        }
+
+                        var matchingWave = waves.FirstOrDefault(w => w.WaveName == row.WaveName || w.Id == selectedWaveId);
+                        string modeStr = matchingWave?.Mode;
+                        bool isOnline = matchingWave?.IsOnline ?? (wName.ToLower().Contains("online") || wName.Contains("أونلاين") || wName.Contains("اونلاين"));
+                        string modeCode = ExtractModeForSerial(modeStr, isOnline);
+                        string uCode = string.IsNullOrWhiteSpace(row.UserCode) ? "0000" : row.UserCode.Trim();
+
+                        row.CertificateCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{uCode}";
+                        row.Status = "Completed";
+                        row.IsPassed = true;
+                    }
+                    else
+                    {
+                        row.CertificateCode = null;
+                        row.Status = "Not Started";
+                        row.IsPassed = false;
+                    }
+                }
+
                 ViewBag.ExamTitle = selectedWaveId == -1 ? "All Waves" : (waves.FirstOrDefault(w => w.Id == selectedWaveId)?.WaveName ?? "No Wave");
-                return View(results.ToList());
+                return View(resultList);
             }
 
             return View(Enumerable.Empty<Exam.DTOs.ExamResultRowDto>());
@@ -501,6 +540,33 @@ namespace Exam.Controllers
                             }
                             resolvedBranchId = dbBranchId;
                         }
+                        else
+                        {
+                            // Auto-lookup branch from HR Employees
+                            var hrLocation = await conn.QueryFirstOrDefaultAsync<string>(@"
+                                SELECT TOP 1 E.LocationCode 
+                                FROM [HR].dbo.Employees E 
+                                WHERE (E.[No.] = @Code OR (TRY_CAST(E.[No.] as bigint) = TRY_CAST(@Code as bigint) AND @Code IS NOT NULL))
+                                   OR REPLACE(E.SearchName, ' ', '') = REPLACE(@Name, ' ', '')",
+                                new { Code = rawUserCode, Name = displayName });
+
+                            if (!string.IsNullOrWhiteSpace(hrLocation))
+                            {
+                                var dbBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
+                                    "SELECT Id FROM dbo.Branches WHERE BranchName = @BranchName",
+                                    new { BranchName = hrLocation.Trim() });
+
+                                if (dbBranchId == null)
+                                {
+                                    dbBranchId = await conn.QueryFirstOrDefaultAsync<int>(@"
+                                        INSERT INTO dbo.Branches (BranchName, BranchCode, IsActive)
+                                        VALUES (@BranchName, @BranchName, 1);
+                                        SELECT CAST(SCOPE_IDENTITY() as int);",
+                                        new { BranchName = hrLocation.Trim() });
+                                }
+                                resolvedBranchId = dbBranchId;
+                            }
+                        }
 
                         var newUser = new ApplicationUser
                         {
@@ -570,6 +636,34 @@ namespace Exam.Controllers
                             }
                             if (user.BranchId != dbBranchId)
                             {
+                                user.BranchId = dbBranchId;
+                                needsUpdate = true;
+                            }
+                        }
+                        else if (!user.BranchId.HasValue)
+                        {
+                            // Auto-lookup branch from HR Employees if currently null
+                            var hrLocation = await conn.QueryFirstOrDefaultAsync<string>(@"
+                                SELECT TOP 1 E.LocationCode 
+                                FROM [HR].dbo.Employees E 
+                                WHERE (E.[No.] = @Code OR (TRY_CAST(E.[No.] as bigint) = TRY_CAST(@Code as bigint) AND @Code IS NOT NULL))
+                                   OR REPLACE(E.SearchName, ' ', '') = REPLACE(@Name, ' ', '')",
+                                new { Code = user.UserCode, Name = user.FullName });
+
+                            if (!string.IsNullOrWhiteSpace(hrLocation))
+                            {
+                                var dbBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
+                                    "SELECT Id FROM dbo.Branches WHERE BranchName = @BranchName",
+                                    new { BranchName = hrLocation.Trim() });
+
+                                if (dbBranchId == null)
+                                {
+                                    dbBranchId = await conn.QueryFirstOrDefaultAsync<int>(@"
+                                        INSERT INTO dbo.Branches (BranchName, BranchCode, IsActive)
+                                        VALUES (@BranchName, @BranchName, 1);
+                                        SELECT CAST(SCOPE_IDENTITY() as int);",
+                                        new { BranchName = hrLocation.Trim() });
+                                }
                                 user.BranchId = dbBranchId;
                                 needsUpdate = true;
                             }
@@ -645,20 +739,52 @@ namespace Exam.Controllers
                                 "SELECT Id FROM dbo.UserWaveCertificates WHERE UserId = @UserId AND WaveId = @WaveId",
                                 new { UserId = user.Id, WaveId = resolvedWaveId });
 
+                            string finalCertCode = rawCertCode;
+                            if (string.IsNullOrWhiteSpace(finalCertCode))
+                            {
+                                var waveInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                                    SELECT WaveName, StartDate, ISNULL(IsOnline, 0) AS IsOnline, Mode 
+                                    FROM TrainingWaves 
+                                    WHERE Id = @WaveId", new { WaveId = resolvedWaveId });
+
+                                if (waveInfo != null)
+                                {
+                                    string wName = (string)waveInfo.WaveName ?? "";
+                                    DateTime wDate = waveInfo.StartDate ?? DateTime.Now;
+                                    string yearStr = wDate.Year.ToString();
+                                    string waveNumStr = "001";
+                                    var digits = new string(wName.Where(char.IsDigit).ToArray());
+                                    if (!string.IsNullOrEmpty(digits))
+                                    {
+                                        waveNumStr = digits.PadLeft(3, '0');
+                                    }
+                                    else
+                                    {
+                                        waveNumStr = resolvedWaveId.ToString().PadLeft(3, '0');
+                                    }
+
+                                    bool isWOnline = waveInfo.IsOnline != null && Convert.ToBoolean(waveInfo.IsOnline);
+                                    string wModeProp = waveInfo.Mode != null ? (string)waveInfo.Mode : null;
+                                    string mCode = ExtractModeForSerial(wModeProp, isWOnline || wName.ToLower().Contains("online") || wName.Contains("أونلاين"));
+                                    string uCode = string.IsNullOrWhiteSpace(user.UserCode) ? "0000" : user.UserCode.Trim();
+                                    finalCertCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{mCode}-{uCode}";
+                                }
+                            }
+
                             if (certExists != null)
                             {
                                 await conn.ExecuteAsync(@"
                                     UPDATE dbo.UserWaveCertificates 
                                     SET CertificateCode = @CertCode, Score = @Score
                                     WHERE UserId = @UserId AND WaveId = @WaveId",
-                                    new { CertCode = rawCertCode, Score = parsedScore, UserId = user.Id, WaveId = resolvedWaveId });
+                                    new { CertCode = finalCertCode, Score = parsedScore, UserId = user.Id, WaveId = resolvedWaveId });
                             }
                             else
                             {
                                 await conn.ExecuteAsync(@"
                                     INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, Score, CreatedAt)
                                     VALUES (@UserId, @WaveId, @CertCode, @Score, @CreatedAt)",
-                                    new { UserId = user.Id, WaveId = resolvedWaveId, CertCode = rawCertCode, Score = parsedScore, CreatedAt = DateTime.Now });
+                                    new { UserId = user.Id, WaveId = resolvedWaveId, CertCode = finalCertCode, Score = parsedScore, CreatedAt = DateTime.Now });
                             }
                         }
 
@@ -700,7 +826,7 @@ namespace Exam.Controllers
                 await conn.OpenAsync();
 
                 var waveInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                    SELECT Id, WaveName, StartDate, ISNULL(IsOnline, 0) AS IsOnline
+                    SELECT Id, WaveName, StartDate, ISNULL(IsOnline, 0) AS IsOnline, Mode
                     FROM TrainingWaves 
                     WHERE Id = @WaveId", new { WaveId = waveId.Value });
 
@@ -725,7 +851,8 @@ namespace Exam.Controllers
                 }
 
                 bool isWaveOnline = waveInfo.IsOnline != null && Convert.ToBoolean(waveInfo.IsOnline);
-                string modeCode = (isWaveOnline || waveName.ToLower().Contains("online") || waveName.Contains("أونلاين") || waveName.Contains("اونلاين") || waveNumStr == "009") ? "Online" : "Off";
+                string waveModeProp = waveInfo.Mode != null ? (string)waveInfo.Mode : null;
+                string modeCode = ExtractModeForSerial(waveModeProp, isWaveOnline || waveName.ToLower().Contains("online") || waveName.Contains("أونلاين") || waveName.Contains("اونلاين"));
 
                 string waveUploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "certificates", waveId.Value.ToString());
                 if (!Directory.Exists(waveUploadDir))
@@ -907,7 +1034,7 @@ namespace Exam.Controllers
                 await conn.OpenAsync();
 
                 var user = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                    SELECT U.Id, ISNULL(U.FullName, U.UserName) as StudentName, U.Email, U.UserCode, UWC.CertificateCode, W.WaveName, W.StartDate, ISNULL(W.IsOnline, 0) AS IsOnline
+                    SELECT U.Id, ISNULL(U.FullName, U.UserName) as StudentName, U.Email, U.UserCode, UWC.CertificateCode, W.WaveName, W.StartDate, ISNULL(W.IsOnline, 0) AS IsOnline, W.Mode
                     FROM AspNetUsers U
                     LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = @WaveId
                     JOIN TrainingWaves W ON W.Id = @WaveId
@@ -944,7 +1071,8 @@ namespace Exam.Controllers
                     DateTime waveDate = user.StartDate ?? DateTime.Now;
                     string yearStr = waveDate.Year.ToString();
                     bool isWaveOnline = user.IsOnline != null && Convert.ToBoolean(user.IsOnline);
-                    string modeCode = (isWaveOnline || waveName.ToLower().Contains("online") || waveName.Contains("أونلاين") || waveName.Contains("اونلاين") || waveNumStr == "009") ? "Online" : "Off";
+                    string userModeProp = user.Mode != null ? (string)user.Mode : null;
+                    string modeCode = ExtractModeForSerial(userModeProp, isWaveOnline || waveName.ToLower().Contains("online") || waveName.Contains("أونلاين") || waveName.Contains("اونلاين"));
 
                     certCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{userCodeStr}";
                 }
@@ -1058,6 +1186,152 @@ namespace Exam.Controllers
             {
                 return Json(new { success = false, message = "حدث خطأ أثناء التحويل: " + ex.Message });
             }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateCertificateCode(string userId, int waveId, string certificateCode)
+        {
+            if (string.IsNullOrEmpty(userId) || waveId <= 0)
+            {
+                return Json(new { success = false, message = "بيانات المستخدم أو الويف غير صحيحة." });
+            }
+
+            try
+            {
+                var cleanCode = (certificateCode ?? "").Trim();
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                var certExists = await conn.QueryFirstOrDefaultAsync<int?>(
+                    "SELECT Id FROM dbo.UserWaveCertificates WHERE UserId = @UserId AND WaveId = @WaveId",
+                    new { UserId = userId, WaveId = waveId });
+
+                if (certExists != null)
+                {
+                    await conn.ExecuteAsync(@"
+                        UPDATE dbo.UserWaveCertificates 
+                        SET CertificateCode = @CertCode
+                        WHERE UserId = @UserId AND WaveId = @WaveId",
+                        new { CertCode = cleanCode, UserId = userId, WaveId = waveId });
+                }
+                else
+                {
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, EmailSent, Score, CreatedAt)
+                        VALUES (@UserId, @WaveId, @CertCode, 0, NULL, GETDATE())",
+                        new { UserId = userId, WaveId = waveId, CertCode = cleanCode });
+                }
+
+                return Json(new { success = true, message = "تم تعديل وترحيل كود الشهادة (Serial Code) بنجاح.", newCode = cleanCode });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ أثناء تعديل كود الشهادة: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateWaveSerialFormat(int waveId, string mode, bool updateExistingCertificates = true)
+        {
+            if (waveId <= 0 || string.IsNullOrWhiteSpace(mode))
+            {
+                return Json(new { success = false, message = "بيانات الـ Wave أو الـ Mode غير صالحة." });
+            }
+
+            try
+            {
+                var cleanMode = mode.Trim();
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.TrainingWaves') AND name = 'Mode')
+                    BEGIN
+                        ALTER TABLE dbo.TrainingWaves ADD Mode NVARCHAR(100) NULL;
+                    END");
+
+                bool isOnline = cleanMode.Equals("Online", StringComparison.OrdinalIgnoreCase);
+                await conn.ExecuteAsync(@"
+                    UPDATE dbo.TrainingWaves
+                    SET Mode = @Mode, IsOnline = @IsOnline
+                    WHERE Id = @WaveId",
+                    new { Mode = cleanMode, IsOnline = isOnline ? 1 : 0, WaveId = waveId });
+
+                int updatedCount = 0;
+                if (updateExistingCertificates)
+                {
+                    var waveInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                        SELECT WaveName, StartDate FROM dbo.TrainingWaves WHERE Id = @WaveId", new { WaveId = waveId });
+
+                    if (waveInfo != null)
+                    {
+                        string waveName = (string)waveInfo.WaveName ?? "";
+                        DateTime waveDate = waveInfo.StartDate ?? DateTime.Now;
+                        string yearStr = waveDate.Year.ToString();
+
+                        string waveNumStr = "001";
+                        var digits = new string(waveName.Where(char.IsDigit).ToArray());
+                        if (!string.IsNullOrEmpty(digits))
+                        {
+                            waveNumStr = digits.PadLeft(3, '0');
+                        }
+                        else
+                        {
+                            waveNumStr = waveId.ToString().PadLeft(3, '0');
+                        }
+
+                        var certUsers = await conn.QueryAsync<dynamic>(@"
+                            SELECT UWC.UserId, U.UserCode
+                            FROM dbo.UserWaveCertificates UWC
+                            INNER JOIN dbo.AspNetUsers U ON UWC.UserId = U.Id
+                            WHERE UWC.WaveId = @WaveId", new { WaveId = waveId });
+
+                        string serialMode = ExtractModeForSerial(cleanMode, false);
+                        foreach (var u in certUsers)
+                        {
+                            string uid = (string)u.UserId;
+                            string userCodeStr = (string)u.UserCode ?? "0000";
+                            string newCertCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{serialMode}-{userCodeStr}";
+
+                            await conn.ExecuteAsync(@"
+                                UPDATE dbo.UserWaveCertificates
+                                SET CertificateCode = @CertCode
+                                WHERE UserId = @UserId AND WaveId = @WaveId",
+                                new { CertCode = newCertCode, UserId = uid, WaveId = waveId });
+                            updatedCount++;
+                        }
+                    }
+                }
+
+                return Json(new { success = true, message = $"تم تحديث نمط سيريال الويف إلى ({cleanMode}) وتطبيق التعديل على {updatedCount} شهادة بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ أثناء تحديث سيريال الويف: " + ex.Message });
+            }
+        }
+
+        private static string ExtractModeForSerial(string? mode, bool isOnlineFallback = false)
+        {
+            if (string.IsNullOrWhiteSpace(mode))
+            {
+                return isOnlineFallback ? "ON" : "Off";
+            }
+
+            mode = mode.Trim();
+            var match = System.Text.RegularExpressions.Regex.Match(mode, @"\(([^)]+)\)");
+            if (match.Success && !string.IsNullOrWhiteSpace(match.Groups[1].Value))
+            {
+                return match.Groups[1].Value.Trim();
+            }
+
+            if (mode.Equals("Online", StringComparison.OrdinalIgnoreCase)) return "ON";
+            if (mode.Equals("Offline", StringComparison.OrdinalIgnoreCase)) return "Off";
+            if (mode.Equals("Onsite", StringComparison.OrdinalIgnoreCase)) return "ONS";
+            if (mode.Equals("Hybrid", StringComparison.OrdinalIgnoreCase)) return "HYB";
+            if (mode.Equals("VIP", StringComparison.OrdinalIgnoreCase)) return "VIP";
+
+            return mode;
         }
     }
 }

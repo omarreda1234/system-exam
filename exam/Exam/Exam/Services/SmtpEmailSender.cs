@@ -46,12 +46,23 @@ namespace Exam.Services
 
         public async Task SendEmailAsync(string to, string subject, string htmlMessage)
         {
-            await CheckLimitAndLogAsync(to);
+            if (string.IsNullOrWhiteSpace(to))
+                throw new Exception("عنوان البريد الإلكتروني للمستلم فارغ.");
+
+            var cleanTo = to.Trim().Replace("\r", "").Replace("\n", "");
+            var cleanSubject = (subject ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+
+            await CheckLimitAndLogAsync(cleanTo);
 
             var email = new MimeMessage();
-            email.From.Add(new MailboxAddress("Eltarshoubi Academy", _settings.From));
-            email.To.Add(MailboxAddress.Parse(to));
-            email.Subject = subject;
+            email.From.Add(new MailboxAddress("Eltarshoubi Academy", _settings.From.Trim()));
+            
+            if (!MailboxAddress.TryParse(cleanTo, out var targetAddress))
+            {
+                throw new Exception($"عنوان البريد الإلكتروني غير صالـح: '{cleanTo}'");
+            }
+            email.To.Add(targetAddress);
+            email.Subject = cleanSubject;
 
             var builder = new BodyBuilder { HtmlBody = htmlMessage };
             email.Body = builder.ToMessageBody();
@@ -59,8 +70,8 @@ namespace Exam.Services
             using var client = new SmtpClient();
             try
             {
-                await client.ConnectAsync(_settings.SmtpServer, _settings.Port, SecureSocketOptions.StartTls);
-                await client.AuthenticateAsync(_settings.Username, _settings.Password);
+                await client.ConnectAsync(_settings.SmtpServer.Trim(), _settings.Port, SecureSocketOptions.StartTls);
+                await client.AuthenticateAsync(_settings.Username.Trim(), _settings.Password.Trim());
                 await client.SendAsync(email);
                 await client.DisconnectAsync(true);
             }
@@ -73,25 +84,37 @@ namespace Exam.Services
 
         public async Task SendEmailWithAttachmentAsync(string to, string subject, string htmlMessage, byte[] attachmentBytes, string attachmentName)
         {
-            await CheckLimitAndLogAsync(to);
+            if (string.IsNullOrWhiteSpace(to))
+                throw new Exception("عنوان البريد الإلكتروني للمستلم فارغ.");
+
+            var cleanTo = to.Trim().Replace("\r", "").Replace("\n", "");
+            var cleanSubject = (subject ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+            var cleanAttachmentName = (attachmentName ?? "Attachment.pdf").Replace("\r", "").Replace("\n", "").Trim();
+
+            await CheckLimitAndLogAsync(cleanTo);
 
             var email = new MimeMessage();
-            email.From.Add(new MailboxAddress("Eltarshoubi Academy", _settings.From));
-            email.To.Add(MailboxAddress.Parse(to));
-            email.Subject = subject;
+            email.From.Add(new MailboxAddress("Eltarshoubi Academy", _settings.From.Trim()));
+
+            if (!MailboxAddress.TryParse(cleanTo, out var targetAddress))
+            {
+                throw new Exception($"عنوان البريد الإلكتروني غير صالـح: '{cleanTo}'");
+            }
+            email.To.Add(targetAddress);
+            email.Subject = cleanSubject;
 
             var builder = new BodyBuilder { HtmlBody = htmlMessage };
             if (attachmentBytes != null && attachmentBytes.Length > 0)
             {
-                builder.Attachments.Add(attachmentName, attachmentBytes, ContentType.Parse("application/pdf"));
+                builder.Attachments.Add(cleanAttachmentName, attachmentBytes, ContentType.Parse("application/pdf"));
             }
             email.Body = builder.ToMessageBody();
 
             using var client = new SmtpClient();
             try
             {
-                await client.ConnectAsync(_settings.SmtpServer, _settings.Port, SecureSocketOptions.StartTls);
-                await client.AuthenticateAsync(_settings.Username, _settings.Password);
+                await client.ConnectAsync(_settings.SmtpServer.Trim(), _settings.Port, SecureSocketOptions.StartTls);
+                await client.AuthenticateAsync(_settings.Username.Trim(), _settings.Password.Trim());
                 await client.SendAsync(email);
                 await client.DisconnectAsync(true);
             }

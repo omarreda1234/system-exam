@@ -34,49 +34,51 @@
     </div>
 
     <!-- Filter Bar Row -->
-    <div class="flex flex-wrap items-center gap-4">
-        <div class="space-y-2">
-            <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Year</label>
-            <select id="yearFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold w-[110px] transition-colors focus:border-brand-500 outline-none">
-                <option value="0">Year</option>
-                @for (int y = DateTime.Now.Year; y >= 2024; y--)
-                {
-                    <option value="@y" selected="@(ViewBag.SelectedYear == y ? "selected" : null)">@y</option>
-                }
-            </select>
-        </div>
-
-        <div class="space-y-2">
-            <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Selected Wave</label>
-            <select id="examFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[280px] transition-colors focus:border-brand-500 outline-none">
-                <option value="-1" selected="@(-1 == selectedWaveId ? "selected" : null)">ALL WAVES</option>
-                <optgroup label="TRAINING BATCHES">
-                    @foreach (var w in waves)
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-4">
+            <div class="space-y-2">
+                <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Year</label>
+                <select id="yearFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold w-[110px] transition-colors focus:border-brand-500 outline-none">
+                    <option value="0">Year</option>
+                    @for (int y = DateTime.Now.Year; y >= 2024; y--)
                     {
-                        <option value="@w.Id" selected="@(w.Id == selectedWaveId ? "selected" : null)">
-                            @w.WaveName.ToUpper() @(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")
-                        </option>
+                        <option value="@y" selected="@(ViewBag.SelectedYear == y ? "selected" : null)">@y</option>
                     }
-                </optgroup>
-            </select>
-        </div>
+                </select>
+            </div>
 
-        <div class="space-y-2">
-            <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Status Filter (تصفية بالحالة)</label>
-            <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[210px] transition-colors focus:border-brand-500 outline-none">
-                <option value="all">All Statuses (الكل)</option>
-                <option value="certified">Certified (تم إصدار الشهادة)</option>
-                <option value="pending">Pending (لم تصدر شهادة)</option>
-                <option value="email_sent">Email Sent (تم إرسال الإيميل ✉️)</option>
-                <option value="email_failed">Email Failed (فشل إرسال الإيميل ⚠️)</option>
-            </select>
+            <div class="space-y-2">
+                <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Selected Wave</label>
+                <select id="examFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[280px] transition-colors focus:border-brand-500 outline-none">
+                    <option value="-1" selected="@(-1 == selectedWaveId ? "selected" : null)">ALL WAVES</option>
+                    <optgroup label="TRAINING BATCHES">
+                        @foreach (var w in waves)
+                        {
+                            <option value="@w.Id" selected="@(w.Id == selectedWaveId ? "selected" : null)">
+                                @w.WaveName.ToUpper() @(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")
+                            </option>
+                        }
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Status Filter (تصفية بالحالة)</label>
+                <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[210px] transition-colors focus:border-brand-500 outline-none">
+                    <option value="all">All Statuses (الكل)</option>
+                    <option value="certified">Certified (تم إصدار الشهادة)</option>
+                    <option value="pending">Pending (لم تصدر شهادة)</option>
+                    <option value="email_sent">Email Sent (تم إرسال الإيميل ✉️)</option>
+                    <option value="email_failed">Email Failed (فشل إرسال الإيميل ⚠️)</option>
+                </select>
+            </div>
         </div>
     </div>
 </div>
 
 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 overflow-hidden shadow-sm">
     <div class="overflow-x-auto">
-        <table class="datatable saas-table">
+        <table id="certificatesTable" class="datatable saas-table">
             <thead>
                 <tr>
                     <th class="min-w-[280px]">Personnel</th>
@@ -150,9 +152,18 @@
                              <span class="text-[10px] font-bold text-slate-500 uppercase">@s.UserCode</span>
                         </td>
                         <td>
-                            <span class="px-3 py-1.5 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-mono text-[10px] font-bold tracking-widest rounded-lg border border-amber-200 dark:border-amber-800 shadow-sm whitespace-nowrap">
-                                @(string.IsNullOrEmpty(s.CertificateCode) ? "--" : s.CertificateCode)
-                            </span>
+                            <div class="flex items-center gap-1.5">
+                                @if (hasCertCode)
+                                {
+                                    <span id="certCodeDisplay_@s.Id" class="px-3 py-1.5 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-mono text-[10px] font-bold tracking-widest rounded-lg border border-amber-200 dark:border-amber-800 shadow-sm whitespace-nowrap">
+                                        @s.CertificateCode
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-slate-400 dark:text-slate-600 text-xs font-mono font-bold">--</span>
+                                }
+                            </div>
                         </td>
                         <td class="text-right px-8">
                             <div class="flex items-center justify-end gap-2">
@@ -161,7 +172,7 @@
                                     <button class="p-2 text-slate-400 hover:text-emerald-600 bg-slate-50 dark:bg-slate-800 rounded-xl resend-email-btn" 
                                             data-user-id="@s.Id" 
                                             data-username="@s.StudentName" 
-                                            data-wave-id="@selectedWaveId"
+                                            data-wave-id="@selectedWaveId" 
                                             title="إعادة إرسال الإيميل">
                                         <i class="fas fa-paper-plane"></i>
                                     </button>
@@ -171,7 +182,7 @@
                                     <button class="p-2.5 text-slate-400 hover:text-amber-600 bg-slate-50 dark:bg-slate-800 rounded-xl reassign-wave" 
                                             data-user-id="@s.Id" 
                                             data-username="@s.StudentName" 
-                                            data-old-wave-id="@selectedWaveId"
+                                            data-old-wave-id="@selectedWaveId" 
                                             title="Move to another Wave">
                                         <i class="fas fa-exchange-alt"></i>
                                     </button>
@@ -187,6 +198,7 @@
 
 @section Scripts {
     <script>
+        const allWaves = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(waves.Select(w => new { id = w.Id, name = w.WaveName })));
         function updateExamList() {
             const type = 0;
             const year = $('#yearFilter').val();
@@ -216,13 +228,22 @@
             });
         }
 
-        $('#yearFilter').change(updateExamList);
-
-        $('#examFilter').change(function () { 
+        $('#yearFilter').change(function () {
+            const year = $(this).val();
+            const waveId = $('#examFilter').val() || -1;
             const type = 0;
-            const year = $('#yearFilter').val();
             const month = 0;
-            let newUrl = '/Admin/Certificates?waveId=' + $(this).val() + '&typeId=' + type + '&year=' + year + '&month=' + month; 
+            let newUrl = '/Admin/Certificates?waveId=' + waveId + '&typeId=' + type + '&year=' + year + '&month=' + month; 
+            if (window.location.search.includes('iframe=true')) newUrl += '&iframe=true';
+            window.location = newUrl;
+        });
+
+        $('#examFilter').change(function () {
+            const waveId = $(this).val();
+            const year = $('#yearFilter').val() || 0;
+            const type = 0;
+            const month = 0;
+            let newUrl = '/Admin/Certificates?waveId=' + waveId + '&typeId=' + type + '&year=' + year + '&month=' + month; 
             if (window.location.search.includes('iframe=true')) newUrl += '&iframe=true';
             window.location = newUrl;
         });
@@ -234,7 +255,7 @@
                 title: '<div class="flex flex-col items-center gap-2 pt-4 px-6"><i class="fas fa-file-excel text-emerald-500 text-3xl mb-2"></i><span class="text-lg font-black uppercase tracking-wider text-slate-800 dark:text-slate-100">دليل استيراد ملف الإكسيل</span></div>',
                 html: `
                     <div class="text-right px-6 py-4 space-y-4" dir="rtl">
-                        <p class="text-xs text-slate-600 dark:text-slate-400 font-bold mb-3">لاستيراد الشهادات بنجاح، يجب أن يحتوي ملف الإكسيل (Excel) على الأعمدة التالية:</p>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 font-bold mb-3">لاستيراد بيانات الطلاب والشهادات بنجاح، الأعمدة المدعومة بملف الإكسيل (Excel):</p>
                         <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3 font-sans">
                             
                             <!-- كود المستخدم -->
@@ -246,12 +267,12 @@
                                 </div>
                             </div>
                             
-                            <!-- كود الشهادة -->
+                            <!-- كود السيريال التلقائي -->
                             <div class="flex items-start gap-3 border-t border-slate-200 dark:border-slate-800 pt-3">
-                                <span class="bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider mt-0.5">مطلوب</span>
+                                <span class="bg-brand-100 dark:bg-brand-950 text-brand-700 dark:text-brand-400 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider mt-0.5">توليد آلي ⚡</span>
                                 <div class="flex-1 pr-2">
-                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200">كود الشهادة (Certificate Code)</p>
-                                    <p class="text-[10px] text-slate-400 dark:text-slate-500">العناوين المقبولة: Certificate، CertificateCode، Certificate Code، الشهادة، كود الشهادة، رقم الشهادة</p>
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200">كود السيريال والشهادة (Certificate Serial Code)</p>
+                                    <p class="text-[10px] text-brand-600 dark:text-brand-400 font-bold">يتم توليده وحسابه تلقائياً من النظام وفق نمط سيريال الويف (مثل: WTTA-2026-001-PB-Off-5671) دون الحاجة لإدخاله يدوياً في ملف الإكسيل.</p>
                                 </div>
                             </div>
                             
@@ -260,7 +281,7 @@
                                 <span class="bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider mt-0.5">اختياري</span>
                                 <div class="flex-1 pr-2">
                                     <p class="text-xs font-bold text-slate-800 dark:text-slate-200">اسم الويف (Wave Name)</p>
-                                    <p class="text-[10px] text-slate-400 dark:text-slate-500">العناوين المقبولة: Wave، الويف، الدورة، المجموعة، WaveName. <br><span class="text-amber-600 dark:text-amber-400 font-semibold">ملاحظة: إذا لم تكن الويف موجودة بالسيستم (مثل wave1)، فسيقوم النظام بإنشائها تلقائياً ونقل الطالب إليها.</span></p>
+                                    <p class="text-[10px] text-slate-400 dark:text-slate-500">العناوين المقبولة: Wave، الويف، الدورة، المجموعة، WaveName. <br><span class="text-amber-600 dark:text-amber-400 font-semibold">ملاحظة: إذا لم تكن الويف موجودة بالسيستم، فسيقوم النظام بإنشائها تلقائياً ونقل الطالب إليها.</span></p>
                                 </div>
                             </div>
                             
@@ -458,33 +479,55 @@
             });
         }
 
-        const allWaves = @Html.Raw(Json.Serialize(waves.Select(w => new { id = w.Id, name = w.WaveName })));
+        $.fn.dataTable.ext.search.push(
+            function(settings, data, dataIndex) {
+                if (settings.nTable.id !== 'certificatesTable') return true;
+                const selectedFilter = $('#certStatusFilter').val();
+                if (!selectedFilter || selectedFilter === 'all') return true;
+
+                const tr = settings.aoData[dataIndex] ? settings.aoData[dataIndex].nTr : null;
+                if (!tr) return true;
+
+                const rowCertStatus = $(tr).attr('data-cert-status') || '';
+                const rowEmailStatus = $(tr).attr('data-email-status') || '';
+
+                if (selectedFilter === 'certified') {
+                    return rowCertStatus === 'certified';
+                }
+                if (selectedFilter === 'pending') {
+                    return rowCertStatus === 'pending';
+                }
+                if (selectedFilter === 'email_sent') {
+                    return rowEmailStatus === 'email_sent';
+                }
+                if (selectedFilter === 'email_failed') {
+                    return rowEmailStatus === 'email_failed';
+                }
+                return true;
+            }
+        );
+
+        $(document).on('change', '#certStatusFilter', function() {
+            if ($.fn.DataTable.isDataTable('#certificatesTable')) {
+                $('#certificatesTable').DataTable().draw();
+            }
+        });
 
         $(document).ready(function() {
-            let table = $('.datatable').DataTable();
-
-            $.fn.dataTable.ext.search.push(
-                function(settings, data, dataIndex) {
-                    const selectedFilter = $('#certStatusFilter').val();
-                    if (!selectedFilter || selectedFilter === 'all') return true;
-
-                    const row = table.row(dataIndex).node();
-                    const rowCertStatus = $(row).attr('data-cert-status');
-                    const rowEmailStatus = $(row).attr('data-email-status');
-
-                    if (selectedFilter === 'certified' || selectedFilter === 'pending') {
-                        return rowCertStatus === selectedFilter;
+            let table;
+            if ($.fn.DataTable.isDataTable('#certificatesTable')) {
+                table = $('#certificatesTable').DataTable();
+            } else {
+                table = $('#certificatesTable').DataTable({
+                    responsive: true,
+                    pageLength: 25,
+                    ordering: true,
+                    language: {
+                        search: "_INPUT_",
+                        searchPlaceholder: "Search records..."
                     }
-                    if (selectedFilter === 'email_sent' || selectedFilter === 'email_failed') {
-                        return rowEmailStatus === selectedFilter;
-                    }
-                    return true;
-                }
-            );
-
-            $('#certStatusFilter').on('change', function() {
-                table.draw();
-            });
+                });
+            }
 
             $(document).on('click', '.reassign-wave', function() {
                 const userId = $(this).data('user-id');
@@ -492,11 +535,13 @@
                 const oldWaveId = $(this).data('old-wave-id');
 
                 let optionsHtml = '';
-                allWaves.forEach(w => {
-                    if (w.id != oldWaveId) {
-                        optionsHtml += `<option value="${w.id}">${w.name.toUpperCase()}</option>`;
-                    }
-                });
+                if (typeof allWaves !== 'undefined' && Array.isArray(allWaves)) {
+                    allWaves.forEach(w => {
+                        if (w.id != oldWaveId) {
+                            optionsHtml += `<option value="${w.id}">${w.name.toUpperCase()}</option>`;
+                        }
+                    });
+                }
 
                 if (!optionsHtml) {
                     Swal.fire('Warning', 'No other waves available for reassignment.', 'warning');
@@ -623,6 +668,5 @@
                 });
             });
         });
-
     </script>
 }

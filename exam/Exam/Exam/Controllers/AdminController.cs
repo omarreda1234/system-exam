@@ -70,17 +70,20 @@ namespace Exam.Controllers
             "ExportStudentsToExcel", "ExportWaveResultsToExcel",
             "MoveUserToWave", "CheckExistence", "GetUsersWithoutCertificate",
             "ImportUsersToWaveFromExcel", "UpdateTopicSchema", "SyncFromLive",
-            "BranchSupervisors", "GetSupervisorBranches", "SaveSupervisorBranches"
+            "BranchSupervisors", "GetSupervisorBranches", "SaveSupervisorBranches",
+            "EditWave", "DeleteWave", "CreateWave", "CloneWave", "AssignUsersToWave", "WaveDetails", "GetWaveUserIds", "GetUsersByWaveId", "RemoveUserFromWave",
+            "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
+            "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
         {
             var userRoles = User.Claims
-                .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+                .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
                 .Select(c => c.Value)
                 .ToList();
 
-            if (userRoles.Contains("Admin"))
+            if (User.IsInRole("Admin") || userRoles.Contains("Admin"))
             {
                 base.OnActionExecuting(context);
                 return;
