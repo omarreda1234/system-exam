@@ -1645,19 +1645,17 @@ WHERE U.Id = @UserId;";
                         EM.Title as ExamName,
                         EM.TypeName as ExamType,
                         CASE 
-                            WHEN UWC.CertificateCode IS NOT NULL OR UWC.Score IS NOT NULL THEN 'Completed'
-                            WHEN U.CertificateCode IS NOT NULL OR U.CertificateScore IS NOT NULL THEN 'Completed'
                             WHEN UA.EndTime IS NOT NULL THEN 'Completed' 
                             ELSE 'InProgress' 
                         END as Status,
-                        ISNULL(UWC.Score, ISNULL(U.CertificateScore, ISNULL(UA.Score, 0))) as Score,
+                        ISNULL(UA.Score, 0) as Score,
                         ISNULL(UA.FinalScore, 0) as FinalScore,
                         CASE 
                             WHEN UA.StartTime IS NOT NULL AND UA.EndTime IS NOT NULL THEN DATEDIFF(MINUTE, UA.StartTime, UA.EndTime)
                             ELSE ISNULL(UA.DurationInMinutes, 0) 
                         END as DurationInMinutes,
                         ISNULL(UA.IsPassed, 0) as IsPassed, 
-                        ISNULL(UWC.CertificateCode, ISNULL(U.CertificateCode, UA.CertificateCode)) as CertificateCode, 
+                        UA.CertificateCode as CertificateCode, 
                         UA.EmailSent,
                         ISNULL(UA.AttemptNumber, 0) as AttemptNumber, 
                         UA.AttemptDate as CompletionDate, 
@@ -1699,15 +1697,14 @@ WHERE U.Id = @UserId;";
                         EM.Title as ExamName, 
                         EM.TypeName as ExamType,
                         CASE 
-                            WHEN UWC.CertificateCode IS NOT NULL OR UWC.Score IS NOT NULL THEN 'Completed'
-                            WHEN U.CertificateCode IS NOT NULL OR U.CertificateScore IS NOT NULL THEN 'Completed'
+                            WHEN EM.WaveId IS NOT NULL AND EM.WaveId > 0 AND (UWC.CertificateCode IS NOT NULL OR UWC.Score IS NOT NULL) THEN 'Completed'
                             ELSE 'Not Started' 
                         END as Status, 
-                        ISNULL(UWC.Score, ISNULL(U.CertificateScore, 0)) as Score, 
+                        ISNULL(CASE WHEN EM.WaveId IS NOT NULL AND EM.WaveId > 0 THEN UWC.Score ELSE 0 END, 0) as Score, 
                         CAST(0 AS DECIMAL(18,2)) as FinalScore, 
                         0 as DurationInMinutes, 
                         CAST(0 AS BIT) as IsPassed, 
-                        ISNULL(UWC.CertificateCode, U.CertificateCode) as CertificateCode, 
+                        CASE WHEN EM.WaveId IS NOT NULL AND EM.WaveId > 0 THEN UWC.CertificateCode ELSE NULL END as CertificateCode, 
                         CAST(0 AS BIT) as EmailSent, 
                         0 as AttemptNumber, 
                         CAST(NULL AS DATETIME) as CompletionDate, 
