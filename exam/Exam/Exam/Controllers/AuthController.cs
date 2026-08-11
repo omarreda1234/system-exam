@@ -193,6 +193,31 @@ namespace Exam.Controllers
         {
             if (!ModelState.IsValid) return View(dto);
 
+            var cleanEmail = dto.Email?.Trim().ToLower();
+            if (string.IsNullOrEmpty(cleanEmail))
+            {
+                ModelState.AddModelError(string.Empty, "يرجى إدخال البريد الإلكتروني.");
+                return View(dto);
+            }
+
+            // 1. Hourly Rate Limiting check per email (Max 3 attempts per hour)
+            using (var conn = new SqlConnection(_connectionString))
+            {
+                var recentRequestsCount = await conn.ExecuteScalarAsync<int>(@"
+                    SELECT COUNT(*) 
+                    FROM EmailLogs 
+                    WHERE LOWER(Recipient) = LOWER(@Recipient) 
+                      AND SentAt > DATEADD(HOUR, -1, GETDATE())", 
+                    new { Recipient = cleanEmail });
+
+                const int maxHourlyAttemptsPerUser = 3;
+                if (recentRequestsCount >= maxHourlyAttemptsPerUser)
+                {
+                    ModelState.AddModelError(string.Empty, "لقد تجاوزت الحد المسموح به لطلبات استعادة كلمة المرور (3 محاولات كحد أقصى خلال الساعة). يرجى الانتظار والمحاولة لاحقاً بعد مرور ساعة.");
+                    return View(dto);
+                }
+            }
+
             var token = await _authService.GeneratePasswordResetTokenAsync(dto.Email);
             if (token != null)
             {
@@ -214,13 +239,27 @@ namespace Exam.Controllers
                         <p style='font-size: 11px; color: #999;'>Eltarshoubi Academy LMS Portal</p>
                     </div>";
                 
-                _ = _emailSender.SendEmailAsync(dto.Email, subject, body);
-                
-                TempData["SuccessMessage"] = "If an account with that email exists, a password reset link has been sent.";
-                return View();
+                try
+                {
+                    await _emailSender.SendEmailAsync(dto.Email, subject, body);
+                    TempData["SuccessMessage"] = "تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني بنجاح. يرجى التحقق من صندوق الوارد (أو مجلد الرسائل غير المرغوب فيها Spam).";
+                    return View();
+                }
+                catch (Exception ex)
+                {
+                    if (ex.Message.Contains("LIMIT_REACHED") || ex.Message.Contains("Daily user sending limit exceeded"))
+                    {
+                        ModelState.AddModelError(string.Empty, "تم تجاوز الحد المسموح به لإرسال البريد الإلكتروني حالياً. يرجى المحاولة لاحقاً بعد قليل.");
+                    }
+                    else
+                    {
+                        ModelState.AddModelError(string.Empty, "تعذر إرسال البريد الإلكتروني في الوقت الحالي. يرجى مراجعة إدارة الأكاديمية أو المحاولة لاحقاً.");
+                    }
+                    return View(dto);
+                }
             }
             
-            ModelState.AddModelError(string.Empty, "No user found with this email address.");
+            ModelState.AddModelError(string.Empty, "لا يوجد حساب مسجل بهذا البريد الإلكتروني.");
             return View(dto);
         }
 
