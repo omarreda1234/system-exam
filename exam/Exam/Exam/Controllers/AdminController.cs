@@ -2487,20 +2487,21 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                         </select>
                     </form>" : "";
 
-                string resetPassBtn = canResetPassword ? $@"
-                    <button type='button' onclick=""resetPassword('{userId}')"" class='flex-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white py-1.5 px-2 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
-                        <i class='fas fa-key text-[9px]'></i> Reset Password
-                    </button>" : "";
+                string resetPassRow = canResetPassword ? $@"
+                    <div class='flex items-center gap-1.5 w-full'>
+                        <button type='button' onclick=""resetPassword('{userId}')"" class='flex-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white py-1.5 px-2 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
+                            <i class='fas fa-key text-[9px]'></i> Reset Password
+                        </button>
+                        <button type='button' onclick=""viewSavedPassword('{userId}', '{userNameEscaped}')"" title='Show Saved Password' class='bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white px-2.5 py-1.5 rounded-xl transition-all border border-indigo-100 dark:border-indigo-800 flex items-center justify-center gap-1 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
+                            <i class='fas fa-eye text-[10px]'></i>
+                        </button>
+                    </div>" : "";
 
-                string statusBtnHtml = canToggleStatus ? statusButton : "";
+                string statusRow = canToggleStatus ? $"<div class='flex items-center gap-1.5 w-full'>{statusButton}</div>" : "";
 
                 string topRowActions = (string.IsNullOrEmpty(editBtn) && string.IsNullOrEmpty(deleteBtn))
                     ? ""
                     : $"<div class='flex items-center gap-1.5'>{editBtn}{deleteBtn}</div>";
-
-                string bottomRowActions = (string.IsNullOrEmpty(statusBtnHtml) && string.IsNullOrEmpty(resetPassBtn))
-                    ? ""
-                    : $"<div class='flex items-center gap-1.5'>{statusBtnHtml}{resetPassBtn}</div>";
 
                 string actionsHtml = $@"
                     <div class='flex flex-col gap-1.5 py-1 min-w-[240px] max-w-[260px] ml-auto'>
@@ -2508,7 +2509,8 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                         {sendMsgBtn}
                         {roleFormHtml}
                         {shiftFormHtml}
-                        {bottomRowActions}
+                        {statusRow}
+                        {resetPassRow}
                     </div>";
 
                 dataList.Add(new {
@@ -3878,10 +3880,71 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 var result = await _userManager.AddPasswordAsync(user, newPassword);
                 if (result.Succeeded)
                 {
+                    try
+                    {
+                        using var conn = new SqlConnection(_connectionString);
+                        await conn.ExecuteAsync(@"
+                            IF EXISTS (SELECT 1 FROM UserSavedPasswords WHERE UserId = @UserId)
+                            BEGIN
+                                UPDATE UserSavedPasswords 
+                                SET PlainPassword = @PlainPassword, UpdatedAt = GETDATE(), UpdatedBy = 'Admin' 
+                                WHERE UserId = @UserId;
+                            END
+                            ELSE
+                            BEGIN
+                                INSERT INTO UserSavedPasswords (UserId, PlainPassword, UpdatedAt, UpdatedBy) 
+                                VALUES (@UserId, @PlainPassword, GETDATE(), 'Admin');
+                            END", new { UserId = userId, PlainPassword = newPassword });
+                    }
+                    catch { }
+
                     return Json(new { success = true, message = $"Password has been successfully updated to '{newPassword}'." });
                 }
 
                 return Json(new { success = false, message = string.Join(", ", result.Errors.Select(e => e.Description)) });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetUserSavedPassword(string userId)
+        {
+            if (string.IsNullOrEmpty(userId)) return Json(new { success = false, message = "User ID required." });
+
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            var currentLoggedInUser = User.Identity?.Name;
+            bool isAdmin = User.IsInRole("Admin");
+            bool canResetPassword = isAdmin || (currentLoggedInUser != null && await _examService.HasPermissionAsync(userRoles, "Admin", "ResetUserPassword"));
+
+            if (!canResetPassword)
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var saved = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT P.PlainPassword, P.UpdatedAt, P.UpdatedBy, U.UserName, U.Email 
+                    FROM UserSavedPasswords P
+                    INNER JOIN AspNetUsers U ON P.UserId = U.Id
+                    WHERE P.UserId = @UserId", new { UserId = userId });
+
+                if (saved == null || string.IsNullOrEmpty((string)saved.PlainPassword))
+                {
+                    return Json(new { success = false, message = "لا يوجد كلمة سر محفوظة لهذا المستخدم (لم يتم إعادة تعيينها من قبل)." });
+                }
+
+                return Json(new { 
+                    success = true, 
+                    password = (string)saved.PlainPassword, 
+                    updatedAt = ((DateTime)saved.UpdatedAt).ToString("yyyy-MM-dd HH:mm"),
+                    updatedBy = (string)saved.UpdatedBy,
+                    userName = (string)saved.UserName
+                });
             }
             catch (Exception ex)
             {

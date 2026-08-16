@@ -314,6 +314,29 @@ namespace Exam.Controllers
             }
             if (result.Succeeded)
             {
+                try
+                {
+                    using var conn = new SqlConnection(_connectionString);
+                    var targetUser = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT Id FROM AspNetUsers WHERE LOWER(Email) = LOWER(@Email)", new { Email = dto.Email });
+                    if (targetUser != null && targetUser.Id != null)
+                    {
+                        string targetUserId = (string)targetUser.Id;
+                        await conn.ExecuteAsync(@"
+                            IF EXISTS (SELECT 1 FROM UserSavedPasswords WHERE UserId = @UserId)
+                            BEGIN
+                                UPDATE UserSavedPasswords 
+                                SET PlainPassword = @PlainPassword, UpdatedAt = GETDATE(), UpdatedBy = 'EmailReset' 
+                                WHERE UserId = @UserId;
+                            END
+                            ELSE
+                            BEGIN
+                                INSERT INTO UserSavedPasswords (UserId, PlainPassword, UpdatedAt, UpdatedBy) 
+                                VALUES (@UserId, @PlainPassword, GETDATE(), 'EmailReset');
+                            END", new { UserId = targetUserId, PlainPassword = dto.NewPassword });
+                    }
+                }
+                catch { }
+
                 // Send confirmation email with the new password
                 var subject = "Your Password Has Been Reset Successfully - Eltarshoubi Academy";
                 var body = $@"

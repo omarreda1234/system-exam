@@ -3038,6 +3038,18 @@ DELETE FROM AspNetUsers WHERE Id = @UserId;",
             {
                 await conn.OpenAsync();
 
+                // 0. Create UserSavedPasswords Table
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'UserSavedPasswords')
+                    BEGIN
+                        CREATE TABLE UserSavedPasswords (
+                            UserId NVARCHAR(450) NOT NULL PRIMARY KEY,
+                            PlainPassword NVARCHAR(256) NOT NULL,
+                            UpdatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+                            UpdatedBy NVARCHAR(128) NULL
+                        );
+                    END");
+
                 // 1. Create Companies Table
                 await conn.ExecuteAsync(@"
                     IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Companies')
