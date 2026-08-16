@@ -4979,17 +4979,24 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             int waveId = (int)assignment.WaveId;
 
             var attempts = await conn.QueryAsync<dynamic>(@"
-                SELECT att.Id AS AttemptId, att.Score, 
+                WITH LatestAttempts AS (
+                    SELECT Id AS AttemptId, Score, Status, StartTime, EndTime, UserId, AssignmentId,
+                           ROW_NUMBER() OVER (PARTITION BY UserId, AssignmentId ORDER BY CASE WHEN Status = 'Completed' THEN 1 WHEN Status = 'InProgress' THEN 2 ELSE 3 END, Id DESC) AS rn
+                    FROM dbo.StudentAssignmentAttempts
+                    WHERE AssignmentId = @AssignmentId
+                )
+                SELECT att.AttemptId, att.Score, 
                        COALESCE(att.Status, 'Not Started') AS Status, 
                        att.StartTime, att.EndTime, 
                        u.FullName, u.Email, u.UserName, u.UserCode,
-                       r.Name AS RoleName
-                FROM dbo.UserWaves uw
+                       r.Name AS RoleName,
+                       b.BranchName
+                FROM (SELECT DISTINCT UserId FROM dbo.UserWaves WHERE WaveId = @WaveId AND (IsDeactivated IS NULL OR IsDeactivated = 0)) uw
                 INNER JOIN dbo.AspNetUsers u ON uw.UserId = u.Id
+                LEFT JOIN dbo.Branches b ON b.Id = u.BranchId
                 LEFT JOIN dbo.AspNetUserRoles ur ON u.Id = ur.UserId
                 LEFT JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id
-                LEFT JOIN dbo.StudentAssignmentAttempts att ON att.AssignmentId = @AssignmentId AND att.UserId = u.Id
-                WHERE uw.WaveId = @WaveId AND uw.IsActive = 1
+                LEFT JOIN LatestAttempts att ON att.UserId = u.Id AND att.rn = 1
                 ORDER BY CASE WHEN att.Status = 'Completed' THEN 1 WHEN att.Status = 'InProgress' THEN 2 ELSE 3 END, u.FullName",
                 new { AssignmentId = id, WaveId = waveId });
 
@@ -5024,17 +5031,24 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 int waveId = (int)assignment.WaveId;
 
                 var attempts = await conn.QueryAsync<dynamic>(@"
-                    SELECT att.Id AS AttemptId, att.Score, 
+                    WITH LatestAttempts AS (
+                        SELECT Id AS AttemptId, Score, Status, StartTime, EndTime, UserId, AssignmentId,
+                               ROW_NUMBER() OVER (PARTITION BY UserId, AssignmentId ORDER BY CASE WHEN Status = 'Completed' THEN 1 WHEN Status = 'InProgress' THEN 2 ELSE 3 END, Id DESC) AS rn
+                        FROM dbo.StudentAssignmentAttempts
+                        WHERE AssignmentId = @AssignmentId
+                    )
+                    SELECT att.AttemptId, att.Score, 
                            COALESCE(att.Status, 'Not Started') AS Status, 
                            att.StartTime, att.EndTime, 
                            u.FullName, u.Email, u.UserName, u.UserCode,
-                           r.Name AS RoleName
-                    FROM dbo.UserWaves uw
+                           r.Name AS RoleName,
+                           b.BranchName
+                    FROM (SELECT DISTINCT UserId FROM dbo.UserWaves WHERE WaveId = @WaveId AND (IsDeactivated IS NULL OR IsDeactivated = 0)) uw
                     INNER JOIN dbo.AspNetUsers u ON uw.UserId = u.Id
+                    LEFT JOIN dbo.Branches b ON b.Id = u.BranchId
                     LEFT JOIN dbo.AspNetUserRoles ur ON u.Id = ur.UserId
                     LEFT JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id
-                    LEFT JOIN dbo.StudentAssignmentAttempts att ON att.AssignmentId = @AssignmentId AND att.UserId = u.Id
-                    WHERE uw.WaveId = @WaveId AND uw.IsActive = 1
+                    LEFT JOIN LatestAttempts att ON att.UserId = u.Id AND att.rn = 1
                     ORDER BY CASE WHEN att.Status = 'Completed' THEN 1 WHEN att.Status = 'InProgress' THEN 2 ELSE 3 END, u.FullName",
                     new { AssignmentId = id, WaveId = waveId });
 

@@ -850,6 +850,31 @@
             });
         }
 
+        function copyTextToClipboard(textToCopy) {
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(textToCopy);
+            } else {
+                return new Promise((resolve, reject) => {
+                    try {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = textToCopy;
+                        textArea.style.position = "fixed";
+                        textArea.style.left = "-999999px";
+                        textArea.style.top = "-999999px";
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        const successful = document.execCommand('copy');
+                        textArea.remove();
+                        if (successful) resolve();
+                        else reject(new Error('execCommand copy failed'));
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+            }
+        }
+
         function viewSavedPassword(userId, userName) {
             Swal.fire({
                 title: 'جاري التحقق...',
@@ -884,9 +909,21 @@
                             confirmButtonColor: '#4f46e5',
                             didOpen: () => {
                                 $('#btnCopyPass').on('click', function() {
-                                    navigator.clipboard.writeText(res.password);
-                                    $(this).html('<i class="fas fa-check text-emerald-500"></i>');
-                                    setTimeout(() => $(this).html('<i class="fas fa-copy text-sm"></i>'), 2000);
+                                    const $btn = $(this);
+                                    copyTextToClipboard(res.password).then(() => {
+                                        $btn.html('<i class="fas fa-check text-emerald-500"></i>');
+                                        setTimeout(() => $btn.html('<i class="fas fa-copy text-sm"></i>'), 2000);
+                                    }).catch(err => {
+                                        console.error('Copy failed:', err);
+                                        const el = document.getElementById('savedPassText');
+                                        if (el) {
+                                            const range = document.createRange();
+                                            range.selectNodeContents(el);
+                                            const sel = window.getSelection();
+                                            sel.removeAllRanges();
+                                            sel.addRange(range);
+                                        }
+                                    });
                                 });
                             }
                         });
