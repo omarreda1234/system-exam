@@ -2361,7 +2361,8 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             {
                 string userId = u.Id;
                 string email = u.Email ?? "";
-                string userName = u.UserName ?? "";
+                string fullNameVal = u.FullName ?? "";
+                string userName = !string.IsNullOrWhiteSpace(fullNameVal) ? fullNameVal : (u.UserName ?? "");
                 string userCode = u.Code ?? "";
                 string branchNameVal = u.BranchName ?? "GLOBAL";
                 string roleName = u.RoleName ?? "User";
