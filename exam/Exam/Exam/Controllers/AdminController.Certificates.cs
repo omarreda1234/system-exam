@@ -1311,6 +1311,147 @@ namespace Exam.Controllers
             }
         }
 
+        [HttpGet]
+        public async Task<IActionResult> ExportCertificatesToExcel(int? waveId, int? year = null)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var waves = (await _examService.GetAllWavesAsync()).ToList();
+
+            if (year.HasValue && year.Value > 0)
+            {
+                waves = waves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Year == year.Value).ToList();
+            }
+
+            int selectedWaveId = waveId ?? 0;
+            if (selectedWaveId == 0)
+            {
+                selectedWaveId = waves.FirstOrDefault()?.Id ?? 0;
+            }
+
+            var waveIds = selectedWaveId == -1 ? waves.Select(w => w.Id).ToList() : new List<int> { selectedWaveId };
+            if (!waveIds.Any())
+            {
+                return BadRequest("No data available to export.");
+            }
+
+            var sql = @"
+                WITH UserRoles AS (
+                    SELECT UR.UserId,
+                           MAX(R.Name) as RoleName
+                    FROM AspNetUserRoles UR
+                    JOIN AspNetRoles R ON UR.RoleId = R.Id
+                    GROUP BY UR.UserId
+                )
+                SELECT 
+                    U.Id, 
+                    ISNULL(NULLIF(U.FullName, ''), U.UserName) as StudentName, 
+                    U.Email as StudentEmail, 
+                    U.UserCode, 
+                    B.BranchName, 
+                    W.WaveName, 
+                    COALESCE(UR.RoleName, 'User') as RoleName,
+                    UWC.CertificateCode, 
+                    ISNULL(UWC.Score, 0) as Score, 
+                    ISNULL(UWC.EmailSent, 0) as EmailSent, 
+                    W.StartDate as ActualStartTime
+                FROM dbo.UserWaves UW
+                INNER JOIN AspNetUsers U ON UW.UserId = U.Id
+                INNER JOIN TrainingWaves W ON UW.WaveId = W.Id
+                LEFT JOIN Branches B ON U.BranchId = B.Id
+                LEFT JOIN UserRoles UR ON U.Id = UR.UserId
+                LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = UW.WaveId
+                WHERE UW.WaveId IN @WaveIds AND UW.IsActive = 1";
+
+            var results = (await conn.QueryAsync<Exam.DTOs.ExamResultRowDto>(sql, new { WaveIds = waveIds })).ToList();
+
+            if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
+            {
+                var currentUser = await _userManager.GetUserAsync(User);
+                if (currentUser != null && currentUser.BranchId.HasValue)
+                {
+                    var branchName = await conn.QueryFirstOrDefaultAsync<string>(
+                        "SELECT BranchName FROM Branches WHERE Id = @Id", 
+                        new { Id = currentUser.BranchId.Value });
+                        
+                    if (!string.IsNullOrEmpty(branchName))
+                        results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase)).ToList();
+                    else
+                        results = new List<Exam.DTOs.ExamResultRowDto>();
+                }
+                else
+                    results = new List<Exam.DTOs.ExamResultRowDto>();
+            }
+
+            foreach (var row in results)
+            {
+                if (!string.IsNullOrWhiteSpace(row.CertificateCode) && row.CertificateCode.Trim() != "/")
+                {
+                    string wName = row.WaveName ?? "";
+                    DateTime wDate = row.ActualStartTime ?? DateTime.Now;
+                    string yearStr = wDate.Year.ToString();
+                    string waveNumStr = "001";
+                    var digits = new string(wName.Where(char.IsDigit).ToArray());
+                    if (!string.IsNullOrEmpty(digits)) waveNumStr = digits.PadLeft(3, '0');
+
+                    var matchingWave = waves.FirstOrDefault(w => w.WaveName == row.WaveName || w.Id == selectedWaveId);
+                    string modeStr = matchingWave?.Mode;
+                    bool isOnline = matchingWave?.IsOnline ?? (wName.ToLower().Contains("online") || wName.Contains("أونلاين") || wName.Contains("اونلاين"));
+                    string modeCode = ExtractModeForSerial(modeStr, isOnline);
+                    string uCode = string.IsNullOrWhiteSpace(row.UserCode) ? "0000" : row.UserCode.Trim();
+
+                    row.CertificateCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{uCode}";
+                    row.Status = "Certified";
+                }
+                else
+                {
+                    row.CertificateCode = "--";
+                    row.Status = "Pending";
+                }
+            }
+
+            using (var workbook = new XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Certificates Data");
+
+                string[] headers = new[] { "User Code", "Personnel Name", "Email", "Role", "Wave", "Branch", "Status", "Score", "Certificate Code", "Email Sent" };
+                for (int i = 0; i < headers.Length; i++)
+                {
+                    worksheet.Cell(1, i + 1).Value = headers[i];
+                }
+
+                var headerRange = worksheet.Range(1, 1, 1, headers.Length);
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Font.FontColor = XLColor.White;
+                headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#059669");
+                headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                int rowIdx = 2;
+                foreach (var item in results)
+                {
+                    worksheet.Cell(rowIdx, 1).Value = item.UserCode ?? "";
+                    worksheet.Cell(rowIdx, 2).Value = item.StudentName ?? "";
+                    worksheet.Cell(rowIdx, 3).Value = item.StudentEmail ?? "";
+                    worksheet.Cell(rowIdx, 4).Value = item.RoleName ?? "";
+                    worksheet.Cell(rowIdx, 5).Value = item.WaveName ?? "";
+                    worksheet.Cell(rowIdx, 6).Value = item.BranchName ?? "";
+                    worksheet.Cell(rowIdx, 7).Value = item.Status == "Certified" ? "تم إصدار الشهادة" : "لم تصدر شهادة";
+                    worksheet.Cell(rowIdx, 8).Value = item.Score > 0 ? $"{item.Score:0.0}%" : "--";
+                    worksheet.Cell(rowIdx, 9).Value = item.CertificateCode ?? "--";
+                    worksheet.Cell(rowIdx, 10).Value = item.EmailSent ? "تم إرسال البريد" : "لم يرسل البريد";
+
+                    rowIdx++;
+                }
+
+                worksheet.Columns().AdjustToContents();
+
+                using var stream = new MemoryStream();
+                workbook.SaveAs(stream);
+                var content = stream.ToArray();
+                string fileName = $"Certificates_Data_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+        }
+
         private static string ExtractModeForSerial(string? mode, bool isOnlineFallback = false)
         {
             if (string.IsNullOrWhiteSpace(mode))
