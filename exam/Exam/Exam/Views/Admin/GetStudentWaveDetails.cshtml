@@ -74,7 +74,7 @@
                                         <i class="fas fa-eye"></i> View Answers
                                     </button>
                                 }
-                                @if (status == "Completed" || status == "InProgress")
+                                @if (status != "Not Started")
                                 {
                                     <button type="button" 
                                             onclick="wipeStudentWaveExamData(@item.ExamId, '@ViewBag.StudentId', @item.WaveId, '@item.ExamTitle')" 
@@ -83,7 +83,7 @@
                                         <i class="fas fa-trash-alt"></i> Delete
                                     </button>
                                 }
-                                else if (status != "Completed")
+                                else
                                 {
                                     <span class="text-slate-300 dark:text-slate-700 text-xs">-</span>
                                 }
