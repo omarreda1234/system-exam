@@ -46,12 +46,30 @@
 
     <!-- Content -->
     <div class="max-w-7xl mx-auto px-6 mt-8">
-        <!-- Premium Search Bar -->
-        <div class="mb-8 relative max-w-md">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-                <i class="fas fa-search text-sm"></i>
+        <!-- Premium Search & Activity Filter Bar -->
+        <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="relative max-w-md w-full">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                    <i class="fas fa-search text-sm"></i>
+                </div>
+                <input type="text" id="attendanceSearchInput" oninput="filterAttendanceCards()" placeholder="Search / ابحث..." class="w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold text-slate-950 dark:text-white placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 shadow-sm transition-all" />
             </div>
-            <input type="text" id="attendanceSearchInput" oninput="filterAttendanceCards()" placeholder="Search / ابحث..." class="w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold text-slate-950 dark:text-white placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 shadow-sm transition-all" />
+
+            <!-- Wave Activity Filter Pills -->
+            <div id="waveActivityFilters" class="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1.5 rounded-2xl shadow-sm self-start md:self-auto">
+                <button type="button" onclick="setWaveStatusFilter('active')" id="btnFilterActive" class="wave-status-btn px-4 py-2 text-xs font-bold rounded-xl bg-brand-600 text-white transition-all shadow-sm flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    الويفات النشطة (Active)
+                </button>
+                <button type="button" onclick="setWaveStatusFilter('done')" id="btnFilterDone" class="wave-status-btn px-4 py-2 text-xs font-bold rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-all flex items-center gap-2">
+                    <i class="fas fa-check-circle text-[11px]"></i>
+                    المنتهية (Done)
+                </button>
+                <button type="button" onclick="setWaveStatusFilter('all')" id="btnFilterAll" class="wave-status-btn px-4 py-2 text-xs font-bold rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-all flex items-center gap-2">
+                    <i class="fas fa-layer-group text-[11px]"></i>
+                    الكل (All)
+                </button>
+            </div>
         </div>
 
         <!-- Waves Content -->
@@ -61,17 +79,35 @@
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 @foreach (var wave in Model)
                 {
-                    <a href="@Url.Action("ManageSessions", new { waveId = wave.Id })" class="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm hover:shadow-xl hover:border-brand-500/30 transition-all duration-500">
+                    bool isWaveActive = wave.IsActive == null || wave.IsActive == true || wave.IsActive.ToString() == "1" || wave.IsActive.ToString().ToLower() == "true";
+                    <a href="@Url.Action("ManageSessions", new { waveId = wave.Id })" 
+                       data-is-active="@(isWaveActive.ToString().ToLower())"
+                       class="wave-card group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm hover:shadow-xl hover:border-brand-500/30 transition-all duration-500">
                         <div class="flex flex-col h-full">
                             <div class="flex justify-between items-start mb-6">
                                 <div class="w-14 h-14 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 dark:text-slate-500 group-hover:bg-brand-50 group-hover:text-brand-600 dark:group-hover:bg-brand-950/30 transition-colors">
                                     <i class="fas fa-users-rectangle text-xl"></i>
                                 </div>
-                                <span class="bg-brand-50 text-brand-600 dark:bg-brand-950/30 dark:text-brand-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider">Active Wave</span>
+                                @if (isWaveActive)
+                                {
+                                    <span class="bg-brand-50 text-brand-600 dark:bg-brand-950/30 dark:text-brand-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        Active Wave
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 border border-slate-200 dark:border-slate-700">
+                                        <i class="fas fa-check-circle text-slate-400"></i>
+                                        Done Wave
+                                    </span>
+                                }
                             </div>
                             
                             <h3 class="text-lg font-black text-slate-900 dark:text-white group-hover:text-brand-600 transition-colors mb-2">@wave.WaveName</h3>
-                            <p class="text-xs font-bold text-slate-400 leading-relaxed mb-8 uppercase tracking-wide">Standard training cycle wave attendance schedule</p>
+                            <p class="text-xs font-bold text-slate-400 leading-relaxed mb-8 uppercase tracking-wide">
+                                @(isWaveActive ? "Standard training cycle wave attendance schedule" : "Completed training cycle wave attendance schedule")
+                            </p>
                             
                             <div class="mt-auto pt-6 border-t border-slate-50 dark:border-slate-800/50 flex items-center justify-between">
                                 <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-brand-600 transition-colors">Manage Sessions</span>
@@ -80,6 +116,14 @@
                         </div>
                     </a>
                 }
+            </div>
+
+            <div id="noWavesFoundMessage" class="hidden bg-white dark:bg-slate-900 rounded-[32px] p-20 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 mt-4">
+                <div class="w-20 h-20 bg-slate-50 dark:bg-slate-850 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300">
+                    <i class="fas fa-folder-open text-3xl"></i>
+                </div>
+                <h3 class="text-lg font-black text-slate-950 dark:text-white uppercase mb-2">No Waves Found</h3>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">No waves match your filter criteria.</p>
             </div>
 
             @if (!Model.Any())
@@ -209,6 +253,26 @@
 
 @section Scripts {
     <script>
+        let currentWaveStatusFilter = 'active'; // Default to active waves only!
+
+        function setWaveStatusFilter(status) {
+            currentWaveStatusFilter = status;
+            
+            $('.wave-status-btn')
+                .removeClass('bg-brand-600 text-white shadow-sm')
+                .addClass('text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white');
+
+            if (status === 'active') {
+                $('#btnFilterActive').addClass('bg-brand-600 text-white shadow-sm').removeClass('text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white');
+            } else if (status === 'done') {
+                $('#btnFilterDone').addClass('bg-brand-600 text-white shadow-sm').removeClass('text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white');
+            } else {
+                $('#btnFilterAll').addClass('bg-brand-600 text-white shadow-sm').removeClass('text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white');
+            }
+
+            filterAttendanceCards();
+        }
+
         function switchTab(tabId) {
             $('.tab-pane').addClass('hidden').removeClass('active');
             $(`#tabContent-${tabId}`).removeClass('hidden').addClass('active');
@@ -216,6 +280,12 @@
             $('#tabBtn-waves, #tabBtn-companies, #tabBtn-softskills').removeClass('border-brand-600 text-brand-600').addClass('border-transparent text-slate-400 hover:text-slate-600');
             $(`#tabBtn-${tabId}`).addClass('border-brand-600 text-brand-600').removeClass('border-transparent text-slate-400 hover:text-slate-600');
             
+            if (tabId === 'waves') {
+                $('#waveActivityFilters').removeClass('hidden');
+            } else {
+                $('#waveActivityFilters').addClass('hidden');
+            }
+
             // Clear search when switching tabs
             document.getElementById('attendanceSearchInput').value = '';
             filterAttendanceCards();
@@ -224,15 +294,38 @@
         function filterAttendanceCards() {
             const query = document.getElementById('attendanceSearchInput').value.toLowerCase().trim();
             
-            // Filter waves
+            // Filter waves by search query AND active status filter
+            let visibleWaveCount = 0;
             document.querySelectorAll('#tabContent-waves .grid > a').forEach(card => {
                 const title = card.querySelector('h3').textContent.toLowerCase();
-                if (title.includes(query)) {
+                const isActiveAttr = card.getAttribute('data-is-active');
+                const isWaveActive = isActiveAttr === 'true';
+
+                let matchesStatus = true;
+                if (currentWaveStatusFilter === 'active') {
+                    matchesStatus = isWaveActive;
+                } else if (currentWaveStatusFilter === 'done') {
+                    matchesStatus = !isWaveActive;
+                }
+
+                const matchesSearch = title.includes(query);
+
+                if (matchesStatus && matchesSearch) {
                     card.classList.remove('hidden');
+                    visibleWaveCount++;
                 } else {
                     card.classList.add('hidden');
                 }
             });
+
+            const noWavesMsg = document.getElementById('noWavesFoundMessage');
+            if (noWavesMsg) {
+                if (visibleWaveCount === 0) {
+                    noWavesMsg.classList.remove('hidden');
+                } else {
+                    noWavesMsg.classList.add('hidden');
+                }
+            }
 
             // Filter companies
             document.querySelectorAll('#tabContent-companies .grid > a').forEach(card => {
@@ -257,6 +350,10 @@
                 }
             });
         }
+
+        $(function() {
+            filterAttendanceCards();
+        });
     </script>
 }
 

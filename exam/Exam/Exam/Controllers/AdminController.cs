@@ -1408,7 +1408,7 @@ namespace Exam.Controllers
 
             if (!string.IsNullOrEmpty(searchValue))
             {
-                sqlBase += " AND (No_ LIKE @Search OR Description LIKE @Search OR [Description 2] LIKE @Search OR [Item Definition] LIKE @Search OR Color LIKE @Search)";
+                sqlBase += " AND (No_ LIKE @Search OR Description LIKE @Search OR [Description 2] LIKE @Search OR [Item Definition] LIKE @Search OR CustomDefinition LIKE @Search OR Color LIKE @Search)";
                 parameters.Add("Search", $"%{searchValue}%");
             }
 
@@ -1445,7 +1445,9 @@ namespace Exam.Controllers
                     [Item Definition] AS ItemDefinition,
                     [Date Created] AS DateCreated,
                     [Last Date Modified] AS LastDateModified,
-                    LastSyncedAt AS LastSyncedAt
+                    LastSyncedAt AS LastSyncedAt,
+                    ISNULL(IsCustomDefinition, 0) AS IsCustomDefinition,
+                    CustomDefinition AS CustomDefinition
                 {sqlBase}
                 ORDER BY {sortColumn} {sortDirection}
                 OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
@@ -1468,7 +1470,9 @@ namespace Exam.Controllers
                     color = item.Color ?? "",
                     dateCreated = item.DateCreated?.ToString("yyyy-MM-dd HH:mm") ?? "-",
                     lastDateModified = item.LastDateModified?.ToString("yyyy-MM-dd HH:mm") ?? "-",
-                    lastSyncedAt = item.LastSyncedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-"
+                    lastSyncedAt = item.LastSyncedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-",
+                    isCustomDefinition = item.IsCustomDefinition,
+                    customDefinition = item.CustomDefinition ?? ""
                 });
             }
 
@@ -1478,6 +1482,30 @@ namespace Exam.Controllers
                 recordsFiltered = filteredRecords,
                 data = dataList
             });
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateItemCustomDefinition([FromBody] CustomDefinitionRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.ItemNo))
+            {
+                return Json(new { success = false, message = "Invalid request payload." });
+            }
+
+            using var conn = new SqlConnection(_connectionString);
+            await conn.ExecuteAsync(@"
+                UPDATE dbo.Items 
+                SET IsCustomDefinition = @IsCustomDefinition,
+                    CustomDefinition = @CustomDefinition
+                WHERE No_ = @ItemNo",
+                new { 
+                    request.ItemNo, 
+                    IsCustomDefinition = request.IsCustomDefinition ? 1 : 0, 
+                    CustomDefinition = request.CustomDefinition ?? "" 
+                });
+
+            return Json(new { success = true, message = "Custom item definition updated successfully!" });
         }
 
 
@@ -5795,6 +5823,15 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
         public DateTime? DateCreated { get; set; }
         public DateTime? LastDateModified { get; set; }
         public DateTime? LastSyncedAt { get; set; }
+        public bool IsCustomDefinition { get; set; }
+        public string CustomDefinition { get; set; }
+    }
+
+    public class CustomDefinitionRequest
+    {
+        public string ItemNo { get; set; }
+        public bool IsCustomDefinition { get; set; }
+        public string CustomDefinition { get; set; }
     }
 }
 

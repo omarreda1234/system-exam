@@ -33,13 +33,13 @@
                     <th class="min-w-[120px]">Item No</th>
                     <th class="min-w-[200px]">Description</th>
                     <th class="min-w-[150px]">Description 2</th>
-                    <th class="min-w-[120px]">Item Definition</th>
+                    <th class="min-w-[180px]">Item Definition</th>
                     <th>Storage</th>
                     <th>Incentive</th>
                     <th>Color</th>
-                    <th class="min-w-[130px]">Created</th>
-                    <th class="min-w-[130px]">Modified</th>
-                    <th class="min-w-[130px]">Synced At</th>
+                    <th class="min-w-[110px]">Created</th>
+                    <th class="min-w-[110px]">Modified</th>
+                    <th class="min-w-[110px]">Synced At</th>
                 </tr>
             </thead>
             <tbody>
@@ -69,8 +69,14 @@
                     { 
                         data: 'itemDefinition',
                         render: function(data, type, row) {
+                            if (row.isCustomDefinition && row.customDefinition) {
+                                return '<div class="flex flex-col gap-1">' +
+                                       '<span class="px-2 py-1 rounded bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 text-xs font-semibold border border-amber-200 dark:border-amber-800/40 truncate max-w-[200px]" title="' + escapeQuote(row.customDefinition) + '">' + row.customDefinition + '</span>' +
+                                       '<span class="text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest"><i class="fas fa-magic mr-1"></i> Custom Active</span>' +
+                                       '</div>';
+                            }
                             if (!data) return '';
-                            return '<span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-xs font-semibold">' + data + '</span>';
+                            return '<span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-xs font-semibold truncate max-w-[200px] inline-block" title="' + escapeQuote(data) + '">' + data + '</span>';
                         }
                     },
                     { 
@@ -78,7 +84,7 @@
                         className: 'text-xs truncate max-w-[150px]',
                         render: function(data, type, row) {
                             if (!data) return '';
-                            return '<span title="' + data + '">' + data + '</span>';
+                            return '<span title="' + escapeQuote(data) + '">' + data + '</span>';
                         }
                     },
                     { data: 'incentiveValue', className: 'font-mono text-xs' },
@@ -172,5 +178,10 @@
                 });
             });
         });
+
+        function escapeQuote(str) {
+            if (!str) return '';
+            return str.replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ');
+        }
     </script>
 }

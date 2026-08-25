@@ -346,7 +346,17 @@ namespace Exam.Controllers
         public async Task<IActionResult> Index()
         {
             using var conn = new SqlConnection(_connectionString);
-            var waves = await conn.QueryAsync<dynamic>("SELECT Id, WaveName FROM TrainingWaves");
+            try
+            {
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.TrainingWaves') AND name = 'IsActive')
+                    BEGIN
+                        ALTER TABLE dbo.TrainingWaves ADD IsActive BIT NOT NULL CONSTRAINT DF_TrainingWaves_IsActive DEFAULT 1;
+                    END");
+            }
+            catch { }
+
+            var waves = await conn.QueryAsync<dynamic>("SELECT Id, WaveName, StartDate, EndDate, ISNULL(IsOnline, 0) AS IsOnline, Mode, ISNULL(IsActive, 1) AS IsActive FROM TrainingWaves ORDER BY Id DESC");
             var companies = await conn.QueryAsync<dynamic>("SELECT Id, Name FROM Companies ORDER BY Name");
 
             var softSkillsTrack = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT Id FROM SkillTracks WHERE TrackName = 'SoftSkills Track'");

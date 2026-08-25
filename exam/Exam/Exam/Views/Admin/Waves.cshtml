@@ -55,6 +55,7 @@
             <thead>
                 <tr>
                     <th class="pl-8">Batch Name</th>
+                    <th>Status</th>
                     <th>Type</th>
                     <th>Start Date</th>
                     <th>End Date</th>
@@ -69,6 +70,24 @@
                                 <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400"><i class="fas fa-water"></i></div>
                                 <span class="font-bold text-slate-900 dark:text-white">@wave.WaveName</span>
                             </div>
+                        </td>
+                        <td>
+                            <button type="button" onclick="toggleWaveStatus(event, @wave.Id, @((!wave.IsActive).ToString().ToLower()))" class="cursor-pointer transition-transform hover:scale-105 inline-block" title="انقر لتغيير حالة الويف (Active / Done)">
+                                @if (wave.IsActive)
+                                {
+                                    <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800 flex items-center gap-1.5 w-fit">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        Active / شغال
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 flex items-center gap-1.5 w-fit">
+                                        <i class="fas fa-check-circle text-slate-400"></i>
+                                        Done / انتهت
+                                    </span>
+                                }
+                            </button>
                         </td>
                         <td>
                             <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider @(wave.IsOnline || (wave.Mode != null && wave.Mode.ToLower() == "online") ? "bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800" : "bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700")">
@@ -93,7 +112,7 @@
                                 }
                                 @if (HasWavesEditPermission())
                                 {
-                                    <button onclick="editWave(event, @wave.Id, '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(wave.WaveName))', '@(wave.StartDate.HasValue ? wave.StartDate.Value.ToString("yyyy-MM-dd") : "")', '@(wave.EndDate.HasValue ? wave.EndDate.Value.ToString("yyyy-MM-dd") : "")', @(wave.IsOnline.ToString().ToLower()), '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(wave.Mode ?? (wave.IsOnline ? "Online" : "Off")))')" class="bg-amber-50 hover:bg-amber-600 text-amber-600 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-amber-100 hover:border-amber-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
+                                    <button onclick="editWave(event, @wave.Id, '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(wave.WaveName))', '@(wave.StartDate.HasValue ? wave.StartDate.Value.ToString("yyyy-MM-dd") : "")', '@(wave.EndDate.HasValue ? wave.EndDate.Value.ToString("yyyy-MM-dd") : "")', @(wave.IsOnline.ToString().ToLower()), '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(wave.Mode ?? (wave.IsOnline ? "Online" : "Off")))', @(wave.IsActive.ToString().ToLower()))" class="bg-amber-50 hover:bg-amber-600 text-amber-600 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-amber-100 hover:border-amber-600 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 group">
                                         <i class="fas fa-edit text-xs"></i>
                                         Edit
                                     </button>
@@ -366,16 +385,22 @@
             }
         }
 
-        async function editWave(evt, id, currentName, currentDate, currentEndDate, currentIsOnline, currentMode) {
+        async function editWave(evt, id, currentName, currentDate, currentEndDate, currentIsOnline, currentMode, currentIsActive) {
             if (evt) evt.stopPropagation();
             const initialMode = currentMode || (currentIsOnline ? 'Online (ON)' : 'Offline (Off)');
             const initialExtracted = extractModePreview(initialMode);
+            if (currentIsActive === undefined || currentIsActive === null) currentIsActive = true;
 
             const { value: formValues } = await Swal.fire({
                 title: '<div class="text-lg font-black uppercase text-slate-800 dark:text-slate-100">تعديل الويف (Edit Batch)</div>',
                 html:
                     '<div class="text-right space-y-4" dir="rtl">' +
                     `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">اسم الويف (Batch Name):</label><input id="edit-sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-amber-500 transition-all font-bold text-sm" value="${currentName}"></div>` +
+                    `<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">حالة الويف (Activity Status):</label>` +
+                    `<select id="edit-sw-active" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-amber-500 transition-all font-bold text-sm">` +
+                    `<option value="true" ${currentIsActive ? 'selected' : ''}>Active / نشط (شغال)</option>` +
+                    `<option value="false" ${!currentIsActive ? 'selected' : ''}>Done / منتهي (انتهت)</option>` +
+                    `</select></div>` +
                     `<div class="space-y-2">` +
                     `<div class="flex items-center justify-between mb-1">` +
                     `<label class="block text-xs font-bold text-slate-500 uppercase text-right">حالة السيريال / نوع الويف (Mode):</label>` +
@@ -420,13 +445,14 @@
                     const name = document.getElementById('edit-sw-name').value;
                     const date = document.getElementById('edit-sw-date').value;
                     const endDate = document.getElementById('edit-sw-enddate').value;
+                    const isActive = document.getElementById('edit-sw-active').value === 'true';
                     const finalMode = document.getElementById('edit-sw-mode').value || 'Offline (Off)';
                     const isOnline = finalMode.toLowerCase().includes('online');
                     if (!name || !name.trim()) {
                         Swal.showValidationMessage('اسم الويف مطلوب');
                         return false;
                     }
-                    return { name: name.trim(), startDate: date || null, endDate: endDate || null, isOnline: isOnline, mode: finalMode.trim() };
+                    return { name: name.trim(), startDate: date || null, endDate: endDate || null, isOnline: isOnline, mode: finalMode.trim(), isActive: isActive };
                 }
             });
 
@@ -437,7 +463,7 @@
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ id: id, waveName: formValues.name, startDate: formValues.startDate, endDate: formValues.endDate, isOnline: formValues.isOnline, mode: formValues.mode })
+                        body: JSON.stringify({ id: id, waveName: formValues.name, startDate: formValues.startDate, endDate: formValues.endDate, isOnline: formValues.isOnline, mode: formValues.mode, isActive: formValues.isActive })
                     });
                     const json = await res.json();
                     if (json.success) {
@@ -845,7 +871,6 @@
             }
         }
 
-        $(function () {
             $('#createWaveButton').on('click', async function () {
                 const initialMode = 'Offline (Off)';
                 const initialExtracted = 'Off';
@@ -854,6 +879,11 @@
                     html:
                         '<div class="text-right space-y-4" dir="rtl">' +
                         '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">اسم الويف (Batch Name):</label><input id="sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm" placeholder="مثال: Wave 12"></div>' +
+                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">حالة الويف (Activity Status):</label>' +
+                        '<select id="sw-active" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm">' +
+                        '<option value="true" selected>Active / نشط (شغال)</option>' +
+                        '<option value="false">Done / منتهي (انتهت)</option>' +
+                        '</select></div>' +
                         '<div class="space-y-2">' +
                         '<div class="flex items-center justify-between mb-1">' +
                         '<label class="block text-xs font-bold text-slate-500 uppercase text-right">حالة السيريال / نوع الويف (Mode):</label>' +
@@ -898,13 +928,14 @@
                         const name = document.getElementById('sw-name').value;
                         const date = document.getElementById('sw-date').value;
                         const endDate = document.getElementById('sw-enddate').value;
+                        const isActive = document.getElementById('sw-active').value === 'true';
                         const finalMode = document.getElementById('sw-mode').value || 'Offline (Off)';
                         const isOnline = finalMode.toLowerCase().includes('online');
                         if (!name || !name.trim()) {
                             Swal.showValidationMessage('اسم الويف مطلوب');
                             return false;
                         }
-                        return { name: name.trim(), date: date || null, endDate: endDate || null, isOnline: isOnline, mode: finalMode.trim() };
+                        return { name: name.trim(), date: date || null, endDate: endDate || null, isOnline: isOnline, mode: finalMode.trim(), isActive: isActive };
                     }
                 });
 
@@ -913,7 +944,7 @@
                         const res = await fetch('/Admin/CreateWave', { 
                             method: 'POST', 
                             headers: { 'Content-Type': 'application/json' }, 
-                            body: JSON.stringify({ WaveName: formValues.name, StartDate: formValues.date || null, EndDate: formValues.endDate || null, IsOnline: formValues.isOnline, Mode: formValues.mode }) 
+                            body: JSON.stringify({ WaveName: formValues.name, StartDate: formValues.date || null, EndDate: formValues.endDate || null, IsOnline: formValues.isOnline, Mode: formValues.mode, IsActive: formValues.isActive }) 
                         });
                         if(res.ok) {
                             showToast('تم إنشاء الويف بنجاح', 'success');
@@ -1046,6 +1077,41 @@
                     showToast('فشل تحميل قائمة الطلاب', 'error');
                 }
             }
-        });
+        async function toggleWaveStatus(evt, waveId, targetIsActive) {
+            if (evt) evt.stopPropagation();
+            const btn = evt ? evt.currentTarget : null;
+            try {
+                const res = await fetch(`/Admin/ToggleWaveStatus?id=${waveId}&isActive=${targetIsActive}`, {
+                    method: 'POST'
+                });
+                const json = await res.json();
+                if (json.success) {
+                    showToast(json.message, 'success');
+                    if (btn) {
+                        const nextTarget = !targetIsActive;
+                        btn.setAttribute('onclick', `toggleWaveStatus(event, ${waveId}, ${nextTarget})`);
+                        if (targetIsActive) {
+                            btn.innerHTML = `
+                                <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800 flex items-center gap-1.5 w-fit">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    Active / شغال
+                                </span>
+                            `;
+                        } else {
+                            btn.innerHTML = `
+                                <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 flex items-center gap-1.5 w-fit">
+                                    <i class="fas fa-check-circle text-slate-400"></i>
+                                    Done / انتهت
+                                </span>
+                            `;
+                        }
+                    }
+                } else {
+                    showToast(json.message || 'تعذر تغيير حالة الويف', 'error');
+                }
+            } catch (e) {
+                showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
+            }
+        }
     </script>
 }

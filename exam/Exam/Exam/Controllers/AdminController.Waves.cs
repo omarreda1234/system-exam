@@ -36,6 +36,10 @@ namespace Exam.Controllers
                     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.TrainingWaves') AND name = 'EndDate')
                     BEGIN
                         ALTER TABLE dbo.TrainingWaves ADD EndDate DATETIME NULL;
+                    END
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('dbo.TrainingWaves') AND name = 'IsActive')
+                    BEGIN
+                        ALTER TABLE dbo.TrainingWaves ADD IsActive BIT NOT NULL CONSTRAINT DF_TrainingWaves_IsActive DEFAULT 1;
                     END");
             }
             catch { }
@@ -49,7 +53,7 @@ namespace Exam.Controllers
                 await EnsureWaveModeColumnAsync(connection);
 
                 var waves = await connection.QueryAsync<Exam.DTOs.WaveDto>(@"
-                    SELECT Id, WaveName, StartDate, EndDate, ISNULL(IsOnline, 0) AS IsOnline, ISNULL(Mode, CASE WHEN IsOnline = 1 THEN 'Online' ELSE 'Off' END) AS Mode
+                    SELECT Id, WaveName, StartDate, EndDate, ISNULL(IsOnline, 0) AS IsOnline, ISNULL(Mode, CASE WHEN IsOnline = 1 THEN 'Online' ELSE 'Off' END) AS Mode, ISNULL(IsActive, 1) AS IsActive
                     FROM dbo.TrainingWaves
                     ORDER BY Id DESC"
                 );
@@ -163,10 +167,10 @@ namespace Exam.Controllers
 
                 var modeValue = string.IsNullOrWhiteSpace(wave.Mode) ? (wave.IsOnline ? "Online" : "Off") : wave.Mode.Trim();
                 var newWaveId = await connection.ExecuteScalarAsync<int>(@"
-                    INSERT INTO dbo.TrainingWaves (WaveName, StartDate, EndDate, IsOnline, Mode)
-                    VALUES (@WaveName, @StartDate, @EndDate, @IsOnline, @Mode);
+                    INSERT INTO dbo.TrainingWaves (WaveName, StartDate, EndDate, IsOnline, Mode, IsActive)
+                    VALUES (@WaveName, @StartDate, @EndDate, @IsOnline, @Mode, @IsActive);
                     SELECT SCOPE_IDENTITY();",
-                    new { wave.WaveName, wave.StartDate, wave.EndDate, wave.IsOnline, Mode = modeValue }
+                    new { wave.WaveName, wave.StartDate, wave.EndDate, wave.IsOnline, Mode = modeValue, IsActive = wave.IsActive }
                 );
 
                 return Ok(new { NewWaveId = newWaveId });
@@ -227,8 +231,8 @@ namespace Exam.Controllers
 
                     var modeValue = string.IsNullOrWhiteSpace(wave.Mode) ? (wave.IsOnline ? "Online (ON)" : "Offline (Off)") : wave.Mode.Trim();
                     int rows = await connection.ExecuteAsync(
-                        "UPDATE dbo.TrainingWaves SET WaveName = @WaveName, StartDate = @StartDate, EndDate = @EndDate, IsOnline = @IsOnline, Mode = @Mode WHERE Id = @Id",
-                        new { WaveName = wave.WaveName.Trim(), StartDate = wave.StartDate, EndDate = wave.EndDate, IsOnline = wave.IsOnline, Mode = modeValue, Id = wave.Id }
+                        "UPDATE dbo.TrainingWaves SET WaveName = @WaveName, StartDate = @StartDate, EndDate = @EndDate, IsOnline = @IsOnline, Mode = @Mode, IsActive = @IsActive WHERE Id = @Id",
+                        new { WaveName = wave.WaveName.Trim(), StartDate = wave.StartDate, EndDate = wave.EndDate, IsOnline = wave.IsOnline, Mode = modeValue, IsActive = wave.IsActive, Id = wave.Id }
                     );
 
                     if (rows > 0)
@@ -376,6 +380,40 @@ namespace Exam.Controllers
             catch (Exception ex)
             {
                 return Json(new { success = false, message = "حدث خطأ أثناء حذف الحالة: " + ex.Message });
+            }
+        }
+        [HttpPost]
+        public async Task<IActionResult> ToggleWaveStatus(int id, bool isActive)
+        {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role").Select(c => c.Value).ToList();
+            bool hasPermission = User.IsInRole("Admin") || userRoles.Contains("Admin") || userRoles.Contains("HR") || await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Waves", "edit");
+            if (!hasPermission)
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    await EnsureWaveModeColumnAsync(connection);
+
+                    int rows = await connection.ExecuteAsync(
+                        "UPDATE dbo.TrainingWaves SET IsActive = @IsActive WHERE Id = @Id",
+                        new { IsActive = isActive, Id = id }
+                    );
+
+                    if (rows > 0)
+                    {
+                        return Json(new { success = true, isActive = isActive, message = isActive ? "تم تفعيل الويف بنجاح" : "تم تمييز الويف كمنتهي (Done)" });
+                    }
+                    return Json(new { success = false, message = "Wave not found." });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
             }
         }
     }

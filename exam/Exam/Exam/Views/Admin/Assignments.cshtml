@@ -339,6 +339,22 @@
                             Swal.fire('Error', 'Please search and select a product for ItemDefinitionMatch question.', 'warning');
                             return false;
                         }
+
+                        // If custom definition option is checked, update item in DB
+                        const isCustomChecked = $(this).find('.chk-custom-def').is(':checked');
+                        const customDefText = $(this).find('.custom-def-text').val();
+                        if (isCustomChecked && customDefText) {
+                            $.ajax({
+                                url: '/Admin/UpdateItemCustomDefinition',
+                                type: 'POST',
+                                contentType: 'application/json',
+                                data: JSON.stringify({
+                                    itemNo: q.CorrectItemNo,
+                                    isCustomDefinition: true,
+                                    customDefinition: customDefText
+                                })
+                            });
+                        }
                     }
 
                     questions.push(q);
@@ -548,8 +564,29 @@
                                 <input type="text" readonly class="correct-item-no bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs w-full text-slate-500" placeholder="Auto-populated" />
                             </div>
                             <div class="space-y-1">
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Long Definition (Question Prompt)</label>
+                                <div class="flex items-center justify-between">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Long Definition (Question Prompt)</label>
+                                    <span class="custom-badge hidden text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200"><i class="fas fa-magic mr-1"></i> Custom Active</span>
+                                </div>
                                 <textarea class="item-def bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs w-full h-20 outline-none focus:border-brand-500 transition-all" placeholder="This description will be shown to the student..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Admin Custom Definition Checkbox & Boxarea Toggle -->
+                        <div class="p-3.5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/30 rounded-2xl space-y-3">
+                            <label class="flex items-center gap-2.5 cursor-pointer">
+                                <input type="checkbox" class="chk-custom-def w-4 h-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500 cursor-pointer" onchange="toggleQuestionCustomDef(${id})" />
+                                <div class="flex flex-col">
+                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-200">تعديل وتخصيص تعريف هذا الصنف للأدمن (Customize Item Definition in DB)</span>
+                                    <span class="text-[9px] text-slate-500">تفعيل خيار إضافة Box Area لكتابة تعريف مخصص للصنف دون الالتزام بتعريف الأصناف الجاية</span>
+                                </div>
+                            </label>
+
+                            <div class="custom-def-box-container hidden space-y-1.5 pt-2.5 border-t border-amber-200/50 dark:border-amber-900/30">
+                                <label class="block text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-widest">
+                                    التعريف المخصص للصنف (Custom Box Area)
+                                </label>
+                                <textarea class="custom-def-text bg-white dark:bg-slate-950 border border-amber-300 dark:border-amber-800 rounded-xl px-4 py-2.5 text-xs w-full h-24 outline-none focus:border-amber-500 transition-all leading-relaxed" placeholder="اكتب التعريف المخصص للصنف هنا وسوف يظهر للطلاب بدلاً من التعريف الأصلي..." oninput="syncCustomDefToPrompt(${id})"></textarea>
                             </div>
                         </div>
                     </div>
@@ -616,6 +653,34 @@
             }
         }
 
+        function toggleQuestionCustomDef(id) {
+            const $block = $(`.question-block[data-id="${id}"]`);
+            const isChecked = $block.find('.chk-custom-def').is(':checked');
+            const $container = $block.find('.custom-def-box-container');
+            const $badge = $block.find('.custom-badge');
+
+            if (isChecked) {
+                $container.removeClass('hidden').addClass('block');
+                $badge.removeClass('hidden').addClass('inline-flex');
+                if (!$block.find('.custom-def-text').val()) {
+                    $block.find('.custom-def-text').val($block.find('.item-def').val());
+                }
+                syncCustomDefToPrompt(id);
+            } else {
+                $container.removeClass('block').addClass('hidden');
+                $badge.removeClass('inline-flex').addClass('hidden');
+            }
+        }
+
+        function syncCustomDefToPrompt(id) {
+            const $block = $(`.question-block[data-id="${id}"]`);
+            const isChecked = $block.find('.chk-custom-def').is(':checked');
+            if (isChecked) {
+                const customVal = $block.find('.custom-def-text').val();
+                $block.find('.item-def').val(customVal);
+            }
+        }
+
         function populateGroups(id, selectedGroup) {
             const $block = $(`.question-block[data-id="${id}"]`);
             const cat = $block.find('.cat-select').val();
@@ -672,12 +737,15 @@
                         const desc = item.description || item.Description || '';
                         const definition = item.itemDefinition || item.ItemDefinition || '';
                         const category = item.category || item.Category || '';
+                        const isCustom = item.isCustomDefinition ? true : false;
+                        const customDef = item.customDefinition || '';
                         
                         const row = `
-                            <div onclick="selectProduct(${id}, '${code}', '${escapeQuote(desc)}', '${escapeQuote(definition)}')" class="p-3 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                            <div onclick="selectProduct(${id}, '${code}', '${escapeQuote(desc)}', '${escapeQuote(definition)}', ${isCustom}, '${escapeQuote(customDef)}')" class="p-3 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
                                 <div>
                                     <span class="font-bold text-brand-600 dark:text-brand-400">${code}</span> - 
                                     <span class="font-semibold text-slate-700 dark:text-slate-300">${desc}</span>
+                                    ${isCustom ? '<span class="ml-2 text-[9px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Custom Def</span>' : ''}
                                 </div>
                                 <span class="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded">${category}</span>
                             </div>
@@ -689,12 +757,21 @@
             });
         }
 
-        function selectProduct(id, itemCode, desc, definition) {
+        function selectProduct(id, itemCode, desc, definition, isCustom, customDef) {
             const $block = $(`.question-block[data-id="${id}"]`);
             $block.find('.prod-search').val(desc);
             $block.find('.correct-item-no').val(itemCode);
             
-            // If the item doesn't have an item definition, default to description
+            // If custom definition exists for item
+            if (isCustom && customDef) {
+                $block.find('.chk-custom-def').prop('checked', true);
+                $block.find('.custom-def-text').val(customDef);
+                toggleQuestionCustomDef(id);
+            } else {
+                $block.find('.chk-custom-def').prop('checked', false);
+                toggleQuestionCustomDef(id);
+            }
+
             const finalDef = definition ? definition : `Product definition of ${desc}`;
             $block.find('.item-def').val(finalDef);
             
