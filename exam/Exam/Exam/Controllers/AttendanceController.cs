@@ -412,19 +412,19 @@ namespace Exam.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateSession(int? waveId, int? companyId, DateTime sessionDate, string sessionName)
+        public async Task<IActionResult> CreateSession(int? waveId, int? companyId, DateTime sessionDate, string sessionName, TimeSpan? startTime, TimeSpan? endTime)
         {
             using var conn = new SqlConnection(_connectionString);
             if (companyId.HasValue)
             {
-                await conn.ExecuteAsync("INSERT INTO AttendanceSessions (CompanyId, SessionDate, SessionName) VALUES (@CompanyId, @Date, @Name)", 
-                    new { CompanyId = companyId, Date = sessionDate, Name = sessionName });
+                await conn.ExecuteAsync("INSERT INTO AttendanceSessions (CompanyId, SessionDate, SessionName, StartTime, EndTime) VALUES (@CompanyId, @Date, @Name, @Start, @End)", 
+                    new { CompanyId = companyId, Date = sessionDate, Name = sessionName, Start = startTime, End = endTime });
                 return RedirectToAction(nameof(ManageSessions), new { companyId });
             }
             else
             {
-                await conn.ExecuteAsync("INSERT INTO AttendanceSessions (WaveId, SessionDate, SessionName) VALUES (@WaveId, @Date, @Name)", 
-                    new { WaveId = waveId, Date = sessionDate, Name = sessionName });
+                await conn.ExecuteAsync("INSERT INTO AttendanceSessions (WaveId, SessionDate, SessionName, StartTime, EndTime) VALUES (@WaveId, @Date, @Name, @Start, @End)", 
+                    new { WaveId = waveId, Date = sessionDate, Name = sessionName, Start = startTime, End = endTime });
                 return RedirectToAction(nameof(ManageSessions), new { waveId });
             }
         }
@@ -593,6 +593,34 @@ namespace Exam.Controllers
             
             if (session == null) return NotFound();
 
+            bool isLocked = false;
+            string lockReason = "";
+            DateTime now = DateTime.Now;
+
+            if (session.StartTime != null && session.EndTime != null)
+            {
+                TimeSpan sTime = (TimeSpan)session.StartTime;
+                TimeSpan eTime = (TimeSpan)session.EndTime;
+                DateTime sessionDate = ((DateTime)session.SessionDate).Date;
+
+                DateTime sessionStart = sessionDate.Add(sTime);
+                DateTime sessionEnd = sessionDate.Add(eTime);
+
+                if (now < sessionStart)
+                {
+                    isLocked = true;
+                    lockReason = $"المحاضرة لم تبدأ بعد. مسموح بأخذ الغياب فقط بين الساعة {sTime:hh\\:mm} والبيانات {eTime:hh\\:mm} بتاريخ {sessionDate:dd/MM/yyyy}.";
+                }
+                else if (now > sessionEnd)
+                {
+                    isLocked = true;
+                    lockReason = $"انتهى وقت المحاضرة المحدد. كان مسموحاً بأخذ الغياب فقط بين الساعة {sTime:hh\\:mm} و {eTime:hh\\:mm} بتاريخ {sessionDate:dd/MM/yyyy}.";
+                }
+            }
+
+            ViewBag.IsLocked = isLocked;
+            ViewBag.LockReason = lockReason;
+
             IEnumerable<dynamic> users;
 
             if (session.CompanyId != null)
@@ -631,6 +659,23 @@ namespace Exam.Controllers
             {
                 using var conn = new SqlConnection(_connectionString);
                 var recordedBy = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+                var session = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT SessionDate, StartTime, EndTime FROM AttendanceSessions WHERE Id = @Id", new { Id = sessionId });
+                if (session != null && session.StartTime != null && session.EndTime != null)
+                {
+                    TimeSpan sTime = (TimeSpan)session.StartTime;
+                    TimeSpan eTime = (TimeSpan)session.EndTime;
+                    DateTime sessionDate = ((DateTime)session.SessionDate).Date;
+
+                    DateTime sessionStart = sessionDate.Add(sTime);
+                    DateTime sessionEnd = sessionDate.Add(eTime);
+                    DateTime now = DateTime.Now;
+
+                    if (now < sessionStart || now > sessionEnd)
+                    {
+                        return Json(new { success = false, message = $"عفواً، تسجيل الغياب مغلق الآن! الموعد المسموح فقط من {sTime:hh\\:mm} إلى {eTime:hh\\:mm} بتاريخ {sessionDate:dd/MM/yyyy}." });
+                    }
+                }
                 
                 // Apply defensive schema adjustments just in case
                 await conn.ExecuteAsync(@"

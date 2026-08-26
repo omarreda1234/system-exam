@@ -28,6 +28,12 @@
                             <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                                 @session.SessionDate.ToString("dd MMMM yyyy")
                             </span>
+                            @if (session.StartTime != null && session.EndTime != null)
+                            {
+                                <span class="text-[9px] font-black bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full uppercase tracking-widest border border-slate-200">
+                                    <i class="far fa-clock text-brand-500 mr-1"></i> @(((TimeSpan)session.StartTime).ToString(@"hh\:mm")) - @(((TimeSpan)session.EndTime).ToString(@"hh\:mm"))
+                                </span>
+                            }
                         </div>
                         <h1 class="text-2xl font-black text-slate-900 tracking-tight uppercase">@session.SessionName</h1>
                     </div>
@@ -74,6 +80,19 @@
 
     <!-- Attendance Sheet -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 mt-8">
+        @if (ViewBag.IsLocked == true)
+        {
+            <div class="bg-amber-50 border-2 border-amber-500/30 text-amber-900 p-6 rounded-3xl mb-6 flex items-center gap-4 shadow-sm">
+                <div class="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl shrink-0 shadow-md shadow-amber-500/20">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <div>
+                    <h4 class="font-black text-sm uppercase tracking-wide">Attendance Window Locked / تسجيل الغياب مغلق</h4>
+                    <p class="text-xs font-bold text-amber-700 mt-0.5">@ViewBag.LockReason</p>
+                </div>
+            </div>
+        }
+
         <div class="hidden md:block bg-white border border-slate-200 rounded-t-[32px] overflow-hidden shadow-sm">
              <div class="grid grid-cols-12 bg-slate-50/50 border-b border-slate-100 px-8 py-4">
                  <div class="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Trainee / المتدرب</div>
@@ -116,38 +135,38 @@
                         <div class="md:col-span-6 flex flex-wrap items-center justify-end gap-6 pt-4 md:pt-0 border-t md:border-0 border-slate-50">
                             <!-- Arrival (حضور) -->
                             <div class="flex items-center gap-2">
-                                <label class="flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl transition-all hover:bg-emerald-50 @(!User.IsInRole("Admin") && user.IsPresent ? "opacity-60 cursor-not-allowed pointer-events-none" : "")">
+                                <label class="flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl transition-all hover:bg-emerald-50 @((ViewBag.IsLocked == true || (!User.IsInRole("Admin") && user.IsPresent)) ? "opacity-60 cursor-not-allowed pointer-events-none" : "")">
                                     <input type="checkbox" id="checkin-chk-@user.Id" 
                                            onchange="onCheckInToggle('@user.Id')"
                                            class="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 focus:ring-2"
                                            @(user.IsPresent ? "checked" : "")
-                                           @(!User.IsInRole("Admin") && user.IsPresent ? "disabled" : "") />
+                                           @((ViewBag.IsLocked == true || (!User.IsInRole("Admin") && user.IsPresent)) ? "disabled" : "") />
                                     <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Arrived / حضور</span>
                                 </label>
                                 <input type="text" id="checkin-time-@user.Id" 
                                        placeholder="--:--" 
                                        value="@user.CheckInTime"
-                                       @(User.IsInRole("Admin") || string.IsNullOrEmpty(user.CheckInTime) ? "" : "readonly")
+                                       @(ViewBag.IsLocked == true || (!User.IsInRole("Admin") && !string.IsNullOrEmpty(user.CheckInTime)) ? "readonly" : "")
                                        onchange="saveDetailedAttendance('@user.Id')"
-                                       class="time-input-field w-20 px-2 py-1.5 text-[10px] font-bold text-center rounded-lg focus:outline-none @(User.IsInRole("Admin") || string.IsNullOrEmpty(user.CheckInTime) ? "bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500" : "bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none")" />
+                                       class="time-input-field w-20 px-2 py-1.5 text-[10px] font-bold text-center rounded-lg focus:outline-none @(ViewBag.IsLocked != true && (User.IsInRole("Admin") || string.IsNullOrEmpty(user.CheckInTime)) ? "bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500" : "bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none")" />
                             </div>
 
                             <!-- Departure (انصراف) -->
                             <div class="flex items-center gap-2">
-                                <label class="flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl transition-all hover:bg-rose-50 @(!User.IsInRole("Admin") && !string.IsNullOrEmpty(user.CheckOutTime) ? "opacity-60 cursor-not-allowed pointer-events-none" : "")">
+                                <label class="flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl transition-all hover:bg-rose-50 @((ViewBag.IsLocked == true || (!User.IsInRole("Admin") && !string.IsNullOrEmpty(user.CheckOutTime))) ? "opacity-60 cursor-not-allowed pointer-events-none" : "")">
                                     <input type="checkbox" id="checkout-chk-@user.Id" 
                                            onchange="onCheckOutToggle('@user.Id')"
                                            class="w-4 h-4 text-rose-600 border-slate-300 rounded focus:ring-rose-500 focus:ring-2"
                                            @(!string.IsNullOrEmpty(user.CheckOutTime) ? "checked" : "")
-                                           @(!User.IsInRole("Admin") && !string.IsNullOrEmpty(user.CheckOutTime) ? "disabled" : "") />
+                                           @((ViewBag.IsLocked == true || (!User.IsInRole("Admin") && !string.IsNullOrEmpty(user.CheckOutTime))) ? "disabled" : "") />
                                     <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Left / انصراف</span>
                                 </label>
                                 <input type="text" id="checkout-time-@user.Id" 
                                        placeholder="--:--" 
                                        value="@user.CheckOutTime"
-                                       @(User.IsInRole("Admin") || string.IsNullOrEmpty(user.CheckOutTime) ? "" : "readonly")
+                                       @(ViewBag.IsLocked == true || (!User.IsInRole("Admin") && !string.IsNullOrEmpty(user.CheckOutTime)) ? "readonly" : "")
                                        onchange="saveDetailedAttendance('@user.Id')"
-                                       class="time-input-field w-20 px-2 py-1.5 text-[10px] font-bold text-center rounded-lg focus:outline-none @(User.IsInRole("Admin") || string.IsNullOrEmpty(user.CheckOutTime) ? "bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500" : "bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none")" />
+                                       class="time-input-field w-20 px-2 py-1.5 text-[10px] font-bold text-center rounded-lg focus:outline-none @(ViewBag.IsLocked != true && (User.IsInRole("Admin") || string.IsNullOrEmpty(user.CheckOutTime)) ? "bg-white border border-slate-300 text-slate-900 focus:ring-1 focus:ring-brand-500 focus:border-brand-500" : "bg-slate-100/80 border border-slate-200 text-slate-500 pointer-events-none select-none")" />
                             </div>
                         </div>
                     </div>
@@ -207,8 +226,19 @@
         }
 
         const isAdmin = @(User.IsInRole("Admin").ToString().ToLower());
+        const isSessionLocked = @((ViewBag.IsLocked == true).ToString().ToLower());
+        const lockReason = '@Html.Raw(ViewBag.LockReason ?? "")';
 
         function saveDetailedAttendance(userId) {
+            if (isSessionLocked) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'تسجيل الغياب مغلق',
+                    text: lockReason || 'عفواً، لا يمكن تسجيل الغياب خارج مواعيد المحاضرة المحددة!'
+                });
+                return;
+            }
+
             let isPresent = document.getElementById(`checkin-chk-${userId}`).checked;
             let checkInTime = document.getElementById(`checkin-time-${userId}`).value.trim();
             const checkOutTime = document.getElementById(`checkout-time-${userId}`).value.trim();

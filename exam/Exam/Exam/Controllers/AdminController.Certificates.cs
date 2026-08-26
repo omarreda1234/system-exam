@@ -149,7 +149,20 @@ namespace Exam.Controllers
                 var resultList = results.ToList();
                 foreach (var row in resultList)
                 {
-                    if (!string.IsNullOrWhiteSpace(row.CertificateCode) && row.CertificateCode.Trim() != "/")
+                    if (row.Score > 100m && row.Score <= 1000m)
+                    {
+                        row.Score = Math.Round(row.Score / 10m, 2);
+                    }
+                    else if (row.Score > 1000m)
+                    {
+                        row.Score = Math.Round(row.Score / 100m, 2);
+                    }
+                    else if (row.Score <= 1.0m && row.Score > 0m)
+                    {
+                        row.Score = Math.Round(row.Score * 100m, 2);
+                    }
+
+                    if (row.Score > 75)
                     {
                         string wName = row.WaveName ?? "";
                         DateTime wDate = row.ActualStartTime ?? DateTime.Now;
@@ -171,14 +184,29 @@ namespace Exam.Controllers
                         string modeCode = ExtractModeForSerial(modeStr, isOnline);
                         string uCode = string.IsNullOrWhiteSpace(row.UserCode) ? "0000" : row.UserCode.Trim();
 
-                        row.CertificateCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{uCode}";
-                        row.Status = "Completed";
+                        if (string.IsNullOrWhiteSpace(row.CertificateCode) || row.CertificateCode.Trim() == "/")
+                        {
+                            row.CertificateCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{uCode}";
+                        }
+                        row.Status = "PassedWithCert";
                         row.IsPassed = true;
+                    }
+                    else if (row.Score >= 70 && row.Score <= 75)
+                    {
+                        row.CertificateCode = null;
+                        row.Status = "PassedNoCert";
+                        row.IsPassed = true;
+                    }
+                    else if (row.Score > 0 && row.Score < 70)
+                    {
+                        row.CertificateCode = null;
+                        row.Status = "Failed";
+                        row.IsPassed = false;
                     }
                     else
                     {
                         row.CertificateCode = null;
-                        row.Status = "Not Started";
+                        row.Status = "NotExamined";
                         row.IsPassed = false;
                     }
                 }
@@ -450,7 +478,7 @@ namespace Exam.Controllers
 
                 var colUserCode = GetCol("Code", "UserCode", "User Code", "الكود", "كود", "كود الطالب");
                 var colCertificateCode = GetCol("Certificate", "CertificateCode", "Certificate Code", "الشهادة", "كود الشهادة", "رقم الشهادة");
-                var colScore = GetCol("Score", "الدرجة", "النسبة", "النسبه", "النسبة المئوية", "الدرجة المئوية", "درجة", "نسبة", "نسبه", "Score %", "Percentage");
+                var colScore = GetCol("Score", "الدرجة", "النسبة", "النسبه", "النسبة المئوية", "الدرجة المئوية", "درجة", "نسبة", "نسبه", "Score %", "Percentage", "النتيجة", "النتيجه", "الدرجة النهائية", "الدرجة النهائيه", "درجة الاختبار", "درجة الإختبار", "Grade", "Mark");
                 var colWaveName = GetCol("Wave", "الويف", "الدورة", "المجموعة", "WaveName", "Wave Name");
                 var colStudentName = GetCol("Name", "FullName", "StudentName", "Student Name", "الاسم", "اسم الطالب", "الاسم بالكامل", "الاسم ثلاثي");
                 var colEmail = GetCol("Email", "Mail", "الايميل", "البريد الالكتروني", "البريد الإلكتروني", "الميل");
@@ -491,12 +519,54 @@ namespace Exam.Controllers
                     }
 
                     decimal? parsedScore = null;
-                    if (!string.IsNullOrWhiteSpace(rawScore))
+                    if (colScore != null)
                     {
-                        var cleanScoreStr = rawScore.Replace("%", "").Trim();
-                        if (decimal.TryParse(cleanScoreStr, out var sVal))
+                        var scoreCell = worksheet.Cell(row, colScore.Value);
+                        if (!scoreCell.IsEmpty())
                         {
-                            parsedScore = sVal;
+                            try
+                            {
+                                if (scoreCell.DataType == ClosedXML.Excel.XLDataType.Number)
+                                {
+                                    decimal dVal = (decimal)scoreCell.GetDouble();
+                                    if (dVal > 100m && dVal <= 1000m)
+                                    {
+                                        dVal = dVal / 10m;
+                                    }
+                                    else if (dVal > 1000m)
+                                    {
+                                        dVal = dVal / 100m;
+                                    }
+                                    else if (dVal <= 1.0m && dVal > 0m)
+                                    {
+                                        dVal = dVal * 100m;
+                                    }
+                                    parsedScore = Math.Round(dVal, 2);
+                                }
+                            }
+                            catch { }
+
+                            if (!parsedScore.HasValue && !string.IsNullOrWhiteSpace(rawScore))
+                            {
+                                var cleanScoreStr = rawScore.Replace("%", "").Trim();
+                                if (decimal.TryParse(cleanScoreStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var sVal) ||
+                                    decimal.TryParse(cleanScoreStr, out sVal))
+                                {
+                                    if (sVal > 100m && sVal <= 1000m)
+                                    {
+                                        sVal = sVal / 10m;
+                                    }
+                                    else if (sVal > 1000m)
+                                    {
+                                        sVal = sVal / 100m;
+                                    }
+                                    else if (sVal <= 1.0m && sVal > 0m && cleanScoreStr != "1" && cleanScoreStr != "1.0")
+                                    {
+                                        sVal = sVal * 100m;
+                                    }
+                                    parsedScore = Math.Round(sVal, 2);
+                                }
+                            }
                         }
                     }
 
@@ -578,7 +648,7 @@ namespace Exam.Controllers
                             IsActive = true,
                         };
 
-                        var createResult = await _userManager.CreateAsync(newUser, "Test@123");
+                        var createResult = await _userManager.CreateAsync(newUser, "Test@2468");
                         if (createResult.Succeeded)
                         {
                             string resolvedRole = "Pharmacist";
@@ -742,32 +812,39 @@ namespace Exam.Controllers
                             string finalCertCode = rawCertCode;
                             if (string.IsNullOrWhiteSpace(finalCertCode))
                             {
-                                var waveInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                                    SELECT WaveName, StartDate, ISNULL(IsOnline, 0) AS IsOnline, Mode 
-                                    FROM TrainingWaves 
-                                    WHERE Id = @WaveId", new { WaveId = resolvedWaveId });
-
-                                if (waveInfo != null)
+                                if (parsedScore.HasValue && parsedScore.Value > 75m)
                                 {
-                                    string wName = (string)waveInfo.WaveName ?? "";
-                                    DateTime wDate = waveInfo.StartDate ?? DateTime.Now;
-                                    string yearStr = wDate.Year.ToString();
-                                    string waveNumStr = "001";
-                                    var digits = new string(wName.Where(char.IsDigit).ToArray());
-                                    if (!string.IsNullOrEmpty(digits))
-                                    {
-                                        waveNumStr = digits.PadLeft(3, '0');
-                                    }
-                                    else
-                                    {
-                                        waveNumStr = resolvedWaveId.ToString().PadLeft(3, '0');
-                                    }
+                                    var waveInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                                        SELECT WaveName, StartDate, ISNULL(IsOnline, 0) AS IsOnline, Mode 
+                                        FROM TrainingWaves 
+                                        WHERE Id = @WaveId", new { WaveId = resolvedWaveId });
 
-                                    bool isWOnline = waveInfo.IsOnline != null && Convert.ToBoolean(waveInfo.IsOnline);
-                                    string wModeProp = waveInfo.Mode != null ? (string)waveInfo.Mode : null;
-                                    string mCode = ExtractModeForSerial(wModeProp, isWOnline || wName.ToLower().Contains("online") || wName.Contains("أونلاين"));
-                                    string uCode = string.IsNullOrWhiteSpace(user.UserCode) ? "0000" : user.UserCode.Trim();
-                                    finalCertCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{mCode}-{uCode}";
+                                    if (waveInfo != null)
+                                    {
+                                        string wName = (string)waveInfo.WaveName ?? "";
+                                        DateTime wDate = waveInfo.StartDate ?? DateTime.Now;
+                                        string yearStr = wDate.Year.ToString();
+                                        string waveNumStr = "001";
+                                        var digits = new string(wName.Where(char.IsDigit).ToArray());
+                                        if (!string.IsNullOrEmpty(digits))
+                                        {
+                                            waveNumStr = digits.PadLeft(3, '0');
+                                        }
+                                        else
+                                        {
+                                            waveNumStr = resolvedWaveId.ToString().PadLeft(3, '0');
+                                        }
+
+                                        bool isWOnline = waveInfo.IsOnline != null && Convert.ToBoolean(waveInfo.IsOnline);
+                                        string wModeProp = waveInfo.Mode != null ? (string)waveInfo.Mode : null;
+                                        string mCode = ExtractModeForSerial(wModeProp, isWOnline || wName.ToLower().Contains("online") || wName.Contains("أونلاين"));
+                                        string uCode = string.IsNullOrWhiteSpace(user.UserCode) ? "0000" : user.UserCode.Trim();
+                                        finalCertCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{mCode}-{uCode}";
+                                    }
+                                }
+                                else
+                                {
+                                    finalCertCode = null;
                                 }
                             }
 
@@ -1384,7 +1461,8 @@ namespace Exam.Controllers
 
             foreach (var row in results)
             {
-                if (!string.IsNullOrWhiteSpace(row.CertificateCode) && row.CertificateCode.Trim() != "/")
+                bool hasCertCode = !string.IsNullOrWhiteSpace(row.CertificateCode) && row.CertificateCode.Trim() != "/";
+                if (hasCertCode || row.Score > 75)
                 {
                     string wName = row.WaveName ?? "";
                     DateTime wDate = row.ActualStartTime ?? DateTime.Now;
@@ -1400,12 +1478,22 @@ namespace Exam.Controllers
                     string uCode = string.IsNullOrWhiteSpace(row.UserCode) ? "0000" : row.UserCode.Trim();
 
                     row.CertificateCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{uCode}";
-                    row.Status = "Certified";
+                    row.Status = "ناجح بشهادة";
+                }
+                else if (row.Score >= 70 && row.Score <= 75)
+                {
+                    row.CertificateCode = "--";
+                    row.Status = "ناجح بدون شهادة";
+                }
+                else if (row.Score > 0 && row.Score < 70)
+                {
+                    row.CertificateCode = "--";
+                    row.Status = "ساقط";
                 }
                 else
                 {
                     row.CertificateCode = "--";
-                    row.Status = "Pending";
+                    row.Status = "لم تصدر شهادة";
                 }
             }
 
@@ -1434,7 +1522,7 @@ namespace Exam.Controllers
                     worksheet.Cell(rowIdx, 4).Value = item.RoleName ?? "";
                     worksheet.Cell(rowIdx, 5).Value = item.WaveName ?? "";
                     worksheet.Cell(rowIdx, 6).Value = item.BranchName ?? "";
-                    worksheet.Cell(rowIdx, 7).Value = item.Status == "Certified" ? "تم إصدار الشهادة" : "لم تصدر شهادة";
+                    worksheet.Cell(rowIdx, 7).Value = item.Status ?? "--";
                     worksheet.Cell(rowIdx, 8).Value = item.Score > 0 ? $"{item.Score:0.0}%" : "--";
                     worksheet.Cell(rowIdx, 9).Value = item.CertificateCode ?? "--";
                     worksheet.Cell(rowIdx, 10).Value = item.EmailSent ? "تم إرسال البريد" : "لم يرسل البريد";

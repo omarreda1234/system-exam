@@ -1,6 +1,6 @@
 @model IEnumerable<Exam.DTOs.ExamResultRowDto>
 @{
-    ViewData["Title"] = "Certificates Management";
+    ViewData["Title"] = "Wave Results & Certificates";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
     var waves = ViewBag.Waves as IEnumerable<Exam.DTOs.WaveDto> ?? Enumerable.Empty<Exam.DTOs.WaveDto>();
     var selectedWaveId = ViewBag.SelectedWaveId as int? ?? 0;
@@ -13,7 +13,7 @@
         <div>
             <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Analytical Filter</h2>
             <div class="flex items-center gap-3">
-                <p class="text-xl font-bold">Certificates Management</p>
+                <p class="text-xl font-bold">Wave Results & Certificates</p>
                 <span class="bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-200">
                      Advanced Mode Active
                  </span>
@@ -70,8 +70,10 @@
                 <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Status Filter (تصفية بالحالة)</label>
                 <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[210px] transition-colors focus:border-brand-500 outline-none">
                     <option value="all">All Statuses (الكل)</option>
-                    <option value="certified">Certified (تم إصدار الشهادة)</option>
-                    <option value="pending">Pending (لم تصدر شهادة)</option>
+                    <option value="passed_cert">Passed with Cert (ناجح بشهادة > 75%)</option>
+                    <option value="passed_no_cert">Passed without Cert (ناجح بدون شهادة 70-75%)</option>
+                    <option value="failed">Failed (ساقط < 70%)</option>
+                    <option value="not_examined">Not Examined (لم يمتحن بعد ⚪)</option>
                     <option value="email_sent">Email Sent (تم إرسال الإيميل ✉️)</option>
                     <option value="email_failed">Email Failed (فشل إرسال الإيميل ⚠️)</option>
                 </select>
@@ -98,16 +100,28 @@
             <tbody>
                 @foreach (var s in Model) {
                     bool hasCertCode = !string.IsNullOrEmpty(s.CertificateCode) && s.CertificateCode.Trim() != "/";
-                    string certStatus = "pending";
-                    string certStatusText = "لم تصدر شهادة";
-                    string statusBadgeClass = "bg-amber-500 text-amber-700 bg-opacity-10 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800";
+                    string certStatus = "not_examined";
+                    string certStatusText = "لم يمتحن بعد";
+                    string statusBadgeClass = "bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:text-slate-400 border border-slate-200 dark:border-slate-700";
                     string emailStatusAttr = hasCertCode ? (s.EmailSent ? "email_sent" : "email_failed") : "no_email";
                     
-                    if (hasCertCode)
+                    if (s.Status == "PassedWithCert" || s.Score > 75m)
                     {
-                        certStatus = "certified";
-                        certStatusText = "تم إصدار الشهادة";
+                        certStatus = "passed_cert";
+                        certStatusText = "ناجح بشهادة";
                         statusBadgeClass = "bg-emerald-500 text-emerald-700 bg-opacity-10 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800";
+                    }
+                    else if (s.Status == "PassedNoCert" || (s.Score >= 70m && s.Score <= 75m))
+                    {
+                        certStatus = "passed_no_cert";
+                        certStatusText = "ناجح بدون شهادة";
+                        statusBadgeClass = "bg-amber-500 text-amber-700 bg-opacity-10 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800";
+                    }
+                    else if (s.Status == "Failed" || (s.Score < 70m && s.Score > 0m))
+                    {
+                        certStatus = "failed";
+                        certStatusText = "ساقط";
+                        statusBadgeClass = "bg-rose-500 text-rose-700 bg-opacity-10 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800";
                     }
 
                     <tr class="student-row" data-cert-status="@certStatus" data-email-status="@emailStatusAttr">
@@ -501,8 +515,14 @@
                 const rowCertStatus = $(tr).attr('data-cert-status') || '';
                 const rowEmailStatus = $(tr).attr('data-email-status') || '';
 
-                if (selectedFilter === 'certified') {
-                    return rowCertStatus === 'certified';
+                if (selectedFilter === 'passed_cert' || selectedFilter === 'certified') {
+                    return rowCertStatus === 'passed_cert' || rowCertStatus === 'certified';
+                }
+                if (selectedFilter === 'passed_no_cert') {
+                    return rowCertStatus === 'passed_no_cert';
+                }
+                if (selectedFilter === 'failed') {
+                    return rowCertStatus === 'failed';
                 }
                 if (selectedFilter === 'pending') {
                     return rowCertStatus === 'pending';
