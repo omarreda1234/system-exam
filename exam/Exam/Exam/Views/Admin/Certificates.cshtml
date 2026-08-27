@@ -214,6 +214,8 @@
     </div>
 </div>
 
+</div>
+
 @section Scripts {
     <script>
         const allWaves = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(waves.Select(w => new { id = w.Id, name = w.WaveName })));

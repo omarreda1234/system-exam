@@ -431,6 +431,14 @@
                             </a>
                         }
 
+                        @if (HasAccess("Admin", "Certificates") || HasAccess("Admin", "AllUsers"))
+                        {
+                            <a href="@Url.Action("TraineeProfile", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "traineeprofile")">
+                                <i class="fas fa-id-card-clip w-5"></i>
+                                <span>Trainee 360° Profile</span>
+                            </a>
+                        }
+
                         @if (HasAccess("Admin", "PendingRequests"))
                         {
                             <a href="@Url.Action("PendingRequests", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "pendingrequests")">

@@ -1672,7 +1672,186 @@ namespace Exam.Controllers
 
             result.BranchStats = branchMap.Values.OrderByDescending(b => b.Total).ToList();
 
+            var monthlySql = @"
+                SELECT 
+                    FORMAT(W.StartDate, 'MMM yyyy') as MonthLabel,
+                    MIN(W.StartDate) as MonthDate,
+                    COUNT(UW.UserId) as TotalTrainees,
+                    SUM(CASE WHEN wc.Score > 75 THEN 1 ELSE 0 END) as CertifiedCount,
+                    SUM(CASE WHEN wc.Score >= 70 AND wc.Score <= 75 THEN 1 ELSE 0 END) as PassedNoCertCount,
+                    SUM(CASE WHEN wc.Score > 0 AND wc.Score < 70 THEN 1 ELSE 0 END) as FailedCount
+                FROM TrainingWaves W
+                JOIN UserWaves UW ON W.Id = UW.WaveId AND UW.IsActive = 1
+                LEFT JOIN UserWaveCertificates wc ON wc.UserId = UW.UserId AND wc.WaveId = W.Id
+                WHERE W.StartDate IS NOT NULL
+                GROUP BY FORMAT(W.StartDate, 'MMM yyyy')
+                ORDER BY MIN(W.StartDate) ASC";
+
+            var monthlyRows = (await conn.QueryAsync<dynamic>(monthlySql)).ToList();
+            var monthlyTrends = new List<MonthlyTrendDto>();
+            foreach (var m in monthlyRows)
+            {
+                int total = Convert.ToInt32(m.TotalTrainees);
+                int cert = Convert.ToInt32(m.CertifiedCount);
+                int passNoCert = Convert.ToInt32(m.PassedNoCertCount);
+                int failed = Convert.ToInt32(m.FailedCount);
+                int examined = cert + passNoCert + failed;
+                double pr = examined > 0 ? Math.Round((double)(cert + passNoCert) / examined * 100.0, 1) : 0;
+                monthlyTrends.Add(new MonthlyTrendDto
+                {
+                    MonthLabel = Convert.ToString(m.MonthLabel) ?? "",
+                    TotalTrainees = total,
+                    CertifiedCount = cert,
+                    PassedNoCertCount = passNoCert,
+                    FailedCount = failed,
+                    PassRate = pr
+                });
+            }
+            result.MonthlyTrends = monthlyTrends;
+
             return result;
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetTrainee360Data(string userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+                return BadRequest("UserId is required.");
+
+            using var conn = new SqlConnection(_connectionString);
+
+            // 1. User Header & Basic Info
+            var userSql = @"
+                SELECT 
+                    U.Id as UserId,
+                    ISNULL(U.FullName, U.UserName) as FullName,
+                    U.UserName,
+                    U.Email,
+                    U.PhoneNumber,
+                    U.UserCode,
+                    ISNULL(B.BranchName, N'بدون فرع / Global') as BranchName,
+                    ISNULL((
+                        SELECT TOP 1 R.Name 
+                        FROM AspNetUserRoles UR 
+                        JOIN AspNetRoles R ON UR.RoleId = R.Id 
+                        WHERE UR.UserId = U.Id
+                    ), 'Student') as RoleName
+                FROM AspNetUsers U
+                LEFT JOIN Branches B ON U.BranchId = B.Id
+                WHERE U.Id = @UserId";
+
+            var user = await conn.QueryFirstOrDefaultAsync<Trainee360UserDto>(userSql, new { UserId = userId });
+            if (user == null)
+                return NotFound("User not found.");
+
+            // 2. Weekly Exam Attempts Log
+            var examsSql = @"
+                SELECT 
+                    uea.Id as AttemptId,
+                    e.Title as ExamTitle,
+                    ISNULL(w.WaveName, N'General') as WaveName,
+                    uea.AttemptNumber,
+                    uea.Score,
+                    uea.FinalScore,
+                    COALESCE(
+                        (SELECT NULLIF(SUM(q.Points), 0) FROM UserSeenQuestions usq JOIN Questions q ON usq.QuestionId = q.Id WHERE usq.AttemptId = uea.Id),
+                        (SELECT NULLIF(COUNT(*), 0) FROM UserSeenQuestions usq WHERE usq.AttemptId = uea.Id),
+                        CASE WHEN uea.Score > 0 AND uea.FinalScore > 0 THEN CAST(ROUND((uea.FinalScore / uea.Score) * 100.0, 0) AS INT) ELSE NULL END,
+                        NULLIF(e.TotalQuestionsToShow, 0),
+                        10
+                    ) as TotalPoints,
+                    uea.IsPassed,
+                    uea.Status,
+                    uea.StartTime,
+                    uea.EndTime,
+                    uea.DurationInMinutes,
+                    uea.CertificateCode
+                FROM UserExamAttempts uea
+                JOIN Exams e ON uea.ExamId = e.Id
+                LEFT JOIN TrainingWaves w ON e.WaveId = w.Id
+                WHERE uea.UserId = @UserId
+                ORDER BY uea.StartTime DESC";
+
+            var examAttempts = (await conn.QueryAsync<Trainee360ExamAttemptDto>(examsSql, new { UserId = userId })).ToList();
+
+            // 3. Assignment Submissions & Tasks
+            var assignmentsSql = @"
+                SELECT 
+                    saa.Id as AttemptId,
+                    a.Title as AssignmentTitle,
+                    ISNULL(w.WaveName, N'General') as WaveName,
+                    saa.Score,
+                    saa.Status,
+                    saa.StartTime,
+                    saa.EndTime
+                FROM StudentAssignmentAttempts saa
+                JOIN Assignments a ON saa.AssignmentId = a.Id
+                LEFT JOIN TrainingWaves w ON a.WaveId = w.Id
+                WHERE saa.UserId = @UserId
+                ORDER BY saa.StartTime DESC";
+
+            var assignmentAttempts = (await conn.QueryAsync<Trainee360AssignmentAttemptDto>(assignmentsSql, new { UserId = userId })).ToList();
+
+            // 4. Wave Enrolments & Certification Journeys
+            var wavesSql = @"
+                SELECT 
+                    w.Id as WaveId,
+                    w.WaveName,
+                    uw.JoinDate,
+                    uw.IsActive,
+                    wc.Score as CertScore,
+                    wc.CertificateCode,
+                    wc.CreatedAt as CertCreatedAt
+                FROM UserWaves uw
+                JOIN TrainingWaves w ON uw.WaveId = w.Id
+                LEFT JOIN UserWaveCertificates wc ON wc.UserId = uw.UserId AND wc.WaveId = w.Id
+                WHERE uw.UserId = @UserId
+                ORDER BY w.StartDate DESC";
+
+            var waveJourneys = (await conn.QueryAsync<Trainee360WaveJourneyDto>(wavesSql, new { UserId = userId })).ToList();
+
+            return Json(new
+            {
+                user,
+                examAttempts,
+                assignmentAttempts,
+                waveJourneys
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> TraineeProfile(string? userId)
+        {
+            ViewBag.InitialUserId = userId ?? "";
+            return View();
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SearchTrainees(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return Json(new List<TraineeSearchResultDto>());
+
+            using var conn = new SqlConnection(_connectionString);
+            var sql = @"
+                SELECT TOP 15
+                    U.Id as UserId,
+                    ISNULL(U.FullName, U.UserName) as FullName,
+                    ISNULL(U.UserCode, N'--') as UserCode,
+                    ISNULL(B.BranchName, N'بدون فرع') as BranchName,
+                    ISNULL((
+                        SELECT TOP 1 R.Name 
+                        FROM AspNetUserRoles UR 
+                        JOIN AspNetRoles R ON UR.RoleId = R.Id 
+                        WHERE UR.UserId = U.Id
+                    ), 'Student') as RoleName
+                FROM AspNetUsers U
+                LEFT JOIN Branches B ON U.BranchId = B.Id
+                WHERE U.FullName LIKE @Q OR U.UserName LIKE @Q OR U.UserCode LIKE @Q
+                ORDER BY U.FullName";
+
+            var list = await conn.QueryAsync<TraineeSearchResultDto>(sql, new { Q = $"%{query.Trim()}%" });
+            return Json(list);
         }
 
         private static void CalculateRolePassRate(RoleAnalyticsDto r)
@@ -1680,6 +1859,65 @@ namespace Exam.Controllers
             int examined = r.Certified + r.PassedNoCert + r.Failed;
             r.PassRate = examined > 0 ? Math.Round((double)(r.Certified + r.PassedNoCert) / examined * 100, 1) : 0;
         }
+    }
+
+    public class TraineeSearchResultDto
+    {
+        public string UserId { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public string UserCode { get; set; } = "";
+        public string BranchName { get; set; } = "";
+        public string RoleName { get; set; } = "";
+    }
+
+    public class Trainee360UserDto
+    {
+        public string Id { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public string UserName { get; set; } = "";
+        public string UserCode { get; set; } = "";
+        public string BranchName { get; set; } = "";
+        public string RoleName { get; set; } = "";
+        public string PhoneNumber { get; set; } = "";
+    }
+
+    public class Trainee360ExamAttemptDto
+    {
+        public int AttemptId { get; set; }
+        public string ExamTitle { get; set; } = "";
+        public string WaveName { get; set; } = "";
+        public int AttemptNumber { get; set; }
+        public double? Score { get; set; }
+        public double? FinalScore { get; set; }
+        public double? TotalPoints { get; set; }
+        public bool? IsPassed { get; set; }
+        public string Status { get; set; } = "";
+        public DateTime? StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+        public int? DurationInMinutes { get; set; }
+        public string CertificateCode { get; set; } = "";
+    }
+
+    public class Trainee360AssignmentAttemptDto
+    {
+        public int AttemptId { get; set; }
+        public string AssignmentTitle { get; set; } = "";
+        public string WaveName { get; set; } = "";
+        public double? Score { get; set; }
+        public string Status { get; set; } = "";
+        public DateTime? StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+    }
+
+    public class Trainee360WaveJourneyDto
+    {
+        public int WaveId { get; set; }
+        public string WaveName { get; set; } = "";
+        public DateTime? JoinDate { get; set; }
+        public bool IsActive { get; set; }
+        public double? CertScore { get; set; }
+        public string CertificateCode { get; set; } = "";
+        public DateTime? CertCreatedAt { get; set; }
     }
 
     public class WaveAnalyticsResultDto
@@ -1698,6 +1936,17 @@ namespace Exam.Controllers
         public RoleAnalyticsDto OtherRoleStats { get; set; } = new();
 
         public List<BranchAnalyticsDto> BranchStats { get; set; } = new();
+        public List<MonthlyTrendDto> MonthlyTrends { get; set; } = new();
+    }
+
+    public class MonthlyTrendDto
+    {
+        public string MonthLabel { get; set; } = string.Empty;
+        public int TotalTrainees { get; set; }
+        public int CertifiedCount { get; set; }
+        public int PassedNoCertCount { get; set; }
+        public int FailedCount { get; set; }
+        public double PassRate { get; set; }
     }
 
     public class RoleAnalyticsDto

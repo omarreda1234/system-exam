@@ -1,0 +1,586 @@
+@{
+    ViewData["Title"] = "Trainee 360° Profile | Performance Hub";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    string initialUserId = ViewBag.InitialUserId as string ?? "";
+}
+
+<style>
+    @@media print {
+        body * {
+            visibility: hidden;
+        }
+        #traineeMainContent, #traineeMainContent * {
+            visibility: visible;
+        }
+        #traineeMainContent {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+        }
+        .no-print {
+            display: none !important;
+        }
+    }
+</style>
+
+<div class="space-y-6">
+    
+    <!-- Page Header & Live Search Bar -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm no-print">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
+            <div>
+                <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center text-lg">
+                        <i class="fas fa-id-card-clip"></i>
+                    </span>
+                    Trainee 360° Performance Hub
+                </h1>
+                <p class="text-xs font-bold text-slate-400 mt-1">Search by employee code or name to inspect individual exam attempts, assignment submissions, wave progress, and certified credentials.</p>
+            </div>
+        </div>
+
+        <!-- Dynamic Live Search Container -->
+        <div class="relative w-full max-w-3xl">
+            <div class="relative flex items-center">
+                <i class="fas fa-search absolute left-5 text-slate-400 text-sm pointer-events-none"></i>
+                <input type="text" id="traineeSearchInput" 
+                       placeholder="Enter User Code or Name for instant autocomplete lookup..." 
+                       class="w-full bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl pl-12 pr-12 py-4 text-sm font-bold text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all shadow-inner" 
+                       autocomplete="off" />
+                <div id="searchSpinner" class="hidden absolute right-4 text-brand-500">
+                    <i class="fas fa-spinner fa-spin text-sm"></i>
+                </div>
+            </div>
+
+            <!-- Autocomplete Suggestions Dropdown -->
+            <div id="searchDropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+                <!-- Populated via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Empty State Prompt -->
+    <div id="emptyTraineeState" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center space-y-4 no-print">
+        <div class="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl mx-auto flex items-center justify-center text-slate-400 text-2xl">
+            <i class="fas fa-user-check"></i>
+        </div>
+        <div>
+            <h3 class="text-base font-black text-slate-800 dark:text-slate-200">Select a Trainee to View Performance Profile</h3>
+            <p class="text-xs text-slate-400 font-bold max-w-md mx-auto mt-1">Type an employee code or name in the search bar above to generate their complete report.</p>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingTraineeState" class="hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center space-y-4 no-print">
+        <i class="fas fa-circle-notch fa-spin text-4xl text-brand-500"></i>
+        <p class="text-sm font-black text-slate-600 dark:text-slate-300">Fetching trainee profile and aggregating performance metrics...</p>
+    </div>
+
+    <!-- Full Trainee Content Container -->
+    <div id="traineeMainContent" class="hidden space-y-6">
+        
+        <!-- Header Info Card & Quick Stats Grid -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 dark:border-slate-800 pb-6">
+                <div class="flex items-center gap-5">
+                    <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center text-2xl font-black shadow-lg shadow-brand-500/20">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-3">
+                            <h2 id="tProfileName" class="text-xl font-black text-slate-900 dark:text-white">---</h2>
+                            <span id="tProfileRole" class="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800">---</span>
+                        </div>
+                        <div class="flex items-center gap-4 text-xs font-bold text-slate-400 mt-1.5 flex-wrap">
+                            <span><i class="fas fa-building text-slate-400 mr-1"></i>Branch: <span id="tProfileBranch" class="text-slate-700 dark:text-slate-300">---</span></span>
+                            <span><i class="fas fa-barcode text-slate-400 mr-1"></i>Code: <span id="tProfileCode" class="font-mono text-brand-600 dark:text-brand-400">---</span></span>
+                            <span id="tProfilePhoneSpan"><i class="fas fa-phone text-slate-400 mr-1"></i>Phone: <span id="tProfilePhone">---</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export Action Buttons -->
+                <div class="flex items-center gap-3 no-print">
+                    <button id="btnExportExcel" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all">
+                        <i class="fas fa-file-excel"></i> Export Excel
+                    </button>
+                    <button id="btnPrintPdf" class="px-4 py-2.5 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white text-xs font-black rounded-xl flex items-center gap-2 shadow-lg transition-all">
+                        <i class="fas fa-print"></i> Print / PDF Report
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Key Metrics Cards Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Weekly Exams</span>
+                    <div id="statExamsCount" class="text-xl font-black text-slate-900 dark:text-white font-mono">0</div>
+                    <span id="statExamsPassRate" class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Pass Rate: 0%</span>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Assignments & Tasks</span>
+                    <div id="statAssignmentsCount" class="text-xl font-black text-slate-900 dark:text-white font-mono">0</div>
+                    <span id="statAssignmentsAvg" class="text-[10px] font-bold text-purple-600 dark:text-purple-400">Average Score: 0%</span>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Enrolled Waves</span>
+                    <div id="statWavesCount" class="text-xl font-black text-slate-900 dark:text-white font-mono">0</div>
+                    <span class="text-[10px] font-bold text-slate-500">Wave Cycles</span>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Verified Certificates</span>
+                    <div id="statCertsCount" class="text-xl font-black text-amber-600 dark:text-amber-400 font-mono">0</div>
+                    <span class="text-[10px] font-bold text-amber-600 dark:text-amber-400">Official Credentials</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Section Tabs Container -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+            
+            <!-- Tab Navigation Header -->
+            <div class="px-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/50 flex items-center gap-2 overflow-x-auto text-xs font-black no-print">
+                <button class="profile-tab-btn active py-4 px-5 text-brand-600 dark:text-brand-400 border-b-2 border-brand-500 flex items-center gap-2 transition-all" data-tab="pageTabExams">
+                    <i class="fas fa-calendar-week text-brand-500"></i> Weekly Exams & Quizzes
+                </button>
+                <button class="profile-tab-btn py-4 px-5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 transition-all" data-tab="pageTabAssignments">
+                    <i class="fas fa-tasks text-purple-500"></i> Assignment Submissions
+                </button>
+                <button class="profile-tab-btn py-4 px-5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 transition-all" data-tab="pageTabWaves">
+                    <i class="fas fa-water text-amber-500"></i> Wave Paths & Certificates
+                </button>
+            </div>
+
+            <!-- Tab Contents -->
+            <div class="p-6">
+                
+                <!-- Tab 1: Weekly Exams -->
+                <div id="pageTabExams" class="profile-tab-content block space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-black text-slate-800 dark:text-slate-200">Exam Attempts & Weekly Assessment Log</h3>
+                        <span class="text-xs font-bold text-slate-400">Total Attempts: <span id="examsTotalBadge" class="font-mono text-brand-600">0</span></span>
+                    </div>
+                    <div class="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-black text-[9px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                    <th class="p-3">Exam Title</th>
+                                    <th class="p-3">Associated Wave</th>
+                                    <th class="p-3 text-center">Attempt #</th>
+                                    <th class="p-3 text-center">Percentage</th>
+                                    <th class="p-3 text-center">Score</th>
+                                    <th class="p-3 text-right">Date & Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pageExamsTbody" class="divide-y divide-slate-100 dark:divide-slate-800 font-bold text-slate-700 dark:text-slate-300">
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Assignments -->
+                <div id="pageTabAssignments" class="profile-tab-content hidden space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-black text-slate-800 dark:text-slate-200">Assignment Submissions & Homework Log</h3>
+                        <span class="text-xs font-bold text-slate-400">Total Tasks: <span id="assignmentsTotalBadge" class="font-mono text-purple-600">0</span></span>
+                    </div>
+                    <div class="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-black text-[9px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                    <th class="p-3">Assignment Title</th>
+                                    <th class="p-3">Associated Wave</th>
+                                    <th class="p-3 text-center">Awarded Score</th>
+                                    <th class="p-3 text-center">Submission Status</th>
+                                    <th class="p-3 text-right">Submission Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pageAssignmentsTbody" class="divide-y divide-slate-100 dark:divide-slate-800 font-bold text-slate-700 dark:text-slate-300">
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Waves & Certificates -->
+                <div id="pageTabWaves" class="profile-tab-content hidden space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-black text-slate-800 dark:text-slate-200">Wave Enrolments & Verified Credentials</h3>
+                        <span class="text-xs font-bold text-slate-400">Total Waves: <span id="wavesTotalBadge" class="font-mono text-amber-600">0</span></span>
+                    </div>
+                    <div class="overflow-x-auto rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-black text-[9px] uppercase tracking-widest border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                    <th class="p-3">Wave Name</th>
+                                    <th class="p-3 text-center">Join Date</th>
+                                    <th class="p-3 text-center">Certificate Score</th>
+                                    <th class="p-3 text-center">Official Code</th>
+                                    <th class="p-3 text-right">Issue Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pageWavesTbody" class="divide-y divide-slate-100 dark:divide-slate-800 font-bold text-slate-700 dark:text-slate-300">
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+@section Scripts {
+    <script>
+        const initialUserId = '@initialUserId';
+        let searchTimer = null;
+        let currentTraineeData = null;
+
+        $(document).ready(function () {
+
+            if (initialUserId) {
+                loadTrainee360Profile(initialUserId);
+            }
+
+            // Live Autocomplete Search Input Event
+            $('#traineeSearchInput').on('input', function () {
+                const q = $(this).val().trim();
+                clearTimeout(searchTimer);
+
+                if (q.length < 2) {
+                    $('#searchDropdown').addClass('hidden').empty();
+                    return;
+                }
+
+                $('#searchSpinner').removeClass('hidden');
+
+                searchTimer = setTimeout(() => {
+                    $.get('/Admin/SearchTrainees', { query: q }, function (res) {
+                        $('#searchSpinner').addClass('hidden');
+                        const $dropdown = $('#searchDropdown');
+                        $dropdown.empty();
+
+                        if (!res || res.length === 0) {
+                            $dropdown.html('<div class="p-4 text-center text-xs text-slate-400 font-bold">No trainees found matching search query</div>').removeClass('hidden');
+                            return;
+                        }
+
+                        res.forEach(u => {
+                            const name = u.fullName || u.FullName || u.userName || u.UserName || '---';
+                            const role = u.roleName || u.RoleName || 'Student';
+                            const branch = u.branchName || u.BranchName || 'Global';
+                            const code = u.userCode || u.UserCode || 'N/A';
+                            const userId = u.userId || u.UserId || '';
+
+                            const $item = $(`
+                                <div class="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer flex items-center justify-between transition-colors select-trainee-item" data-id="${userId}">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-lg bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold text-xs">
+                                            <i class="fas fa-user"></i>
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-black text-slate-900 dark:text-white">${name}</div>
+                                            <div class="text-[10px] text-slate-400 font-bold">${role} - Branch: ${branch}</div>
+                                        </div>
+                                    </div>
+                                    <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[10px] font-black text-brand-600 dark:text-brand-400">Code: ${code}</span>
+                                </div>
+                            `);
+                            $dropdown.append($item);
+                        });
+
+                        $dropdown.removeClass('hidden');
+                    });
+                }, 250);
+            });
+
+            // Select Trainee from dropdown
+            $(document).on('click', '.select-trainee-item', function () {
+                const userId = $(this).data('id');
+                $('#searchDropdown').addClass('hidden').empty();
+                $('#traineeSearchInput').val('');
+                loadTrainee360Profile(userId);
+            });
+
+            // Hide dropdown on outside click
+            $(document).click(function (e) {
+                if (!$(e.target).closest('#traineeSearchInput, #searchDropdown').length) {
+                    $('#searchDropdown').addClass('hidden');
+                }
+            });
+
+            // Tab Buttons Switcher
+            $('.profile-tab-btn').click(function () {
+                $('.profile-tab-btn').removeClass('active text-brand-600 dark:text-brand-400 border-brand-500')
+                    .addClass('text-slate-400 border-transparent');
+                $(this).addClass('active text-brand-600 dark:text-brand-400 border-brand-500')
+                    .removeClass('text-slate-400 border-transparent');
+
+                const targetTab = $(this).data('tab');
+                $('.profile-tab-content').addClass('hidden').removeClass('block');
+                $('#' + targetTab).removeClass('hidden').addClass('block');
+            });
+
+            // Export Actions
+            $('#btnPrintPdf').click(function () {
+                window.print();
+            });
+
+            $('#btnExportExcel').click(function () {
+                if (!currentTraineeData || !currentTraineeData.user) {
+                    Swal.fire('Warning', 'No trainee profile loaded to export.', 'warning');
+                    return;
+                }
+                exportTraineeToCsv(currentTraineeData);
+            });
+
+            function loadTrainee360Profile(userId) {
+                $('#emptyTraineeState').addClass('hidden');
+                $('#traineeMainContent').addClass('hidden');
+                $('#loadingTraineeState').removeClass('hidden');
+
+                $.get('/Admin/GetTrainee360Data', { userId: userId }, function (data) {
+                    $('#loadingTraineeState').addClass('hidden');
+
+                    if (!data || !data.user) {
+                        Swal.fire('Error', 'Unable to fetch trainee profile data.', 'error');
+                        $('#emptyTraineeState').removeClass('hidden');
+                        return;
+                    }
+
+                    currentTraineeData = data;
+                    const u = data.user;
+                    const name = u.fullName || u.FullName || u.userName || u.UserName || '---';
+                    const role = u.roleName || u.RoleName || 'Student';
+                    const branch = u.branchName || u.BranchName || 'Global';
+                    const code = u.userCode || u.UserCode || 'N/A';
+                    const phone = u.phoneNumber || u.PhoneNumber || '';
+
+                    $('#tProfileName').text(name);
+                    $('#tProfileRole').text(role);
+                    $('#tProfileBranch').text(branch);
+                    $('#tProfileCode').text(code);
+                    if (phone) {
+                        $('#tProfilePhoneSpan').removeClass('hidden');
+                        $('#tProfilePhone').text(phone);
+                    } else {
+                        $('#tProfilePhoneSpan').addClass('hidden');
+                    }
+
+                    // 1. Render Exams
+                    const exams = data.examAttempts || [];
+                    $('#statExamsCount').text(exams.length);
+                    $('#examsTotalBadge').text(exams.length);
+
+                    let passedExams = exams.filter(e => e.isPassed === true || e.IsPassed === true).length;
+                    let examPassRate = exams.length > 0 ? Math.round((passedExams / exams.length) * 100) : 0;
+                    $('#statExamsPassRate').text(`Pass Rate: ${examPassRate}%`);
+
+                    let examsHtml = '';
+                    if (exams.length === 0) {
+                        examsHtml = '<tr><td colspan="6" class="p-6 text-center text-slate-400 font-bold text-xs uppercase">No weekly exam attempts recorded for this trainee</td></tr>';
+                    } else {
+                        exams.forEach(e => {
+                            const title = e.examTitle || e.ExamTitle || '---';
+                            const wave = e.waveName || e.WaveName || 'General';
+                            const attempt = e.attemptNumber || e.AttemptNumber || 1;
+                            const score = e.score ?? e.Score;
+                            const finalScore = e.finalScore ?? e.FinalScore;
+                            const totalPoints = e.totalPoints ?? e.TotalPoints;
+                            const startTime = e.startTime || e.StartTime;
+
+                            const dateStr = startTime ? new Date(startTime).toLocaleString('en-US') : '--';
+                            
+                            let percentageDisplay = score != null ? `<div class="font-mono text-brand-600 dark:text-brand-400 font-black text-sm">${score}%</div>` : '<span class="text-slate-400 font-mono">--</span>';
+
+                            let scoreFractionDisplay = '<span class="text-slate-400 font-mono">--</span>';
+                            if (finalScore != null) {
+                                let max = totalPoints;
+                                if ((!max || max === 0) && score != null && score > 0) {
+                                    max = Math.round((finalScore / score) * 100);
+                                }
+                                if (!max || max === 0) max = 10;
+
+                                const formattedFinal = Math.round(finalScore * 100) / 100;
+                                const formattedMax = Math.round(max * 100) / 100;
+
+                                scoreFractionDisplay = `<span class="px-3 py-1 rounded-full font-mono text-xs font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shadow-sm">${formattedFinal} / ${formattedMax}</span>`;
+                            }
+
+                            examsHtml += `
+                                <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                                    <td class="p-4 font-bold text-slate-900 dark:text-white">${title}</td>
+                                    <td class="p-4 text-slate-400 text-[10px] font-black">${wave}</td>
+                                    <td class="p-4 text-center font-mono font-bold">${attempt}</td>
+                                    <td class="p-4 text-center">${percentageDisplay}</td>
+                                    <td class="p-4 text-center">${scoreFractionDisplay}</td>
+                                    <td class="p-4 text-right font-mono text-[10px] text-slate-400">${dateStr}</td>
+                                </tr>
+                            `;
+                        });
+                    }
+                    $('#pageExamsTbody').html(examsHtml);
+
+                    // 2. Render Assignments
+                    const assignments = data.assignmentAttempts || [];
+                    $('#statAssignmentsCount').text(assignments.length);
+                    $('#assignmentsTotalBadge').text(assignments.length);
+
+                    let avgScore = 0;
+                    if (assignments.length > 0) {
+                        let total = assignments.reduce((acc, curr) => acc + (curr.score ?? curr.Score ?? 0), 0);
+                        avgScore = Math.round(total / assignments.length);
+                    }
+                    $('#statAssignmentsAvg').text(`Average Score: ${avgScore}%`);
+
+                    let asstHtml = '';
+                    if (assignments.length === 0) {
+                        asstHtml = '<tr><td colspan="5" class="p-6 text-center text-slate-400 font-bold text-xs uppercase">No assignment submissions recorded for this trainee</td></tr>';
+                    } else {
+                        assignments.forEach(a => {
+                            const title = a.assignmentTitle || a.AssignmentTitle || '---';
+                            const wave = a.waveName || a.WaveName || 'General';
+                            const score = a.score ?? a.Score;
+                            const status = a.status || a.Status || 'Completed';
+                            const startTime = a.startTime || a.StartTime;
+
+                            const dateStr = startTime ? new Date(startTime).toLocaleString('en-US') : '--';
+                            
+                            let asstScoreCellContent = '<span class="text-slate-400 font-mono">--</span>';
+                            if (score != null) {
+                                asstScoreCellContent = `<div class="font-mono text-purple-600 dark:text-purple-400 font-black text-sm">${score}%</div>`;
+                                asstScoreCellContent += `<div class="text-[10px] text-slate-400 font-bold font-mono mt-0.5">Score: ${score} pts</div>`;
+                            }
+
+                            asstHtml += `
+                                <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                                    <td class="p-4 font-bold text-slate-900 dark:text-white">${title}</td>
+                                    <td class="p-4 text-slate-400 text-[10px] font-black">${wave}</td>
+                                    <td class="p-4 text-center">${asstScoreCellContent}</td>
+                                    <td class="p-4 text-center"><span class="px-2.5 py-1 rounded-full text-[9px] font-black bg-purple-50 text-purple-600 border border-purple-200">${status}</span></td>
+                                    <td class="p-4 text-right font-mono text-[10px] text-slate-400">${dateStr}</td>
+                                </tr>
+                            `;
+                        });
+                    }
+                    $('#pageAssignmentsTbody').html(asstHtml);
+
+                    // 3. Render Waves & Certs
+                    const waves = data.waveJourneys || [];
+                    $('#statWavesCount').text(waves.length);
+                    $('#wavesTotalBadge').text(waves.length);
+
+                    let certsCount = waves.filter(w => (w.certificateCode || w.CertificateCode)).length;
+                    $('#statCertsCount').text(certsCount);
+
+                    let waveHtml = '';
+                    if (waves.length === 0) {
+                        waveHtml = '<tr><td colspan="5" class="p-6 text-center text-slate-400 font-bold text-xs uppercase">Trainee is not enrolled in any waves yet</td></tr>';
+                    } else {
+                        waves.forEach(w => {
+                            const waveName = w.waveName || w.WaveName || '---';
+                            const joinDate = w.joinDate || w.JoinDate;
+                            const certScore = w.certScore ?? w.CertScore;
+                            const certCode = w.certificateCode || w.CertificateCode;
+                            const certCreatedAt = w.certCreatedAt || w.CertCreatedAt;
+
+                            const joinDateStr = joinDate ? new Date(joinDate).toLocaleDateString('en-US') : '--';
+                            const certDateStr = certCreatedAt ? new Date(certCreatedAt).toLocaleDateString('en-US') : '--';
+                            const certCodeBadge = certCode
+                                ? `<span class="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-600 font-mono text-[11px] font-bold border border-amber-200 shadow-sm">${certCode}</span>`
+                                : '<span class="text-slate-400 font-mono">--</span>';
+
+                            let certScoreCellContent = '<span class="text-slate-400 font-mono">--</span>';
+                            if (certScore != null) {
+                                certScoreCellContent = `<div class="font-mono text-emerald-600 dark:text-emerald-400 font-black text-sm">${certScore}%</div>`;
+                                certScoreCellContent += `<div class="text-[10px] text-slate-400 font-bold font-mono mt-0.5">Score: ${certScore} pts</div>`;
+                            }
+
+                            waveHtml += `
+                                <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                                    <td class="p-4 font-bold text-slate-900 dark:text-white">${waveName}</td>
+                                    <td class="p-4 text-center font-mono text-[10px] text-slate-400">${joinDateStr}</td>
+                                    <td class="p-4 text-center">${certScoreCellContent}</td>
+                                    <td class="p-4 text-center">${certCodeBadge}</td>
+                                    <td class="p-4 text-right font-mono text-[10px] text-slate-400">${certDateStr}</td>
+                                </tr>
+                            `;
+                        });
+                    }
+                    $('#pageWavesTbody').html(waveHtml);
+
+                    $('#traineeMainContent').removeClass('hidden');
+                });
+            }
+
+            function exportTraineeToCsv(data) {
+                const u = data.user;
+                const name = u.fullName || u.FullName || u.userName || u.UserName || 'Trainee';
+                const code = u.userCode || u.UserCode || 'N/A';
+                const branch = u.branchName || u.BranchName || 'Global';
+                const role = u.roleName || u.RoleName || 'Student';
+
+                let csv = `Trainee 360 Performance Report\n`;
+                csv += `Name,${name}\n`;
+                csv += `User Code,${code}\n`;
+                csv += `Branch,${branch}\n`;
+                csv += `Role,${role}\n\n`;
+
+                csv += `EXAM ATTEMPTS\n`;
+                csv += `Exam Title,Wave,Attempt,Percentage,Score (Marks),Date\n`;
+                (data.examAttempts || []).forEach(e => {
+                    const title = (e.examTitle || e.ExamTitle || '').replace(/,/g, ' ');
+                    const wave = (e.waveName || e.WaveName || '').replace(/,/g, ' ');
+                    const attempt = e.attemptNumber || e.AttemptNumber || 1;
+                    const score = e.score ?? e.Score ?? '';
+                    const finalScore = e.finalScore ?? e.FinalScore;
+                    const totalPoints = e.totalPoints ?? e.TotalPoints;
+                    let max = totalPoints;
+                    if ((!max || max === 0) && score && score > 0 && finalScore) {
+                        max = Math.round((finalScore / score) * 100);
+                    }
+                    if (!max || max === 0) max = 10;
+                    const scoreStr = finalScore != null ? `${finalScore}/${max}` : '';
+                    const date = e.startTime || e.StartTime ? new Date(e.startTime || e.StartTime).toLocaleString('en-US').replace(/,/g, ' ') : '';
+                    csv += `"${title}","${wave}",${attempt},${score}%,${scoreStr},"${date}"\n`;
+                });
+
+                csv += `\nASSIGNMENT SUBMISSIONS\n`;
+                csv += `Assignment Title,Wave,Score,Status,Date\n`;
+                (data.assignmentAttempts || []).forEach(a => {
+                    const title = (a.assignmentTitle || a.AssignmentTitle || '').replace(/,/g, ' ');
+                    const wave = (a.waveName || a.WaveName || '').replace(/,/g, ' ');
+                    const score = a.score ?? a.Score ?? '';
+                    const status = a.status || a.Status || 'Completed';
+                    const date = a.startTime || a.StartTime ? new Date(a.startTime || a.StartTime).toLocaleString('en-US').replace(/,/g, ' ') : '';
+                    csv += `"${title}","${wave}",${score}%,${status},"${date}"\n`;
+                });
+
+                csv += `\nWAVE JOURNEYS & CERTIFICATES\n`;
+                csv += `Wave Name,Join Date,Certificate Score,Certificate Code,Issue Date\n`;
+                (data.waveJourneys || []).forEach(w => {
+                    const waveName = (w.waveName || w.WaveName || '').replace(/,/g, ' ');
+                    const joinDate = w.joinDate || w.JoinDate ? new Date(w.joinDate || w.JoinDate).toLocaleDateString('en-US') : '';
+                    const certScore = w.certScore ?? w.CertScore ?? '';
+                    const certCode = w.certificateCode || w.CertificateCode || '';
+                    const certDate = w.certCreatedAt || w.CertCreatedAt ? new Date(w.certCreatedAt || w.CertCreatedAt).toLocaleDateString('en-US') : '';
+                    csv += `"${waveName}","${joinDate}",${certScore}%,"${certCode}","${certDate}"\n`;
+                });
+
+                const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.setAttribute('download', `Trainee_360_${code}_${name.replace(/\s+/g, '_')}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+        });
+    </script>
+}
