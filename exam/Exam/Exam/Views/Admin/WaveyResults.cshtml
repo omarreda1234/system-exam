@@ -3,7 +3,9 @@
     ViewData["Title"] = "Wave Performance Tracker";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
     var waves = ViewBag.Waves as IEnumerable<Exam.DTOs.WaveDto> ?? Enumerable.Empty<Exam.DTOs.WaveDto>();
+    var branches = ViewBag.Branches as IEnumerable<Exam.DTOs.BranchDto> ?? Enumerable.Empty<Exam.DTOs.BranchDto>();
     var selectedWaveId = ViewBag.SelectedWaveId as int? ?? 0;
+    var selectedBranchId = ViewBag.SelectedBranchId as int? ?? 0;
 
     // Summary stats
     var total      = Model.Count();
@@ -11,7 +13,7 @@
     var incomplete = Model.Count(s => s.WaveStatus == "INCOMPLETE");
     
     var completedList = Model.Where(s => s.WaveStatus != "INCOMPLETE").ToList();
-    var avgPct = completedList.Any() ? completedList.Average(s => s.TotalAvailable > 0 ? (double)(s.TotalScore / s.TotalAvailable) * 100 : 0) : 0.0;
+    var avgPct = completedList.Any() ? completedList.Average(s => s.TotalAvailable > 0 ? (double)(s.TotalScore / s.TotalAvailable) * 100 : 0.0) : 0.0;
 }
 
 <!-- Header / Filter Row -->
@@ -28,6 +30,17 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-4">
+            <div class="space-y-2">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Branch (الفرع)</label>
+                <select id="branchFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold min-w-[160px]">
+                    <option value="0">ALL BRANCHES</option>
+                    @foreach (var b in branches)
+                    {
+                        <option value="@b.Id" selected="@(b.Id == selectedBranchId.ToString() ? "selected" : null)">@b.BranchName</option>
+                    }
+                </select>
+            </div>
+
             <div class="space-y-2">
                 <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Year</label>
                 <select id="yearFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold w-[100px]">
@@ -52,7 +65,7 @@
 
             <div class="space-y-2">
                 <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Training Wave</label>
-                <select id="waveFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3 text-sm font-bold min-w-[260px]">
+                <select id="waveFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3 text-sm font-bold min-w-[240px]">
                     <option value="-1" selected="@(-1 == selectedWaveId ? "selected" : null)">ALL WAVES</option>
                     <optgroup label="TRAINING BATCHES">
                         @foreach (var w in waves)
@@ -67,7 +80,10 @@
 
             <div class="flex items-center gap-2 mt-auto">
                 <button id="btnExport" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2">
-                    <i class="fas fa-file-excel"></i> Export
+                    <i class="fas fa-file-excel"></i> Export Results
+                </button>
+                <button id="btnShowUnassignedModal" class="bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 px-6 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2">
+                    <i class="fas fa-user-slash text-rose-500"></i> Unassigned Users (عرض غير المسجلين)
                 </button>
             </div>
         </div>
@@ -277,10 +293,11 @@
     <script>
         // Filter dropdowns → reload page
         function applyFilters() {
-            const waveId = $('#waveFilter').val();
-            const year   = $('#yearFilter').val();
-            const month  = $('#monthFilter').val();
-            let url = '/Admin/WaveyResults?waveId=' + waveId + '&year=' + year + '&month=' + month;
+            const waveId   = $('#waveFilter').val();
+            const year     = $('#yearFilter').val();
+            const month    = $('#monthFilter').val();
+            const branchId = $('#branchFilter').val();
+            let url = '/Admin/WaveyResults?waveId=' + waveId + '&year=' + year + '&month=' + month + '&branchId=' + branchId;
             if (window.location.search.includes('iframe=true')) url += '&iframe=true';
             window.location = url;
         }
@@ -303,11 +320,108 @@
             });
         });
 
-        $('#waveFilter').change(applyFilters);
+        $('#waveFilter, #branchFilter').change(applyFilters);
 
         // Export
         $('#btnExport').on('click', function () {
-            window.location = '/Admin/ExportWaveResultsToExcel?waveId=' + $('#waveFilter').val() + '&year=' + $('#yearFilter').val() + '&month=' + $('#monthFilter').val();
+            window.location = '/Admin/ExportWaveResultsToExcel?waveId=' + $('#waveFilter').val() + '&year=' + $('#yearFilter').val() + '&month=' + $('#monthFilter').val() + '&branchId=' + $('#branchFilter').val();
+        });
+
+        $('#btnShowUnassignedModal').on('click', function () {
+            const waveId = $('#waveFilter').val() || -1;
+            const branchId = $('#branchFilter').val() || 0;
+
+            Swal.fire({
+                title: 'Loading Users...',
+                html: '<div class="py-10 text-center"><i class="fas fa-spinner fa-spin text-4xl text-rose-500"></i><p class="mt-3 text-xs font-bold text-slate-500">Fetching unassigned trainees...</p></div>',
+                showConfirmButton: false,
+                allowOutsideClick: false,
+                background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+            });
+
+            $.get('/Admin/GetUnassignedUsersList', { waveId: waveId, branchId: branchId }, function (res) {
+                if (!res.success) {
+                    Swal.fire('Error', res.message || 'Failed to load list', 'error');
+                    return;
+                }
+
+                let userRowsHtml = '';
+                if (res.users && res.users.length > 0) {
+                    res.users.forEach((u, i) => {
+                        userRowsHtml += `
+                            <tr class="border-b border-slate-100 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-xs">
+                                <td class="py-2.5 px-3 font-mono text-slate-400 text-center">${i + 1}</td>
+                                <td class="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100">${u.userName || u.UserName || '-'}</td>
+                                <td class="py-2.5 px-3 text-slate-600 dark:text-slate-400 font-mono">${u.userCode || u.UserCode || '-'}</td>
+                                <td class="py-2.5 px-3 text-slate-500 dark:text-slate-400">${u.email || u.Email || '-'}</td>
+                                <td class="py-2.5 px-3 font-semibold text-violet-600 dark:text-violet-400">${u.roleName || u.RoleName || 'Trainee'}</td>
+                                <td class="py-2.5 px-3 font-bold text-slate-700 dark:text-slate-300">${u.branchName || u.BranchName || 'GLOBAL'}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    userRowsHtml = `<tr><td colspan="6" class="py-8 text-center text-slate-400 font-bold">No unassigned trainees found for current filters.</td></tr>`;
+                }
+
+                const modalHtml = `
+                    <div class="text-left space-y-4">
+                        <div class="flex items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+                            <div>
+                                <span class="text-[10px] font-black uppercase tracking-widest text-rose-500">Unassigned Personnel List</span>
+                                <h3 class="text-base font-extrabold text-slate-900 dark:text-white">المتدربين غير المسجلين في الويفات</h3>
+                            </div>
+                            <span class="bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 px-3 py-1 rounded-full text-xs font-black">
+                                ${res.count} Users
+                            </span>
+                        </div>
+
+                        <div class="flex items-center gap-3">
+                            <input id="modalSearchInput" type="text" placeholder="Search by name, email, code or branch..." class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-rose-500 transition-all text-slate-800 dark:text-slate-200" />
+                            <a href="/Admin/ExportUnassignedUsersToExcel?waveId=${waveId}&branchId=${branchId}" class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 shadow-md shadow-rose-600/20">
+                                <i class="fas fa-file-excel"></i> Export Excel
+                            </a>
+                        </div>
+
+                        <div class="overflow-y-auto max-h-[50vh] border border-slate-200 dark:border-slate-800 rounded-2xl">
+                            <table class="w-full text-left border-collapse" id="unassignedModalTable">
+                                <thead class="sticky top-0 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[10px] font-black uppercase text-slate-500">
+                                    <tr>
+                                        <th class="py-2.5 px-3 text-center">#</th>
+                                        <th class="py-2.5 px-3">Name</th>
+                                        <th class="py-2.5 px-3">Code</th>
+                                        <th class="py-2.5 px-3">Email</th>
+                                        <th class="py-2.5 px-3">Role</th>
+                                        <th class="py-2.5 px-3">Branch</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${userRowsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+
+                Swal.fire({
+                    html: modalHtml,
+                    width: '850px',
+                    showConfirmButton: true,
+                    confirmButtonText: 'Close / إغلاق',
+                    confirmButtonColor: '#64748b',
+                    background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                    color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+                    didOpen: () => {
+                        $('#modalSearchInput').on('input', function() {
+                            const q = $(this).val().toLowerCase().trim();
+                            $('#unassignedModalTable tbody tr').each(function() {
+                                const text = $(this).text().toLowerCase();
+                                $(this).toggle(text.indexOf(q) > -1);
+                            });
+                        });
+                    }
+                });
+            });
         });
 
         // View wave breakdown details

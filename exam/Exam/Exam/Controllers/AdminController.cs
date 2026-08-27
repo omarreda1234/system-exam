@@ -578,7 +578,7 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> ExportWaveResultsToExcel(int waveId, int? month = null, int? year = null)
+        public async Task<IActionResult> ExportWaveResultsToExcel(int waveId, int? month = null, int? year = null, int? branchId = null)
         {
             try
             {
@@ -633,6 +633,17 @@ namespace Exam.Controllers
                     }
                 }
 
+                // User branch filter
+                if (branchId.HasValue && branchId.Value > 0)
+                {
+                    var branches = await _examService.GetAllBranchesAsync();
+                    var selectedBranch = branches.FirstOrDefault(b => b.Id == branchId.Value.ToString());
+                    if (selectedBranch != null)
+                    {
+                        results = results.Where(r => string.Equals(r.BranchName, selectedBranch.BranchName, StringComparison.OrdinalIgnoreCase)).ToList();
+                    }
+                }
+
                 using (var workbook = new XLWorkbook())
                 {
                     var worksheet = workbook.Worksheets.Add("Wave Performance Report");
@@ -652,29 +663,31 @@ namespace Exam.Controllers
                         var cell = worksheet.Cell(currentRow, i + 1);
                         cell.Value = headers[i];
                         cell.Style.Font.Bold = true;
-                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#0D9488");
+                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#4F46E5");
                         cell.Style.Font.FontColor = XLColor.White;
+                        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                     }
+                    currentRow++;
 
-                    foreach (var item in results)
+                    foreach (var r in results)
                     {
+                        worksheet.Cell(currentRow, 1).Value = r.StudentName;
+                        worksheet.Cell(currentRow, 2).Value = r.StudentEmail;
+                        worksheet.Cell(currentRow, 3).Value = r.UserCode;
+                        worksheet.Cell(currentRow, 4).Value = r.RoleName;
+                        worksheet.Cell(currentRow, 5).Value = r.WaveName;
+                        worksheet.Cell(currentRow, 6).Value = r.BranchName;
+                        worksheet.Cell(currentRow, 7).Value = r.Status;
+                        worksheet.Cell(currentRow, 8).Value = r.ActualStartTime.HasValue ? r.ActualStartTime.Value.ToString("yyyy-MM-dd HH:mm") : "--";
+                        worksheet.Cell(currentRow, 9).Value = r.ActualEndTime.HasValue ? r.ActualEndTime.Value.ToString("yyyy-MM-dd HH:mm") : "--";
+                        worksheet.Cell(currentRow, 10).Value = r.DurationInMinutes > 0 ? r.DurationInMinutes : "--";
+                        worksheet.Cell(currentRow, 11).Value = r.ExamsCompleted;
+                        worksheet.Cell(currentRow, 12).Value = r.ExamsAssigned;
+                        worksheet.Cell(currentRow, 13).Value = r.TotalScore;
+                        worksheet.Cell(currentRow, 14).Value = r.TotalAvailable;
+                        worksheet.Cell(currentRow, 15).Value = Math.Round(r.AggregatePercentage, 1);
+                        worksheet.Cell(currentRow, 16).Value = r.WaveStatus;
                         currentRow++;
-                        worksheet.Cell(currentRow, 1).Value = item.StudentName;
-                        worksheet.Cell(currentRow, 2).Value = item.StudentEmail;
-                        worksheet.Cell(currentRow, 3).Value = item.UserCode;
-                        worksheet.Cell(currentRow, 4).Value = item.RoleName;
-                        worksheet.Cell(currentRow, 5).Value = item.WaveName ?? "Global";
-                        worksheet.Cell(currentRow, 6).Value = item.BranchName ?? "Global";
-                        worksheet.Cell(currentRow, 7).Value = item.Status ?? "--";
-                        worksheet.Cell(currentRow, 8).Value = item.ActualStartTime.HasValue ? item.ActualStartTime.Value.ToString("dd MMM yyyy hh:mm tt") : "--";
-                        worksheet.Cell(currentRow, 9).Value = item.ActualEndTime.HasValue ? item.ActualEndTime.Value.ToString("dd MMM yyyy hh:mm tt") : "--";
-                        worksheet.Cell(currentRow, 10).Value = item.DurationInMinutes > 0 ? $"{item.DurationInMinutes} m" : (item.ActualStartTime.HasValue && item.ActualEndTime.HasValue ? $"{(int)(item.ActualEndTime.Value - item.ActualStartTime.Value).TotalMinutes} m" : "--");
-                        worksheet.Cell(currentRow, 11).Value = item.ExamsCompleted;
-                        worksheet.Cell(currentRow, 12).Value = item.ExamsAssigned;
-                        worksheet.Cell(currentRow, 13).Value = item.TotalScore;
-                        worksheet.Cell(currentRow, 14).Value = item.TotalAvailable;
-                        worksheet.Cell(currentRow, 15).Value = item.AggregatePercentage;
-                        worksheet.Cell(currentRow, 16).Value = item.WaveStatus;
                     }
 
                     worksheet.Columns().AdjustToContents();
@@ -683,13 +696,214 @@ namespace Exam.Controllers
                     {
                         workbook.SaveAs(stream);
                         var content = stream.ToArray();
-                        return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{waveName.Replace(" ", "_")}_Wave_Report.xlsx");
+                        return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"Wave_Performance_Report_{waveName.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
                     }
                 }
             }
             catch (Exception ex)
             {
-                return Content($"Error: {ex.Message}");
+                return BadRequest("Error generating report: " + ex.Message);
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportUnassignedUsersToExcel(int? branchId = null, int? waveId = null)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                string waveName = "All Waves";
+                if (waveId.HasValue && waveId.Value > 0)
+                {
+                    var wName = await conn.ExecuteScalarAsync<string>("SELECT WaveName FROM dbo.TrainingWaves WHERE Id = @WaveId", new { WaveId = waveId.Value });
+                    if (!string.IsNullOrEmpty(wName)) waveName = wName;
+                }
+
+                string sql = @"
+SELECT 
+    U.Id,
+    U.UserName,
+    U.Email,
+    U.UserCode,
+    U.CertificateCode,
+    B.BranchName,
+    B.Id AS BranchId,
+    R.Name AS RoleName,
+    S.ShiftName,
+    U.IsActive
+FROM dbo.AspNetUsers U WITH(NOLOCK)
+LEFT JOIN dbo.Branches B WITH(NOLOCK) ON U.BranchId = B.Id
+LEFT JOIN dbo.AspNetUserRoles UR ON U.Id = UR.UserId
+LEFT JOIN dbo.AspNetRoles R WITH(NOLOCK) ON UR.RoleId = R.Id
+LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId
+WHERE 1 = 1";
+
+                if (waveId.HasValue && waveId.Value > 0)
+                {
+                    sql += " AND NOT EXISTS (SELECT 1 FROM dbo.UserWaves UW WHERE UW.UserId = U.Id AND UW.WaveId = @WaveId AND (UW.IsDeactivated IS NULL OR UW.IsDeactivated = 0))";
+                }
+                else
+                {
+                    sql += " AND NOT EXISTS (SELECT 1 FROM dbo.UserWaves UW WHERE UW.UserId = U.Id AND (UW.IsDeactivated IS NULL OR UW.IsDeactivated = 0))";
+                }
+
+                var users = (await conn.QueryAsync<dynamic>(sql, new { WaveId = waveId })).ToList();
+
+                // Branch Manager / Supervisor restrictions
+                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
+                {
+                    var currentUser = await _userManager.GetUserAsync(User);
+                    var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+                    if (allowedBranches != null && allowedBranches.Any())
+                        users = users.Where(u => allowedBranches.Any(b => string.Equals((string)u.BranchName, b, StringComparison.OrdinalIgnoreCase))).ToList();
+                    else
+                        users = new List<dynamic>();
+                }
+
+                // Filter by specific branchId if requested
+                if (branchId.HasValue && branchId.Value > 0)
+                {
+                    var branches = await _examService.GetAllBranchesAsync();
+                    var selectedBranch = branches.FirstOrDefault(b => b.Id == branchId.Value.ToString());
+                    if (selectedBranch != null)
+                    {
+                        users = users.Where(u => string.Equals((string)u.BranchName, selectedBranch.BranchName, StringComparison.OrdinalIgnoreCase)).ToList();
+                    }
+                }
+
+                using (var workbook = new XLWorkbook())
+                {
+                    var worksheet = workbook.Worksheets.Add("Unassigned Trainees");
+                    var currentRow = 1;
+
+                    worksheet.Cell(currentRow, 1).Value = "Target Wave Context:";
+                    worksheet.Cell(currentRow, 2).Value = waveId.HasValue && waveId.Value > 0 ? $"Users NOT in Wave ({waveName})" : "Users NOT in ANY Wave";
+                    currentRow++;
+                    worksheet.Cell(currentRow, 1).Value = "Total Unassigned:";
+                    worksheet.Cell(currentRow, 2).Value = users.Count;
+                    currentRow++;
+                    worksheet.Cell(currentRow, 1).Value = "Generated At:";
+                    worksheet.Cell(currentRow, 2).Value = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+                    currentRow += 2;
+
+                    string[] headers = { "#", "User Name", "Email", "User Code", "Certificate Code", "Classification (Role)", "Branch", "Shift Window", "Account Status" };
+                    for (int i = 0; i < headers.Length; i++)
+                    {
+                        var cell = worksheet.Cell(currentRow, i + 1);
+                        cell.Value = headers[i];
+                        cell.Style.Font.Bold = true;
+                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#E11D48");
+                        cell.Style.Font.FontColor = XLColor.White;
+                        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    }
+                    currentRow++;
+
+                    int idx = 1;
+                    foreach (var u in users)
+                    {
+                        worksheet.Cell(currentRow, 1).Value = idx++;
+                        worksheet.Cell(currentRow, 2).Value = (string)u.UserName ?? "";
+                        worksheet.Cell(currentRow, 3).Value = (string)u.Email ?? "";
+                        worksheet.Cell(currentRow, 4).Value = (string)u.UserCode ?? "";
+                        worksheet.Cell(currentRow, 5).Value = (string)u.CertificateCode ?? "";
+                        worksheet.Cell(currentRow, 6).Value = (string)u.RoleName ?? "";
+                        worksheet.Cell(currentRow, 7).Value = (string)u.BranchName ?? "";
+                        worksheet.Cell(currentRow, 8).Value = (string)u.ShiftName ?? "";
+                        worksheet.Cell(currentRow, 9).Value = (u.IsActive == true || u.IsActive == 1) ? "Active" : "Inactive";
+                        currentRow++;
+                    }
+
+                    worksheet.Columns().AdjustToContents();
+
+                    using (var stream = new MemoryStream())
+                    {
+                        workbook.SaveAs(stream);
+                        var content = stream.ToArray();
+                        string fileName = $"Unassigned_Users_{(waveId > 0 ? "Wave_" + waveId : "All_Waves")}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+                        return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return BadRequest("Error generating report: " + ex.Message);
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetUnassignedUsersList(int? branchId = null, int? waveId = null)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                string waveName = "All Waves";
+                if (waveId.HasValue && waveId.Value > 0)
+                {
+                    var wName = await conn.ExecuteScalarAsync<string>("SELECT WaveName FROM dbo.TrainingWaves WHERE Id = @WaveId", new { WaveId = waveId.Value });
+                    if (!string.IsNullOrEmpty(wName)) waveName = wName;
+                }
+
+                string sql = @"
+SELECT 
+    U.Id,
+    ISNULL(NULLIF(U.FullName, ''), U.UserName) AS UserName,
+    U.Email,
+    U.UserCode,
+    U.CertificateCode,
+    B.BranchName,
+    B.Id AS BranchId,
+    R.Name AS RoleName,
+    S.ShiftName,
+    U.IsActive
+FROM dbo.AspNetUsers U WITH(NOLOCK)
+LEFT JOIN dbo.Branches B WITH(NOLOCK) ON U.BranchId = B.Id
+LEFT JOIN dbo.AspNetUserRoles UR ON U.Id = UR.UserId
+LEFT JOIN dbo.AspNetRoles R WITH(NOLOCK) ON UR.RoleId = R.Id
+LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId
+WHERE 1 = 1";
+
+                if (waveId.HasValue && waveId.Value > 0)
+                {
+                    sql += " AND NOT EXISTS (SELECT 1 FROM dbo.UserWaves UW WHERE UW.UserId = U.Id AND UW.WaveId = @WaveId AND (UW.IsDeactivated IS NULL OR UW.IsDeactivated = 0))";
+                }
+                else
+                {
+                    sql += " AND NOT EXISTS (SELECT 1 FROM dbo.UserWaves UW WHERE UW.UserId = U.Id AND (UW.IsDeactivated IS NULL OR UW.IsDeactivated = 0))";
+                }
+
+                var users = (await conn.QueryAsync<dynamic>(sql, new { WaveId = waveId })).ToList();
+
+                // Branch Manager / Supervisor restrictions
+                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
+                {
+                    var currentUser = await _userManager.GetUserAsync(User);
+                    var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+                    if (allowedBranches != null && allowedBranches.Any())
+                        users = users.Where(u => allowedBranches.Any(b => string.Equals((string)u.BranchName, b, StringComparison.OrdinalIgnoreCase))).ToList();
+                    else
+                        users = new List<dynamic>();
+                }
+
+                // Filter by specific branchId if requested
+                if (branchId.HasValue && branchId.Value > 0)
+                {
+                    var branches = await _examService.GetAllBranchesAsync();
+                    var selectedBranch = branches.FirstOrDefault(b => b.Id == branchId.Value.ToString());
+                    if (selectedBranch != null)
+                    {
+                        users = users.Where(u => string.Equals((string)u.BranchName, selectedBranch.BranchName, StringComparison.OrdinalIgnoreCase)).ToList();
+                    }
+                }
+
+                return Json(new { success = true, waveName = waveName, count = users.Count, users = users });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
             }
         }
 
@@ -791,7 +1005,7 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> WaveyResults(int? waveId, int? month = null, int? year = null)
+        public async Task<IActionResult> WaveyResults(int? waveId, int? month = null, int? year = null, int? branchId = null)
         {
             var waves = (await _examService.GetAllWavesAsync()).ToList();
 
@@ -805,54 +1019,53 @@ namespace Exam.Controllers
             ViewBag.SelectedMonth = month;
             ViewBag.SelectedYear = year;
 
+            var branches = (await _examService.GetAllBranchesAsync()).OrderBy(b => b.BranchName).ToList();
+            ViewBag.Branches = branches;
+            ViewBag.SelectedBranchId = branchId;
+
             int selectedWaveId = waveId ?? 0;
             if (selectedWaveId == 0)
                 selectedWaveId = waves.FirstOrDefault()?.Id ?? 0;
             ViewBag.SelectedWaveId = selectedWaveId;
 
+            List<Exam.DTOs.WaveStudentResultDto> allResults = new List<Exam.DTOs.WaveStudentResultDto>();
+
             if (selectedWaveId == -1)
             {
-                var allResults = new List<Exam.DTOs.WaveStudentResultDto>();
                 foreach (var w in waves)
                 {
                     var results = await _examService.GetWaveAggregateResultsAsync(w.Id);
                     allResults.AddRange(results);
                 }
-
-                // Branch manager restriction
-                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
-                {
-                    var currentUser = await _userManager.GetUserAsync(User);
-                    using var conn = new SqlConnection(_connectionString);
-                    var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
-                    if (allowedBranches != null && allowedBranches.Any())
-                        allResults = allResults.Where(r => allowedBranches.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase))).ToList();
-                    else
-                        allResults = new List<Exam.DTOs.WaveStudentResultDto>();
-                }
-
-                return View(allResults);
             }
             else if (selectedWaveId > 0)
             {
-                var results = (await _examService.GetWaveAggregateResultsAsync(selectedWaveId)).ToList();
-
-                // Branch manager restriction
-                if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
-                {
-                    var currentUser = await _userManager.GetUserAsync(User);
-                    using var conn = new SqlConnection(_connectionString);
-                    var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
-                    if (allowedBranches != null && allowedBranches.Any())
-                        results = results.Where(r => allowedBranches.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase))).ToList();
-                    else
-                        results = new List<Exam.DTOs.WaveStudentResultDto>();
-                }
-
-                return View(results);
+                allResults = (await _examService.GetWaveAggregateResultsAsync(selectedWaveId)).ToList();
             }
 
-            return View(new List<Exam.DTOs.WaveStudentResultDto>());
+            // Branch manager restriction
+            if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
+            {
+                var currentUser = await _userManager.GetUserAsync(User);
+                using var conn = new SqlConnection(_connectionString);
+                var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+                if (allowedBranches != null && allowedBranches.Any())
+                    allResults = allResults.Where(r => allowedBranches.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase))).ToList();
+                else
+                    allResults = new List<Exam.DTOs.WaveStudentResultDto>();
+            }
+
+            // Apply user branch filter
+            if (branchId.HasValue && branchId.Value > 0)
+            {
+                var selectedBranch = branches.FirstOrDefault(b => b.Id == branchId.Value.ToString());
+                if (selectedBranch != null)
+                {
+                    allResults = allResults.Where(r => string.Equals(r.BranchName, selectedBranch.BranchName, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+            }
+
+            return View(allResults);
         }
 
         [HttpGet]

@@ -3,8 +3,10 @@
     ViewData["Title"] = "Wave Results & Certificates";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
     var waves = ViewBag.Waves as IEnumerable<Exam.DTOs.WaveDto> ?? Enumerable.Empty<Exam.DTOs.WaveDto>();
+    var branches = ViewBag.Branches as IEnumerable<Exam.DTOs.BranchDto> ?? Enumerable.Empty<Exam.DTOs.BranchDto>();
     var selectedWaveId = ViewBag.SelectedWaveId as int? ?? 0;
     var selectedExamId = ViewBag.SelectedExamId as int? ?? 0;
+    var selectedBranchId = ViewBag.SelectedBranchId as int? ?? 0;
 }
 
 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm space-y-6">
@@ -40,6 +42,17 @@
     <!-- Filter Bar Row -->
     <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex flex-wrap items-center gap-4">
+            <div class="space-y-2">
+                <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Branch (الفرع)</label>
+                <select id="branchFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[180px] transition-colors focus:border-brand-500 outline-none">
+                    <option value="0">All Branches (جميع الفروع)</option>
+                    @foreach (var b in branches)
+                    {
+                        <option value="@b.Id" selected="@(b.Id == selectedBranchId.ToString() ? "selected" : null)">@b.BranchName</option>
+                    }
+                </select>
+            </div>
+
             <div class="space-y-2">
                 <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Year</label>
                 <select id="yearFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold w-[110px] transition-colors focus:border-brand-500 outline-none">
@@ -248,22 +261,13 @@
             });
         }
 
-        $('#yearFilter').change(function () {
-            const year = $(this).val();
+        $('#yearFilter, #examFilter, #branchFilter').change(function () {
             const waveId = $('#examFilter').val() || -1;
-            const type = 0;
-            const month = 0;
-            let newUrl = '/Admin/Certificates?waveId=' + waveId + '&typeId=' + type + '&year=' + year + '&month=' + month; 
-            if (window.location.search.includes('iframe=true')) newUrl += '&iframe=true';
-            window.location = newUrl;
-        });
-
-        $('#examFilter').change(function () {
-            const waveId = $(this).val();
             const year = $('#yearFilter').val() || 0;
+            const branchId = $('#branchFilter').val() || 0;
             const type = 0;
             const month = 0;
-            let newUrl = '/Admin/Certificates?waveId=' + waveId + '&typeId=' + type + '&year=' + year + '&month=' + month; 
+            let newUrl = '/Admin/Certificates?waveId=' + waveId + '&typeId=' + type + '&year=' + year + '&month=' + month + '&branchId=' + branchId; 
             if (window.location.search.includes('iframe=true')) newUrl += '&iframe=true';
             window.location = newUrl;
         });
@@ -271,7 +275,8 @@
         function exportCertificatesExcel() {
             const waveId = $('#examFilter').val() || -1;
             const year = $('#yearFilter').val() || 0;
-            window.location.href = `/Admin/ExportCertificatesToExcel?waveId=${waveId}&year=${year}`;
+            const branchId = $('#branchFilter').val() || 0;
+            window.location.href = `/Admin/ExportCertificatesToExcel?waveId=${waveId}&year=${year}&branchId=${branchId}`;
         }
 
 

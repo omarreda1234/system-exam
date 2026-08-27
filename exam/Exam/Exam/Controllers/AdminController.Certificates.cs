@@ -26,7 +26,7 @@ namespace Exam.Controllers
     public partial class AdminController
     {
         [HttpGet]
-        public async Task<IActionResult> Certificates(int? waveId, int? examId = null, int? typeId = null, int? month = null, int? year = null)
+        public async Task<IActionResult> Certificates(int? waveId, int? examId = null, int? typeId = null, int? month = null, int? year = null, int? branchId = null)
         {
             var examTypes = (await _examService.GetAllExamTypesAsync())
                 .Where(t => t.TypeName != null && t.TypeName.ToLower().Contains("wave"))
@@ -35,6 +35,10 @@ namespace Exam.Controllers
             ViewBag.SelectedTypeId = typeId;
             ViewBag.SelectedMonth = month;
             ViewBag.SelectedYear = year;
+
+            var branches = (await _examService.GetAllBranchesAsync()).OrderBy(b => b.BranchName).ToList();
+            ViewBag.Branches = branches;
+            ViewBag.SelectedBranchId = branchId;
 
             var allWaves = (await _examService.GetAllWavesAsync()).ToList();
             var waves = allWaves;
@@ -147,6 +151,16 @@ namespace Exam.Controllers
                 }
 
                 var resultList = results.ToList();
+
+                if (branchId.HasValue && branchId.Value > 0)
+                {
+                    var selectedBranch = branches.FirstOrDefault(b => b.Id == branchId.Value.ToString());
+                    if (selectedBranch != null)
+                    {
+                        resultList = resultList.Where(r => string.Equals(r.BranchName, selectedBranch.BranchName, StringComparison.OrdinalIgnoreCase)).ToList();
+                    }
+                }
+
                 foreach (var row in resultList)
                 {
                     if (row.Score > 100m && row.Score <= 1000m)
@@ -1389,7 +1403,7 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> ExportCertificatesToExcel(int? waveId, int? year = null)
+        public async Task<IActionResult> ExportCertificatesToExcel(int? waveId, int? year = null, int? branchId = null)
         {
             using var conn = new SqlConnection(_connectionString);
             var waves = (await _examService.GetAllWavesAsync()).ToList();
@@ -1457,6 +1471,16 @@ namespace Exam.Controllers
                 }
                 else
                     results = new List<Exam.DTOs.ExamResultRowDto>();
+            }
+
+            if (branchId.HasValue && branchId.Value > 0)
+            {
+                var branches = await _examService.GetAllBranchesAsync();
+                var selectedBranch = branches.FirstOrDefault(b => b.Id == branchId.Value.ToString());
+                if (selectedBranch != null)
+                {
+                    results = results.Where(r => string.Equals(r.BranchName, selectedBranch.BranchName, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
             }
 
             foreach (var row in results)
