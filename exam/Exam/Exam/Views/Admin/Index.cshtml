@@ -125,7 +125,229 @@
         </div>
     </div>
 
+    @{
+        var waveAnalytics = ViewBag.WaveAnalytics as Exam.Controllers.WaveAnalyticsResultDto ?? new Exam.Controllers.WaveAnalyticsResultDto();
+    }
 
+    <!-- Wave Analytics & Certificate Telemetry Section -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm">
+        <!-- Header & Wave Selector -->
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100 dark:border-slate-800">
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="px-3 py-1 bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800/50 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                        <i class="fas fa-chart-line"></i> Wave Analytics & Certificate Intelligence
+                    </span>
+                </div>
+                <h2 class="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Wave Performance Overview</h2>
+            </div>
+
+            <!-- Wave Selector Dropdown -->
+            <div class="flex items-center gap-3">
+                <label class="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                    <i class="fas fa-filter text-brand-500 mr-1"></i> Wave Filter:
+                </label>
+                <select id="waveAnalyticsSelector" onchange="onWaveAnalyticsChange(this.value)" class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-brand-500 transition-all cursor-pointer min-w-[200px]">
+                    <option value="0">All Active Waves</option>
+                    @foreach (var w in waveAnalytics.Waves)
+                    {
+                        <option value="@w.id">@w.waveName</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <!-- Summary Stats Bar -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 my-6">
+            <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+                <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Trainees</span>
+                <div class="flex items-baseline gap-2 mt-2">
+                    <span id="waTotalStudents" class="text-2xl font-black text-slate-900 dark:text-white">@waveAnalytics.TotalStudents</span>
+                    <span class="text-[9px] font-bold text-slate-400">Trainees</span>
+                </div>
+            </div>
+
+            <div class="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 rounded-2xl p-4 flex flex-col justify-between">
+                <span class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Certified (≥ 75%)</span>
+                <div class="flex items-baseline gap-2 mt-2">
+                    <span id="waCertified" class="text-2xl font-black text-emerald-600 dark:text-emerald-400">@waveAnalytics.CertifiedCount</span>
+                    <span class="text-[9px] font-bold text-emerald-600/70 dark:text-emerald-500/80">Passed + Cert</span>
+                </div>
+            </div>
+
+            <div class="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-4 flex flex-col justify-between">
+                <span class="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Passed (70-75%)</span>
+                <div class="flex items-baseline gap-2 mt-2">
+                    <span id="waPassedNoCert" class="text-2xl font-black text-amber-600 dark:text-amber-400">@waveAnalytics.PassedNoCertCount</span>
+                    <span class="text-[9px] font-bold text-amber-600/70 dark:text-amber-500/80">Passed Only</span>
+                </div>
+            </div>
+
+            <div class="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-2xl p-4 flex flex-col justify-between">
+                <span class="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Failed (< 70%)</span>
+                <div class="flex items-baseline gap-2 mt-2">
+                    <span id="waFailed" class="text-2xl font-black text-rose-600 dark:text-rose-400">@waveAnalytics.FailedCount</span>
+                    <span class="text-[9px] font-bold text-rose-600/70 dark:text-rose-500/80">Needs Retake</span>
+                </div>
+            </div>
+
+            <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/40 rounded-2xl p-4 flex flex-col justify-between col-span-2 md:col-span-1">
+                <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Not Examined</span>
+                <div class="flex items-baseline gap-2 mt-2">
+                    <span id="waNotExamined" class="text-2xl font-black text-slate-600 dark:text-slate-300">@waveAnalytics.NotExaminedCount</span>
+                    <span class="text-[9px] font-bold text-slate-400">Pending</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Role Performance Breakdown & Donut Chart -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
+            <!-- Role Performance Cards (Pharmacists vs Assistants) -->
+            <div class="lg:col-span-7 space-y-4">
+                <h3 class="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <i class="fas fa-users-gear text-brand-500"></i> Role Composition & Pass Rates
+                </h3>
+
+                <!-- Pharmacists Box -->
+                <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 hover:border-brand-500/30 transition-all">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-sm">
+                                <i class="fas fa-pills"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-tight">Pharmacists</h4>
+                                <span id="waPhTotal" class="text-[10px] font-bold text-slate-400 dark:text-slate-500">Total: @waveAnalytics.PharmacistStats.Total trainees</span>
+                            </div>
+                        </div>
+                        <span id="waPhPassRate" class="text-xs font-black bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 px-3 py-1 rounded-xl">
+                            @waveAnalytics.PharmacistStats.PassRate% Pass Rate
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2 text-center text-[10px] font-bold mt-2">
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <span class="block text-emerald-600 dark:text-emerald-400 font-black text-sm" id="waPhCert">@waveAnalytics.PharmacistStats.Certified</span>
+                            <span class="text-slate-400">Cert (≥75%)</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <span class="block text-amber-600 dark:text-amber-400 font-black text-sm" id="waPhPassed">@waveAnalytics.PharmacistStats.PassedNoCert</span>
+                            <span class="text-slate-400">Pass (70-75%)</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <span class="block text-rose-600 dark:text-rose-400 font-black text-sm" id="waPhFailed">@waveAnalytics.PharmacistStats.Failed</span>
+                            <span class="text-slate-400">Failed</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <span class="block text-slate-500 dark:text-slate-400 font-black text-sm" id="waPhNotEx">@waveAnalytics.PharmacistStats.NotExamined</span>
+                            <span class="text-slate-400">Not Examined</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assistants Box -->
+                <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 hover:border-brand-500/30 transition-all">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center font-black text-sm">
+                                <i class="fas fa-user-doctor"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-tight">Assistants</h4>
+                                <span id="waAsstTotal" class="text-[10px] font-bold text-slate-400 dark:text-slate-500">Total: @waveAnalytics.AssistantStats.Total trainees</span>
+                            </div>
+                        </div>
+                        <span id="waAsstPassRate" class="text-xs font-black bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800/50 px-3 py-1 rounded-xl">
+                            @waveAnalytics.AssistantStats.PassRate% Pass Rate
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2 text-center text-[10px] font-bold mt-2">
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <span class="block text-emerald-600 dark:text-emerald-400 font-black text-sm" id="waAsstCert">@waveAnalytics.AssistantStats.Certified</span>
+                            <span class="text-slate-400">Cert (≥75%)</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <span class="block text-amber-600 dark:text-amber-400 font-black text-sm" id="waAsstPassed">@waveAnalytics.AssistantStats.PassedNoCert</span>
+                            <span class="text-slate-400">Pass (70-75%)</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <span class="block text-rose-600 dark:text-rose-400 font-black text-sm" id="waAsstFailed">@waveAnalytics.AssistantStats.Failed</span>
+                            <span class="text-slate-400">Failed</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <span class="block text-slate-500 dark:text-slate-400 font-black text-sm" id="waAsstNotEx">@waveAnalytics.AssistantStats.NotExamined</span>
+                            <span class="text-slate-400">Not Examined</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Donut Chart & Results Breakdown -->
+            <div class="lg:col-span-5 flex flex-col justify-between bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
+                <h3 class="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4 flex items-center justify-between">
+                    <span><i class="fas fa-chart-pie text-brand-500 mr-1"></i> Results Distribution</span>
+                    <span class="text-[10px] text-brand-600 dark:text-brand-400 font-bold" id="waOverallPassRate">@waveAnalytics.PassRate% Pass Rate</span>
+                </h3>
+                <div class="h-[210px] w-full relative flex items-center justify-center">
+                    <canvas id="waveResultsDonutChart"></canvas>
+                </div>
+                <div class="flex flex-wrap items-center justify-center gap-3 text-[9px] font-extrabold uppercase tracking-widest mt-4">
+                    <span class="flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Cert (≥75%)</span>
+                    <span class="flex items-center gap-1 text-amber-600 dark:text-amber-400"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Pass (70-75%)</span>
+                    <span class="flex items-center gap-1 text-rose-600 dark:text-rose-400"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Failed</span>
+                    <span class="flex items-center gap-1 text-slate-500 dark:text-slate-400"><span class="w-2 h-2 rounded-full bg-slate-400"></span> Not Examined</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Branch Breakdown Matrix Table -->
+        <div class="mt-8 border-t border-slate-100 dark:border-slate-800 pt-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <i class="fas fa-building text-brand-500"></i> Branch Performance Breakdown
+                </h3>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Showing <span id="waBranchCount">@waveAnalytics.BranchStats.Count</span> Branches
+                </span>
+            </div>
+
+            <div class="max-h-[260px] overflow-y-auto custom-scrollbar rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <table class="saas-table w-full text-left text-xs">
+                    <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-black text-[9px] uppercase tracking-widest sticky top-0 border-b border-slate-200 dark:border-slate-800">
+                        <tr>
+                            <th class="p-3.5">Branch Name</th>
+                            <th class="p-3.5 text-center">Trainees</th>
+                            <th class="p-3.5 text-center">Certified (≥75%)</th>
+                            <th class="p-3.5 text-center">Passed (70-75%)</th>
+                            <th class="p-3.5 text-center">Failed</th>
+                            <th class="p-3.5 text-center">Not Examined</th>
+                            <th class="p-3.5 text-right">Pass Rate %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="waBranchTbody" class="divide-y divide-slate-100 dark:divide-slate-800 font-bold text-slate-700 dark:text-slate-300">
+                        @foreach (var b in waveAnalytics.BranchStats)
+                        {
+                            <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                                <td class="p-3.5 font-black text-slate-900 dark:text-white">@b.BranchName</td>
+                                <td class="p-3.5 text-center font-mono">@b.Total</td>
+                                <td class="p-3.5 text-center text-emerald-600 dark:text-emerald-400 font-mono">@b.Certified</td>
+                                <td class="p-3.5 text-center text-amber-600 dark:text-amber-400 font-mono">@b.PassedNoCert</td>
+                                <td class="p-3.5 text-center text-rose-600 dark:text-rose-400 font-mono">@b.Failed</td>
+                                <td class="p-3.5 text-center text-slate-400 font-mono">@b.NotExamined</td>
+                                <td class="p-3.5 text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <div class="w-16 bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                            <div class="bg-brand-500 h-full rounded-full" style="width: @b.PassRate%"></div>
+                                        </div>
+                                        <span class="font-mono text-emerald-600 dark:text-emerald-400 text-[10px]">@b.PassRate%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
     <!-- Trend Chart -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm">
@@ -243,6 +465,110 @@
 
 @section Scripts {
     <script>
+        let waveDonutChart = null;
+
+        function renderWaveDonutChart(cert, passed, failed, notEx) {
+            const canvas = document.getElementById('waveResultsDonutChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            if (waveDonutChart) {
+                waveDonutChart.destroy();
+                waveDonutChart = null;
+            }
+
+            const isDark = document.documentElement.classList.contains('dark');
+
+            waveDonutChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Certified (≥75%)', 'Passed (70-75%)', 'Failed (<70%)', 'Not Examined'],
+                    datasets: [{
+                        data: [cert, passed, failed, notEx],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444', isDark ? '#475569' : '#cbd5e1'],
+                        borderWidth: 2,
+                        borderColor: isDark ? '#0f172a' : '#ffffff',
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        function onWaveAnalyticsChange(waveId) {
+            $.get('/Admin/GetWaveAnalyticsData', { waveId: waveId }, function (data) {
+                if (!data) return;
+
+                $('#waTotalStudents').text(data.totalStudents);
+                $('#waCertified').text(data.certifiedCount);
+                $('#waPassedNoCert').text(data.passedNoCertCount);
+                $('#waFailed').text(data.failedCount);
+                $('#waNotExamined').text(data.notExaminedCount);
+                $('#waOverallPassRate').text((data.passRate || 0) + '% Pass Rate');
+
+                // Pharmacists
+                const ph = data.pharmacistStats || {};
+                $('#waPhTotal').text('Total: ' + (ph.total || 0) + ' trainees');
+                $('#waPhPassRate').text((ph.passRate || 0) + '% Pass Rate');
+                $('#waPhCert').text(ph.certified || 0);
+                $('#waPhPassed').text(ph.passedNoCert || 0);
+                $('#waPhFailed').text(ph.failed || 0);
+                $('#waPhNotEx').text(ph.notExamined || 0);
+
+                // Assistants
+                const asst = data.assistantStats || {};
+                $('#waAsstTotal').text('Total: ' + (asst.total || 0) + ' trainees');
+                $('#waAsstPassRate').text((asst.passRate || 0) + '% Pass Rate');
+                $('#waAsstCert').text(asst.certified || 0);
+                $('#waAsstPassed').text(asst.passedNoCert || 0);
+                $('#waAsstFailed').text(asst.failed || 0);
+                $('#waAsstNotEx').text(asst.notExamined || 0);
+
+                // Donut Chart
+                renderWaveDonutChart(data.certifiedCount || 0, data.passedNoCertCount || 0, data.failedCount || 0, data.notExaminedCount || 0);
+
+                // Branch Table
+                const branches = data.branchStats || [];
+                $('#waBranchCount').text(branches.length);
+
+                let rowsHtml = '';
+                branches.forEach(function (b) {
+                    rowsHtml += `
+                        <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                            <td class="p-3.5 font-black text-slate-900 dark:text-white">${b.branchName}</td>
+                            <td class="p-3.5 text-center font-mono">${b.total}</td>
+                            <td class="p-3.5 text-center text-emerald-600 dark:text-emerald-400 font-mono">${b.certified}</td>
+                            <td class="p-3.5 text-center text-amber-600 dark:text-amber-400 font-mono">${b.passedNoCert}</td>
+                            <td class="p-3.5 text-center text-rose-600 dark:text-rose-400 font-mono">${b.failed}</td>
+                            <td class="p-3.5 text-center text-slate-400 font-mono">${b.notExamined}</td>
+                            <td class="p-3.5 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <div class="w-16 bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-brand-500 h-full rounded-full" style="width: ${b.passRate}%"></div>
+                                    </div>
+                                    <span class="font-mono text-emerald-600 dark:text-emerald-400 text-[10px]">${b.passRate}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                if (branches.length === 0) {
+                    rowsHtml = `<tr><td colspan="7" class="p-6 text-center text-slate-400 font-bold uppercase text-[10px]">No branch data found</td></tr>`;
+                }
+
+                $('#waBranchTbody').html(rowsHtml);
+            });
+        }
+
         $(function () {
             const isDark = document.documentElement.classList.contains('dark');
             const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
@@ -254,7 +580,8 @@
             Chart.defaults.font.size = 11;
             Chart.defaults.color = textColor;
 
-
+            // Render Wave Donut Chart
+            renderWaveDonutChart(@waveAnalytics.CertifiedCount, @waveAnalytics.PassedNoCertCount, @waveAnalytics.FailedCount, @waveAnalytics.NotExaminedCount);
 
             // 3. Growth
             const ctxTrend = document.getElementById('trendChart')?.getContext('2d');

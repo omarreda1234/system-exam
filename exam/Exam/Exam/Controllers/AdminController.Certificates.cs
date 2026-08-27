@@ -1562,5 +1562,162 @@ namespace Exam.Controllers
 
             return mode;
         }
+
+        [HttpGet]
+        public async Task<IActionResult> GetWaveAnalyticsData(int? waveId)
+        {
+            var result = await FetchWaveAnalyticsAsync(waveId);
+            return Json(result);
+        }
+
+        public async Task<WaveAnalyticsResultDto> FetchWaveAnalyticsAsync(int? waveId)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName FROM dbo.TrainingWaves ORDER BY Id DESC")).ToList();
+
+            int targetWaveId = waveId ?? 0;
+
+            var sql = @"
+                WITH UserRoles AS (
+                    SELECT UR.UserId,
+                           MAX(CASE WHEN LOWER(R.Name) = 'pharmacist' OR R.Name LIKE N'%صيدل%' THEN 'Pharmacist'
+                                    WHEN LOWER(R.Name) = 'assistant' OR R.Name LIKE N'%مساعد%' THEN 'Assistant'
+                                    ELSE 'Other' END) as RoleCategory
+                    FROM AspNetUserRoles UR
+                    JOIN AspNetRoles R ON UR.RoleId = R.Id
+                    GROUP BY UR.UserId
+                )
+                SELECT 
+                    U.Id as UserId,
+                    ISNULL(U.FullName, U.UserName) as StudentName,
+                    ISNULL(B.BranchName, N'بدون فرع / Global') as BranchName,
+                    ISNULL(UR.RoleCategory, 'Other') as RoleCategory,
+                    W.Id as WaveId,
+                    W.WaveName,
+                    wc.Score as CertScore,
+                    wc.CertificateCode
+                FROM AspNetUsers U
+                JOIN UserWaves UW ON U.Id = UW.UserId
+                JOIN TrainingWaves W ON UW.WaveId = W.Id
+                LEFT JOIN UserRoles UR ON U.Id = UR.UserId
+                LEFT JOIN Branches B ON U.BranchId = B.Id
+                LEFT JOIN UserWaveCertificates wc ON wc.UserId = U.Id AND wc.WaveId = W.Id
+                WHERE (@WaveId IS NULL OR @WaveId = 0 OR W.Id = @WaveId) AND UW.IsActive = 1";
+
+            var rows = (await conn.QueryAsync<dynamic>(sql, new { WaveId = targetWaveId })).ToList();
+
+            var result = new WaveAnalyticsResultDto
+            {
+                SelectedWaveId = targetWaveId,
+                Waves = waves.Select(w => new { id = (int)w.Id, waveName = (string)w.WaveName }).Cast<dynamic>().ToList()
+            };
+
+            result.TotalStudents = rows.Count;
+
+            var branchMap = new Dictionary<string, BranchAnalyticsDto>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var r in rows)
+            {
+                double score = -1;
+                if (r.CertScore != null) score = Convert.ToDouble(r.CertScore);
+
+                if (score > 100 && score <= 1000) score = Math.Round(score / 10.0, 2);
+                else if (score > 1000) score = Math.Round(score / 100.0, 2);
+                else if (score <= 1.0 && score > 0) score = Math.Round(score * 100.0, 2);
+
+                string status = "NotExamined";
+                if (score > 75) status = "Certified";
+                else if (score >= 70 && score <= 75) status = "PassedNoCert";
+                else if (score > 0 && score < 70) status = "Failed";
+                else status = "NotExamined";
+
+                if (status == "Certified") result.CertifiedCount++;
+                else if (status == "PassedNoCert") result.PassedNoCertCount++;
+                else if (status == "Failed") result.FailedCount++;
+                else result.NotExaminedCount++;
+
+                string role = (string)r.RoleCategory ?? "Other";
+                RoleAnalyticsDto rStats = role == "Pharmacist" ? result.PharmacistStats : (role == "Assistant" ? result.AssistantStats : result.OtherRoleStats);
+                rStats.Total++;
+                if (status == "Certified") rStats.Certified++;
+                else if (status == "PassedNoCert") rStats.PassedNoCert++;
+                else if (status == "Failed") rStats.Failed++;
+                else rStats.NotExamined++;
+
+                string branch = (string)r.BranchName ?? "بدون فرع / Global";
+                if (!branchMap.TryGetValue(branch, out var bDto))
+                {
+                    bDto = new BranchAnalyticsDto { BranchName = branch };
+                    branchMap[branch] = bDto;
+                }
+                bDto.Total++;
+                if (status == "Certified") bDto.Certified++;
+                else if (status == "PassedNoCert") bDto.PassedNoCert++;
+                else if (status == "Failed") bDto.Failed++;
+                else bDto.NotExamined++;
+            }
+
+            int totalExamined = result.CertifiedCount + result.PassedNoCertCount + result.FailedCount;
+            result.PassRate = totalExamined > 0 ? Math.Round((double)(result.CertifiedCount + result.PassedNoCertCount) / totalExamined * 100, 1) : 0;
+
+            CalculateRolePassRate(result.PharmacistStats);
+            CalculateRolePassRate(result.AssistantStats);
+            CalculateRolePassRate(result.OtherRoleStats);
+
+            foreach (var b in branchMap.Values)
+            {
+                int bExamined = b.Certified + b.PassedNoCert + b.Failed;
+                b.PassRate = bExamined > 0 ? Math.Round((double)(b.Certified + b.PassedNoCert) / bExamined * 100, 1) : 0;
+            }
+
+            result.BranchStats = branchMap.Values.OrderByDescending(b => b.Total).ToList();
+
+            return result;
+        }
+
+        private static void CalculateRolePassRate(RoleAnalyticsDto r)
+        {
+            int examined = r.Certified + r.PassedNoCert + r.Failed;
+            r.PassRate = examined > 0 ? Math.Round((double)(r.Certified + r.PassedNoCert) / examined * 100, 1) : 0;
+        }
+    }
+
+    public class WaveAnalyticsResultDto
+    {
+        public int SelectedWaveId { get; set; }
+        public List<dynamic> Waves { get; set; } = new();
+        public int TotalStudents { get; set; }
+        public int CertifiedCount { get; set; }
+        public int PassedNoCertCount { get; set; }
+        public int FailedCount { get; set; }
+        public int NotExaminedCount { get; set; }
+        public double PassRate { get; set; }
+
+        public RoleAnalyticsDto PharmacistStats { get; set; } = new();
+        public RoleAnalyticsDto AssistantStats { get; set; } = new();
+        public RoleAnalyticsDto OtherRoleStats { get; set; } = new();
+
+        public List<BranchAnalyticsDto> BranchStats { get; set; } = new();
+    }
+
+    public class RoleAnalyticsDto
+    {
+        public int Total { get; set; }
+        public int Certified { get; set; }
+        public int PassedNoCert { get; set; }
+        public int Failed { get; set; }
+        public int NotExamined { get; set; }
+        public double PassRate { get; set; }
+    }
+
+    public class BranchAnalyticsDto
+    {
+        public string BranchName { get; set; } = "";
+        public int Total { get; set; }
+        public int Certified { get; set; }
+        public int PassedNoCert { get; set; }
+        public int Failed { get; set; }
+        public int NotExamined { get; set; }
+        public double PassRate { get; set; }
     }
 }

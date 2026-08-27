@@ -2712,15 +2712,24 @@ WHERE U.Id = @UserId;";
 
             // 1. Staff Counts (Pharmacists vs Assistants)
             var staffCounts = (await conn.QueryAsync<dynamic>(@"
-                SELECT R.Name as RoleName, COUNT(U.Id) as Count
+                SELECT 
+                    CASE 
+                        WHEN LOWER(R.Name) = 'pharmacist' OR R.Name LIKE N'%صيدل%' THEN 'pharmacist'
+                        WHEN LOWER(R.Name) = 'assistant' OR R.Name LIKE N'%مساعد%' THEN 'assistant'
+                        ELSE 'other'
+                    END as RoleCategory, 
+                    COUNT(DISTINCT U.Id) as Count
                 FROM AspNetUsers U
                 INNER JOIN AspNetUserRoles UR ON U.Id = UR.UserId
                 INNER JOIN AspNetRoles R ON UR.RoleId = R.Id
-                WHERE R.Name IN ('pharmacist', 'assistant')
-                GROUP BY R.Name")).ToList();
+                GROUP BY CASE 
+                    WHEN LOWER(R.Name) = 'pharmacist' OR R.Name LIKE N'%صيدل%' THEN 'pharmacist'
+                    WHEN LOWER(R.Name) = 'assistant' OR R.Name LIKE N'%مساعد%' THEN 'assistant'
+                    ELSE 'other'
+                END")).ToList();
 
-            dashboard.TotalPharmacists = staffCounts.Where(x => x.RoleName == "pharmacist").Sum(x => (int)x.Count);
-            dashboard.TotalAssistants = staffCounts.Where(x => x.RoleName == "assistant").Sum(x => (int)x.Count);
+            dashboard.TotalPharmacists = staffCounts.FirstOrDefault(x => (string)x.RoleCategory == "pharmacist")?.Count ?? 0;
+            dashboard.TotalAssistants = staffCounts.FirstOrDefault(x => (string)x.RoleCategory == "assistant")?.Count ?? 0;
 
             // 2. Active Exams
             dashboard.ActiveExamsCount = await conn.ExecuteScalarAsync<int>(@"

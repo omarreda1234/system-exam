@@ -524,8 +524,8 @@
                 if (selectedFilter === 'failed') {
                     return rowCertStatus === 'failed';
                 }
-                if (selectedFilter === 'pending') {
-                    return rowCertStatus === 'pending';
+                if (selectedFilter === 'not_examined' || selectedFilter === 'pending') {
+                    return rowCertStatus === 'not_examined' || rowCertStatus === 'pending';
                 }
                 if (selectedFilter === 'email_sent') {
                     return rowEmailStatus === 'email_sent';

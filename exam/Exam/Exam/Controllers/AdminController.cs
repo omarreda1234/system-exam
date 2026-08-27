@@ -142,6 +142,9 @@ namespace Exam.Controllers
                 return RedirectToAction("Index", "SkillTracks");
             }
             var data = await _examService.GetDashboardDataAsync();
+            try {
+                ViewBag.WaveAnalytics = await FetchWaveAnalyticsAsync(0);
+            } catch { }
             return View(data);
         }
 
