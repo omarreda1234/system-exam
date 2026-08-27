@@ -2798,6 +2798,59 @@ WHERE U.Id = @UserId;";
             }
             catch { }
 
+            // 7b. Weekly Exams List for Filter Dropdown
+            try
+            {
+                var weeklyExams = await conn.QueryAsync<WeeklyExamOptionDto>(@"
+                    SELECT Id, Title 
+                    FROM Exams 
+                    WHERE WaveId IS NULL OR Title LIKE 'Weekly%'
+                    ORDER BY Id ASC");
+                dashboard.WeeklyExamsList = weeklyExams.ToList();
+            }
+            catch { }
+
+            // 7c. Per-Weekly Exam Telemetry (Hover showing Weekly Exam Title)
+            try
+            {
+                var monthlyWeekly = await conn.QueryAsync<MonthlyWeeklyExamStatsDto>(@"
+                    SELECT 
+                        e.Id AS ExamId,
+                        e.Title AS ExamTitle,
+                        FORMAT(MIN(uea.StartTime), 'MMM yyyy') AS Month,
+                        COUNT(DISTINCT uea.UserId) AS ExamineesCount,
+                        COUNT(uea.Id) AS TotalAttempts,
+                        ROUND(AVG(CAST(uea.Score AS FLOAT)), 1) AS AverageScore
+                    FROM UserExamAttempts uea
+                    JOIN Exams e ON uea.ExamId = e.Id
+                    WHERE uea.Status = 'Completed' AND (e.WaveId IS NULL OR e.Title LIKE 'Weekly%')
+                    GROUP BY e.Id, e.Title
+                    ORDER BY e.Id ASC");
+                dashboard.MonthlyWeeklyExamStats = monthlyWeekly.ToList();
+            }
+            catch { }
+
+            // 7d. All Branches Weekly Exam Turnout & Score Stats
+            try
+            {
+                var branchWeekly = await conn.QueryAsync<BranchWeeklyExamStatsDto>(@"
+                    SELECT 
+                        b.Id AS BranchId,
+                        b.BranchName,
+                        COUNT(DISTINCT uea.UserId) AS ExamineesCount,
+                        COUNT(uea.Id) AS TotalAttempts,
+                        ISNULL(ROUND(AVG(CAST(uea.Score AS FLOAT)), 1), 0) AS AverageScore
+                    FROM Branches b
+                    LEFT JOIN AspNetUsers u ON u.BranchId = b.Id
+                    LEFT JOIN UserExamAttempts uea ON uea.UserId = u.Id AND uea.Status = 'Completed' 
+                        AND uea.ExamId IN (SELECT Id FROM Exams WHERE WaveId IS NULL OR Title LIKE 'Weekly%')
+                    GROUP BY b.Id, b.BranchName
+                    HAVING COUNT(DISTINCT uea.UserId) > 0
+                    ORDER BY ExamineesCount DESC, b.BranchName ASC");
+                dashboard.BranchWeeklyExamStats = branchWeekly.ToList();
+            }
+            catch { }
+
             // 8. Top Performing Pharmacists
             dashboard.TopPerformingPharmacists = (await conn.QueryAsync<TopPharmacistDto>(@"
                 SELECT TOP 5 U.UserName as Name, U.UserCode, E.Title as ExamTitle, SA.Score as Score

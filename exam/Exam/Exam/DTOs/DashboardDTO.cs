@@ -12,6 +12,9 @@ namespace Exam.DTOs
         public double OverallPassRate { get; set; }
         public List<BranchStatsDto> PharmacistsPerBranch { get; set; } = new();
         public List<WaveEnrollmentDto> WaveEnrollmentTrend { get; set; } = new();
+        public List<MonthlyWeeklyExamStatsDto> MonthlyWeeklyExamStats { get; set; } = new();
+        public List<BranchWeeklyExamStatsDto> BranchWeeklyExamStats { get; set; } = new();
+        public List<WeeklyExamOptionDto> WeeklyExamsList { get; set; } = new();
         public List<TopPharmacistDto> TopPerformingPharmacists { get; set; } = new();
         public int PassedAttempts { get; set; }
         public int FailedAttempts { get; set; }
@@ -20,6 +23,30 @@ namespace Exam.DTOs
         public int TotalQuestionsCount { get; set; }
         public List<CategoryStatDto> QuestionsPerCategory { get; set; } = new();
         public List<QuestionAnomaliesDto> MismatchedQuestions { get; set; } = new();
+    }
+
+    public class MonthlyWeeklyExamStatsDto
+    {
+        public int ExamId { get; set; }
+        public string ExamTitle { get; set; } = "";
+        public string Month { get; set; } = "";
+        public int ExamineesCount { get; set; }
+        public int TotalAttempts { get; set; }
+        public double AverageScore { get; set; }
+    }
+
+    public class WeeklyExamOptionDto
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+    }
+
+    public class BranchWeeklyExamStatsDto
+    {
+        public string BranchName { get; set; } = "";
+        public int ExamineesCount { get; set; }
+        public int TotalAttempts { get; set; }
+        public double AverageScore { get; set; }
     }
 
     public class QuestionAnomaliesDto

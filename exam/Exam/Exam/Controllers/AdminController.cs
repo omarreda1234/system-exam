@@ -149,6 +149,29 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
+        public async Task<IActionResult> GetBranchWeeklyTelemetry(int? examId)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var branchWeekly = await conn.QueryAsync<Exam.DTOs.BranchWeeklyExamStatsDto>(@"
+                SELECT 
+                    b.Id AS BranchId,
+                    b.BranchName,
+                    COUNT(DISTINCT uea.UserId) AS ExamineesCount,
+                    COUNT(uea.Id) AS TotalAttempts,
+                    ISNULL(ROUND(AVG(CAST(uea.Score AS FLOAT)), 1), 0) AS AverageScore
+                FROM Branches b
+                LEFT JOIN AspNetUsers u ON u.BranchId = b.Id
+                LEFT JOIN UserExamAttempts uea ON uea.UserId = u.Id AND uea.Status = 'Completed' 
+                    AND (@ExamId IS NULL OR @ExamId = 0 OR uea.ExamId = @ExamId)
+                    AND uea.ExamId IN (SELECT Id FROM Exams WHERE WaveId IS NULL OR Title LIKE 'Weekly%')
+                GROUP BY b.Id, b.BranchName
+                HAVING COUNT(DISTINCT uea.UserId) > 0 OR @ExamId IS NULL OR @ExamId = 0
+                ORDER BY ExamineesCount DESC, b.BranchName ASC", new { ExamId = examId });
+
+            return Json(branchWeekly);
+        }
+
+        [HttpGet]
         public async Task<IActionResult> PendingRequests()
         {
             using var conn = new SqlConnection(_connectionString);

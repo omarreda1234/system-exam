@@ -366,19 +366,68 @@
         </div>
     </div>
 
-    <!-- Trend Chart -->
+    <!-- Monthly Weekly Exam Telemetry -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm">
-        <div class="flex items-center justify-between mb-8">
-            <h3 class="font-black text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Enrollment Telemetry</h3>
-            <div class="flex items-center gap-4 text-[10px] font-bold uppercase text-slate-400 tracking-widest">
-                <div class="flex items-center gap-2 italic">
-                    <span class="w-2 h-2 rounded-full bg-brand-500"></span>
-                    <span>Student Registration Curve</span>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+                <h3 class="font-black text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <i class="fas fa-calendar-alt text-brand-500"></i> Weekly Exam Telemetry & Performance
+                </h3>
+                <p class="text-lg font-bold text-slate-900 dark:text-white mt-1">Per-Exam Turnout & Average Score %</p>
+            </div>
+            <div class="flex items-center gap-4 text-[10px] font-extrabold uppercase tracking-widest">
+                <div class="flex items-center gap-2 text-brand-600 dark:text-brand-400">
+                    <span class="w-3 h-3 rounded-md bg-brand-500"></span>
+                    <span>Examinees Count</span>
+                </div>
+                <div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                    <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                    <span>Avg Score %</span>
                 </div>
             </div>
         </div>
-        <div class="h-[250px] relative">
-            <canvas id="trendChart"></canvas>
+        <div class="h-[280px] relative">
+            <canvas id="monthlyWeeklyExamChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Branch-wise Weekly Exam Turnout & Performance -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div>
+                <h3 class="font-black text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <i class="fas fa-store-alt text-purple-500"></i> Branch Weekly Exam Telemetry
+                </h3>
+                <p class="text-lg font-bold text-slate-900 dark:text-white mt-1">Completed Exams & Average Score per Branch</p>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-4">
+                <!-- Dropdown Filter for Weekly Exams -->
+                <div class="flex items-center gap-2">
+                    <label for="weeklyExamSelectFilter" class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Weekly Exam Filter:</label>
+                    <select id="weeklyExamSelectFilter" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm transition-all cursor-pointer">
+                        <option value="0">📊 All Weekly Exams (جميع الامتحانات الأسبوعية)</option>
+                        @foreach (var w in Model.WeeklyExamsList)
+                        {
+                            <option value="@w.Id">📝 @w.Title</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-4 text-[10px] font-extrabold uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                    <div class="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                        <span class="w-3 h-3 rounded-md bg-purple-500"></span>
+                        <span>Examinees Count</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                        <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                        <span>Avg Score %</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="h-[320px] relative w-full overflow-x-auto">
+            <canvas id="branchWeeklyExamChart"></canvas>
         </div>
     </div>
 
@@ -680,41 +729,189 @@
                 });
             }
 
-            // 3. Growth
-            const ctxTrend = document.getElementById('trendChart')?.getContext('2d');
-            if (ctxTrend) {
-                const gradient = ctxTrend.createLinearGradient(0, 0, 0, 250);
-                gradient.addColorStop(0, 'rgba(6, 182, 212, 0.2)');
-                gradient.addColorStop(1, 'rgba(6, 182, 212, 0)');
+            // 3. Weekly Exam Telemetry Chart (Hover displaying Exam Title)
+            const ctxMonthlyWeekly = document.getElementById('monthlyWeeklyExamChart')?.getContext('2d');
+            if (ctxMonthlyWeekly) {
+                const weeklyExamTitles = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.MonthlyWeeklyExamStats.Select(x => x.ExamTitle)));
+                const monthlyExamineesData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.MonthlyWeeklyExamStats.Select(x => x.ExamineesCount)));
+                const monthlyAvgScoresData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.MonthlyWeeklyExamStats.Select(x => x.AverageScore)));
 
-                new Chart(ctxTrend, {
-                    type: 'line',
+                new Chart(ctxMonthlyWeekly, {
+                    type: 'bar',
                     data: {
-                        labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WaveEnrollmentTrend.Select(x => x.Month))),
-                        datasets: [{
-                            data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.WaveEnrollmentTrend.Select(x => x.EnrollmentCount))),
-                            borderColor: '#06b6d4',
-                            backgroundColor: gradient,
-                            fill: true,
-                            tension: 0.4,
-                            borderWidth: 3,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#06b6d4',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2
-                        }]
+                        labels: weeklyExamTitles,
+                        datasets: [
+                            {
+                                label: 'Examinees Count',
+                                data: monthlyExamineesData,
+                                backgroundColor: 'rgba(6, 182, 212, 0.75)',
+                                borderColor: '#06b6d4',
+                                borderWidth: 1.5,
+                                borderRadius: 8,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Average Score %',
+                                data: monthlyAvgScoresData,
+                                type: 'line',
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                borderWidth: 3,
+                                pointRadius: 5,
+                                pointBackgroundColor: '#10b981',
+                                yAxisID: 'y1'
+                            }
+                        ]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        return context[0].label; // Shows Weekly Exam Name e.g. "Weekly 8/2026"
+                                    },
+                                    label: function(context) {
+                                        if (context.dataset.type === 'line') {
+                                            return `Average Score: ${context.raw}%`;
+                                        }
+                                        return `Examinees Count: ${context.raw}`;
+                                    }
+                                }
+                            }
+                        },
                         scales: {
-                            y: { grid: { color: gridColor, drawBorder: false } },
-                            x: { grid: { display: false } }
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                grid: { color: gridColor, drawBorder: false },
+                                title: { display: true, text: 'Examinees Count', font: { size: 10, weight: '700' } }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                min: 0,
+                                max: 100,
+                                title: { display: true, text: 'Avg Score %', font: { size: 10, weight: '700' } }
+                            },
+                            x: { 
+                                grid: { display: false },
+                                ticks: { font: { size: 11, weight: '700' } }
+                            }
                         }
                     }
                 });
             }
+
+            // 4. Dynamic Branch Weekly Exam Activity & Score Chart (All Branches + Filter)
+            let branchChartInstance = null;
+
+            function renderBranchWeeklyChart(branchLabels, examineesData, avgScoresData) {
+                const ctxBranchWeekly = document.getElementById('branchWeeklyExamChart')?.getContext('2d');
+                if (!ctxBranchWeekly) return;
+
+                if (branchChartInstance) {
+                    branchChartInstance.destroy();
+                }
+
+                branchChartInstance = new Chart(ctxBranchWeekly, {
+                    type: 'bar',
+                    data: {
+                        labels: branchLabels,
+                        datasets: [
+                            {
+                                label: 'Examinees Count',
+                                data: examineesData,
+                                backgroundColor: 'rgba(168, 85, 247, 0.75)',
+                                borderColor: '#a855f7',
+                                borderWidth: 1.5,
+                                borderRadius: 8,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Branch Avg Score %',
+                                data: avgScoresData,
+                                type: 'line',
+                                borderColor: '#f59e0b',
+                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                fill: false,
+                                tension: 0.3,
+                                borderWidth: 3,
+                                pointRadius: 5,
+                                pointBackgroundColor: '#f59e0b',
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        return `فرع: ${context[0].label}`;
+                                    },
+                                    label: function(context) {
+                                        if (context.dataset.type === 'line') {
+                                            return `متوسط الدرجات: ${context.raw}%`;
+                                        }
+                                        return `عدد الممتحنين: ${context.raw}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                grid: { color: gridColor, drawBorder: false },
+                                title: { display: true, text: 'Examinees Count', font: { size: 10, weight: '700' } }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                min: 0,
+                                max: 100,
+                                title: { display: true, text: 'Branch Avg Score %', font: { size: 10, weight: '700' } }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { maxRotation: 45, minRotation: 0, font: { size: 10, weight: '600' } }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Initial Branch Chart Render
+            const initialBranchLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.BranchWeeklyExamStats.Select(x => x.BranchName)));
+            const initialBranchExaminees = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.BranchWeeklyExamStats.Select(x => x.ExamineesCount)));
+            const initialBranchAvgScores = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.BranchWeeklyExamStats.Select(x => x.AverageScore)));
+
+            renderBranchWeeklyChart(initialBranchLabels, initialBranchExaminees, initialBranchAvgScores);
+
+            // Handle Weekly Exam Filter Select Change
+            $('#weeklyExamSelectFilter').on('change', function() {
+                const selectedExamId = $(this).val();
+                $.get('/Admin/GetBranchWeeklyTelemetry', { examId: selectedExamId }, function(data) {
+                    const labels = (data || []).map(x => x.branchName || x.BranchName);
+                    const examinees = (data || []).map(x => x.examineesCount || x.ExamineesCount);
+                    const scores = (data || []).map(x => x.averageScore || x.AverageScore);
+                    renderBranchWeeklyChart(labels, examinees, scores);
+                });
+            });
         });
     </script>
 }
