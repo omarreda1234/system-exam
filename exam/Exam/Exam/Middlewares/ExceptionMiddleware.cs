@@ -24,6 +24,7 @@ namespace Exam.Middlewares
             }
             catch (Exception ex)
             {
+                SentrySdk.CaptureException(ex);
                 _logger.LogError(ex, "An unhandled exception has occurred.");
                 
                 if (context.Request.Headers["X-Requested-With"] == "XMLHttpRequest" || context.Request.Path.StartsWithSegments("/api"))

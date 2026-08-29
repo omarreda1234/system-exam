@@ -8,6 +8,9 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
 
+// Enable Sentry Monitoring & Error Tracking
+builder.WebHost.UseSentry();
+
 // Add services to the container.
 PdfSharpCore.Fonts.GlobalFontSettings.FontResolver = new Exam.Services.FileFontResolver();
 builder.Services.AddControllersWithViews();

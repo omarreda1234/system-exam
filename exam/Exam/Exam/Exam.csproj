@@ -22,6 +22,7 @@
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="10.0.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.4" />
     <PackageReference Include="PdfSharpCore" Version="1.3.67" />
+    <PackageReference Include="Sentry.AspNetCore" Version="6.9.0" />
     <PackageReference Include="SweetAlert" Version="1.0.0" />
   </ItemGroup>
 

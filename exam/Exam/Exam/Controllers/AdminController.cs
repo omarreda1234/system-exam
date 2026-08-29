@@ -707,7 +707,7 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> ExportUnassignedUsersToExcel(int? branchId = null, int? waveId = null)
+        public async Task<IActionResult> ExportUnassignedUsersToExcel(int? branchId = null, int? waveId = null, bool traineesOnly = true)
         {
             try
             {
@@ -724,30 +724,32 @@ namespace Exam.Controllers
                 string sql = @"
 SELECT 
     U.Id,
-    U.UserName,
+    ISNULL(NULLIF(U.FullName, ''), U.UserName) AS UserName,
     U.Email,
     U.UserCode,
     U.CertificateCode,
     B.BranchName,
     B.Id AS BranchId,
-    R.Name AS RoleName,
+    ISNULL(NULLIF(U.UserRoleCustom, ''), R.Name) AS RoleName,
     S.ShiftName,
     U.IsActive
 FROM dbo.AspNetUsers U WITH(NOLOCK)
 LEFT JOIN dbo.Branches B WITH(NOLOCK) ON U.BranchId = B.Id
 LEFT JOIN dbo.AspNetUserRoles UR ON U.Id = UR.UserId
 LEFT JOIN dbo.AspNetRoles R WITH(NOLOCK) ON UR.RoleId = R.Id
-LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId
-WHERE 1 = 1";
+LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
 
                 if (waveId.HasValue && waveId.Value > 0)
                 {
-                    sql += " AND NOT EXISTS (SELECT 1 FROM dbo.UserWaves UW WHERE UW.UserId = U.Id AND UW.WaveId = @WaveId AND (UW.IsDeactivated IS NULL OR UW.IsDeactivated = 0))";
+                    sql += " LEFT JOIN dbo.UserWaves UW WITH(NOLOCK) ON U.Id = UW.UserId AND UW.WaveId = @WaveId";
                 }
                 else
                 {
-                    sql += " AND NOT EXISTS (SELECT 1 FROM dbo.UserWaves UW WHERE UW.UserId = U.Id AND (UW.IsDeactivated IS NULL OR UW.IsDeactivated = 0))";
+                    sql += " LEFT JOIN dbo.UserWaves UW WITH(NOLOCK) ON U.Id = UW.UserId";
                 }
+
+                sql += @" WHERE UW.UserId IS NULL
+                  AND U.UserRoleCustom IN ('Pharmacist', 'Assistant')";
 
                 var users = (await conn.QueryAsync<dynamic>(sql, new { WaveId = waveId })).ToList();
 
@@ -779,7 +781,7 @@ WHERE 1 = 1";
                     var currentRow = 1;
 
                     worksheet.Cell(currentRow, 1).Value = "Target Wave Context:";
-                    worksheet.Cell(currentRow, 2).Value = waveId.HasValue && waveId.Value > 0 ? $"Users NOT in Wave ({waveName})" : "Users NOT in ANY Wave";
+                    worksheet.Cell(currentRow, 2).Value = waveId.HasValue && waveId.Value > 0 ? $"Trainees NOT in Wave ({waveName})" : "Trainees NOT in ANY Wave";
                     currentRow++;
                     worksheet.Cell(currentRow, 1).Value = "Total Unassigned:";
                     worksheet.Cell(currentRow, 2).Value = users.Count;
@@ -821,7 +823,7 @@ WHERE 1 = 1";
                     {
                         workbook.SaveAs(stream);
                         var content = stream.ToArray();
-                        string fileName = $"Unassigned_Users_{(waveId > 0 ? "Wave_" + waveId : "All_Waves")}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+                        string fileName = $"Unassigned_Trainees_{(waveId > 0 ? "Wave_" + waveId : "All_Waves")}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
                         return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
                     }
                 }
@@ -833,7 +835,7 @@ WHERE 1 = 1";
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetUnassignedUsersList(int? branchId = null, int? waveId = null)
+        public async Task<IActionResult> GetUnassignedUsersList(int? branchId = null, int? waveId = null, bool traineesOnly = true)
         {
             try
             {
@@ -856,24 +858,26 @@ SELECT
     U.CertificateCode,
     B.BranchName,
     B.Id AS BranchId,
-    R.Name AS RoleName,
+    ISNULL(NULLIF(U.UserRoleCustom, ''), R.Name) AS RoleName,
     S.ShiftName,
     U.IsActive
 FROM dbo.AspNetUsers U WITH(NOLOCK)
 LEFT JOIN dbo.Branches B WITH(NOLOCK) ON U.BranchId = B.Id
 LEFT JOIN dbo.AspNetUserRoles UR ON U.Id = UR.UserId
 LEFT JOIN dbo.AspNetRoles R WITH(NOLOCK) ON UR.RoleId = R.Id
-LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId
-WHERE 1 = 1";
+LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
 
                 if (waveId.HasValue && waveId.Value > 0)
                 {
-                    sql += " AND NOT EXISTS (SELECT 1 FROM dbo.UserWaves UW WHERE UW.UserId = U.Id AND UW.WaveId = @WaveId AND (UW.IsDeactivated IS NULL OR UW.IsDeactivated = 0))";
+                    sql += " LEFT JOIN dbo.UserWaves UW WITH(NOLOCK) ON U.Id = UW.UserId AND UW.WaveId = @WaveId";
                 }
                 else
                 {
-                    sql += " AND NOT EXISTS (SELECT 1 FROM dbo.UserWaves UW WHERE UW.UserId = U.Id AND (UW.IsDeactivated IS NULL OR UW.IsDeactivated = 0))";
+                    sql += " LEFT JOIN dbo.UserWaves UW WITH(NOLOCK) ON U.Id = UW.UserId";
                 }
+
+                sql += @" WHERE UW.UserId IS NULL
+                  AND U.UserRoleCustom IN ('Pharmacist', 'Assistant')";
 
                 var users = (await conn.QueryAsync<dynamic>(sql, new { WaveId = waveId })).ToList();
 
@@ -3810,17 +3814,18 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             ("LMS_Overview", "LMS Overview (Examination Dash)", "Admin", "Index", new string[] { }),
             ("AttendanceDash", "Attendance Dashboard", "Attendance", "Index", new string[] { }),
             ("ProgramDash", "Program Dashboard", "Materials", "Index", new string[] { }),
-            ("Items", "Items Management", "Admin", "Items", new[] { "AddItem", "EditItem", "DeleteItem" }),
-            ("WeeklyExams", "Weekly Exams Matrix", "Admin", "WeeklyExams", new string[] { }),
-            ("WaveExams", "Wave Exams Matrix", "Admin", "WaveExams", new string[] { }),
-            ("Assignments", "Wave Assignments", "Admin", "Assignments", new string[] { }),
-            ("WeeklyAnalytics", "Weekly Analytics", "Admin", "WeeklyResults", new[] { "GetWeeklyResultsPaged" }),
+            ("Items", "Items Management", "Admin", "Items", new[] { "AddItem", "EditItem", "DeleteItem", "GetItemsPaged", "UpdateItemCustomDefinition", "SyncItems" }),
+            ("WeeklyExams", "Weekly Exams Matrix", "Admin", "WeeklyExams", new[] { "GetWeeklyExamsForFilter", "GetGenerationRules", "GetExamsForFilter" }),
+            ("WaveExams", "Wave Exams Matrix", "Admin", "WaveExams", new[] { "GetWaveExamsForFilter", "GetExamsForFilter" }),
+            ("Assignments", "Wave Assignments", "Admin", "Assignments", new[] { "GetEligibleUsersForExam", "AssignExamToStudents", "ReassignExamToStudents", "RemoveStudentFromExam", "RemoveAllStudentsFromExam", "WipeStudentData" }),
+            ("WeeklyAnalytics", "Weekly Analytics", "Admin", "WeeklyResults", new[] { "GetWeeklyResultsPaged", "ExportAllStudentsToExcel", "SendFailEmails" }),
             ("WaveAnalytics", "Wave Analytics", "Admin", "WaveyResults", new string[] { }),
             ("GeneralAnalytics", "General Analytics", "Admin", "Students", new[] { "ExportStudentsToExcel", "GetStudentExamReview" }),
-            ("LiveMonitor", "Live Monitor", "Admin", "LiveMonitor", new string[] { }),
-            ("Certificates", "Certificates Management", "Admin", "Certificates", new[] { "UploadCertificatesOnlyExcel", "SendCertificates", "MoveUserToWave", "UploadCertificatesPdfs" }),
+            ("LiveMonitor", "Live Monitor", "Admin", "LiveMonitor", new[] { "GetLiveMonitorData", "GetLiveMonitorPaged", "ExportLiveMonitorToExcel", "GetExamsByWaveId" }),
+            ("Certificates", "Certificates Management", "Admin", "Certificates", new[] { "ExportWaveResultsToExcel", "UploadCertificatesOnlyExcel", "SendCertificates", "MoveUserToWave", "UploadCertificatesPdfs", "GetStudentWaveDetails" }),
+            ("TraineeProfile", "Trainee 360° Profile", "Admin", "TraineeProfile", new[] { "GetTraineeDetailsByCode", "GetUnassignedUsersList", "ExportUnassignedUsersToExcel" }),
             ("NewCome", "New Come Requests (Pending)", "Admin", "PendingRequests", new[] { "ApproveRequest", "RejectRequest" }),
-            ("PersonnelRegistry", "Personnel Registry (Main Access)", "Admin", "AllUsers", new[] { "GetUsersPaged", "AddUser" }),
+            ("PersonnelRegistry", "Personnel Registry (Main Access)", "Admin", "AllUsers", new[] { "GetUsersPaged", "AddUser", "DownloadPersonnelTemplate", "CheckExistence" }),
             ("Personnel_EditProfile", "Personnel Action: Edit Profile & Branch", "Admin", "UpdateUserProfile", new string[] { }),
             ("Personnel_EditShift", "Personnel Action: Change Shift", "Admin", "UpdateUserShift", new string[] { }),
             ("Personnel_EditRole", "Personnel Action: Change Role / Classification", "Admin", "UpdateUserRole", new string[] { }),
@@ -3830,16 +3835,132 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             ("Deactivated", "Deactivated Users", "Admin", "DeactivatedUsers", new[] { "DeactivateUser", "ActivateUser", "DeactivateUserByCode", "ImportDeactivationsFromExcel" }),
             ("BatchCycles", "Batch Cycles (Waves)", "Admin", "Waves", new[] { "WaveDetails", "GetWaves", "CreateWave", "EditWave", "GetWaveUserIds", "GetUsersByWaveId", "AssignUsersToWave", "ImportUsersToWaveFromExcel", "DeleteWave" }),
             ("BatchCycles_RemoveUser", "Batch Cycles Action: Remove User from Wave", "Admin", "RemoveUserFromWave", new string[] { }),
-            ("Companies", "Companies Management", "Admin", "Companies", new[] { "AddCompany", "EditCompany", "DeleteCompany", "ClearCompanyTrainees", "ImportCompanyTraineesFromExcel", "GetCompanyTrainees", "DeleteCompanyTrainee", "AddCompanyTraineeManually", "GetTraineeDetailsByCode" }),
+            ("Companies", "Companies Management", "Admin", "Companies", new[] { "AddCompany", "EditCompany", "DeleteCompany", "ClearCompanyTrainees", "ImportCompanyTraineesFromExcel", "GetCompanyTrainees", "DeleteCompanyTrainee", "AddCompanyTraineeManually" }),
             ("Branches", "Branches Management", "Admin", "Branches", new[] { "AddBranch", "EditBranch", "DeleteBranch" }),
+            ("BranchSupervisors", "Branch Supervisors Management", "Admin", "BranchSupervisors", new[] { "AddBranchSupervisor", "DeleteBranchSupervisor" }),
             ("AttendanceTrends", "Attendance Trends", "Attendance", "Analytics", new string[] { }),
             ("SkillTracks", "Skill Tracks", "SkillTracks", "Index", new string[] { }),
-            ("SystemRoles", "System Roles Configuration", "Admin", "Roles", new string[] { }),
-            ("QuestionCategories", "Question Categories", "Admin", "getallcategories", new string[] { }),
-            ("ExamVarieties", "Exam Varieties", "Admin", "getallexamtypes", new string[] { }),
-            ("CourseStructure", "Course Structure", "Admin", "Structure", new string[] { }),
-            ("ExamInstructions", "Exam Instructions", "Admin", "ManageInstructions", new string[] { })
+            ("SystemRoles", "System Roles Configuration", "Admin", "Roles", new[] { "CreateRole", "DeleteRole" }),
+            ("RolePermissions", "Role Permissions Console", "Admin", "Permissions", new[] { "SavePermissions", "GetPermissionsForRole" }),
+            ("QuestionCategories", "Question Categories", "Admin", "getallcategories", new[] { "AddCategory", "EditCategory", "DeleteCategory" }),
+            ("ExamVarieties", "Exam Varieties", "Admin", "getallexamtypes", new[] { "AddExamType", "EditExamType", "DeleteExamType" }),
+            ("CourseStructure", "Course Structure", "Admin", "Structure", new[] { "AddCourse", "EditCourse", "DeleteCourse" }),
+            ("ExamInstructions", "Exam Instructions", "Admin", "ManageInstructions", new[] { "SaveInstruction", "DeleteInstruction" }),
+            ("ManageHome", "Homepage CMS Management", "Admin", "ManageHome", new[] { "UploadSliderImage", "DeleteSliderImage", "ToggleSliderImage", "SaveHomeSection", "DeleteHomeSection", "ToggleHomeSection", "SaveFacultyMember", "DeleteFacultyMember", "ToggleFacultyMember" })
         };
+
+        private static string HumanizeActionName(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return "";
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < input.Length; i++)
+            {
+                char c = input[i];
+                if (i > 0 && char.IsUpper(c) && !char.IsUpper(input[i - 1]))
+                {
+                    sb.Append(' ');
+                }
+                sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
+        private List<ModulePermissionViewModel> BuildFullPermissionsList(List<RolePermission> currentPermissions)
+        {
+            var model = new List<ModulePermissionViewModel>();
+            var coveredActions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // 1. Pre-Configured System Modules
+            foreach (var module in DashboardModules)
+            {
+                coveredActions.Add($"{module.Ctrl}:{module.Act}");
+                if (module.AddActs != null)
+                {
+                    foreach (var addAct in module.AddActs)
+                    {
+                        coveredActions.Add($"{module.Ctrl}:{addAct}");
+                    }
+                }
+
+                var perm = currentPermissions.FirstOrDefault(p => 
+                    p.ControllerName.Equals(module.Ctrl, StringComparison.OrdinalIgnoreCase) && 
+                    p.ActionName.Equals(module.Act, StringComparison.OrdinalIgnoreCase));
+
+                model.Add(new ModulePermissionViewModel
+                {
+                    ModuleKey = module.Key,
+                    DisplayName = module.Name,
+                    ControllerName = module.Ctrl,
+                    ActionName = module.Act,
+                    CanAccess = perm?.CanAccess ?? false,
+                    CanCreate = perm?.CanCreate ?? false,
+                    CanEdit = perm?.CanEdit ?? false,
+                    CanDelete = perm?.CanDelete ?? false
+                });
+            }
+
+            // 2. Reflection Auto-Discovery for any new standalone Page Actions
+            try
+            {
+                var assembly = typeof(AdminController).Assembly;
+                var controllerTypes = assembly.GetTypes()
+                    .Where(t => typeof(Microsoft.AspNetCore.Mvc.Controller).IsAssignableFrom(t) && !t.IsAbstract)
+                    .ToList();
+
+                foreach (var ctrlType in controllerTypes)
+                {
+                    string ctrlName = ctrlType.Name.EndsWith("Controller", StringComparison.OrdinalIgnoreCase)
+                        ? ctrlType.Name.Substring(0, ctrlType.Name.Length - 10)
+                        : ctrlType.Name;
+
+                    var methods = ctrlType.GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.DeclaredOnly)
+                        .Where(m => typeof(Microsoft.AspNetCore.Mvc.IActionResult).IsAssignableFrom(m.ReturnType) || 
+                                    (m.ReturnType.IsGenericType && m.ReturnType.GetGenericTypeDefinition() == typeof(Task<>) && typeof(Microsoft.AspNetCore.Mvc.IActionResult).IsAssignableFrom(m.ReturnType.GetGenericArguments()[0])))
+                        .ToList();
+
+                    foreach (var method in methods)
+                    {
+                        string actName = method.Name;
+                        if (coveredActions.Contains($"{ctrlName}:{actName}")) continue;
+
+                        // Skip internal backend API / AJAX / Utility handlers that don't represent independent pages
+                        if (actName.StartsWith("Get") || actName.StartsWith("Fetch") || actName.StartsWith("Build") ||
+                            actName.StartsWith("Save") || actName.StartsWith("Delete") || actName.StartsWith("Toggle") ||
+                            actName.StartsWith("Upload") || actName.StartsWith("Export") || actName.StartsWith("Download") ||
+                            actName.StartsWith("Check") || actName.StartsWith("Update") || actName.StartsWith("Sync") ||
+                            actName.StartsWith("Reset") || actName.StartsWith("Assign") || actName.StartsWith("Remove") ||
+                            actName.StartsWith("Wipe") || actName.StartsWith("Approve") || actName.StartsWith("Reject") ||
+                            actName.StartsWith("Import") || actName.StartsWith("Move") || actName.StartsWith("Send"))
+                        {
+                            continue;
+                        }
+
+                        coveredActions.Add($"{ctrlName}:{actName}");
+
+                        var perm = currentPermissions.FirstOrDefault(p => 
+                            p.ControllerName.Equals(ctrlName, StringComparison.OrdinalIgnoreCase) && 
+                            p.ActionName.Equals(actName, StringComparison.OrdinalIgnoreCase));
+
+                        string autoKey = $"Auto_{ctrlName}_{actName}";
+                        string humanName = HumanizeActionName(actName);
+                        model.Add(new ModulePermissionViewModel
+                        {
+                            ModuleKey = autoKey,
+                            DisplayName = $"{ctrlName}: {humanName}",
+                            ControllerName = ctrlName,
+                            ActionName = actName,
+                            CanAccess = perm?.CanAccess ?? false,
+                            CanCreate = perm?.CanCreate ?? false,
+                            CanEdit = perm?.CanEdit ?? false,
+                            CanDelete = perm?.CanDelete ?? false
+                        });
+                    }
+                }
+            }
+            catch { }
+
+            return model;
+        }
 
         [HttpGet]
         public async Task<IActionResult> Permissions(string roleName)
@@ -3858,26 +3979,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 ? new List<RolePermission>()
                 : (await _examService.GetPermissionsForRoleAsync(roleName)).ToList();
 
-            var model = new List<ModulePermissionViewModel>();
-            foreach (var module in DashboardModules)
-            {
-                var perm = currentPermissions.FirstOrDefault(p => 
-                    p.ControllerName.Equals(module.Ctrl, StringComparison.OrdinalIgnoreCase) && 
-                    p.ActionName.Equals(module.Act, StringComparison.OrdinalIgnoreCase));
-
-                model.Add(new ModulePermissionViewModel
-                {
-                    ModuleKey = module.Key,
-                    DisplayName = module.Name,
-                    ControllerName = module.Ctrl,
-                    ActionName = module.Act,
-                    CanAccess = perm?.CanAccess ?? false,
-                    CanCreate = perm?.CanCreate ?? false,
-                    CanEdit = perm?.CanEdit ?? false,
-                    CanDelete = perm?.CanDelete ?? false
-                });
-            }
-
+            var model = BuildFullPermissionsList(currentPermissions);
             return View(model);
         }
 
@@ -3894,19 +3996,39 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
             foreach (var input in permissions)
             {
-                var module = DashboardModules.FirstOrDefault(m => m.Key == input.ModuleKey);
-                if (module.Key == null) continue;
+                string ctrlName = "";
+                string actName = "";
+                string[] addActs = null;
 
-                var ctrlLower = module.Ctrl.ToLowerInvariant();
-                var actLower = module.Act.ToLowerInvariant();
+                var module = DashboardModules.FirstOrDefault(m => m.Key == input.ModuleKey);
+                if (module.Key != null)
+                {
+                    ctrlName = module.Ctrl;
+                    actName = module.Act;
+                    addActs = module.AddActs;
+                }
+                else if (input.ModuleKey != null && input.ModuleKey.StartsWith("Auto_"))
+                {
+                    var parts = input.ModuleKey.Split('_', 3);
+                    if (parts.Length == 3)
+                    {
+                        ctrlName = parts[1];
+                        actName = parts[2];
+                    }
+                }
+
+                if (string.IsNullOrEmpty(ctrlName) || string.IsNullOrEmpty(actName)) continue;
+
+                var ctrlLower = ctrlName.ToLowerInvariant();
+                var actLower = actName.ToLowerInvariant();
 
                 if (addedPairs.Add((ctrlLower, actLower)))
                 {
                     dbPermissions.Add(new RolePermission
                     {
                         RoleName = roleName,
-                        ControllerName = module.Ctrl,
-                        ActionName = module.Act,
+                        ControllerName = ctrlName,
+                        ActionName = actName,
                         CanAccess = input.CanAccess,
                         CanCreate = input.CanCreate,
                         CanEdit = input.CanEdit,
@@ -3914,9 +4036,9 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     });
                 }
 
-                if (module.AddActs != null)
+                if (addActs != null)
                 {
-                    foreach (var act in module.AddActs)
+                    foreach (var act in addActs)
                     {
                         var addActLower = act.ToLowerInvariant();
                         if (addedPairs.Add((ctrlLower, addActLower)))
@@ -3924,7 +4046,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                             dbPermissions.Add(new RolePermission
                             {
                                 RoleName = roleName,
-                                ControllerName = module.Ctrl,
+                                ControllerName = ctrlName,
                                 ActionName = act,
                                 CanAccess = input.CanAccess,
                                 CanCreate = input.CanCreate,
