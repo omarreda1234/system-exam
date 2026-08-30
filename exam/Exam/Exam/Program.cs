@@ -12,10 +12,12 @@ builder.Host.UseWindowsService();
 builder.WebHost.UseSentry(options =>
 {
     options.Dsn = builder.Configuration["Sentry:Dsn"];
+    options.Environment = builder.Environment.EnvironmentName; // "Production" or "Development"
     options.TracesSampleRate = 1.0; // 100% of HTTP transactions for Performance Tracing
     options.ProfilesSampleRate = 1.0; // Captures profiling details for slow requests
     options.SendDefaultPii = true;
     options.MaxRequestBodySize = Sentry.Extensibility.RequestSize.Always;
+    options.Debug = builder.Environment.IsDevelopment(); // Enable verbose logs only in Dev
 });
 
 // Add services to the container.

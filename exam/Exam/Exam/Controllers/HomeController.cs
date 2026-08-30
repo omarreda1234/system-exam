@@ -82,6 +82,25 @@ namespace Exam.Controllers
             return Json(new { instructions });
         }
 
+        [HttpGet("/sentry-test")]
+        public async Task<IActionResult> SentryTest()
+        {
+            var eventId = SentrySdk.CaptureMessage("🔥 Sentry Live Diagnostic Test Message from ASP.NET Core!");
+            
+            try
+            {
+                throw new InvalidOperationException("🔥 Sentry Test Exception Triggered Manually!");
+            }
+            catch (System.Exception ex)
+            {
+                SentrySdk.CaptureException(ex);
+            }
+
+            await SentrySdk.FlushAsync(System.TimeSpan.FromSeconds(3));
+
+            return Content($"Sentry Test Event Sent Successfully! EventId: {eventId}. Please check Sentry Dashboard (Issues & Performance / Traces).");
+        }
+
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public IActionResult Error(string message = null, string trace = null)
         {

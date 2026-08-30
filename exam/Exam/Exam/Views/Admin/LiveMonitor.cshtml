@@ -61,15 +61,38 @@
 
         <!-- Filter Bar -->
         <form method="get" action="/Admin/LiveMonitor" id="filterForm" class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div class="flex flex-col gap-1">
+            <!-- Multi-Select Branch Dropdown -->
+            <div class="flex flex-col gap-1 relative text-left" id="multiSelectBranchWrapperLive">
                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Branch</label>
-                <select name="branchId" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
-                    <option value="">All Branches</option>
-                    @foreach (var b in branches)
-                    {
-                        <option value="@b.Id" selected="@(selBranch == b.Id.ToString() ? "selected" : null)">@b.BranchName</option>
-                    }
-                </select>
+                <button type="button" id="btnMultiSelectBranchLive" onclick="toggleBranchDropdownLive()"
+                        class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all shadow-sm flex items-center justify-between gap-2">
+                    <span id="lblBranchSelectedLive" class="truncate">All Branches</span>
+                    <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- Dropdown Menu -->
+                <div id="dropdownBranchMenuLive" class="hidden absolute left-0 top-full mt-1 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                    <div class="relative">
+                        <input type="text" id="branchSearchInputLive" placeholder="Search branch..." oninput="filterBranchOptionsLive(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                    </div>
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Branches</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="selectAllBranchesLive(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllBranchesLive(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                        @foreach (var b in branches)
+                        {
+                            <label class="branch-option-label-live flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                                <input type="checkbox" value="@b.Id" class="chk-branch-live rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onBranchFilterChangeLive()" />
+                                <span class="truncate">@b.BranchName</span>
+                            </label>
+                        }
+                    </div>
+                </div>
             </div>
             <div class="flex flex-col gap-1">
                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Shift</label>
@@ -81,15 +104,38 @@
                     }
                 </select>
             </div>
-            <div class="flex flex-col gap-1">
+            <!-- Multi-Select Role Dropdown -->
+            <div class="flex flex-col gap-1 relative text-left" id="multiSelectRoleWrapperLive">
                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Role</label>
-                <select name="roleName" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold">
-                    <option value="">All Roles</option>
-                    @foreach (var r in roles)
-                    {
-                        <option value="@r" selected="@(selRole == r ? "selected" : null)">@r</option>
-                    }
-                </select>
+                <button type="button" id="btnMultiSelectRoleLive" onclick="toggleRoleDropdownLive()"
+                        class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all shadow-sm flex items-center justify-between gap-2">
+                    <span id="lblRoleSelectedLive" class="truncate">All Roles</span>
+                    <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- Dropdown Menu -->
+                <div id="dropdownRoleMenuLive" class="hidden absolute left-0 top-full mt-1 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                    <div class="relative">
+                        <input type="text" id="roleSearchInputLive" placeholder="Search role..." oninput="filterRoleOptionsLive(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                    </div>
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Roles</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="selectAllRolesLive(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllRolesLive(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                        @foreach (var r in roles)
+                        {
+                            <label class="role-option-label-live flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                                <input type="checkbox" value="@r" class="chk-role-live rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onRoleFilterChangeLive()" />
+                                <span class="truncate">@r</span>
+                            </label>
+                        }
+                    </div>
+                </div>
             </div>
             <div class="flex flex-col gap-1">
                 <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Status</label>
@@ -253,6 +299,95 @@
             }
         });
 
+        function toggleBranchDropdownLive() {
+            $('#dropdownBranchMenuLive').toggleClass('hidden');
+            $('#dropdownRoleMenuLive').addClass('hidden');
+        }
+
+        function toggleRoleDropdownLive() {
+            $('#dropdownRoleMenuLive').toggleClass('hidden');
+            $('#dropdownBranchMenuLive').addClass('hidden');
+        }
+
+        $(document).click(function(e) {
+            if (!$(e.target).closest('#multiSelectBranchWrapperLive').length) {
+                $('#dropdownBranchMenuLive').addClass('hidden');
+            }
+            if (!$(e.target).closest('#multiSelectRoleWrapperLive').length) {
+                $('#dropdownRoleMenuLive').addClass('hidden');
+            }
+        });
+
+        function filterBranchOptionsLive(query) {
+            const q = (query || '').toLowerCase().trim();
+            $('.branch-option-label-live').each(function() {
+                const text = $(this).text().toLowerCase();
+                $(this).toggle(!q || text.includes(q));
+            });
+        }
+
+        function filterRoleOptionsLive(query) {
+            const q = (query || '').toLowerCase().trim();
+            $('.role-option-label-live').each(function() {
+                const text = $(this).text().toLowerCase();
+                $(this).toggle(!q || text.includes(q));
+            });
+        }
+
+        function selectAllBranchesLive(checkAll) {
+            $('.branch-option-label-live:visible .chk-branch-live').prop('checked', checkAll);
+            onBranchFilterChangeLive();
+        }
+
+        function selectAllRolesLive(checkAll) {
+            $('.role-option-label-live:visible .chk-role-live').prop('checked', checkAll);
+            onRoleFilterChangeLive();
+        }
+
+        function getSelectedBranchesLive() {
+            let checked = [];
+            $('.chk-branch-live:checked').each(function() {
+                checked.push($(this).val());
+            });
+            return checked;
+        }
+
+        function getSelectedRolesLive() {
+            let checked = [];
+            $('.chk-role-live:checked').each(function() {
+                checked.push($(this).val());
+            });
+            return checked;
+        }
+
+        function onBranchFilterChangeLive() {
+            let selected = getSelectedBranchesLive();
+            let total = $('.chk-branch-live').length;
+            if (selected.length === 0 || selected.length === total) {
+                $('#lblBranchSelectedLive').html('<span class="text-slate-500">All Branches</span>');
+            } else if (selected.length === 1) {
+                let bName = $('.chk-branch-live:checked').parent().text().trim();
+                $('#lblBranchSelectedLive').html(`<span class="text-brand-600 font-extrabold">${bName}</span>`);
+            } else {
+                $('#lblBranchSelectedLive').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
+            }
+            if (table) table.draw();
+        }
+
+        function onRoleFilterChangeLive() {
+            let selected = getSelectedRolesLive();
+            let total = $('.chk-role-live').length;
+            if (selected.length === 0 || selected.length === total) {
+                $('#lblRoleSelectedLive').html('<span class="text-slate-500">All Roles</span>');
+            } else if (selected.length === 1) {
+                let rName = $('.chk-role-live:checked').parent().text().trim();
+                $('#lblRoleSelectedLive').html(`<span class="text-brand-600 font-extrabold">${rName}</span>`);
+            } else {
+                $('#lblRoleSelectedLive').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
+            }
+            if (table) table.draw();
+        }
+
         $(document).ready(function () {
             table = $('#liveMonitorTable').DataTable({
                 serverSide: true,
@@ -262,9 +397,9 @@
                     url: '/Admin/GetLiveMonitorPaged',
                     type: 'POST',
                     data: function (d) {
-                        d.branchId = $('[name="branchId"]').val();
+                        d.branchId = getSelectedBranchesLive().join(',');
                         d.shiftId = $('[name="shiftId"]').val();
-                        d.roleName = $('[name="roleName"]').val();
+                        d.roleName = getSelectedRolesLive().join(',');
                         d.status = $('[name="status"]').val();
                         d.waveId = $('[name="waveId"]').val();
                         d.date = $('[name="date"]').val();

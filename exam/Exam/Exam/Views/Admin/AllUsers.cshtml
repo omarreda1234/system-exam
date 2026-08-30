@@ -82,26 +82,80 @@
 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
     <!-- Filters -->
     <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-6 bg-slate-50/50 dark:bg-slate-800/20">
-        <div class="flex items-center gap-3">
-            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest"><i class="fas fa-filter mr-1"></i> Classification</label>
-            <select id="filterClassification" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all min-w-[180px] shadow-sm">
-                <option value="">All Classifications</option>
-                @foreach (var r in roles) {
-                    <option value="@r.RoleName.ToUpper()">@r.RoleName.ToUpper()</option>
-                }
-            </select>
-        </div>
-        <div class="flex items-center gap-3">
-            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest"><i class="fas fa-code-branch mr-1"></i> Branch</label>
-            <select id="filterBranch" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all min-w-[180px] shadow-sm">
-                <option value="">All Branches</option>
-                <option value="GLOBAL">GLOBAL</option>
-                @if (ViewBag.Branches != null) {
-                    foreach (var b in ViewBag.Branches as IEnumerable<Exam.DTOs.BranchDto>) {
-                        <option value="@b.BranchName.ToUpper()">@b.BranchName.ToUpper()</option>
+        <!-- Multi-Select Classification Dropdown -->
+        <div class="relative inline-block text-left" id="multiSelectClassificationWrapper">
+            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
+                <i class="fas fa-filter mr-1"></i> Classification
+            </label>
+            <button type="button" id="btnMultiSelectClassification" onclick="toggleClassificationDropdown()"
+                    class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[220px] shadow-sm flex items-center justify-between gap-2">
+                <span id="lblClassificationSelected" class="truncate">All Classifications</span>
+                <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
+            </button>
+
+            <!-- Dropdown Menu -->
+            <div id="dropdownClassificationMenu" class="hidden absolute left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                <div class="relative">
+                    <input type="text" id="classificationSearchInput" placeholder="Search classification..." oninput="filterClassificationOptions(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                </div>
+                <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Classifications</span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="selectAllClassifications(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
+                        <span class="text-slate-300">|</span>
+                        <button type="button" onclick="selectAllClassifications(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
+                    </div>
+                </div>
+                <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar" id="classificationOptionsContainer">
+                    @foreach (var r in roles) {
+                        <label class="classification-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" value="@r.RoleName.ToUpper()" class="chk-classification rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onClassificationFilterChange()" />
+                            <span class="truncate">@r.RoleName.ToUpper()</span>
+                        </label>
                     }
-                }
-            </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Multi-Select Branch Dropdown -->
+        <div class="relative inline-block text-left" id="multiSelectBranchWrapper">
+            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
+                <i class="fas fa-code-branch mr-1"></i> Branch
+            </label>
+            <button type="button" id="btnMultiSelectBranch" onclick="toggleBranchDropdown()"
+                    class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[220px] shadow-sm flex items-center justify-between gap-2">
+                <span id="lblBranchSelected" class="truncate">All Branches</span>
+                <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
+            </button>
+
+            <!-- Dropdown Menu -->
+            <div id="dropdownBranchMenu" class="hidden absolute left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                <div class="relative">
+                    <input type="text" id="branchSearchInput" placeholder="Search branch..." oninput="filterBranchOptions(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                </div>
+                <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Branches</span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="selectAllBranches(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
+                        <span class="text-slate-300">|</span>
+                        <button type="button" onclick="selectAllBranches(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
+                    </div>
+                </div>
+                <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar" id="branchOptionsContainer">
+                    <label class="branch-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <input type="checkbox" value="GLOBAL" class="chk-branch rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onBranchFilterChange()" />
+                        <span class="truncate">GLOBAL</span>
+                    </label>
+                    @if (ViewBag.Branches != null) {
+                        foreach (var b in ViewBag.Branches as IEnumerable<Exam.DTOs.BranchDto>) {
+                            <label class="branch-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                                <input type="checkbox" value="@b.BranchName.ToUpper()" class="chk-branch rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onBranchFilterChange()" />
+                                <span class="truncate">@b.BranchName.ToUpper()</span>
+                            </label>
+                        }
+                    }
+                </div>
+            </div>
         </div>
     </div>
 
@@ -134,6 +188,93 @@
         const canEditShift = @((ViewBag.CanEditShift ?? false).ToString().ToLower());
         const canCreateUser = @((ViewBag.CanCreateUser ?? false).ToString().ToLower());
 
+        function toggleClassificationDropdown() {
+            $('#dropdownClassificationMenu').toggleClass('hidden');
+            $('#dropdownBranchMenu').addClass('hidden');
+        }
+
+        function toggleBranchDropdown() {
+            $('#dropdownBranchMenu').toggleClass('hidden');
+            $('#dropdownClassificationMenu').addClass('hidden');
+        }
+
+        $(document).click(function(e) {
+            if (!$(e.target).closest('#multiSelectClassificationWrapper').length) {
+                $('#dropdownClassificationMenu').addClass('hidden');
+            }
+            if (!$(e.target).closest('#multiSelectBranchWrapper').length) {
+                $('#dropdownBranchMenu').addClass('hidden');
+            }
+        });
+
+        function filterClassificationOptions(query) {
+            const q = (query || '').toLowerCase().trim();
+            $('.classification-option-label').each(function() {
+                const text = $(this).text().toLowerCase();
+                $(this).toggle(!q || text.includes(q));
+            });
+        }
+
+        function filterBranchOptions(query) {
+            const q = (query || '').toLowerCase().trim();
+            $('.branch-option-label').each(function() {
+                const text = $(this).text().toLowerCase();
+                $(this).toggle(!q || text.includes(q));
+            });
+        }
+
+        function selectAllClassifications(checkAll) {
+            $('.classification-option-label:visible .chk-classification').prop('checked', checkAll);
+            onClassificationFilterChange();
+        }
+
+        function selectAllBranches(checkAll) {
+            $('.branch-option-label:visible .chk-branch').prop('checked', checkAll);
+            onBranchFilterChange();
+        }
+
+        function getSelectedClassifications() {
+            let checked = [];
+            $('.chk-classification:checked').each(function() {
+                checked.push($(this).val());
+            });
+            return checked;
+        }
+
+        function getSelectedBranches() {
+            let checked = [];
+            $('.chk-branch:checked').each(function() {
+                checked.push($(this).val());
+            });
+            return checked;
+        }
+
+        function onClassificationFilterChange() {
+            let selected = getSelectedClassifications();
+            let total = $('.chk-classification').length;
+            if (selected.length === 0 || selected.length === total) {
+                $('#lblClassificationSelected').html('<span class="text-slate-500">All Classifications</span>');
+            } else if (selected.length === 1) {
+                $('#lblClassificationSelected').html(`<span class="text-brand-600 font-extrabold">${selected[0]}</span>`);
+            } else {
+                $('#lblClassificationSelected').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
+            }
+            if (table) table.draw();
+        }
+
+        function onBranchFilterChange() {
+            let selected = getSelectedBranches();
+            let total = $('.chk-branch').length;
+            if (selected.length === 0 || selected.length === total) {
+                $('#lblBranchSelected').html('<span class="text-slate-500">All Branches</span>');
+            } else if (selected.length === 1) {
+                $('#lblBranchSelected').html(`<span class="text-brand-600 font-extrabold">${selected[0]}</span>`);
+            } else {
+                $('#lblBranchSelected').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
+            }
+            if (table) table.draw();
+        }
+
         let table;
         $(document).ready(function() {
             table = $('#personnelTable').DataTable({
@@ -143,8 +284,8 @@
                     url: '/Admin/GetUsersPaged',
                     type: 'POST',
                     data: function (d) {
-                        d.classification = $('#filterClassification').val();
-                        d.branchName = $('#filterBranch').val();
+                        d.classification = getSelectedClassifications().join(',');
+                        d.branchName = getSelectedBranches().join(',');
                     },
                     headers: {
                         'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
@@ -203,7 +344,7 @@
                 }
             });
 
-            $('#filterClassification, #filterBranch').on('change', function() {
+            $('#filterBranch').on('change', function() {
                 table.draw();
             });
         });

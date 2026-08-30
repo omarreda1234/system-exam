@@ -135,19 +135,15 @@ namespace Exam.Controllers
                 if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
                 {
                     var currentUser = await _userManager.GetUserAsync(User);
-                    if (currentUser != null && currentUser.BranchId.HasValue)
+                    var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+                    if (allowedBranches != null && allowedBranches.Any())
                     {
-                        var branchName = await conn.QueryFirstOrDefaultAsync<string>(
-                            "SELECT BranchName FROM Branches WHERE Id = @Id", 
-                            new { Id = currentUser.BranchId.Value });
-                            
-                        if (!string.IsNullOrEmpty(branchName))
-                            results = results.Where(r => string.Equals(r.BranchName, branchName, StringComparison.OrdinalIgnoreCase));
-                        else
-                            results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
+                        results = results.Where(r => allowedBranches.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase)));
                     }
                     else
+                    {
                         results = Enumerable.Empty<Exam.DTOs.ExamResultRowDto>();
+                    }
                 }
 
                 var resultList = results.ToList();
@@ -1744,6 +1740,9 @@ namespace Exam.Controllers
 
             using var conn = new SqlConnection(_connectionString);
 
+            var currentUser = await _userManager.GetUserAsync(User);
+            var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+
             // 1. User Header & Basic Info
             var userSql = @"
                 SELECT 
@@ -1767,6 +1766,15 @@ namespace Exam.Controllers
             var user = await conn.QueryFirstOrDefaultAsync<Trainee360UserDto>(userSql, new { UserId = userId });
             if (user == null)
                 return NotFound("User not found.");
+
+            // Security Check for Branch Managers and Branch Supervisors
+            if (allowedBranches != null)
+            {
+                if (!allowedBranches.Any(b => string.Equals(b, user.BranchName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return BadRequest("You do not have permission to view trainee details outside your assigned branch(es).");
+                }
+            }
 
             // 2. Weekly Exam Attempts Log
             var examsSql = @"
@@ -1857,6 +1865,15 @@ namespace Exam.Controllers
                 return Json(new List<TraineeSearchResultDto>());
 
             using var conn = new SqlConnection(_connectionString);
+
+            var currentUser = await _userManager.GetUserAsync(User);
+            var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+
+            if (allowedBranches != null && !allowedBranches.Any())
+            {
+                return Json(new List<TraineeSearchResultDto>());
+            }
+
             var sql = @"
                 SELECT TOP 15
                     U.Id as UserId,
@@ -1871,10 +1888,20 @@ namespace Exam.Controllers
                     ), 'Student') as RoleName
                 FROM AspNetUsers U
                 LEFT JOIN Branches B ON U.BranchId = B.Id
-                WHERE U.FullName LIKE @Q OR U.UserName LIKE @Q OR U.UserCode LIKE @Q
-                ORDER BY U.FullName";
+                WHERE (U.FullName LIKE @Q OR U.UserName LIKE @Q OR U.UserCode LIKE @Q)";
 
-            var list = await conn.QueryAsync<TraineeSearchResultDto>(sql, new { Q = $"%{query.Trim()}%" });
+            if (allowedBranches != null)
+            {
+                sql += " AND UPPER(B.BranchName) IN @AllowedBranches";
+            }
+
+            sql += " ORDER BY U.FullName";
+
+            var list = await conn.QueryAsync<TraineeSearchResultDto>(sql, new { 
+                Q = $"%{query.Trim()}%",
+                AllowedBranches = allowedBranches?.Select(b => b.ToUpper()).ToList()
+            });
+
             return Json(list);
         }
 

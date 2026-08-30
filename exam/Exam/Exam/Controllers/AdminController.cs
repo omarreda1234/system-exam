@@ -1423,7 +1423,55 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                 parsedDate = d;
 
             var results = await _examService.GetLiveMonitorDataAsync(
-                branchId, shiftId, roleName, status, waveId, parsedDate, examId);
+                null, shiftId, null, status, waveId, parsedDate, examId);
+
+            // Branch security guard for Branch Manager & Branch Supervisor
+            if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
+            {
+                var currentUser = await _userManager.GetUserAsync(User);
+                using var conn = new SqlConnection(_connectionString);
+                var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+                if (allowedBranches != null && allowedBranches.Any())
+                {
+                    results = results.Where(r => allowedBranches.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase)));
+                }
+                else
+                {
+                    results = Enumerable.Empty<Exam.DTOs.LiveMonitorRowDto>();
+                }
+            }
+
+            // User branch filter (supports multi-select branch IDs or names)
+            if (!string.IsNullOrWhiteSpace(branchIdStr))
+            {
+                var branchIdList = branchIdStr.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                              .Select(b => b.Trim().ToUpper())
+                                              .Where(b => b != "0" && b != "ALL")
+                                              .ToList();
+                if (branchIdList.Any())
+                {
+                    using var conn = new SqlConnection(_connectionString);
+                    var allBranches = await conn.QueryAsync<Exam.DTOs.BranchDto>("SELECT CAST(Id AS NVARCHAR(50)) AS Id, BranchName FROM Branches");
+                    var matchedBranchNames = allBranches.Where(b => branchIdList.Contains(b.Id.ToUpper()) || branchIdList.Contains(b.BranchName.ToUpper()))
+                                                        .Select(b => b.BranchName)
+                                                        .ToList();
+                    var searchNames = matchedBranchNames.Any() ? matchedBranchNames : branchIdList;
+                    results = results.Where(r => !string.IsNullOrEmpty(r.BranchName) && searchNames.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase)));
+                }
+            }
+
+            // User role filter (supports multi-select role names)
+            if (!string.IsNullOrWhiteSpace(roleName))
+            {
+                var roleList = roleName.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                       .Select(r => r.Trim().ToUpper())
+                                       .Where(r => r != "ALL" && !string.IsNullOrEmpty(r))
+                                       .ToList();
+                if (roleList.Any())
+                {
+                    results = results.Where(r => !string.IsNullOrEmpty(r.RoleName) && roleList.Contains(r.RoleName.ToUpper()));
+                }
+            }
 
             int totalRecords = results.Count();
 
@@ -2397,10 +2445,17 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                 }
             }
 
-            // Apply user-selected branch dropdown filter if provided
+            // Apply user-selected branch dropdown filter if provided (supports multi-select)
             if (!string.IsNullOrWhiteSpace(selectedBranchName))
             {
-                results = results.Where(r => string.Equals(r.BranchName, selectedBranchName, StringComparison.OrdinalIgnoreCase));
+                var branchList = selectedBranchName.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                                   .Select(b => b.Trim())
+                                                   .Where(b => !b.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                                                   .ToList();
+                if (branchList.Any())
+                {
+                    results = results.Where(r => branchList.Any(b => string.Equals(r.BranchName, b, StringComparison.OrdinalIgnoreCase)));
+                }
             }
 
             int totalRecords = results.Count();
@@ -2532,6 +2587,9 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
 
             using var conn = new SqlConnection(_connectionString);
 
+            var currentUser = await _userManager.GetUserAsync(User);
+            var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+
             // Base SQL query
             string sqlBase = @"
 FROM dbo.AspNetUsers U WITH(NOLOCK)
@@ -2543,6 +2601,20 @@ WHERE 1 = 1";
 
             var parameters = new DynamicParameters();
 
+            // Enforce branch access security for Branch Managers and Branch Supervisors
+            if (allowedBranches != null)
+            {
+                if (!allowedBranches.Any())
+                {
+                    sqlBase += " AND 1 = 0";
+                }
+                else
+                {
+                    sqlBase += " AND UPPER(B.BranchName) IN @AllowedBranches";
+                    parameters.Add("AllowedBranches", allowedBranches.Select(b => b.ToUpper()).ToList());
+                }
+            }
+
             if (!string.IsNullOrEmpty(searchValue))
             {
                 sqlBase += " AND (U.UserName LIKE @Search OR U.Email LIKE @Search OR U.UserCode LIKE @Search)";
@@ -2551,20 +2623,43 @@ WHERE 1 = 1";
 
             if (!string.IsNullOrEmpty(classification))
             {
-                sqlBase += " AND UPPER(R.Name) = @Classification";
-                parameters.Add("Classification", classification.ToUpper());
+                var classList = classification.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                               .Select(c => c.Trim().ToUpper())
+                                               .Where(c => c != "ALL")
+                                               .ToList();
+                if (classList.Any())
+                {
+                    sqlBase += " AND UPPER(R.Name) IN @Classifications";
+                    parameters.Add("Classifications", classList);
+                }
             }
 
             if (!string.IsNullOrEmpty(branchName))
             {
-                if (branchName.Equals("GLOBAL", StringComparison.OrdinalIgnoreCase))
+                var branchList = branchName.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                           .Select(b => b.Trim().ToUpper())
+                                           .Where(b => b != "ALL")
+                                           .ToList();
+
+                if (branchList.Any())
                 {
-                    sqlBase += " AND (B.BranchName IS NULL OR B.BranchName = '')";
-                }
-                else
-                {
-                    sqlBase += " AND UPPER(B.BranchName) = @BranchName";
-                    parameters.Add("BranchName", branchName.ToUpper());
+                    bool hasGlobal = branchList.Contains("GLOBAL");
+                    var nonGlobal = branchList.Where(b => b != "GLOBAL").ToList();
+
+                    if (hasGlobal && nonGlobal.Any())
+                    {
+                        sqlBase += " AND (B.BranchName IS NULL OR B.BranchName = '' OR UPPER(B.BranchName) IN @BranchList)";
+                        parameters.Add("BranchList", nonGlobal);
+                    }
+                    else if (hasGlobal)
+                    {
+                        sqlBase += " AND (B.BranchName IS NULL OR B.BranchName = '')";
+                    }
+                    else
+                    {
+                        sqlBase += " AND UPPER(B.BranchName) IN @BranchList";
+                        parameters.Add("BranchList", nonGlobal);
+                    }
                 }
             }
 
