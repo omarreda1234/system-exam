@@ -8,8 +8,15 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService();
 
-// Enable Sentry Monitoring & Error Tracking
-builder.WebHost.UseSentry();
+// Enable Sentry Monitoring & Error/Performance Tracking
+builder.WebHost.UseSentry(options =>
+{
+    options.Dsn = builder.Configuration["Sentry:Dsn"];
+    options.TracesSampleRate = 1.0; // 100% of HTTP transactions for Performance Tracing
+    options.ProfilesSampleRate = 1.0; // Captures profiling details for slow requests
+    options.SendDefaultPii = true;
+    options.MaxRequestBodySize = Sentry.Extensibility.RequestSize.Always;
+});
 
 // Add services to the container.
 PdfSharpCore.Fonts.GlobalFontSettings.FontResolver = new Exam.Services.FileFontResolver();
@@ -94,6 +101,7 @@ if (app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 app.UseRouting();
+app.UseSentryTracing();
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -273,163 +273,57 @@
                 opacity: 0;
             }
         }
-        /* High-End Corporate Vector Preloader Styles */
-        @@keyframes capFigmaSnap {
-            0% {
-                transform: translateY(-42px) scale(0.7) rotate(-14deg);
-                opacity: 0.2;
-                filter: blur(4px);
-            }
-            38%, 68% {
-                transform: translateY(0) scale(1) rotate(0deg);
-                opacity: 1;
-                filter: blur(0px);
-            }
-            100% {
-                transform: translateY(-42px) scale(0.7) rotate(14deg);
-                opacity: 0.2;
-                filter: blur(4px);
-            }
+        /* Dynamic Premium Preloader CSS Animations */
+        @@keyframes spin-reverse {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(-360deg); }
         }
-
-        @@keyframes ringFigmaSnap {
-            0% {
-                transform: scale(1.35) rotate(-45deg);
-                opacity: 0.15;
-                filter: blur(4px);
-            }
-            34%, 72% {
-                transform: scale(1) rotate(0deg);
-                opacity: 1;
-                filter: blur(0px);
-            }
-            100% {
-                transform: scale(1.35) rotate(45deg);
-                opacity: 0.15;
-                filter: blur(4px);
-            }
+        @@keyframes bounce-gentle {
+            0%, 100% { transform: scale(0.96); filter: drop-shadow(0 0 12px rgba(1, 68, 60, 0.25)); }
+            50% { transform: scale(1.06); filter: drop-shadow(0 0 28px rgba(16, 185, 129, 0.5)); }
         }
-
-        @@keyframes caduceusFigmaSnap {
-            0% {
-                transform: translateY(35px) scale(0.5);
-                opacity: 0.2;
-                filter: blur(4px);
-            }
-            42%, 64% {
-                transform: translateY(0) scale(1);
-                opacity: 1;
-                filter: blur(0px);
-            }
-            100% {
-                transform: translateY(35px) scale(0.5);
-                opacity: 0.2;
-                filter: blur(4px);
-            }
+        .animate-spin-reverse {
+            animation: spin-reverse 1.8s linear infinite;
         }
-
-        @@keyframes textFigmaSnap {
-            0% {
-                transform: translateY(22px) scale(0.75);
-                opacity: 0.2;
-                filter: blur(3px);
-            }
-            45%, 60% {
-                transform: translateY(0) scale(1);
-                opacity: 1;
-                filter: blur(0px);
-            }
-            100% {
-                transform: translateY(22px) scale(0.75);
-                opacity: 0.2;
-                filter: blur(3px);
-            }
-        }
-
-        .cap-cinematic-anim {
-            transform-origin: 100px 53px;
-            animation: capFigmaSnap 3.2s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
-        }
-
-        .ring-cinematic-anim {
-            transform-origin: 100px 92px;
-            animation: ringFigmaSnap 3.2s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
-        }
-
-        .caduceus-cinematic-anim {
-            transform-origin: 100px 103px;
-            animation: caduceusFigmaSnap 3.2s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
-        }
-
-        .text-cinematic-anim {
-            transform-origin: 100px 158px;
-            animation: textFigmaSnap 3.2s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+        .animate-bounce-gentle {
+            animation: bounce-gentle 2s ease-in-out infinite;
         }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased transition-colors duration-300 overflow-x-hidden">
 
-    <!-- High-End Corporate Vector SVG Preloader (Apple/Figma Magnetic Assembly) -->
-    <div id="page-preloader" class="fixed inset-0 z-[999999] flex items-center justify-center bg-[#0b0f19]/96 backdrop-blur-md transition-all duration-500 select-none">
-        <div class="relative flex items-center justify-center p-6">
-            <!-- Inline Vector SVG Emblem with Separated Magnetic Groups -->
-            <svg id="loader-svg" viewBox="0 0 200 200" class="w-56 h-56 sm:w-64 sm:h-64 overflow-visible drop-shadow-[0_20px_50px_rgba(16,185,129,0.25)]" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <!-- Gold Gradient -->
-                    <linearGradient id="goldGradCinematic" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stop-color="#f59e0b" />
-                        <stop offset="50%" stop-color="#fbbf24" />
-                        <stop offset="100%" stop-color="#d97706" />
-                    </linearGradient>
-                    
-                    <!-- Emerald Gradient -->
-                    <linearGradient id="emeraldGradCinematic" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stop-color="#059669" />
-                        <stop offset="50%" stop-color="#10b981" />
-                        <stop offset="100%" stop-color="#047857" />
-                    </linearGradient>
+    <!-- High-End Dynamic Animated Preloader -->
+    <div id="page-preloader" class="fixed inset-0 z-[999999] flex flex-col items-center justify-center bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl transition-all duration-500 select-none">
+        <div class="relative flex items-center justify-center w-48 h-48 sm:w-56 sm:h-56">
+            
+            <!-- Outer Glowing Radar Pulse Waves -->
+            <div class="absolute inset-0 rounded-full border-2 border-emerald-500/20 animate-ping opacity-75"></div>
+            <div class="absolute -inset-4 rounded-full border border-emerald-400/30 animate-pulse opacity-50"></div>
 
-                    <!-- Precision Glow Filter -->
-                    <filter id="luminousGlow" x="-30%" y="-30%" width="160%" height="160%">
-                        <feGaussianBlur stdDeviation="3" result="blur" />
-                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                    </filter>
-                </defs>
+            <!-- Rotating Outer Emerald Ring (Clockwise) -->
+            <div class="absolute inset-1 rounded-full border-4 border-transparent border-t-emerald-600 border-r-emerald-500 animate-spin" style="animation-duration: 2s;"></div>
 
-                <!-- 1. Outer Precision Golden Ring -->
-                <g id="loader-ring" class="ring-cinematic-anim">
-                    <circle cx="100" cy="92" r="74" fill="none" stroke="url(#goldGradCinematic)" stroke-width="4.5" filter="url(#luminousGlow)" />
-                    <circle cx="100" cy="92" r="67" fill="none" stroke="url(#goldGradCinematic)" stroke-width="1.8" stroke-dasharray="7 5" opacity="0.85" />
-                </g>
+            <!-- Rotating Inner Gold Ring (Counter-Clockwise) -->
+            <div class="absolute inset-5 rounded-full border-2 border-transparent border-b-amber-500 border-l-amber-400 animate-spin-reverse"></div>
 
-                <!-- 2. Graduation Cap (Top Assembly) -->
-                <g id="loader-cap" class="cap-cinematic-anim">
-                    <polygon points="100,34 150,53 100,72 50,53" fill="url(#emeraldGradCinematic)" stroke="#064e3b" stroke-width="2" />
-                    <polygon points="100,34 150,53 100,44" fill="#6ee7b7" opacity="0.4" />
-                    <path d="M 72,61 L 72,76 C 72,84 128,84 128,76 L 128,61 Z" fill="url(#emeraldGradCinematic)" />
-                    <circle cx="100" cy="53" r="3.5" fill="url(#goldGradCinematic)" />
-                    <path d="M 100,53 C 122,57 136,70 139,83" fill="none" stroke="url(#goldGradCinematic)" stroke-width="2.2" stroke-linecap="round" />
-                    <circle cx="139" cy="85" r="2.5" fill="url(#goldGradCinematic)" />
-                </g>
+            <!-- Breathing Central Official Logo Badge -->
+            <div class="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-white dark:bg-slate-900 p-3 shadow-2xl shadow-emerald-600/30 border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center animate-bounce-gentle">
+                <img src="~/images/logo.jpeg" alt="Eltarshoubi Logo" class="w-full h-full object-contain drop-shadow-md" />
+            </div>
+        </div>
 
-                <!-- 3. Medical Caduceus / Mortar Core -->
-                <g id="loader-caduceus" class="caduceus-cinematic-anim">
-                    <path d="M 76,98 Q 100,133 124,98 Z" fill="url(#emeraldGradCinematic)" stroke="url(#goldGradCinematic)" stroke-width="2" />
-                    <path d="M 100,79 L 100,127" stroke="url(#goldGradCinematic)" stroke-width="4" stroke-linecap="round" />
-                    <path d="M 86,87 Q 100,82 114,92 Q 100,102 86,110 Q 100,120 114,114" fill="none" stroke="url(#goldGradCinematic)" stroke-width="2.5" stroke-linecap="round" />
-                    <circle cx="86" cy="87" r="2.8" fill="url(#goldGradCinematic)" />
-                </g>
-
-                <!-- 4. Eltarshouby Brand Vector Typography -->
-                <g id="loader-text" class="text-cinematic-anim">
-                    <text x="100" y="152" text-anchor="middle" font-family="'Plus Jakarta Sans', 'Inter', sans-serif" font-size="13" font-weight="900" letter-spacing="1.5" fill="url(#emeraldGradCinematic)">
-                        ELTARSHOUBI
-                    </text>
-                    <text x="100" y="164" text-anchor="middle" font-family="'Plus Jakarta Sans', 'Inter', sans-serif" font-size="7.5" font-weight="800" letter-spacing="2.8" fill="url(#goldGradCinematic)">
-                        ACADEMY
-                    </text>
-                </g>
-            </svg>
+        <!-- Animated Loading Brand Typography -->
+        <div class="mt-6 text-center space-y-2">
+            <h3 class="text-sm font-black tracking-[0.25em] text-slate-900 dark:text-white uppercase flex items-center justify-center gap-1.5">
+                <span>ELTARSHOUBI</span>
+                <span class="text-emerald-600 dark:text-emerald-400">ACADEMY</span>
+            </h3>
+            <!-- Bouncing Shimmer Dots -->
+            <div class="flex items-center justify-center gap-2 pt-1">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-bounce" style="animation-delay: 0s;"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-bounce" style="animation-delay: 0.2s;"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-bounce" style="animation-delay: 0.4s;"></span>
+            </div>
         </div>
     </div>
 
@@ -2003,32 +1897,6 @@
 }
 
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            if (typeof gsap !== 'undefined') {
-                // Disable CSS fallbacks when GSAP is available for pixel-perfect physics
-                document.querySelectorAll('.cap-cinematic-anim, .ring-cinematic-anim, .caduceus-cinematic-anim, .text-cinematic-anim').forEach(el => {
-                    el.style.animation = 'none';
-                });
-
-                const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.2 });
-                
-                // Explode Outward Phase
-                tl.to("#loader-cap", { y: -38, x: -8, scale: 0.7, rotation: -14, opacity: 0.2, filter: "blur(4px)", duration: 1.1, ease: "power3.inOut" }, 0)
-                  .to("#loader-ring", { scale: 1.35, rotation: 60, opacity: 0.15, filter: "blur(4px)", duration: 1.1, ease: "power3.inOut" }, 0)
-                  .to("#loader-caduceus", { y: 32, scale: 0.55, opacity: 0.2, filter: "blur(4px)", duration: 1.1, ease: "power3.inOut" }, 0)
-                  .to("#loader-text", { y: 20, scale: 0.75, opacity: 0.2, filter: "blur(3px)", duration: 1.1, ease: "power3.inOut" }, 0)
-
-                // Apple/Figma Elastic Magnetic Snap Assembly Phase
-                  .to("#loader-cap", { y: 0, x: 0, scale: 1, rotation: 0, opacity: 1, filter: "blur(0px)", duration: 1.3, ease: "back.out(1.8)" }, 1.1)
-                  .to("#loader-ring", { scale: 1, rotation: 0, opacity: 1, filter: "blur(0px)", duration: 1.3, ease: "back.out(1.4)" }, 1.1)
-                  .to("#loader-caduceus", { y: 0, scale: 1, opacity: 1, filter: "blur(0px)", duration: 1.3, ease: "back.out(1.8)" }, 1.1)
-                  .to("#loader-text", { y: 0, scale: 1, opacity: 1, filter: "blur(0px)", duration: 1.3, ease: "power3.out" }, 1.1)
-
-                // Luminous Hold Pulse
-                  .to("#loader-svg", { scale: 1.04, duration: 0.6, yoyo: true, repeat: 1, ease: "sine.inOut" }, 2.4);
-            }
-        });
-
         function hidePagePreloader() {
             const preloader = document.getElementById('page-preloader');
             if (preloader) {
@@ -2044,7 +1912,7 @@
             hidePagePreloader();
         } else {
             window.addEventListener('load', hidePagePreloader);
-            setTimeout(hidePagePreloader, 3500);
+            setTimeout(hidePagePreloader, 2500);
         }
     </script>
 
