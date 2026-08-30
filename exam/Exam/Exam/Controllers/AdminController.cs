@@ -1036,10 +1036,11 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
 
             if (selectedWaveId == -1)
             {
-                foreach (var w in waves)
+                var tasks = waves.Select(w => _examService.GetWaveAggregateResultsAsync(w.Id));
+                var resultsArray = await Task.WhenAll(tasks);
+                foreach (var res in resultsArray)
                 {
-                    var results = await _examService.GetWaveAggregateResultsAsync(w.Id);
-                    allResults.AddRange(results);
+                    allResults.AddRange(res);
                 }
             }
             else if (selectedWaveId > 0)

@@ -191,7 +191,7 @@
                 }
                 @foreach (var s in Model)
                 {
-                    <tr>
+                    <tr data-wave-name="@(s.WaveName ?? "")" data-branch-name="@(s.BranchName ?? "")">
                         <td>
                             <div class="flex items-center gap-3 px-2 py-2 flex-nowrap">
                                 <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase">
@@ -429,18 +429,24 @@
                 const selBranches = getSelectedBranchesWavey();
                 const selWaves = getSelectedWavesWavey();
 
-                // Branch column (col index 3), Wave column (col index 2)
-                const rowWave = (data[2] || '').toUpperCase().trim();
-                const rowBranch = (data[3] || '').toUpperCase().trim();
+                const tr = settings.aoData[dataIndex] ? settings.aoData[dataIndex].nTr : null;
+                const rowBranch = (data[1] || (tr ? $(tr).attr('data-branch-name') : '') || '').toUpperCase().trim();
+                const rowWave = (tr ? ($(tr).attr('data-wave-name') || '') : '').toUpperCase().trim();
 
                 let branchMatch = (selBranches.length === 0 || selBranches.length === $('.chk-branch-wavey').length);
                 if (!branchMatch) {
-                    branchMatch = selBranches.some(b => rowBranch.includes(b));
+                    branchMatch = selBranches.some(b => {
+                        const bUpper = b.toUpperCase().trim();
+                        return rowBranch.includes(bUpper) || bUpper.includes(rowBranch);
+                    });
                 }
 
                 let waveMatch = (selWaves.length === 0 || selWaves.length === $('.chk-wave-wavey').length);
                 if (!waveMatch) {
-                    waveMatch = selWaves.some(w => rowWave.includes(w));
+                    waveMatch = selWaves.some(w => {
+                        const wUpper = w.toUpperCase().trim();
+                        return rowWave.includes(wUpper) || wUpper.includes(rowWave);
+                    });
                 }
 
                 return branchMatch && waveMatch;
