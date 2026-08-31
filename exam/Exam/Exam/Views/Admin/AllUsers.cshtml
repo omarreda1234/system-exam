@@ -155,7 +155,14 @@
                         }
                     }
                 </div>
-            </div>
+        </div>
+
+        <!-- Export Filtered Excel Button -->
+        <div class="ml-auto mt-auto">
+            <button type="button" onclick="exportFilteredUsersExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl transition-all text-xs font-bold uppercase shadow-sm flex items-center gap-2">
+                <i class="fas fa-file-excel text-sm"></i>
+                Export Filtered (تصدير النتيجة لإكسل)
+            </button>
         </div>
     </div>
 
@@ -273,6 +280,15 @@
                 $('#lblBranchSelected').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
             }
             if (table) table.draw();
+        }
+
+        function exportFilteredUsersExcel() {
+            let searchValue = table ? table.search() : '';
+            let classification = getSelectedClassifications().join(',');
+            let branchName = getSelectedBranches().join(',');
+
+            let url = `/Admin/ExportFilteredUsersToExcel?search=${encodeURIComponent(searchValue)}&classification=${encodeURIComponent(classification)}&branchName=${encodeURIComponent(branchName)}`;
+            window.location.href = url;
         }
 
         let table;

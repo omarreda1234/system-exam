@@ -2909,6 +2909,141 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
             });
         }
 
+        [HttpGet]
+        public async Task<IActionResult> ExportFilteredUsersToExcel(string? search, string? classification, string? branchName)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var currentUser = await _userManager.GetUserAsync(User);
+            var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
+
+            string sqlBase = @"
+FROM dbo.AspNetUsers U WITH(NOLOCK)
+LEFT JOIN dbo.AspNetUserRoles UR ON U.Id = UR.UserId
+LEFT JOIN dbo.AspNetRoles R WITH(NOLOCK) ON UR.RoleId = R.Id
+LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId
+LEFT JOIN dbo.Branches B WITH(NOLOCK) ON U.BranchId = B.Id
+WHERE 1 = 1";
+
+            var parameters = new DynamicParameters();
+
+            if (allowedBranches != null)
+            {
+                if (!allowedBranches.Any())
+                {
+                    sqlBase += " AND 1 = 0";
+                }
+                else
+                {
+                    sqlBase += " AND UPPER(B.BranchName) IN @AllowedBranches";
+                    parameters.Add("AllowedBranches", allowedBranches.Select(b => b.ToUpper()).ToList());
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                sqlBase += " AND (U.UserName LIKE @Search OR U.Email LIKE @Search OR U.UserCode LIKE @Search)";
+                parameters.Add("Search", $"%{search.Trim()}%");
+            }
+
+            if (!string.IsNullOrWhiteSpace(classification))
+            {
+                var classList = classification.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                               .Select(c => c.Trim().ToUpper())
+                                               .Where(c => c != "ALL")
+                                               .ToList();
+                if (classList.Any())
+                {
+                    sqlBase += " AND UPPER(R.Name) IN @Classifications";
+                    parameters.Add("Classifications", classList);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(branchName))
+            {
+                var branchList = branchName.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                           .Select(b => b.Trim().ToUpper())
+                                           .Where(b => b != "ALL")
+                                           .ToList();
+
+                if (branchList.Any())
+                {
+                    bool hasGlobal = branchList.Contains("GLOBAL");
+                    var nonGlobal = branchList.Where(b => b != "GLOBAL").ToList();
+
+                    if (hasGlobal && nonGlobal.Any())
+                    {
+                        sqlBase += " AND (B.BranchName IS NULL OR UPPER(B.BranchName) IN @BranchList)";
+                        parameters.Add("BranchList", nonGlobal);
+                    }
+                    else if (hasGlobal)
+                    {
+                        sqlBase += " AND B.BranchName IS NULL";
+                    }
+                    else
+                    {
+                        sqlBase += " AND UPPER(B.BranchName) IN @BranchList";
+                        parameters.Add("BranchList", branchList);
+                    }
+                }
+            }
+
+            string sqlQuery = $@"
+SELECT
+    U.UserName,
+    U.FullName,
+    U.Email,
+    U.PhoneNumber AS Phone,
+    U.UserCode AS Code,
+    B.BranchName,
+    S.ShiftName,
+    R.Name AS RoleName
+{sqlBase}
+ORDER BY U.UserName ASC";
+
+            var users = (await conn.QueryAsync<dynamic>(sqlQuery, parameters)).ToList();
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Filtered Personnel");
+
+            worksheet.Cell(1, 1).Value = "User Name";
+            worksheet.Cell(1, 2).Value = "Full Name";
+            worksheet.Cell(1, 3).Value = "E-Mail";
+            worksheet.Cell(1, 4).Value = "Phone";
+            worksheet.Cell(1, 5).Value = "Branch";
+            worksheet.Cell(1, 6).Value = "Security Code";
+            worksheet.Cell(1, 7).Value = "Classification";
+            worksheet.Cell(1, 8).Value = "Shift";
+
+            var headerRange = worksheet.Range("A1:H1");
+            headerRange.Style.Font.Bold = true;
+            headerRange.Style.Font.FontColor = XLColor.White;
+            headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f172a");
+            headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+            int rowIdx = 2;
+            foreach (var u in users)
+            {
+                worksheet.Cell(rowIdx, 1).Value = u.UserName ?? "";
+                worksheet.Cell(rowIdx, 2).Value = u.FullName ?? "";
+                worksheet.Cell(rowIdx, 3).Value = u.Email ?? "";
+                worksheet.Cell(rowIdx, 4).Value = u.Phone ?? "";
+                worksheet.Cell(rowIdx, 5).Value = u.BranchName ?? "GLOBAL";
+                worksheet.Cell(rowIdx, 6).Value = u.Code ?? "";
+                worksheet.Cell(rowIdx, 7).Value = (u.RoleName ?? "Trainee").ToString().ToUpper();
+                worksheet.Cell(rowIdx, 8).Value = u.ShiftName ?? "Unassigned";
+                rowIdx++;
+            }
+
+            worksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var content = stream.ToArray();
+
+            string fileName = $"Personnel_Filtered_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddUser(RegisterDTO dto)
