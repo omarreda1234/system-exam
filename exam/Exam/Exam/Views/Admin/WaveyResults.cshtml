@@ -87,38 +87,17 @@
                 </select>
             </div>
 
-            <!-- Multi-Select Wave Dropdown -->
-            <div class="space-y-1 relative inline-block text-left" id="multiSelectWaveWrapperWavey">
+            <div class="space-y-1">
                 <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Training Wave</label>
-                <button type="button" id="btnMultiSelectWaveWavey" onclick="toggleWaveDropdownWavey()"
-                        class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[220px] shadow-sm flex items-center justify-between gap-2">
-                    <span id="lblWaveSelectedWavey" class="truncate">All Waves</span>
-                    <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
-                </button>
-
-                <!-- Dropdown Menu -->
-                <div id="dropdownWaveMenuWavey" class="hidden absolute left-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
-                    <div class="relative">
-                        <input type="text" id="waveSearchInputWavey" placeholder="Search wave..." oninput="filterWaveOptionsWavey(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
-                    </div>
-                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Waves</span>
-                        <div class="flex items-center gap-2">
-                            <button type="button" onclick="selectAllWavesWavey(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
-                            <span class="text-slate-300">|</span>
-                            <button type="button" onclick="selectAllWavesWavey(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
-                        </div>
-                    </div>
-                    <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                        @foreach (var w in waves)
-                        {
-                            <label class="wave-option-label-wavey flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
-                                <input type="checkbox" value="@w.WaveName.ToUpper()" class="chk-wave-wavey rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onWaveFilterChangeWavey()" />
-                                <span class="truncate">@w.WaveName.ToUpper() @(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")</span>
-                            </label>
-                        }
-                    </div>
-                </div>
+                <select id="waveFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[200px] shadow-sm">
+                    <option value="-1" selected="@(selectedWaveId == -1 ? "selected" : null)">All Waves (كل الويفات)</option>
+                    @foreach (var w in waves)
+                    {
+                        <option value="@w.Id" selected="@(w.Id == selectedWaveId ? "selected" : null)">
+                            @w.WaveName.ToUpper() @(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")
+                        </option>
+                    }
+                </select>
             </div>
 
             <div class="flex items-center gap-2 mt-auto">
@@ -191,8 +170,10 @@
                 }
                 @foreach (var s in Model)
                 {
-                    <tr data-wave-name="@(s.WaveName ?? "")" data-branch-name="@(s.BranchName ?? "")">
+                    <tr data-wave-id="@s.WaveId" data-wave-name="@(s.WaveName ?? "")" data-branch-name="@(s.BranchName ?? "")">
                         <td>
+                            <span class="hidden wave-name-val">@(s.WaveName ?? "")</span>
+                            <span class="hidden branch-name-val">@(s.BranchName ?? "")</span>
                             <div class="flex items-center gap-3 px-2 py-2 flex-nowrap">
                                 <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase">
                                     @(s.StudentName.Length > 0 ? s.StudentName.Substring(0, 1) : "?")
@@ -414,12 +395,15 @@
             if (selected.length === 0 || selected.length === total) {
                 $('#lblWaveSelectedWavey').html('<span class="text-slate-500">All Waves</span>');
             } else if (selected.length === 1) {
-                $('#lblWaveSelectedWavey').html(`<span class="text-brand-600 font-extrabold">${selected[0]}</span>`);
+                let waveName = $('.chk-wave-wavey:checked').attr('data-wave-name') || selected[0];
+                $('#lblWaveSelectedWavey').html(`<span class="text-brand-600 font-extrabold">${waveName}</span>`);
             } else {
                 $('#lblWaveSelectedWavey').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
             }
             if (window.waveyTable) window.waveyTable.draw();
         }
+
+        const normStrWavey = s => (s || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
 
         // DataTables Custom Multi-Select Filter for Wave & Branch
         $.fn.dataTable.ext.search.push(
@@ -427,29 +411,19 @@
                 if (settings.nTable.id !== 'waveResultsTable') return true;
                 
                 const selBranches = getSelectedBranchesWavey();
-                const selWaves = getSelectedWavesWavey();
-
                 const tr = settings.aoData[dataIndex] ? settings.aoData[dataIndex].nTr : null;
-                const rowBranch = (data[1] || (tr ? $(tr).attr('data-branch-name') : '') || '').toUpperCase().trim();
-                const rowWave = (tr ? ($(tr).attr('data-wave-name') || '') : '').toUpperCase().trim();
+                const rowBranch = (data[1] || '') + ' ' + (data[0] || '') + ' ' + (tr ? $(tr).attr('data-branch-name') || '' : '');
 
                 let branchMatch = (selBranches.length === 0 || selBranches.length === $('.chk-branch-wavey').length);
                 if (!branchMatch) {
+                    const nRowBranch = normStrWavey(rowBranch);
                     branchMatch = selBranches.some(b => {
-                        const bUpper = b.toUpperCase().trim();
-                        return rowBranch.includes(bUpper) || bUpper.includes(rowBranch);
+                        const nb = normStrWavey(b);
+                        return nRowBranch.includes(nb) || nb.includes(nRowBranch);
                     });
                 }
 
-                let waveMatch = (selWaves.length === 0 || selWaves.length === $('.chk-wave-wavey').length);
-                if (!waveMatch) {
-                    waveMatch = selWaves.some(w => {
-                        const wUpper = w.toUpperCase().trim();
-                        return rowWave.includes(wUpper) || wUpper.includes(rowWave);
-                    });
-                }
-
-                return branchMatch && waveMatch;
+                return branchMatch;
             }
         );
 
@@ -465,11 +439,12 @@
             }
         });
 
-        // Year / month change → reload page with parameters
-        $('#yearFilter, #monthFilter').change(function () {
+        // Wave / Year / Month change → reload page with parameters
+        $('#waveFilter, #yearFilter, #monthFilter').change(function () {
+            const waveId = $('#waveFilter').val();
             const year  = $('#yearFilter').val();
             const month = $('#monthFilter').val();
-            let url = '/Admin/WaveyResults?year=' + year + '&month=' + month;
+            let url = '/Admin/WaveyResults?waveId=' + waveId + '&year=' + year + '&month=' + month;
             if (window.location.search.includes('iframe=true')) url += '&iframe=true';
             window.location = url;
         });

@@ -644,25 +644,35 @@
             }
         }
 
+        const normStrCerts = s => (s || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
+
         $.fn.dataTable.ext.search.push(
             function(settings, data, dataIndex) {
                 if (settings.nTable.id !== 'certificatesTable') return true;
 
                 // Branch Filter Check
                 const selBranches = getSelectedBranchesCerts();
-                const rowBranch = (data[2] || '').toUpperCase().trim();
+                const rowBranch = data[2] || '';
+                const nRowBranch = normStrCerts(rowBranch);
                 let branchMatch = (selBranches.length === 0 || selBranches.length === $('.chk-branch-certs').length);
                 if (!branchMatch) {
-                    branchMatch = selBranches.some(b => rowBranch.includes(b));
+                    branchMatch = selBranches.some(b => {
+                        const nb = normStrCerts(b);
+                        return nRowBranch.includes(nb) || nb.includes(nRowBranch);
+                    });
                 }
                 if (!branchMatch) return false;
 
                 // Wave Filter Check
                 const selWaves = getSelectedWavesCerts();
-                const rowWave = (data[1] || '').toUpperCase().trim();
+                const rowWave = data[1] || '';
+                const nRowWave = normStrCerts(rowWave);
                 let waveMatch = (selWaves.length === 0 || selWaves.length === $('.chk-wave-certs').length);
                 if (!waveMatch) {
-                    waveMatch = selWaves.some(w => rowWave.includes(w));
+                    waveMatch = selWaves.some(w => {
+                        const nw = normStrCerts(w);
+                        return nRowWave.includes(nw) || nw.includes(nRowWave);
+                    });
                 }
                 if (!waveMatch) return false;
 
