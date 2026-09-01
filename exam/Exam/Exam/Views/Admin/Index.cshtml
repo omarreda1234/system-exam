@@ -148,7 +148,7 @@
                     <i class="fas fa-filter text-brand-500 mr-1"></i> Wave Filter:
                 </label>
                 <select id="waveAnalyticsSelector" onchange="syncAndFilterWaveAnalytics(this.value)" class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-brand-500 transition-all cursor-pointer min-w-[200px]">
-                    <option value="0">All Active Waves</option>
+                    <option value="0">All Waves (جميع الدفعات)</option>
                     @foreach (var w in waveAnalytics.Waves)
                     {
                         <option value="@w.id">@w.waveName</option>
@@ -361,10 +361,10 @@
                             <i class="fas fa-filter text-emerald-500 mr-1"></i> Wave Filter:
                         </label>
                         <select id="sessionWaveFilter" onchange="syncAndFilterWaveAnalytics(this.value)" class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer min-w-[180px]">
-                            <option value="0">📊 All Waves (جميع الدفعات)</option>
+                            <option value="0">All Waves (جميع الدفعات)</option>
                             @foreach (var w in waveAnalytics.Waves)
                             {
-                                <option value="@w.id">🌊 @w.waveName</option>
+                                <option value="@w.id">@w.waveName</option>
                             }
                         </select>
                     </div>
@@ -486,10 +486,10 @@
                 <div class="flex items-center gap-2">
                     <label for="weeklyExamSelectFilter" class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Weekly Exam Filter:</label>
                     <select id="weeklyExamSelectFilter" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm transition-all cursor-pointer">
-                        <option value="0">📊 All Weekly Exams (جميع الامتحانات الأسبوعية)</option>
+                        <option value="0">All Weekly Exams (جميع الامتحانات الأسبوعية)</option>
                         @foreach (var w in Model.WeeklyExamsList)
                         {
-                            <option value="@w.Id">📝 @w.Title</option>
+                            <option value="@w.Id">@w.Title</option>
                         }
                     </select>
                 </div>
@@ -526,12 +526,12 @@
                 <div class="flex items-center gap-2">
                     <label for="invWaveFilter" class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Wave Analytics Filter:</label>
                     <select id="invWaveFilter" onchange="syncAndFilterWaveAnalytics(this.value)" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-sm transition-all cursor-pointer">
-                        <option value="0">📊 All Waves (جميع الدفعات)</option>
+                        <option value="0">All Waves (جميع الدفعات)</option>
                         @if (ViewBag.WavesList != null)
                         {
                             foreach (var w in (IEnumerable<dynamic>)ViewBag.WavesList)
                             {
-                                <option value="@w.Id">🌊 @w.WaveName</option>
+                                <option value="@w.Id">@w.WaveName</option>
                             }
                         }
                     </select>
