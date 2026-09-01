@@ -147,7 +147,7 @@
                 <label class="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest whitespace-nowrap">
                     <i class="fas fa-filter text-brand-500 mr-1"></i> Wave Filter:
                 </label>
-                <select id="waveAnalyticsSelector" onchange="onWaveAnalyticsChange(this.value)" class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-brand-500 transition-all cursor-pointer min-w-[200px]">
+                <select id="waveAnalyticsSelector" onchange="syncAndFilterWaveAnalytics(this.value)" class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-brand-500 transition-all cursor-pointer min-w-[200px]">
                     <option value="0">All Active Waves</option>
                     @foreach (var w in waveAnalytics.Waves)
                     {
@@ -350,13 +350,29 @@
 
         <!-- Wave Sessions & Topics Attendance Telemetry Matrix Table & Chart -->
         <div class="mt-8 border-t border-slate-100 dark:border-slate-800 pt-6">
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                 <h3 class="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
                     <i class="fas fa-chart-bar text-emerald-500"></i> WAVE SESSIONS & TOPICS ATTENDANCE TELEMETRY (VISUAL CHART & MATRIX)
                 </h3>
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    Showing <span id="waSessionCount">@waveAnalytics.SessionAttendanceStats.Count</span> Sessions / Topics
-                </span>
+                
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center gap-2">
+                        <label for="sessionWaveFilter" class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            <i class="fas fa-filter text-emerald-500 mr-1"></i> Wave Filter:
+                        </label>
+                        <select id="sessionWaveFilter" onchange="syncAndFilterWaveAnalytics(this.value)" class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer min-w-[180px]">
+                            <option value="0">📊 All Waves (جميع الدفعات)</option>
+                            @foreach (var w in waveAnalytics.Waves)
+                            {
+                                <option value="@w.id">🌊 @w.waveName</option>
+                            }
+                        </select>
+                    </div>
+
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                        Showing <span id="waSessionCount" class="font-mono text-emerald-600 dark:text-emerald-400 font-black">@waveAnalytics.SessionAttendanceStats.Count</span> Sessions
+                    </span>
+                </div>
             </div>
 
             <!-- Visual Chart Container -->
@@ -509,7 +525,7 @@
                 <!-- Wave Filter Dropdown -->
                 <div class="flex items-center gap-2">
                     <label for="invWaveFilter" class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Wave Analytics Filter:</label>
-                    <select id="invWaveFilter" onchange="onInventoryWaveChange(this.value)" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-sm transition-all cursor-pointer">
+                    <select id="invWaveFilter" onchange="syncAndFilterWaveAnalytics(this.value)" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-sm transition-all cursor-pointer">
                         <option value="0">📊 All Waves (جميع الدفعات)</option>
                         @if (ViewBag.WavesList != null)
                         {
@@ -734,6 +750,15 @@
                     }
                 }
             });
+        }
+
+        function syncAndFilterWaveAnalytics(waveId) {
+            $('#waveAnalyticsSelector').val(waveId);
+            $('#invWaveFilter').val(waveId);
+            $('#sessionWaveFilter').val(waveId);
+
+            onWaveAnalyticsChange(waveId);
+            onInventoryWaveChange(waveId);
         }
 
         function onWaveAnalyticsChange(waveId) {
