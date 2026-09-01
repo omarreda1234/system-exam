@@ -348,6 +348,62 @@
             </div>
         </div>
 
+        <!-- Wave Sessions & Topics Attendance Telemetry Matrix Table -->
+        <div class="mt-8 border-t border-slate-100 dark:border-slate-800 pt-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <i class="fas fa-clipboard-user text-emerald-500"></i> WAVE SESSIONS & TOPICS ATTENDANCE TELEMETRY
+                </h3>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Showing <span id="waSessionCount">@waveAnalytics.SessionAttendanceStats.Count</span> Sessions / Topics
+                </span>
+            </div>
+
+            <div class="max-h-[280px] overflow-y-auto custom-scrollbar rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <table class="saas-table w-full text-left text-xs">
+                    <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-black text-[9px] uppercase tracking-widest sticky top-0 border-b border-slate-200 dark:border-slate-800">
+                        <tr>
+                            <th class="p-3.5">Session / Topic Name</th>
+                            <th class="p-3.5 text-center">Date</th>
+                            <th class="p-3.5 text-center">Enrolled (إجمالي الويف)</th>
+                            <th class="p-3.5 text-center">Present (حاضر)</th>
+                            <th class="p-3.5 text-center">Absent (غائب)</th>
+                            <th class="p-3.5 text-right">Attendance Rate %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="waSessionTbody" class="divide-y divide-slate-100 dark:divide-slate-800 font-bold text-slate-700 dark:text-slate-300">
+                        @foreach (var s in waveAnalytics.SessionAttendanceStats)
+                        {
+                            <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                                <td class="p-3.5 font-black text-slate-900 dark:text-white flex items-center gap-2">
+                                    <i class="fas fa-book-open text-brand-500 text-xs"></i>
+                                    @s.SessionName
+                                </td>
+                                <td class="p-3.5 text-center font-mono text-slate-500">@s.SessionDate</td>
+                                <td class="p-3.5 text-center font-mono">@s.TotalEnrolled</td>
+                                <td class="p-3.5 text-center text-emerald-600 dark:text-emerald-400 font-mono">@s.PresentCount</td>
+                                <td class="p-3.5 text-center text-rose-600 dark:text-rose-400 font-mono">@s.AbsentCount</td>
+                                <td class="p-3.5 text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <div class="w-16 bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                            <div class="bg-emerald-500 h-full rounded-full" style="width: @s.AttendanceRate%"></div>
+                                        </div>
+                                        <span class="font-mono text-emerald-600 dark:text-emerald-400 text-[10px]">@s.AttendanceRate%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        @if (!waveAnalytics.SessionAttendanceStats.Any())
+                        {
+                            <tr>
+                                <td colspan="6" class="p-6 text-center text-slate-400 font-bold uppercase text-[10px]">No session attendance data recorded for this wave yet</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- Certification & Wave Telemetry Monthly Curve -->
         <div class="mt-8 border-t border-slate-100 dark:border-slate-800 pt-6">
             <div class="flex items-center justify-between mb-4">
@@ -632,6 +688,40 @@
                 }
 
                 $('#waBranchTbody').html(rowsHtml);
+
+                // Session Attendance Table
+                const sessions = data.sessionAttendanceStats || [];
+                $('#waSessionCount').text(sessions.length);
+
+                let sessRowsHtml = '';
+                sessions.forEach(function (s) {
+                    sessRowsHtml += `
+                        <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                            <td class="p-3.5 font-black text-slate-900 dark:text-white flex items-center gap-2">
+                                <i class="fas fa-book-open text-brand-500 text-xs"></i>
+                                ${s.sessionName}
+                            </td>
+                            <td class="p-3.5 text-center font-mono text-slate-500">${s.sessionDate}</td>
+                            <td class="p-3.5 text-center font-mono">${s.totalEnrolled}</td>
+                            <td class="p-3.5 text-center text-emerald-600 dark:text-emerald-400 font-mono">${s.presentCount}</td>
+                            <td class="p-3.5 text-center text-rose-600 dark:text-rose-400 font-mono">${s.absentCount}</td>
+                            <td class="p-3.5 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <div class="w-16 bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-emerald-500 h-full rounded-full" style="width: ${s.attendanceRate}%"></div>
+                                    </div>
+                                    <span class="font-mono text-emerald-600 dark:text-emerald-400 text-[10px]">${s.attendanceRate}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                if (sessions.length === 0) {
+                    sessRowsHtml = `<tr><td colspan="6" class="p-6 text-center text-slate-400 font-bold uppercase text-[10px]">No session attendance data recorded for this wave yet</td></tr>`;
+                }
+
+                $('#waSessionTbody').html(sessRowsHtml);
             });
         }
 

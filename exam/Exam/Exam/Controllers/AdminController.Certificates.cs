@@ -1729,6 +1729,38 @@ namespace Exam.Controllers
             }
             result.MonthlyTrends = monthlyTrends;
 
+            var sessionAttendanceSql = @"
+                SELECT 
+                    S.Id as SessionId,
+                    S.SessionName,
+                    S.SessionDate,
+                    (SELECT COUNT(*) FROM dbo.UserWaves UW WHERE UW.WaveId = S.WaveId AND UW.IsActive = 1) as TotalEnrolled,
+                    ISNULL((SELECT COUNT(*) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1), 0) as PresentCount
+                FROM dbo.AttendanceSessions S
+                WHERE (@WaveId IS NULL OR @WaveId = 0 OR S.WaveId = @WaveId)
+                ORDER BY S.SessionDate DESC";
+
+            var sessionRows = (await conn.QueryAsync<dynamic>(sessionAttendanceSql, new { WaveId = targetWaveId })).ToList();
+            var sessionStats = new List<WaveSessionAttendanceDto>();
+            foreach (var s in sessionRows)
+            {
+                int total = Convert.ToInt32(s.TotalEnrolled);
+                int present = Convert.ToInt32(s.PresentCount);
+                int absent = total > present ? total - present : 0;
+                double rate = total > 0 ? Math.Round((double)present / total * 100.0, 1) : 0;
+                sessionStats.Add(new WaveSessionAttendanceDto
+                {
+                    SessionId = Convert.ToInt32(s.SessionId),
+                    SessionName = Convert.ToString(s.SessionName) ?? "",
+                    SessionDate = s.SessionDate != null ? ((DateTime)s.SessionDate).ToString("yyyy-MM-dd") : "",
+                    TotalEnrolled = total,
+                    PresentCount = present,
+                    AbsentCount = absent,
+                    AttendanceRate = rate
+                });
+            }
+            result.SessionAttendanceStats = sessionStats;
+
             return result;
         }
 
@@ -1988,6 +2020,18 @@ namespace Exam.Controllers
 
         public List<BranchAnalyticsDto> BranchStats { get; set; } = new();
         public List<MonthlyTrendDto> MonthlyTrends { get; set; } = new();
+        public List<WaveSessionAttendanceDto> SessionAttendanceStats { get; set; } = new();
+    }
+
+    public class WaveSessionAttendanceDto
+    {
+        public int SessionId { get; set; }
+        public string SessionName { get; set; } = "";
+        public string SessionDate { get; set; } = "";
+        public int TotalEnrolled { get; set; }
+        public int PresentCount { get; set; }
+        public int AbsentCount { get; set; }
+        public double AttendanceRate { get; set; }
     }
 
     public class MonthlyTrendDto
