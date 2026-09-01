@@ -487,14 +487,32 @@
         </div>
     </div>
 
-    <!-- Question Bank Inventory -->
+    <!-- Question Bank Inventory & Wave Topic Analysis -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
-        <div class="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/20">
+        <div class="p-8 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-800/20">
             <div>
-                <h3 class="font-black text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Inventory Telemetry</h3>
-                <p class="text-xl font-bold mt-1">Global Question Bank Overview</p>
+                <h3 class="font-black text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <i class="fas fa-layer-group text-brand-500"></i> INVENTORY & WAVE TOPIC TELEMETRY ANALYSIS
+                </h3>
+                <p class="text-xl font-bold mt-1 text-slate-900 dark:text-white">Global Question Bank & Wave Topic Performance Overview</p>
             </div>
-            <div class="flex items-center gap-3">
+            
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Wave Filter Dropdown -->
+                <div class="flex items-center gap-2">
+                    <label for="invWaveFilter" class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Wave Analytics Filter:</label>
+                    <select id="invWaveFilter" onchange="onInventoryWaveChange(this.value)" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-sm transition-all cursor-pointer">
+                        <option value="0">📊 All Waves (جميع الدفعات)</option>
+                        @if (ViewBag.WavesList != null)
+                        {
+                            foreach (var w in (IEnumerable<dynamic>)ViewBag.WavesList)
+                            {
+                                <option value="@w.Id">🌊 @w.WaveName</option>
+                            }
+                        }
+                    </select>
+                </div>
+
                 <span class="px-4 py-2 bg-brand-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-brand-500/20">
                     <i class="fas fa-database mr-2"></i> @Model.TotalQuestionsCount Questions Total
                 </span>
@@ -502,7 +520,7 @@
         </div>
         
         <div class="p-8">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div id="invCategoriesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 @foreach (var cat in Model.QuestionsPerCategory)
                 {
                     <div class="bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 hover:shadow-lg transition-all border-l-4 border-l-brand-500">
@@ -518,7 +536,7 @@
                                         <i class="fas fa-caret-right text-[8px] text-brand-500/50"></i>
                                         @top.TopicName
                                     </span>
-                                    <span class="text-slate-400 font-mono">@top.Count</span>
+                                    <span class="text-slate-400 font-mono">@top.Count Qs</span>
                                 </div>
                             }
                             @if (cat.Topics.Count > 5)
@@ -1003,5 +1021,57 @@
                 });
             });
         });
+
+        function onInventoryWaveChange(waveId) {
+            $.get('/Admin/GetWaveTopicAnalyticsData', { waveId: waveId }, function (data) {
+                const categories = data.categories || [];
+                let containerHtml = '';
+
+                categories.forEach(function (cat) {
+                    let masteryBadgeClass = 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-200';
+                    if (cat.masteryRate < 70) {
+                        masteryBadgeClass = 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 border-rose-200';
+                    } else if (cat.masteryRate < 80) {
+                        masteryBadgeClass = 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 border-amber-200';
+                    }
+
+                    containerHtml += `
+                        <div class="bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 hover:shadow-lg transition-all border-l-4 border-l-brand-500">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider truncate mr-2">${cat.categoryName}</h4>
+                                <span class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] font-black px-2.5 py-1 rounded-xl text-slate-600 dark:text-slate-400">${cat.totalQuestions} Qs</span>
+                            </div>
+                            
+                            <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200/50 dark:border-slate-800/50">
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Wave Mastery Rate</span>
+                                <span class="px-2 py-0.5 rounded-lg text-[10px] font-black border ${masteryBadgeClass}">${cat.masteryRate}%</span>
+                            </div>
+
+                            <div class="space-y-2">
+                                ${(cat.topics || []).slice(0, 5).map(top => `
+                                    <div class="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 font-bold">
+                                        <span class="flex items-center gap-1.5 truncate">
+                                            <i class="fas fa-caret-right text-[8px] text-brand-500/50"></i>
+                                            ${top.topicName}
+                                        </span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-400 font-mono">${top.questionCount} Qs</span>
+                                            ${top.totalAnswers > 0 ? `<span class="text-brand-600 dark:text-brand-400 font-mono text-[9px]">(${top.accuracyRate}%)</span>` : ''}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                                ${cat.topics.length > 5 ? `<p class="text-[9px] text-slate-400 italic mt-2">+ ${cat.topics.length - 5} more topics...</p>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                if (categories.length === 0) {
+                    containerHtml = `<div class="col-span-full p-8 text-center text-slate-400 font-bold uppercase text-xs">No topic telemetry data found for this wave</div>`;
+                }
+
+                $('#invCategoriesContainer').html(containerHtml);
+            });
+        }
     </script>
 }

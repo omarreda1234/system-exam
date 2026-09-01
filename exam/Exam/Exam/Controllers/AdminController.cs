@@ -144,6 +144,7 @@ namespace Exam.Controllers
             var data = await _examService.GetDashboardDataAsync();
             try {
                 ViewBag.WaveAnalytics = await FetchWaveAnalyticsAsync(0);
+                ViewBag.WavesList = await _examService.GetAllWavesAsync();
             } catch { }
             return View(data);
         }

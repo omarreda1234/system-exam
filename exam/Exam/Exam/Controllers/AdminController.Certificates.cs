@@ -1590,6 +1590,96 @@ namespace Exam.Controllers
             return Json(result);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetWaveTopicAnalyticsData(int? waveId)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            int targetWaveId = waveId ?? 0;
+
+            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName FROM dbo.TrainingWaves ORDER BY Id DESC")).ToList();
+
+            var topicPerfSql = @"
+                SELECT 
+                    C.CategoryName,
+                    T.TopicName,
+                    COUNT(DISTINCT Q.Id) as QuestionCount,
+                    COUNT(USQ.Id) as TotalAnswers,
+                    SUM(CASE WHEN USQ.IsCorrect = 1 THEN 1 ELSE 0 END) as CorrectAnswers
+                FROM dbo.Topics T
+                JOIN dbo.Categories C ON T.CategoryId = C.Id
+                LEFT JOIN dbo.Questions Q ON Q.TopicId = T.Id
+                LEFT JOIN dbo.UserSeenQuestions USQ ON USQ.QuestionId = Q.Id
+                LEFT JOIN dbo.UserExamAttempts UEA ON USQ.AttemptId = UEA.Id
+                LEFT JOIN dbo.Exams E ON UEA.ExamId = E.Id
+                WHERE (@WaveId = 0 OR @WaveId IS NULL OR E.WaveId = @WaveId OR E.WaveId IS NULL)
+                GROUP BY C.CategoryName, T.TopicName
+                ORDER BY C.CategoryName, T.TopicName";
+
+            var topicPerfRows = (await conn.QueryAsync<dynamic>(topicPerfSql, new { WaveId = targetWaveId })).ToList();
+
+            var sessionAttendanceSql = @"
+                SELECT 
+                    S.Id as SessionId,
+                    S.SessionName,
+                    S.SessionDate,
+                    W.WaveName,
+                    (SELECT COUNT(*) FROM dbo.UserWaves UW WHERE UW.WaveId = S.WaveId AND UW.IsActive = 1) as TotalEnrolled,
+                    ISNULL((SELECT COUNT(*) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1), 0) as PresentCount
+                FROM dbo.AttendanceSessions S
+                LEFT JOIN dbo.TrainingWaves W ON S.WaveId = W.Id
+                WHERE (@WaveId = 0 OR @WaveId IS NULL OR S.WaveId = @WaveId)
+                ORDER BY S.SessionDate DESC";
+
+            var sessionRows = (await conn.QueryAsync<dynamic>(sessionAttendanceSql, new { WaveId = targetWaveId })).ToList();
+
+            var categoryAnalytics = topicPerfRows
+                .GroupBy(r => (string)r.CategoryName ?? "General")
+                .Select(g => new
+                {
+                    categoryName = g.Key,
+                    totalQuestions = g.Sum(r => (int)r.QuestionCount),
+                    totalAnswers = g.Sum(r => (int)r.TotalAnswers),
+                    correctAnswers = g.Sum(r => (int)r.CorrectAnswers),
+                    masteryRate = g.Sum(r => (int)r.TotalAnswers) > 0 
+                        ? Math.Round((double)g.Sum(r => (int)r.CorrectAnswers) * 100.0 / g.Sum(r => (int)r.TotalAnswers), 1) 
+                        : 0.0,
+                    topics = g.Select(t => new
+                    {
+                        topicName = (string)t.TopicName,
+                        questionCount = (int)t.QuestionCount,
+                        totalAnswers = (int)t.TotalAnswers,
+                        correctAnswers = (int)t.CorrectAnswers,
+                        accuracyRate = (int)t.TotalAnswers > 0 ? Math.Round((double)(int)t.CorrectAnswers * 100.0 / (int)t.TotalAnswers, 1) : 0.0
+                    }).ToList()
+                }).ToList();
+
+            var sessionAnalytics = sessionRows.Select(s => {
+                int total = Convert.ToInt32(s.TotalEnrolled);
+                int present = Convert.ToInt32(s.PresentCount);
+                int absent = total > present ? total - present : 0;
+                double attRate = total > 0 ? Math.Round((double)present * 100.0 / total, 1) : 0.0;
+                return new
+                {
+                    sessionId = Convert.ToInt32(s.SessionId),
+                    sessionName = (string)s.SessionName ?? "",
+                    sessionDate = s.SessionDate != null ? ((DateTime)s.SessionDate).ToString("yyyy-MM-dd") : "",
+                    waveName = (string)s.WaveName ?? "",
+                    totalEnrolled = total,
+                    presentCount = present,
+                    absentCount = absent,
+                    attendanceRate = attRate
+                };
+            }).ToList();
+
+            return Json(new
+            {
+                selectedWaveId = targetWaveId,
+                waves = waves.Select(w => new { id = (int)w.Id, waveName = (string)w.WaveName }).ToList(),
+                categories = categoryAnalytics,
+                sessions = sessionAnalytics
+            });
+        }
+
         public async Task<WaveAnalyticsResultDto> FetchWaveAnalyticsAsync(int? waveId)
         {
             using var conn = new SqlConnection(_connectionString);
