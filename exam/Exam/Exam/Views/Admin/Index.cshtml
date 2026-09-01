@@ -348,17 +348,25 @@
             </div>
         </div>
 
-        <!-- Wave Sessions & Topics Attendance Telemetry Matrix Table -->
+        <!-- Wave Sessions & Topics Attendance Telemetry Matrix Table & Chart -->
         <div class="mt-8 border-t border-slate-100 dark:border-slate-800 pt-6">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                    <i class="fas fa-clipboard-user text-emerald-500"></i> WAVE SESSIONS & TOPICS ATTENDANCE TELEMETRY
+                    <i class="fas fa-chart-bar text-emerald-500"></i> WAVE SESSIONS & TOPICS ATTENDANCE TELEMETRY (VISUAL CHART & MATRIX)
                 </h3>
                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     Showing <span id="waSessionCount">@waveAnalytics.SessionAttendanceStats.Count</span> Sessions / Topics
                 </span>
             </div>
 
+            <!-- Visual Chart Container -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 mb-5 shadow-sm">
+                <div class="h-[230px] w-full relative">
+                    <canvas id="waveSessionsAttendanceChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Sessions Data Matrix Table -->
             <div class="max-h-[280px] overflow-y-auto custom-scrollbar rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                 <table class="saas-table w-full text-left text-xs">
                     <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-black text-[9px] uppercase tracking-widest sticky top-0 border-b border-slate-200 dark:border-slate-800">
@@ -643,6 +651,91 @@
             });
         }
 
+        let waveSessionsAttendanceChart = null;
+
+        function renderWaveSessionsAttendanceChart(labels, presentData, absentData, rateData) {
+            const ctx = document.getElementById('waveSessionsAttendanceChart')?.getContext('2d');
+            if (!ctx) return;
+
+            if (waveSessionsAttendanceChart) {
+                waveSessionsAttendanceChart.destroy();
+            }
+
+            const isDark = document.documentElement.classList.contains('dark');
+            const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+
+            waveSessionsAttendanceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Present (حاضر)',
+                            data: presentData,
+                            backgroundColor: '#10b981',
+                            borderRadius: 6,
+                            barPercentage: 0.5,
+                            categoryPercentage: 0.6,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Absent (غائب)',
+                            data: absentData,
+                            backgroundColor: '#f43f5e',
+                            borderRadius: 6,
+                            barPercentage: 0.5,
+                            categoryPercentage: 0.6,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Attendance Rate % (نسبة الحضور)',
+                            data: rateData,
+                            type: 'line',
+                            borderColor: '#06b6d4',
+                            backgroundColor: '#06b6d4',
+                            borderWidth: 3,
+                            pointRadius: 4,
+                            tension: 0.3,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { font: { size: 10, weight: '700' } }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            grid: { color: gridColor, drawBorder: false },
+                            title: { display: true, text: 'Trainees Count', font: { size: 10, weight: '700' } }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            min: 0,
+                            max: 100,
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: 'Attendance %', font: { size: 10, weight: '700' } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { size: 9, weight: '600' } }
+                        }
+                    }
+                }
+            });
+        }
+
         function onWaveAnalyticsChange(waveId) {
             $.get('/Admin/GetWaveAnalyticsData', { waveId: waveId }, function (data) {
                 if (!data) return;
@@ -707,9 +800,16 @@
 
                 $('#waBranchTbody').html(rowsHtml);
 
-                // Session Attendance Table
+                // Session Attendance Table & Visual Chart
                 const sessions = data.sessionAttendanceStats || [];
                 $('#waSessionCount').text(sessions.length);
+
+                const sessLabels = sessions.map(s => s.sessionName);
+                const sessPresents = sessions.map(s => s.presentCount);
+                const sessAbsents = sessions.map(s => s.absentCount);
+                const sessRates = sessions.map(s => s.attendanceRate);
+
+                renderWaveSessionsAttendanceChart(sessLabels, sessPresents, sessAbsents, sessRates);
 
                 let sessRowsHtml = '';
                 sessions.forEach(function (s) {
@@ -753,6 +853,13 @@
             Chart.defaults.font.weight = "600";
             Chart.defaults.font.size = 11;
             Chart.defaults.color = textColor;
+
+            // Render Wave Sessions Attendance Visual Chart
+            const initSessLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(waveAnalytics.SessionAttendanceStats.Select(s => s.SessionName)));
+            const initSessPresents = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(waveAnalytics.SessionAttendanceStats.Select(s => s.PresentCount)));
+            const initSessAbsents = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(waveAnalytics.SessionAttendanceStats.Select(s => s.AbsentCount)));
+            const initSessRates = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(waveAnalytics.SessionAttendanceStats.Select(s => s.AttendanceRate)));
+            renderWaveSessionsAttendanceChart(initSessLabels, initSessPresents, initSessAbsents, initSessRates);
 
             // Render Wave Donut Chart
             renderWaveDonutChart(@waveAnalytics.CertifiedCount, @waveAnalytics.PassedNoCertCount, @waveAnalytics.FailedCount, @waveAnalytics.NotExaminedCount);

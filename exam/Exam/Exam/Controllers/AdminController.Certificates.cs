@@ -1596,7 +1596,7 @@ namespace Exam.Controllers
             using var conn = new SqlConnection(_connectionString);
             int targetWaveId = waveId ?? 0;
 
-            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName FROM dbo.TrainingWaves ORDER BY Id DESC")).ToList();
+            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName FROM dbo.TrainingWaves WHERE ISNULL(IsActive, 1) = 1 ORDER BY Id DESC")).ToList();
 
             var topicPerfSql = @"
                 SELECT 
@@ -1623,8 +1623,14 @@ namespace Exam.Controllers
                     S.SessionName,
                     S.SessionDate,
                     W.WaveName,
-                    (SELECT COUNT(*) FROM dbo.UserWaves UW WHERE UW.WaveId = S.WaveId AND UW.IsActive = 1) as TotalEnrolled,
-                    ISNULL((SELECT COUNT(*) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1), 0) as PresentCount
+                    ISNULL((
+                        CASE 
+                            WHEN S.WaveId IS NOT NULL AND S.WaveId > 0 THEN (SELECT COUNT(DISTINCT UW.UserId) FROM dbo.UserWaves UW WHERE UW.WaveId = S.WaveId AND UW.IsActive = 1)
+                            WHEN S.CompanyId IS NOT NULL AND S.CompanyId > 0 THEN (SELECT COUNT(DISTINCT U.Id) FROM dbo.AspNetUsers U WHERE U.CompanyId = S.CompanyId AND U.IsActive = 1)
+                            ELSE (SELECT COUNT(DISTINCT UA.UserId) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id)
+                        END
+                    ), 0) as RawEnrolled,
+                    ISNULL((SELECT COUNT(DISTINCT UA.UserId) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1), 0) as PresentCount
                 FROM dbo.AttendanceSessions S
                 LEFT JOIN dbo.TrainingWaves W ON S.WaveId = W.Id
                 WHERE (@WaveId = 0 OR @WaveId IS NULL OR S.WaveId = @WaveId)
@@ -1654,17 +1660,18 @@ namespace Exam.Controllers
                 }).ToList();
 
             var sessionAnalytics = sessionRows.Select(s => {
-                int total = Convert.ToInt32(s.TotalEnrolled);
+                int rawEnrolled = Convert.ToInt32(s.RawEnrolled);
                 int present = Convert.ToInt32(s.PresentCount);
-                int absent = total > present ? total - present : 0;
-                double attRate = total > 0 ? Math.Round((double)present * 100.0 / total, 1) : 0.0;
+                int totalEnrolled = Math.Max(rawEnrolled, present);
+                int absent = totalEnrolled > present ? totalEnrolled - present : 0;
+                double attRate = totalEnrolled > 0 ? Math.Round((double)present * 100.0 / totalEnrolled, 1) : 0.0;
                 return new
                 {
                     sessionId = Convert.ToInt32(s.SessionId),
                     sessionName = (string)s.SessionName ?? "",
                     sessionDate = s.SessionDate != null ? ((DateTime)s.SessionDate).ToString("yyyy-MM-dd") : "",
                     waveName = (string)s.WaveName ?? "",
-                    totalEnrolled = total,
+                    totalEnrolled = totalEnrolled,
                     presentCount = present,
                     absentCount = absent,
                     attendanceRate = attRate
@@ -1683,7 +1690,7 @@ namespace Exam.Controllers
         public async Task<WaveAnalyticsResultDto> FetchWaveAnalyticsAsync(int? waveId)
         {
             using var conn = new SqlConnection(_connectionString);
-            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName FROM dbo.TrainingWaves ORDER BY Id DESC")).ToList();
+            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName FROM dbo.TrainingWaves WHERE ISNULL(IsActive, 1) = 1 ORDER BY Id DESC")).ToList();
 
             int targetWaveId = waveId ?? 0;
 
@@ -1793,7 +1800,7 @@ namespace Exam.Controllers
                 FROM TrainingWaves W
                 JOIN UserWaves UW ON W.Id = UW.WaveId AND UW.IsActive = 1
                 LEFT JOIN UserWaveCertificates wc ON wc.UserId = UW.UserId AND wc.WaveId = W.Id
-                WHERE W.StartDate IS NOT NULL
+                WHERE W.StartDate IS NOT NULL AND ISNULL(W.IsActive, 1) = 1
                 GROUP BY FORMAT(W.StartDate, 'MMM yyyy')
                 ORDER BY MIN(W.StartDate) ASC";
 
@@ -1824,8 +1831,14 @@ namespace Exam.Controllers
                     S.Id as SessionId,
                     S.SessionName,
                     S.SessionDate,
-                    (SELECT COUNT(*) FROM dbo.UserWaves UW WHERE UW.WaveId = S.WaveId AND UW.IsActive = 1) as TotalEnrolled,
-                    ISNULL((SELECT COUNT(*) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1), 0) as PresentCount
+                    ISNULL((
+                        CASE 
+                            WHEN S.WaveId IS NOT NULL AND S.WaveId > 0 THEN (SELECT COUNT(DISTINCT UW.UserId) FROM dbo.UserWaves UW WHERE UW.WaveId = S.WaveId AND UW.IsActive = 1)
+                            WHEN S.CompanyId IS NOT NULL AND S.CompanyId > 0 THEN (SELECT COUNT(DISTINCT U.Id) FROM dbo.AspNetUsers U WHERE U.CompanyId = S.CompanyId AND U.IsActive = 1)
+                            ELSE (SELECT COUNT(DISTINCT UA.UserId) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id)
+                        END
+                    ), 0) as RawEnrolled,
+                    ISNULL((SELECT COUNT(DISTINCT UA.UserId) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1), 0) as PresentCount
                 FROM dbo.AttendanceSessions S
                 WHERE (@WaveId IS NULL OR @WaveId = 0 OR S.WaveId = @WaveId)
                 ORDER BY S.SessionDate DESC";
@@ -1834,16 +1847,17 @@ namespace Exam.Controllers
             var sessionStats = new List<WaveSessionAttendanceDto>();
             foreach (var s in sessionRows)
             {
-                int total = Convert.ToInt32(s.TotalEnrolled);
+                int rawEnrolled = Convert.ToInt32(s.RawEnrolled);
                 int present = Convert.ToInt32(s.PresentCount);
-                int absent = total > present ? total - present : 0;
-                double rate = total > 0 ? Math.Round((double)present / total * 100.0, 1) : 0;
+                int totalEnrolled = Math.Max(rawEnrolled, present);
+                int absent = totalEnrolled > present ? totalEnrolled - present : 0;
+                double rate = totalEnrolled > 0 ? Math.Round((double)present / totalEnrolled * 100.0, 1) : 0;
                 sessionStats.Add(new WaveSessionAttendanceDto
                 {
                     SessionId = Convert.ToInt32(s.SessionId),
                     SessionName = Convert.ToString(s.SessionName) ?? "",
                     SessionDate = s.SessionDate != null ? ((DateTime)s.SessionDate).ToString("yyyy-MM-dd") : "",
-                    TotalEnrolled = total,
+                    TotalEnrolled = totalEnrolled,
                     PresentCount = present,
                     AbsentCount = absent,
                     AttendanceRate = rate
