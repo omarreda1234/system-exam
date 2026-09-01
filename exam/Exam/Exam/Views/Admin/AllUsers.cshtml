@@ -26,45 +26,52 @@
 
 <!-- Ingestion Area -->
 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm">
-    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100 dark:border-slate-800">
         <div>
             <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Node Registry Management</h2>
             <p class="text-xl font-bold">Personnel Infrastructure Ingress</p>
         </div>
         
-        <div class="flex flex-wrap items-center gap-4">
+        <div class="flex flex-wrap items-center gap-3">
             @if (ViewBag.CanCreateUser == true)
             {
-                <button type="button" onclick="openManualAddModal()" class="bg-brand-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg shadow-brand-600/20 flex items-center gap-3 hover:bg-brand-700">
+                <button type="button" onclick="openManualAddModal()" class="bg-brand-600 text-white px-6 py-2.5 rounded-xl transition-all text-xs font-bold uppercase shadow-md shadow-brand-600/20 flex items-center gap-2 hover:bg-brand-700">
                     <i class="fas fa-user-plus"></i>
                     Add Personnel Manually
                 </button>
-
-                <form id="importForm" asp-action="ImportUsersFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
-                    @Html.AntiForgeryToken()
-                    <div class="flex-1 min-w-[300px] space-y-2">
-                        <div class="flex justify-between items-center px-1">
-                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personnel Payload (.xlsx)</label>
-                            <a href="/Admin/DownloadPersonnelTemplate" class="text-[10px] font-extrabold text-brand-600 hover:text-brand-700 uppercase tracking-wider flex items-center gap-1">
-                                <i class="fas fa-download"></i> Download Template / تحميل النموذج
-                            </a>
-                        </div>
-                        <input id="excelFile" type="file" name="excelFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-slate-900 dark:file:bg-brand-500 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-white dark:bg-slate-950 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
-                    </div>
-                    <label class="flex items-center gap-2 cursor-pointer select-none text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                        <input type="checkbox" name="sendWelcomeEmails" value="true" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
-                        Send welcome emails
-                    </label>
-                    <button type="submit" id="btnImport" class="bg-slate-900 dark:bg-brand-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg flex items-center gap-3 hover:opacity-90" style="min-width:180px;justify-content:center;">
-                        <span id="btnImportInner" style="display:flex;align-items:center;gap:10px;">
-                            <i class="fas fa-file-import"></i>
-                            Execute Ingestion
-                        </span>
-                    </button>
-                </form>
             }
+            <button type="button" onclick="exportFilteredUsersExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl transition-all text-xs font-bold uppercase shadow-md shadow-emerald-600/20 flex items-center gap-2">
+                <i class="fas fa-file-excel"></i>
+                Export Filtered (تصدير النتيجة لإكسل)
+            </button>
         </div>
     </div>
+
+    @if (ViewBag.CanCreateUser == true)
+    {
+        <form id="importForm" asp-action="ImportUsersFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
+            @Html.AntiForgeryToken()
+            <div class="flex-1 min-w-[300px] space-y-2">
+                <div class="flex justify-between items-center px-1">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personnel Payload (.xlsx)</label>
+                    <a href="/Admin/DownloadPersonnelTemplate" class="text-[10px] font-extrabold text-brand-600 hover:text-brand-700 uppercase tracking-wider flex items-center gap-1">
+                        <i class="fas fa-download"></i> Download Template / تحميل النموذج
+                    </a>
+                </div>
+                <input id="excelFile" type="file" name="excelFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-slate-900 dark:file:bg-brand-500 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-white dark:bg-slate-950 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
+            </div>
+            <label class="flex items-center gap-2 cursor-pointer select-none text-[10px] font-bold text-slate-500 uppercase tracking-widest pb-3">
+                <input type="checkbox" name="sendWelcomeEmails" value="true" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                Send welcome emails
+            </label>
+            <button type="submit" id="btnImport" class="bg-slate-900 dark:bg-brand-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg flex items-center gap-3 hover:opacity-90" style="min-width:180px;justify-content:center;">
+                <span id="btnImportInner" style="display:flex;align-items:center;gap:10px;">
+                    <i class="fas fa-file-import"></i>
+                    Execute Ingestion
+                </span>
+            </button>
+        </form>
+    }
 
     <!-- Progress Notification -->
     <div id="progressBox" class="hidden mt-8 p-6 bg-slate-50 dark:bg-slate-950 border border-brand-500/20 rounded-2xl shadow-inner">
@@ -81,85 +88,88 @@
 <!-- Users Table -->
 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
     <!-- Filters -->
-    <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-6 bg-slate-50/50 dark:bg-slate-800/20">
-        <!-- Multi-Select Classification Dropdown -->
-        <div class="relative inline-block text-left" id="multiSelectClassificationWrapper">
-            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
-                <i class="fas fa-filter mr-1"></i> Classification
-            </label>
-            <button type="button" id="btnMultiSelectClassification" onclick="toggleClassificationDropdown()"
-                    class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[220px] shadow-sm flex items-center justify-between gap-2">
-                <span id="lblClassificationSelected" class="truncate">All Classifications</span>
-                <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
-            </button>
+    <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-end justify-between gap-4 bg-slate-50/50 dark:bg-slate-800/20">
+        <div class="flex flex-wrap items-end gap-4">
+            <!-- Multi-Select Classification Dropdown -->
+            <div class="relative inline-block text-left" id="multiSelectClassificationWrapper">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
+                    <i class="fas fa-filter mr-1"></i> Classification
+                </label>
+                <button type="button" id="btnMultiSelectClassification" onclick="toggleClassificationDropdown()"
+                        class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[220px] shadow-sm flex items-center justify-between gap-2">
+                    <span id="lblClassificationSelected" class="truncate">All Classifications</span>
+                    <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
+                </button>
 
-            <!-- Dropdown Menu -->
-            <div id="dropdownClassificationMenu" class="hidden absolute left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
-                <div class="relative">
-                    <input type="text" id="classificationSearchInput" placeholder="Search classification..." oninput="filterClassificationOptions(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
-                </div>
-                <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Classifications</span>
-                    <div class="flex items-center gap-2">
-                        <button type="button" onclick="selectAllClassifications(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
-                        <span class="text-slate-300">|</span>
-                        <button type="button" onclick="selectAllClassifications(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
+                <!-- Dropdown Menu -->
+                <div id="dropdownClassificationMenu" class="hidden absolute left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                    <div class="relative">
+                        <input type="text" id="classificationSearchInput" placeholder="Search classification..." oninput="filterClassificationOptions(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                    </div>
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Classifications</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="selectAllClassifications(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllClassifications(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar" id="classificationOptionsContainer">
+                        @foreach (var r in roles) {
+                            <label class="classification-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                                <input type="checkbox" value="@r.RoleName.ToUpper()" class="chk-classification rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onClassificationFilterChange()" />
+                                <span class="truncate">@r.RoleName.ToUpper()</span>
+                            </label>
+                        }
                     </div>
                 </div>
-                <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar" id="classificationOptionsContainer">
-                    @foreach (var r in roles) {
-                        <label class="classification-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
-                            <input type="checkbox" value="@r.RoleName.ToUpper()" class="chk-classification rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onClassificationFilterChange()" />
-                            <span class="truncate">@r.RoleName.ToUpper()</span>
+            </div>
+
+            <!-- Multi-Select Branch Dropdown -->
+            <div class="relative inline-block text-left" id="multiSelectBranchWrapper">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
+                    <i class="fas fa-code-branch mr-1"></i> Branch
+                </label>
+                <button type="button" id="btnMultiSelectBranch" onclick="toggleBranchDropdown()"
+                        class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[220px] shadow-sm flex items-center justify-between gap-2">
+                    <span id="lblBranchSelected" class="truncate">All Branches</span>
+                    <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- Dropdown Menu -->
+                <div id="dropdownBranchMenu" class="hidden absolute left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                    <div class="relative">
+                        <input type="text" id="branchSearchInput" placeholder="Search branch..." oninput="filterBranchOptions(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                    </div>
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Branches</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="selectAllBranches(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllBranches(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar" id="branchOptionsContainer">
+                        <label class="branch-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" value="GLOBAL" class="chk-branch rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onBranchFilterChange()" />
+                            <span class="truncate">GLOBAL</span>
                         </label>
-                    }
+                        @if (ViewBag.Branches != null) {
+                            foreach (var b in ViewBag.Branches as IEnumerable<Exam.DTOs.BranchDto>) {
+                                <label class="branch-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                                    <input type="checkbox" value="@b.BranchName.ToUpper()" class="chk-branch rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onBranchFilterChange()" />
+                                    <span class="truncate">@b.BranchName.ToUpper()</span>
+                                </label>
+                            }
+                        }
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Multi-Select Branch Dropdown -->
-        <div class="relative inline-block text-left" id="multiSelectBranchWrapper">
-            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
-                <i class="fas fa-code-branch mr-1"></i> Branch
-            </label>
-            <button type="button" id="btnMultiSelectBranch" onclick="toggleBranchDropdown()"
-                    class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[220px] shadow-sm flex items-center justify-between gap-2">
-                <span id="lblBranchSelected" class="truncate">All Branches</span>
-                <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
-            </button>
-
-            <!-- Dropdown Menu -->
-            <div id="dropdownBranchMenu" class="hidden absolute left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
-                <div class="relative">
-                    <input type="text" id="branchSearchInput" placeholder="Search branch..." oninput="filterBranchOptions(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
-                </div>
-                <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Branches</span>
-                    <div class="flex items-center gap-2">
-                        <button type="button" onclick="selectAllBranches(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
-                        <span class="text-slate-300">|</span>
-                        <button type="button" onclick="selectAllBranches(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
-                    </div>
-                </div>
-                <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar" id="branchOptionsContainer">
-                    <label class="branch-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
-                        <input type="checkbox" value="GLOBAL" class="chk-branch rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onBranchFilterChange()" />
-                        <span class="truncate">GLOBAL</span>
-                    </label>
-                    @if (ViewBag.Branches != null) {
-                        foreach (var b in ViewBag.Branches as IEnumerable<Exam.DTOs.BranchDto>) {
-                            <label class="branch-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
-                                <input type="checkbox" value="@b.BranchName.ToUpper()" class="chk-branch rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onBranchFilterChange()" />
-                                <span class="truncate">@b.BranchName.ToUpper()</span>
-                            </label>
-                        }
-                    }
-                </div>
-        </div>
-
         <!-- Export Filtered Excel Button -->
-        <div class="ml-auto mt-auto">
-            <button type="button" onclick="exportFilteredUsersExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl transition-all text-xs font-bold uppercase shadow-sm flex items-center gap-2">
+        <div>
+            <button type="button" onclick="exportFilteredUsersExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl transition-all text-xs font-bold uppercase shadow-md shadow-emerald-600/20 flex items-center gap-2">
                 <i class="fas fa-file-excel text-sm"></i>
                 Export Filtered (تصدير النتيجة لإكسل)
             </button>
