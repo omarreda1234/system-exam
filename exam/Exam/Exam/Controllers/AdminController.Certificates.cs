@@ -1596,7 +1596,7 @@ namespace Exam.Controllers
             using var conn = new SqlConnection(_connectionString);
             int targetWaveId = waveId ?? 0;
 
-            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName FROM dbo.TrainingWaves WHERE ISNULL(IsActive, 1) = 1 ORDER BY Id DESC")).ToList();
+            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName, ISNULL(IsActive, 1) as IsActive FROM dbo.TrainingWaves ORDER BY Id DESC")).ToList();
 
             var topicPerfSql = @"
                 SELECT 
@@ -1622,11 +1622,10 @@ namespace Exam.Controllers
                     S.Id as SessionId,
                     S.SessionName,
                     S.SessionDate,
-                    W.WaveName,
+                    ISNULL(W.WaveName, N'عام / Global') as WaveName,
                     ISNULL((
                         CASE 
-                            WHEN S.WaveId IS NOT NULL AND S.WaveId > 0 THEN (SELECT COUNT(DISTINCT UW.UserId) FROM dbo.UserWaves UW WHERE UW.WaveId = S.WaveId AND UW.IsActive = 1)
-                            WHEN S.CompanyId IS NOT NULL AND S.CompanyId > 0 THEN (SELECT COUNT(DISTINCT U.Id) FROM dbo.AspNetUsers U WHERE U.CompanyId = S.CompanyId AND U.IsActive = 1)
+                            WHEN S.WaveId IS NOT NULL AND S.WaveId > 0 THEN (SELECT COUNT(DISTINCT UW.UserId) FROM dbo.UserWaves UW WHERE UW.WaveId = S.WaveId)
                             ELSE (SELECT COUNT(DISTINCT UA.UserId) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id)
                         END
                     ), 0) as RawEnrolled,
@@ -1681,7 +1680,7 @@ namespace Exam.Controllers
             return Json(new
             {
                 selectedWaveId = targetWaveId,
-                waves = waves.Select(w => new { id = (int)w.Id, waveName = (string)w.WaveName }).ToList(),
+                waves = waves.Select(w => new { id = (int)w.Id, waveName = (string)w.WaveName + (w.IsActive == true ? " (Active)" : " (Done)") }).ToList(),
                 categories = categoryAnalytics,
                 sessions = sessionAnalytics
             });
@@ -1690,7 +1689,7 @@ namespace Exam.Controllers
         public async Task<WaveAnalyticsResultDto> FetchWaveAnalyticsAsync(int? waveId)
         {
             using var conn = new SqlConnection(_connectionString);
-            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName FROM dbo.TrainingWaves WHERE ISNULL(IsActive, 1) = 1 ORDER BY Id DESC")).ToList();
+            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName, ISNULL(IsActive, 1) as IsActive FROM dbo.TrainingWaves ORDER BY Id DESC")).ToList();
 
             int targetWaveId = waveId ?? 0;
 
@@ -1719,14 +1718,14 @@ namespace Exam.Controllers
                 LEFT JOIN UserRoles UR ON U.Id = UR.UserId
                 LEFT JOIN Branches B ON U.BranchId = B.Id
                 LEFT JOIN UserWaveCertificates wc ON wc.UserId = U.Id AND wc.WaveId = W.Id
-                WHERE (@WaveId IS NULL OR @WaveId = 0 OR W.Id = @WaveId) AND UW.IsActive = 1";
+                WHERE (@WaveId IS NULL OR @WaveId = 0 OR W.Id = @WaveId)";
 
             var rows = (await conn.QueryAsync<dynamic>(sql, new { WaveId = targetWaveId })).ToList();
 
             var result = new WaveAnalyticsResultDto
             {
                 SelectedWaveId = targetWaveId,
-                Waves = waves.Select(w => new { id = (int)w.Id, waveName = (string)w.WaveName }).Cast<dynamic>().ToList()
+                Waves = waves.Select(w => new { id = (int)w.Id, waveName = (string)w.WaveName + (w.IsActive == true ? " (Active)" : " (Done)") }).Cast<dynamic>().ToList()
             };
 
             result.TotalStudents = rows.Count;
@@ -1798,9 +1797,9 @@ namespace Exam.Controllers
                     SUM(CASE WHEN wc.Score >= 70 AND wc.Score <= 75 THEN 1 ELSE 0 END) as PassedNoCertCount,
                     SUM(CASE WHEN wc.Score > 0 AND wc.Score < 70 THEN 1 ELSE 0 END) as FailedCount
                 FROM TrainingWaves W
-                JOIN UserWaves UW ON W.Id = UW.WaveId AND UW.IsActive = 1
+                JOIN UserWaves UW ON W.Id = UW.WaveId
                 LEFT JOIN UserWaveCertificates wc ON wc.UserId = UW.UserId AND wc.WaveId = W.Id
-                WHERE W.StartDate IS NOT NULL AND ISNULL(W.IsActive, 1) = 1
+                WHERE W.StartDate IS NOT NULL
                 GROUP BY FORMAT(W.StartDate, 'MMM yyyy')
                 ORDER BY MIN(W.StartDate) ASC";
 
@@ -1831,15 +1830,16 @@ namespace Exam.Controllers
                     S.Id as SessionId,
                     S.SessionName,
                     S.SessionDate,
+                    ISNULL(W.WaveName, N'عام / Global') as WaveName,
                     ISNULL((
                         CASE 
-                            WHEN S.WaveId IS NOT NULL AND S.WaveId > 0 THEN (SELECT COUNT(DISTINCT UW.UserId) FROM dbo.UserWaves UW WHERE UW.WaveId = S.WaveId AND UW.IsActive = 1)
-                            WHEN S.CompanyId IS NOT NULL AND S.CompanyId > 0 THEN (SELECT COUNT(DISTINCT U.Id) FROM dbo.AspNetUsers U WHERE U.CompanyId = S.CompanyId AND U.IsActive = 1)
+                            WHEN S.WaveId IS NOT NULL AND S.WaveId > 0 THEN (SELECT COUNT(DISTINCT UW.UserId) FROM dbo.UserWaves UW WHERE UW.WaveId = S.WaveId)
                             ELSE (SELECT COUNT(DISTINCT UA.UserId) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id)
                         END
                     ), 0) as RawEnrolled,
                     ISNULL((SELECT COUNT(DISTINCT UA.UserId) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1), 0) as PresentCount
                 FROM dbo.AttendanceSessions S
+                LEFT JOIN dbo.TrainingWaves W ON S.WaveId = W.Id
                 WHERE (@WaveId IS NULL OR @WaveId = 0 OR S.WaveId = @WaveId)
                 ORDER BY S.SessionDate DESC";
 
