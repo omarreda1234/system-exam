@@ -2028,14 +2028,14 @@ namespace Exam.Controllers
 
             if (allowedBranches != null)
             {
-                sql += " AND UPPER(B.BranchName) IN @AllowedBranches";
+                sql += " AND B.BranchName IN @AllowedBranches";
             }
 
             sql += " ORDER BY U.FullName";
 
             var list = await conn.QueryAsync<TraineeSearchResultDto>(sql, new { 
                 Q = $"%{query.Trim()}%",
-                AllowedBranches = allowedBranches?.Select(b => b.ToUpper()).ToList()
+                AllowedBranches = allowedBranches
             });
 
             return Json(list);
