@@ -42,38 +42,15 @@
     <!-- Filter Bar Row -->
     <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex flex-wrap items-center gap-4">
-            <!-- Multi-Select Branch Dropdown -->
-            <div class="space-y-2 relative inline-block text-left" id="multiSelectBranchWrapperCerts">
+            <div class="space-y-2">
                 <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Branch (الفرع)</label>
-                <button type="button" id="btnMultiSelectBranchCerts" onclick="toggleBranchDropdownCerts()"
-                        class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[200px] shadow-sm flex items-center justify-between gap-2">
-                    <span id="lblBranchSelectedCerts" class="truncate">All Branches</span>
-                    <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
-                </button>
-
-                <!-- Dropdown Menu -->
-                <div id="dropdownBranchMenuCerts" class="hidden absolute left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
-                    <div class="relative">
-                        <input type="text" id="branchSearchInputCerts" placeholder="Search branch..." oninput="filterBranchOptionsCerts(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
-                    </div>
-                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Branches</span>
-                        <div class="flex items-center gap-2">
-                            <button type="button" onclick="selectAllBranchesCerts(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
-                            <span class="text-slate-300">|</span>
-                            <button type="button" onclick="selectAllBranchesCerts(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
-                        </div>
-                    </div>
-                    <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                        @foreach (var b in branches)
-                        {
-                            <label class="branch-option-label-certs flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
-                                <input type="checkbox" value="@b.BranchName.ToUpper()" class="chk-branch-certs rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onBranchFilterChangeCerts()" />
-                                <span class="truncate">@b.BranchName</span>
-                            </label>
-                        }
-                    </div>
-                </div>
+                <select id="branchFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[180px] transition-colors focus:border-brand-500 outline-none">
+                    <option value="0">All Branches (جميع الفروع)</option>
+                    @foreach (var b in branches)
+                    {
+                        <option value="@b.Id" selected="@(b.Id.ToString() == selectedBranchId.ToString() ? "selected" : null)">@b.BranchName</option>
+                    }
+                </select>
             </div>
 
             <div class="space-y-2">
@@ -87,39 +64,19 @@
                 </select>
             </div>
 
-            <!-- Multi-Select Wave Dropdown -->
-            <div class="space-y-2 relative inline-block text-left" id="multiSelectWaveWrapperCerts">
+            <div class="space-y-2">
                 <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Selected Wave</label>
-                <button type="button" id="btnMultiSelectWaveCerts" onclick="toggleWaveDropdownCerts()"
-                        class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[240px] shadow-sm flex items-center justify-between gap-2">
-                    <span id="lblWaveSelectedCerts" class="truncate">All Waves</span>
-                    <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
-                </button>
-
-                <!-- Dropdown Menu -->
-                <div id="dropdownWaveMenuCerts" class="hidden absolute left-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
-                    <div class="relative">
-                        <input type="text" id="waveSearchInputCerts" placeholder="Search wave..." oninput="filterWaveOptionsCerts(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
-                    </div>
-                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Waves</span>
-                        <div class="flex items-center gap-2">
-                            <button type="button" onclick="selectAllWavesCerts(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
-                            <span class="text-slate-300">|</span>
-                            <button type="button" onclick="selectAllWavesCerts(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
-                        </div>
-                    </div>
-                    <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                <select id="examFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[200px] transition-colors focus:border-brand-500 outline-none">
+                    <option value="-1">ALL WAVES</option>
+                    <optgroup label="WAVES">
                         @foreach (var w in waves)
                         {
-                            var waveLabel = $"{w.WaveName.ToUpper()} {(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")}".Trim();
-                            <label class="wave-option-label-certs flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
-                                <input type="checkbox" value="@w.WaveName.ToUpper()" class="chk-wave-certs rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onWaveFilterChangeCerts()" />
-                                <span class="truncate">@waveLabel</span>
-                            </label>
+                            <option value="@w.Id" selected="@(w.Id == selectedWaveId ? "selected" : null)">
+                                @w.WaveName.ToUpper() @(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")
+                            </option>
                         }
-                    </div>
-                </div>
+                    </optgroup>
+                </select>
             </div>
 
             <div class="space-y-2">
@@ -553,128 +510,9 @@
             });
         }
 
-        function toggleBranchDropdownCerts() {
-            $('#dropdownBranchMenuCerts').toggleClass('hidden');
-            $('#dropdownWaveMenuCerts').addClass('hidden');
-        }
-
-        function toggleWaveDropdownCerts() {
-            $('#dropdownWaveMenuCerts').toggleClass('hidden');
-            $('#dropdownBranchMenuCerts').addClass('hidden');
-        }
-
-        $(document).click(function(e) {
-            if (!$(e.target).closest('#multiSelectBranchWrapperCerts').length) {
-                $('#dropdownBranchMenuCerts').addClass('hidden');
-            }
-            if (!$(e.target).closest('#multiSelectWaveWrapperCerts').length) {
-                $('#dropdownWaveMenuCerts').addClass('hidden');
-            }
-        });
-
-        function filterBranchOptionsCerts(query) {
-            const q = (query || '').toLowerCase().trim();
-            $('.branch-option-label-certs').each(function() {
-                const text = $(this).text().toLowerCase();
-                $(this).toggle(!q || text.includes(q));
-            });
-        }
-
-        function filterWaveOptionsCerts(query) {
-            const q = (query || '').toLowerCase().trim();
-            $('.wave-option-label-certs').each(function() {
-                const text = $(this).text().toLowerCase();
-                $(this).toggle(!q || text.includes(q));
-            });
-        }
-
-        function selectAllBranchesCerts(checkAll) {
-            $('.branch-option-label-certs:visible .chk-branch-certs').prop('checked', checkAll);
-            onBranchFilterChangeCerts();
-        }
-
-        function selectAllWavesCerts(checkAll) {
-            $('.wave-option-label-certs:visible .chk-wave-certs').prop('checked', checkAll);
-            onWaveFilterChangeCerts();
-        }
-
-        function getSelectedBranchesCerts() {
-            let checked = [];
-            $('.chk-branch-certs:checked').each(function() {
-                checked.push($(this).val().toUpperCase());
-            });
-            return checked;
-        }
-
-        function getSelectedWavesCerts() {
-            let checked = [];
-            $('.chk-wave-certs:checked').each(function() {
-                checked.push($(this).val().toUpperCase());
-            });
-            return checked;
-        }
-
-        function onBranchFilterChangeCerts() {
-            let selected = getSelectedBranchesCerts();
-            let total = $('.chk-branch-certs').length;
-            if (selected.length === 0 || selected.length === total) {
-                $('#lblBranchSelectedCerts').html('<span class="text-slate-500">All Branches</span>');
-            } else if (selected.length === 1) {
-                $('#lblBranchSelectedCerts').html(`<span class="text-brand-600 font-extrabold">${selected[0]}</span>`);
-            } else {
-                $('#lblBranchSelectedCerts').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
-            }
-            if ($.fn.DataTable.isDataTable('#certificatesTable')) {
-                $('#certificatesTable').DataTable().draw();
-            }
-        }
-
-        function onWaveFilterChangeCerts() {
-            let selected = getSelectedWavesCerts();
-            let total = $('.chk-wave-certs').length;
-            if (selected.length === 0 || selected.length === total) {
-                $('#lblWaveSelectedCerts').html('<span class="text-slate-500">All Waves</span>');
-            } else if (selected.length === 1) {
-                $('#lblWaveSelectedCerts').html(`<span class="text-brand-600 font-extrabold">${selected[0]}</span>`);
-            } else {
-                $('#lblWaveSelectedCerts').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
-            }
-            if ($.fn.DataTable.isDataTable('#certificatesTable')) {
-                $('#certificatesTable').DataTable().draw();
-            }
-        }
-
-        const normStrCerts = s => (s || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
-
         $.fn.dataTable.ext.search.push(
             function(settings, data, dataIndex) {
                 if (settings.nTable.id !== 'certificatesTable') return true;
-
-                // Branch Filter Check
-                const selBranches = getSelectedBranchesCerts();
-                const rowBranch = data[2] || '';
-                const nRowBranch = normStrCerts(rowBranch);
-                let branchMatch = (selBranches.length === 0 || selBranches.length === $('.chk-branch-certs').length);
-                if (!branchMatch) {
-                    branchMatch = selBranches.some(b => {
-                        const nb = normStrCerts(b);
-                        return nRowBranch.includes(nb) || nb.includes(nRowBranch);
-                    });
-                }
-                if (!branchMatch) return false;
-
-                // Wave Filter Check
-                const selWaves = getSelectedWavesCerts();
-                const rowWave = data[1] || '';
-                const nRowWave = normStrCerts(rowWave);
-                let waveMatch = (selWaves.length === 0 || selWaves.length === $('.chk-wave-certs').length);
-                if (!waveMatch) {
-                    waveMatch = selWaves.some(w => {
-                        const nw = normStrCerts(w);
-                        return nRowWave.includes(nw) || nw.includes(nRowWave);
-                    });
-                }
-                if (!waveMatch) return false;
 
                 // Status Filter Check
                 const selectedFilter = $('#certStatusFilter').val();

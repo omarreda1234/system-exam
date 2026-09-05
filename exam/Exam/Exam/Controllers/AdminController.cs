@@ -5528,10 +5528,8 @@ ORDER BY U.UserName ASC";
             {
                 using var conn = new SqlConnection(_connectionString);
                 
-                // Check if users exist in this branch
-                var usersCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM AspNetUsers WHERE BranchId = @Id", new { Id = id });
-                if (usersCount > 0)
-                    return Json(new { success = false, message = $"Cannot delete: {usersCount} users are assigned to this branch." });
+                // Unassign users from this branch by setting BranchId to NULL
+                await conn.ExecuteAsync("UPDATE AspNetUsers SET BranchId = NULL WHERE BranchId = @Id", new { Id = id });
 
                 // Delete branch
                 await conn.ExecuteAsync("DELETE FROM Branches WHERE Id = @Id", new { Id = id });
