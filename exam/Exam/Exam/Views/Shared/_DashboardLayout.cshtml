@@ -422,7 +422,7 @@
                         }
                     }
 
-                    @if (HasAccess("Admin", "WeeklyResults") || HasAccess("Admin", "WaveyResults") || HasAccess("Admin", "Students") || HasAccess("Admin", "LiveMonitor") || HasAccess("Admin", "Certificates") || HasAccess("Admin", "PendingRequests") || HasAccess("Admin", "AllUsers") || HasAccess("Admin", "DeactivatedUsers") || HasAccess("Admin", "Waves") || HasAccess("Admin", "Companies") || HasAccess("Admin", "Branches") || HasAccess("Attendance", "Analytics"))
+                    @if (HasAccess("Admin", "WeeklyResults") || HasAccess("Admin", "WaveyResults") || HasAccess("Admin", "Students") || HasAccess("Admin", "LiveMonitor") || HasAccess("Admin", "Certificates") || HasAccess("Admin", "PendingRequests") || HasAccess("Admin", "AllUsers") || HasAccess("Admin", "DeactivatedUsers") || HasAccess("Admin", "Waves") || HasAccess("Admin", "Companies") || HasAccess("Admin", "Branches") || HasAccess("Attendance", "Analytics") || HasAccess("Admin", "TraineeProfile"))
                     {
                         <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-8">Personnel Data</div>
 
@@ -476,7 +476,7 @@
                             </a>
                         }
 
-                        @if (HasAccess("Admin", "Certificates") || HasAccess("Admin", "AllUsers"))
+                        @if (HasAccess("Admin", "TraineeProfile") || HasAccess("Admin", "Certificates") || HasAccess("Admin", "AllUsers"))
                         {
                             <a href="@Url.Action("TraineeProfile", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "traineeprofile")">
                                 <i class="fas fa-id-card-clip w-5"></i>
