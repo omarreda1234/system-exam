@@ -265,6 +265,11 @@
                         const $dropdown = $('#searchDropdown');
                         $dropdown.empty();
 
+                        if (res && res.error) {
+                            $dropdown.html(`<div class="p-4 text-center text-xs text-red-500 font-bold">Error: ${res.error}</div>`).removeClass('hidden');
+                            return;
+                        }
+
                         if (!res || res.length === 0) {
                             $dropdown.html('<div class="p-4 text-center text-xs text-slate-400 font-bold">No trainees found matching search query</div>').removeClass('hidden');
                             return;

@@ -2033,12 +2033,19 @@ namespace Exam.Controllers
 
             sql += " ORDER BY U.FullName";
 
-            var list = await conn.QueryAsync<TraineeSearchResultDto>(sql, new { 
-                Q = $"%{query.Trim()}%",
-                AllowedBranches = allowedBranches
-            });
+            try 
+            {
+                var list = await conn.QueryAsync<TraineeSearchResultDto>(sql, new { 
+                    Q = $"%{query.Trim()}%",
+                    AllowedBranches = allowedBranches
+                });
 
-            return Json(list);
+                return Json(list);
+            } 
+            catch (Exception ex) 
+            {
+                return Json(new { error = ex.Message, stackTrace = ex.StackTrace, sql = sql });
+            }
         }
 
         private static void CalculateRolePassRate(RoleAnalyticsDto r)
