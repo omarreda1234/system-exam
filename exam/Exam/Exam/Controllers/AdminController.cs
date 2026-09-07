@@ -73,7 +73,8 @@ namespace Exam.Controllers
             "BranchSupervisors", "GetSupervisorBranches", "SaveSupervisorBranches",
             "EditWave", "DeleteWave", "CreateWave", "CloneWave", "AssignUsersToWave", "WaveDetails", "GetWaveUserIds", "GetUsersByWaveId", "RemoveUserFromWave",
             "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
-            "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode"
+            "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode",
+            "SearchTrainees", "GetTrainee360Data"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)

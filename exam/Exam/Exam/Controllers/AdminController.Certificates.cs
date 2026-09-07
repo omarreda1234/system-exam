@@ -1997,54 +1997,54 @@ namespace Exam.Controllers
         [HttpGet]
         public async Task<IActionResult> SearchTrainees(string query)
         {
-            if (string.IsNullOrWhiteSpace(query))
-                return Json(new List<TraineeSearchResultDto>());
-
-            using var conn = new SqlConnection(_connectionString);
-
-            var currentUser = await _userManager.GetUserAsync(User);
-            var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
-
-            if (allowedBranches != null && !allowedBranches.Any())
+            try
             {
-                return Json(new List<TraineeSearchResultDto>());
-            }
+                if (string.IsNullOrWhiteSpace(query))
+                    return Json(new List<TraineeSearchResultDto>());
 
-            var sql = @"
-                SELECT TOP 15
-                    U.Id as UserId,
-                    ISNULL(U.FullName, U.UserName) as FullName,
-                    ISNULL(U.UserCode, N'--') as UserCode,
-                    ISNULL(B.BranchName, N'بدون فرع') as BranchName,
-                    ISNULL((
-                        SELECT TOP 1 R.Name 
-                        FROM AspNetUserRoles UR 
-                        JOIN AspNetRoles R ON UR.RoleId = R.Id 
-                        WHERE UR.UserId = U.Id
-                    ), 'Student') as RoleName
-                FROM AspNetUsers U
-                LEFT JOIN Branches B ON U.BranchId = B.Id
-                WHERE (U.FullName LIKE @Q OR U.UserName LIKE @Q OR U.UserCode LIKE @Q)";
+                using var conn = new SqlConnection(_connectionString);
 
-            if (allowedBranches != null)
-            {
-                sql += " AND B.BranchName IN @AllowedBranches";
-            }
+                var currentUser = await _userManager.GetUserAsync(User);
+                var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
 
-            sql += " ORDER BY U.FullName";
+                if (allowedBranches != null && !allowedBranches.Any())
+                {
+                    return Json(new List<TraineeSearchResultDto>());
+                }
 
-            try 
-            {
+                var sql = @"
+                    SELECT TOP 15
+                        U.Id as UserId,
+                        ISNULL(U.FullName, U.UserName) as FullName,
+                        ISNULL(U.UserCode, N'--') as UserCode,
+                        ISNULL(B.BranchName, N'بدون فرع') as BranchName,
+                        ISNULL((
+                            SELECT TOP 1 R.Name 
+                            FROM AspNetUserRoles UR 
+                            JOIN AspNetRoles R ON UR.RoleId = R.Id 
+                            WHERE UR.UserId = U.Id
+                        ), 'Student') as RoleName
+                    FROM AspNetUsers U
+                    LEFT JOIN Branches B ON U.BranchId = B.Id
+                    WHERE (U.FullName LIKE @Q OR U.UserName LIKE @Q OR U.UserCode LIKE @Q)";
+
+                if (allowedBranches != null)
+                {
+                    sql += " AND B.BranchName IN @AllowedBranches";
+                }
+
+                sql += " ORDER BY U.FullName";
+
                 var list = await conn.QueryAsync<TraineeSearchResultDto>(sql, new { 
                     Q = $"%{query.Trim()}%",
                     AllowedBranches = allowedBranches
                 });
 
                 return Json(list);
-            } 
-            catch (Exception ex) 
+            }
+            catch (Exception ex)
             {
-                return Json(new { error = ex.Message, stackTrace = ex.StackTrace, sql = sql });
+                return Json(new { error = ex.Message, stackTrace = ex.StackTrace });
             }
         }
 
