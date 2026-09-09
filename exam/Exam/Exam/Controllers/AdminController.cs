@@ -1,4 +1,4 @@
-using ClosedXML.Excel;
+﻿using ClosedXML.Excel;
 using Exam.Services;
 using Exam.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -73,8 +73,7 @@ namespace Exam.Controllers
             "BranchSupervisors", "GetSupervisorBranches", "SaveSupervisorBranches",
             "EditWave", "DeleteWave", "CreateWave", "CloneWave", "AssignUsersToWave", "WaveDetails", "GetWaveUserIds", "GetUsersByWaveId", "RemoveUserFromWave",
             "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
-            "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode",
-            "SearchTrainees", "GetTrainee360Data"
+            "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
@@ -5529,8 +5528,10 @@ ORDER BY U.UserName ASC";
             {
                 using var conn = new SqlConnection(_connectionString);
                 
-                // Unassign users from this branch by setting BranchId to NULL
-                await conn.ExecuteAsync("UPDATE AspNetUsers SET BranchId = NULL WHERE BranchId = @Id", new { Id = id });
+                // Check if users exist in this branch
+                var usersCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM AspNetUsers WHERE BranchId = @Id", new { Id = id });
+                if (usersCount > 0)
+                    return Json(new { success = false, message = $"Cannot delete: {usersCount} users are assigned to this branch." });
 
                 // Delete branch
                 await conn.ExecuteAsync("DELETE FROM Branches WHERE Id = @Id", new { Id = id });

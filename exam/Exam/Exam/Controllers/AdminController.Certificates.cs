@@ -103,13 +103,13 @@ namespace Exam.Controllers
                         N'Training Batch' as ExamName, 
                         N'Wave' as ExamType,
                         CASE 
-                            WHEN UWC.CertificateCode IS NOT NULL THEN 'Completed'
+                            WHEN (UWC.CertificateCode IS NOT NULL AND TRIM(UWC.CertificateCode) <> '' AND TRIM(UWC.CertificateCode) <> '/') OR (UWC.Score IS NOT NULL AND UWC.Score > 0) THEN 'Completed'
                             ELSE 'Not Started' 
                         END as Status, 
                         ISNULL(UWC.Score, 0) as Score, 
                         CAST(0 AS DECIMAL(18,2)) as FinalScore, 
                         0 as DurationInMinutes, 
-                        CASE WHEN UWC.CertificateCode IS NOT NULL THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END as IsPassed, 
+                        CASE WHEN (UWC.CertificateCode IS NOT NULL AND TRIM(UWC.CertificateCode) <> '' AND TRIM(UWC.CertificateCode) <> '/') OR (UWC.Score IS NOT NULL AND UWC.Score > 0) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END as IsPassed, 
                         UWC.CertificateCode as CertificateCode, 
                         ISNULL(UWC.EmailSent, 0) as EmailSent, 
                         0 as AttemptNumber, 
