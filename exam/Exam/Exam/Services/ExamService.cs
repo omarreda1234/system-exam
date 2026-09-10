@@ -892,18 +892,20 @@ namespace Exam.Services
 
                 if (durationMins < 0) durationMins = 0;
 
-                bool hasValidWaveCert = waveCert != null && 
-                    !string.IsNullOrWhiteSpace((string)waveCert.CertificateCode) && 
-                    (string)waveCert.CertificateCode != "/";
-
-                if (hasValidWaveCert)
+                if (waveCert != null)
                 {
                     examsCompleted = 1;
                     examsAssigned = 1;
-                    certCode = (string)waveCert.CertificateCode;
+                    certCode = waveCert.CertificateCode;
                     if (attemptStatus == "Not Started") attemptStatus = "Completed";
 
-                    if (targetAttempt != null)
+                    if (waveCert.Score != null)
+                    {
+                        totalScore = (decimal)waveCert.Score;
+                        studentTotalAvailablePoints = 100.0m;
+                        percentage = (double)totalScore;
+                    }
+                    else if (targetAttempt != null)
                     {
                         if ((string)targetAttempt.Status == "Completed")
                         {
@@ -917,18 +919,10 @@ namespace Exam.Services
                         }
                         else
                         {
-                            bool isAssistant = roleName.ToLower().Contains("assistant") || roleName.Contains("مساعد");
-                            studentTotalAvailablePoints = isAssistant ? 40.0m : 100.0m;
+                            int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
+                            studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
                         }
                         percentage = studentTotalAvailablePoints > 0 ? (double)(totalScore / studentTotalAvailablePoints) * 100 : 0;
-                    }
-                    else if (waveCert.Score != null)
-                    {
-                        bool isAssistant = roleName.ToLower().Contains("assistant") || roleName.Contains("مساعد");
-                        studentTotalAvailablePoints = isAssistant ? 40.0m : 100.0m;
-                        double scorePct = Convert.ToDouble(waveCert.Score);
-                        totalScore = (decimal)((scorePct / 100.0) * (double)studentTotalAvailablePoints);
-                        percentage = scorePct;
                     }
                 }
                 else
@@ -947,30 +941,14 @@ namespace Exam.Services
                         }
                         else
                         {
-                            bool isAssistant = roleName.ToLower().Contains("assistant") || roleName.Contains("مساعد");
-                            if (isAssistant)
-                            {
-                                studentTotalAvailablePoints = 40.0m;
-                            }
-                            else
-                            {
-                                int questionsToShow = targetExam != null && targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
-                                studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam != null && targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
-                            }
+                            int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
+                            studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
                         }
                     }
                     else if (targetExam != null)
                     {
-                        bool isAssistant = roleName.ToLower().Contains("assistant") || roleName.Contains("مساعد");
-                        if (isAssistant)
-                        {
-                            studentTotalAvailablePoints = 40.0m;
-                        }
-                        else
-                        {
-                            int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
-                            studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
-                        }
+                        int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
+                        studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
                     }
 
                     // Certificate code from any completed attempt (latest)
@@ -988,7 +966,7 @@ namespace Exam.Services
                 double passThreshold = 70.0;
 
                 string waveStatus;
-                if (hasValidWaveCert)
+                if (waveCert != null)
                 {
                     if (percentage >= certThreshold)
                         waveStatus = "CERTIFIED";
@@ -1719,10 +1697,10 @@ WHERE U.Id = @UserId;";
                         EM.Title as ExamName, 
                         EM.TypeName as ExamType,
                         CASE 
-                            WHEN EM.WaveId IS NOT NULL AND EM.WaveId > 0 AND ((UWC.CertificateCode IS NOT NULL AND TRIM(UWC.CertificateCode) <> '' AND TRIM(UWC.CertificateCode) <> '/') OR (UWC.Score IS NOT NULL AND UWC.Score > 0)) THEN 'Completed'
+                            WHEN EM.WaveId IS NOT NULL AND EM.WaveId > 0 AND (UWC.CertificateCode IS NOT NULL OR UWC.Score IS NOT NULL) THEN 'Completed'
                             ELSE 'Not Started' 
                         END as Status, 
-                        ISNULL(CASE WHEN EM.WaveId IS NOT NULL AND EM.WaveId > 0 AND ((UWC.CertificateCode IS NOT NULL AND TRIM(UWC.CertificateCode) <> '' AND TRIM(UWC.CertificateCode) <> '/') OR (UWC.Score IS NOT NULL AND UWC.Score > 0)) THEN UWC.Score ELSE 0 END, 0) as Score, 
+                        ISNULL(CASE WHEN EM.WaveId IS NOT NULL AND EM.WaveId > 0 THEN UWC.Score ELSE 0 END, 0) as Score, 
                         CAST(0 AS DECIMAL(18,2)) as FinalScore, 
                         0 as DurationInMinutes, 
                         CAST(0 AS BIT) as IsPassed, 
