@@ -3375,7 +3375,20 @@ DELETE FROM AspNetUsers WHERE Id = @UserId;",
                         VALUES 
                         ('Reception', 'Attendance', 'Analytics', 1, 0, 0, 0),
                         ('Reception', 'Attendance', 'Index', 1, 1, 1, 1);
-                    END");
+                    END
+
+                    -- Sync TraineeProfile sub-actions (SearchTrainees & GetTrainee360Data) for any role with TraineeProfile permission
+                    INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
+                    SELECT rp.RoleName, 'Admin', childAction.ActionName, rp.CanAccess, rp.CanCreate, rp.CanEdit, rp.CanDelete
+                    FROM RolePermissions rp
+                    CROSS JOIN (VALUES ('SearchTrainees'), ('GetTrainee360Data')) AS childAction(ActionName)
+                    WHERE LOWER(rp.ControllerName) = 'admin' AND LOWER(rp.ActionName) = 'traineeprofile'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM RolePermissions sub 
+                          WHERE sub.RoleName = rp.RoleName 
+                            AND LOWER(sub.ControllerName) = 'admin' 
+                            AND LOWER(sub.ActionName) = LOWER(childAction.ActionName)
+                      );");
             }
             catch (Exception ex)
             {

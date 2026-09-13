@@ -1,4 +1,4 @@
-﻿using ClosedXML.Excel;
+using ClosedXML.Excel;
 using Exam.Services;
 using Exam.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -73,7 +73,8 @@ namespace Exam.Controllers
             "BranchSupervisors", "GetSupervisorBranches", "SaveSupervisorBranches",
             "EditWave", "DeleteWave", "CreateWave", "CloneWave", "AssignUsersToWave", "WaveDetails", "GetWaveUserIds", "GetUsersByWaveId", "RemoveUserFromWave",
             "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
-            "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode"
+            "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode",
+            "SearchTrainees", "GetTrainee360Data"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
@@ -4055,7 +4056,7 @@ ORDER BY U.UserName ASC";
             ("GeneralAnalytics", "General Analytics", "Admin", "Students", new[] { "ExportStudentsToExcel", "GetStudentExamReview" }),
             ("LiveMonitor", "Live Monitor", "Admin", "LiveMonitor", new[] { "GetLiveMonitorData", "GetLiveMonitorPaged", "ExportLiveMonitorToExcel", "GetExamsByWaveId" }),
             ("Certificates", "Certificates Management", "Admin", "Certificates", new[] { "ExportWaveResultsToExcel", "UploadCertificatesOnlyExcel", "SendCertificates", "MoveUserToWave", "UploadCertificatesPdfs", "GetStudentWaveDetails" }),
-            ("TraineeProfile", "Trainee 360° Profile", "Admin", "TraineeProfile", new[] { "GetTraineeDetailsByCode", "GetUnassignedUsersList", "ExportUnassignedUsersToExcel" }),
+            ("TraineeProfile", "Trainee 360° Profile", "Admin", "TraineeProfile", new[] { "GetTraineeDetailsByCode", "GetUnassignedUsersList", "ExportUnassignedUsersToExcel", "SearchTrainees", "GetTrainee360Data" }),
             ("NewCome", "New Come Requests (Pending)", "Admin", "PendingRequests", new[] { "ApproveRequest", "RejectRequest" }),
             ("PersonnelRegistry", "Personnel Registry (Main Access)", "Admin", "AllUsers", new[] { "GetUsersPaged", "AddUser", "DownloadPersonnelTemplate", "CheckExistence" }),
             ("Personnel_EditProfile", "Personnel Action: Edit Profile & Branch", "Admin", "UpdateUserProfile", new string[] { }),

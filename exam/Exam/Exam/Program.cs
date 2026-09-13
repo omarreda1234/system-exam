@@ -36,7 +36,6 @@ builder.Services.AddDbContext<ApplicationContext>(option =>
 // إضافة الهوية مع الإعدادات الخاصة بك
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
-    // إعدادات الباسورد (Password) - هنا لغينا الرقم تماماً
     options.Password.RequireDigit = false;
     options.Password.RequiredLength = 4;
     options.Password.RequireNonAlphanumeric = false;
@@ -44,7 +43,6 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.Password.RequireLowercase = false;
     options.Password.RequiredUniqueChars = 1;
 
-    // إعدادات المستخدم (User) - دعم العربي والمسافات
     options.User.AllowedUserNameCharacters = null;
      
 
