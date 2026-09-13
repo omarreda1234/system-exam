@@ -470,30 +470,48 @@ namespace Exam.Controllers
                     }
                 }
 
+                var usedCols = new HashSet<int>();
+
                 int? GetCol(params string[] possibleNames)
                 {
+                    // 1. Exact match first
                     foreach (var name in possibleNames)
                     {
-                        if (headers.TryGetValue(name.Trim(), out var colIndex)) return colIndex;
+                        var clean = name.Trim();
+                        if (headers.TryGetValue(clean, out var colIndex) && !usedCols.Contains(colIndex))
+                        {
+                            usedCols.Add(colIndex);
+                            return colIndex;
+                        }
+                    }
+
+                    // 2. Normalized match (remove spaces, underscores, dashes)
+                    foreach (var name in possibleNames)
+                    {
+                        var normTarget = name.Replace(" ", "").Replace("_", "").Replace("-", "").Trim();
                         foreach (var kvp in headers)
                         {
-                            if (kvp.Key.Contains(name.Trim(), StringComparison.OrdinalIgnoreCase) || name.Trim().Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
+                            if (usedCols.Contains(kvp.Value)) continue;
+                            var normHeader = kvp.Key.Replace(" ", "").Replace("_", "").Replace("-", "").Trim();
+                            if (string.Equals(normTarget, normHeader, StringComparison.OrdinalIgnoreCase))
                             {
+                                usedCols.Add(kvp.Value);
                                 return kvp.Value;
                             }
                         }
                     }
+
                     return null;
                 }
 
-                var colUserCode = GetCol("Code", "UserCode", "User Code", "الكود", "كود", "كود الطالب");
-                var colCertificateCode = GetCol("Certificate", "CertificateCode", "Certificate Code", "الشهادة", "كود الشهادة", "رقم الشهادة");
+                var colUserCode = GetCol("UserCode", "User Code", "Code", "الكود", "كود", "كود الطالب", "كود المستخدم");
+                var colCertificateCode = GetCol("CertificateCode", "Certificate Code", "Certificate", "الشهادة", "كود الشهادة", "رقم الشهادة");
                 var colScore = GetCol("Score", "الدرجة", "النسبة", "النسبه", "النسبة المئوية", "الدرجة المئوية", "درجة", "نسبة", "نسبه", "Score %", "Percentage", "النتيجة", "النتيجه", "الدرجة النهائية", "الدرجة النهائيه", "درجة الاختبار", "درجة الإختبار", "Grade", "Mark");
-                var colWaveName = GetCol("Wave", "الويف", "الدورة", "المجموعة", "WaveName", "Wave Name");
-                var colStudentName = GetCol("Name", "FullName", "StudentName", "Student Name", "الاسم", "اسم الطالب", "الاسم بالكامل", "الاسم ثلاثي");
+                var colWaveName = GetCol("WaveName", "Wave Name", "Wave", "الويف", "الدورة", "المجموعة");
+                var colStudentName = GetCol("FullName", "StudentName", "Student Name", "Name", "UserName", "الاسم", "اسم الطالب", "الاسم بالكامل", "الاسم ثلاثي");
                 var colEmail = GetCol("Email", "Mail", "الايميل", "البريد الالكتروني", "البريد الإلكتروني", "الميل");
-                var colBranchName = GetCol("Branch", "BranchName", "الفرع", "فرع", "الفرع/المنطقة");
-                var colRole = GetCol("Role", "RoleName", "الدور", "الوظيفة", "الوظيفه");
+                var colBranchName = GetCol("BranchName", "Branch Name", "Branch", "الفرع", "فرع", "الفرع/المنطقة");
+                var colRole = GetCol("RoleName", "Role", "الدور", "الوظيفة", "الوظيفه");
 
                 if (colUserCode == null)
                 {
@@ -583,11 +601,21 @@ namespace Exam.Controllers
                     ApplicationUser user = null;
                     if (!string.IsNullOrWhiteSpace(rawUserCode))
                     {
-                        user = await _userManager.Users.FirstOrDefaultAsync(x => x.UserCode == rawUserCode);
+                        var existingId = await conn.QueryFirstOrDefaultAsync<string>(@"
+                            SELECT TOP 1 Id 
+                            FROM AspNetUsers 
+                            WHERE LTRIM(RTRIM(UserCode)) = @Code 
+                               OR (TRY_CAST(UserCode AS BIGINT) = TRY_CAST(@Code AS BIGINT) AND @Code NOT LIKE '%[^0-9]%')",
+                            new { Code = rawUserCode });
+
+                        if (!string.IsNullOrEmpty(existingId))
+                        {
+                            user = await _userManager.FindByIdAsync(existingId);
+                        }
                     }
                     if (user == null && !string.IsNullOrWhiteSpace(rawEmail))
                     {
-                        user = await _userManager.FindByEmailAsync(rawEmail);
+                        user = await _userManager.FindByEmailAsync(rawEmail.Trim());
                     }
 
                     if (user == null)
@@ -610,14 +638,6 @@ namespace Exam.Controllers
                                 "SELECT Id FROM dbo.Branches WHERE BranchName = @BranchName",
                                 new { BranchName = rawBranchName });
 
-                            if (dbBranchId == null)
-                            {
-                                dbBranchId = await conn.QueryFirstOrDefaultAsync<int>(@"
-                                    INSERT INTO dbo.Branches (BranchName, BranchCode, IsActive)
-                                    VALUES (@BranchName, @BranchName, 1);
-                                    SELECT CAST(SCOPE_IDENTITY() as int);",
-                                    new { BranchName = rawBranchName });
-                            }
                             resolvedBranchId = dbBranchId;
                         }
                         else
@@ -636,14 +656,6 @@ namespace Exam.Controllers
                                     "SELECT Id FROM dbo.Branches WHERE BranchName = @BranchName",
                                     new { BranchName = hrLocation.Trim() });
 
-                                if (dbBranchId == null)
-                                {
-                                    dbBranchId = await conn.QueryFirstOrDefaultAsync<int>(@"
-                                        INSERT INTO dbo.Branches (BranchName, BranchCode, IsActive)
-                                        VALUES (@BranchName, @BranchName, 1);
-                                        SELECT CAST(SCOPE_IDENTITY() as int);",
-                                        new { BranchName = hrLocation.Trim() });
-                                }
                                 resolvedBranchId = dbBranchId;
                             }
                         }

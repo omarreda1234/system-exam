@@ -74,7 +74,7 @@ namespace Exam.Controllers
             "EditWave", "DeleteWave", "CreateWave", "CloneWave", "AssignUsersToWave", "WaveDetails", "GetWaveUserIds", "GetUsersByWaveId", "RemoveUserFromWave",
             "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
             "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode",
-            "SearchTrainees", "GetTrainee360Data"
+            "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
@@ -932,7 +932,7 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
             using (var conn = new SqlConnection(_connectionString))
             {
                 var allowedBranches = await GetAllowedBranchNamesForUserAsync(currentUser, conn);
-                if (allowedBranches == null && User.IsInRole("Admin"))
+                if (allowedBranches == null)
                 {
                     allowedBranches = (await conn.QueryAsync<string>("SELECT BranchName FROM Branches WHERE IsActive = 1 AND BranchName IS NOT NULL AND BranchName != '' ORDER BY BranchName")).ToList();
                 }
@@ -2805,7 +2805,8 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     string sel = string.Equals(shiftName, s.ShiftName, StringComparison.OrdinalIgnoreCase) ? "selected" : "";
                     string startTimeStr = s.StartTime.ToString(@"hh\:mm");
                     string endTimeStr = s.EndTime.ToString(@"hh\:mm");
-                    shiftSelectOptions += $"<option value='{s.Id}' data-name='{s.ShiftName.ToUpper()}' data-time='{startTimeStr} — {endTimeStr}' {sel}>{s.ShiftName.ToUpper()} ({startTimeStr})</option>";
+                    string durationStr = s.DurationHours > 0 ? $" • {s.DurationHours}h" : "";
+                    shiftSelectOptions += $"<option value='{s.Id}' data-name='{s.ShiftName.ToUpper()}' data-time='{startTimeStr} — {endTimeStr}' {sel}>{s.ShiftName.ToUpper()} ({startTimeStr} - {endTimeStr}{durationStr})</option>";
                 }
 
                 string statusButton = "";
@@ -3134,27 +3135,52 @@ ORDER BY U.UserName ASC";
                         var val = worksheet.Cell(r, col).Value.ToString().Trim();
                         if (!string.IsNullOrWhiteSpace(val) && !headers.ContainsKey(val)) headers[val] = col;
                     }
-                    if (headers.ContainsKey("Email")) { headerRow = r; break; }
+                    if (headers.ContainsKey("Email") || headers.ContainsKey("UserCode") || headers.ContainsKey("UserName")) { headerRow = r; break; }
                 }
+
+                var usedCols = new HashSet<int>();
 
                 int? GetCol(params string[] possibleNames)
                 {
+                    // 1. Exact match first
                     foreach (var name in possibleNames)
-                        if (headers.TryGetValue(name.Trim(), out var colIndex)) return colIndex;
+                    {
+                        var clean = name.Trim();
+                        if (headers.TryGetValue(clean, out var colIndex) && !usedCols.Contains(colIndex))
+                        {
+                            usedCols.Add(colIndex);
+                            return colIndex;
+                        }
+                    }
+
+                    // 2. Normalized match (remove spaces, underscores, dashes)
+                    foreach (var name in possibleNames)
+                    {
+                        var normTarget = name.Replace(" ", "").Replace("_", "").Replace("-", "").Trim();
+                        foreach (var kvp in headers)
+                        {
+                            if (usedCols.Contains(kvp.Value)) continue;
+                            var normHeader = kvp.Key.Replace(" ", "").Replace("_", "").Replace("-", "").Trim();
+                            if (string.Equals(normTarget, normHeader, StringComparison.OrdinalIgnoreCase))
+                            {
+                                usedCols.Add(kvp.Value);
+                                return kvp.Value;
+                            }
+                        }
+                    }
+
                     return null;
                 }
 
-
-                var colUserName = GetCol("UserName", "Username", "Name");
-                var colEmail = GetCol("Email", "E-mail", "Mail");
-                var colPassword = GetCol("Password", "Pass");
-                var colPhone = GetCol("Phone", "PhoneNumber", "Mobile");
-                var colRoleName = GetCol("RoleName", "Role");
-                var colUserCode = GetCol("UserCode", "Code");
-                // Excel headers: name or code; values matched against sp_Admin_GetAllBranches (or inline Branches query if SP is outdated).
-                var colBranchName = GetCol("BranchName", "Branch", "BranchCode", "Location", "Ø§Ù„ÙØ±Ø¹");
-                var colCertificateCode = GetCol("CertificateCode", "Certificate");
-                var colshiftid = GetCol("ShiftId", "ShieftId", "ShieftId", "Shieft-Id", "Shift Window");
+                var colUserName = GetCol("UserName", "Username", "User Name", "Name", "FullName", "Full Name", "الاسم", "اسم المستخدم", "اسم المتدرب", "اسم الموظف", "اسم الطالب");
+                var colEmail = GetCol("Email", "E-mail", "Mail", "البريد", "البريد الإلكتروني", "البريد الالكتروني", "الايميل", "الميل");
+                var colPassword = GetCol("Password", "Pass", "كلمة المرور", "الباسورد", "الرقم السري");
+                var colPhone = GetCol("Phone", "PhoneNumber", "Phone Number", "Mobile", "الهاتف", "التليفون", "الموبايل", "رقم الهاتف", "رقم الموبايل");
+                var colRoleName = GetCol("RoleName", "Role", "الوظيفة", "الدور", "المسمى الوظيفي", "الوظيفه", "التصنيف");
+                var colUserCode = GetCol("UserCode", "User Code", "Code", "الكود", "كود", "كود المستخدم", "كود الموظف", "كود المتدرب");
+                var colBranchName = GetCol("BranchName", "Branch Name", "Branch", "BranchCode", "Location", "الفرع", "اسم الفرع", "فرع", "المنطقة");
+                var colCertificateCode = GetCol("CertificateCode", "Certificate Code", "Certificate", "كود الشهادة", "الشهادة");
+                var colshiftid = GetCol("ShiftId", "Shift Id", "Shift", "ShieftId", "Shift Window", "الشفت", "الوردية", "فترة العمل");
 
                 var missingColumns = new List<string>();
                 if (colUserName == null) missingColumns.Add("UserName (أو Name)");
@@ -3199,11 +3225,6 @@ ORDER BY U.UserName ASC";
 
                 var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? headerRow;
 
-
-                //  
-
-
-
                 // --- Loop Rows ---
                 for (int row = headerRow + 1; row <= lastRow; row++)
                 {
@@ -3223,13 +3244,55 @@ ORDER BY U.UserName ASC";
 
                         // --- Role Validation (English Only) ---
                         bool hasArabic = System.Text.RegularExpressions.Regex.IsMatch(roleName, @"\p{IsArabic}");
-                        if (hasArabic || roleName.Contains("ØµÙŠØ¯Ù„ÙŠ") || roleName.Contains("Ù…Ø³Ø§Ø¹Ø¯"))
+                        if (hasArabic || roleName.Contains("صيدلي") || roleName.Contains("مساعد"))
                         {
                             errorLines.Add($"Row {row}: Role '{roleName}' must be in English (e.g., Pharmacist, Assistant). Arabic roles are no longer supported.");
                             continue;
                         }
 
-                        var userCode = colUserCode != null ? worksheet.Cell(row, colUserCode.Value).Value.ToString()?.Trim() : null;
+                        var rawUserCode = colUserCode != null ? worksheet.Cell(row, colUserCode.Value).Value.ToString()?.Trim() : null;
+                        string cleanUserCode = null;
+                        if (!string.IsNullOrWhiteSpace(rawUserCode))
+                        {
+                            cleanUserCode = rawUserCode.Trim();
+                            if (double.TryParse(cleanUserCode, out var ucNum))
+                            {
+                                cleanUserCode = ((long)ucNum).ToString();
+                            }
+                        }
+
+                        // RESTRICTION: Do not upload or re-add if UserCode already exists in database
+                        if (!string.IsNullOrWhiteSpace(cleanUserCode))
+                        {
+                            var existingByCode = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                                SELECT TOP 1 Id, UserName, FullName, Email, UserCode 
+                                FROM AspNetUsers 
+                                WHERE LTRIM(RTRIM(UserCode)) = @Code 
+                                   OR (TRY_CAST(UserCode AS BIGINT) = TRY_CAST(@Code AS BIGINT) AND @Code NOT LIKE '%[^0-9]%')",
+                                new { Code = cleanUserCode });
+
+                            if (existingByCode != null)
+                            {
+                                string existingName = existingByCode.FullName ?? existingByCode.UserName ?? "";
+                                errorLines.Add($"Row {row}: User with Code '{cleanUserCode}' already exists in system ({existingName}). Skipped.");
+                                continue;
+                            }
+                        }
+
+                        // RESTRICTION: Do not upload if Email already exists in database
+                        var existingByEmail = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                            SELECT TOP 1 Id, UserName, FullName, Email, UserCode 
+                            FROM AspNetUsers 
+                            WHERE LOWER(LTRIM(RTRIM(Email))) = LOWER(@Email)",
+                            new { Email = email });
+
+                        if (existingByEmail != null)
+                        {
+                            string existingName = existingByEmail.FullName ?? existingByEmail.UserName ?? "";
+                            errorLines.Add($"Row {row}: User with Email '{email}' already exists in system ({existingName}). Skipped.");
+                            continue;
+                        }
+
                         var branchName = colBranchName != null ? worksheet.Cell(row, colBranchName.Value).Value.ToString()?.Trim() : null;
                         var certCode = colCertificateCode != null ? worksheet.Cell(row, colCertificateCode.Value).Value.ToString()?.Trim() : null;
                         var shiftIdStr = colshiftid != null ? worksheet.Cell(row, colshiftid.Value).Value.ToString()?.Trim() : null;
@@ -3251,48 +3314,20 @@ ORDER BY U.UserName ASC";
                                 errorLines.Add($"Row {row}: Branch '{branchName}' did not match any branch from sp_Admin_GetAllBranches (after normalize/contains).");
                         }
 
-                        var user = await _userManager.FindByEmailAsync(email);
-                        
-                        // Check if user exists by UserCode if not found by email
-                        if (user == null && !string.IsNullOrWhiteSpace(userCode)) 
+                        var user = new ApplicationUser
                         {
-                            user = _userManager.Users.FirstOrDefault(x => x.UserCode == userCode);
-                        }
-
-                        // Check if user exists by UserName if still not found
-                        if (user == null && userName != email)
-                        {
-                            var uNameMatch = await _userManager.FindByNameAsync(userName);
-                            if (uNameMatch != null) user = uNameMatch;
-                        }
-
-                        if (user == null)
-                        {
-                            user = new ApplicationUser
-                            {
-                                UserName = userName ?? email,
-                                FullName = !string.IsNullOrWhiteSpace(rawUserName) ? rawUserName : null,
-                                Email = email,
-                                PhoneNumber = phone,
-                                UserCode = userCode,
-                                CertificateCode = certCode,
-                                BranchId = bId,
-                                ShiftId = sId,
-                                IsActive = true
-                            };
-                            var res = await _userManager.CreateAsync(user, password);
-                            if (!res.Succeeded) { errorLines.Add($"Row {row}: {res.Errors.First().Description}"); continue; }
-                        }
-                        else
-                        {
-                            user.FullName = !string.IsNullOrWhiteSpace(rawUserName) && (string.IsNullOrWhiteSpace(user.FullName) || user.FullName == user.UserName || user.FullName.StartsWith("External Trainee") || user.FullName != rawUserName) ? rawUserName : user.FullName;
-                            user.PhoneNumber = phone ?? user.PhoneNumber;
-                            user.UserCode = userCode ?? user.UserCode;
-                            user.CertificateCode = certCode ?? user.CertificateCode;
-                            user.BranchId = bId ?? user.BranchId;
-                            user.ShiftId = sId ?? user.ShiftId;
-                            await _userManager.UpdateAsync(user);
-                        }
+                            UserName = userName ?? email,
+                            FullName = !string.IsNullOrWhiteSpace(rawUserName) ? rawUserName : null,
+                            Email = email,
+                            PhoneNumber = phone,
+                            UserCode = cleanUserCode,
+                            CertificateCode = certCode,
+                            BranchId = bId,
+                            ShiftId = sId,
+                            IsActive = true
+                        };
+                        var res = await _userManager.CreateAsync(user, password);
+                        if (!res.Succeeded) { errorLines.Add($"Row {row}: {res.Errors.First().Description}"); continue; }
 
                         if (sId.HasValue)
                         {
@@ -4071,6 +4106,7 @@ ORDER BY U.UserName ASC";
             ("Companies", "Companies Management", "Admin", "Companies", new[] { "AddCompany", "EditCompany", "DeleteCompany", "ClearCompanyTrainees", "ImportCompanyTraineesFromExcel", "GetCompanyTrainees", "DeleteCompanyTrainee", "AddCompanyTraineeManually" }),
             ("Branches", "Branches Management", "Admin", "Branches", new[] { "AddBranch", "EditBranch", "DeleteBranch" }),
             ("BranchSupervisors", "Branch Supervisors Management", "Admin", "BranchSupervisors", new[] { "AddBranchSupervisor", "DeleteBranchSupervisor" }),
+            ("WorkShifts", "Work Shifts Management", "Admin", "Shifts", new[] { "AddShift", "EditShift", "DeleteShift", "GetShiftDetails" }),
             ("AttendanceTrends", "Attendance Trends", "Attendance", "Analytics", new string[] { }),
             ("SkillTracks", "Skill Tracks", "SkillTracks", "Index", new string[] { }),
             ("SystemRoles", "System Roles Configuration", "Admin", "Roles", new[] { "CreateRole", "DeleteRole" }),
@@ -5098,7 +5134,7 @@ ORDER BY U.UserName ASC";
                         var val = worksheet.Cell(r, col).Value.ToString().Trim();
                         if (!string.IsNullOrWhiteSpace(val) && !headers.ContainsKey(val)) headers[val] = col;
                     }
-                    if (headers.ContainsKey("Ø§Ù„ÙƒÙˆØ¯") || headers.ContainsKey("Code") || headers.ContainsKey("Ø§Ù„Ø§Ø³Ù…") || headers.ContainsKey("Name") ||
+                    if (headers.ContainsKey("الكود") || headers.ContainsKey("Code") || headers.ContainsKey("الاسم") || headers.ContainsKey("Name") ||
                         headers.ContainsKey("Full Name") || headers.ContainsKey("User Code") || headers.ContainsKey("FullName") || headers.ContainsKey("UserCode"))
                     {
                         headerRow = r;
@@ -5106,15 +5142,32 @@ ORDER BY U.UserName ASC";
                     }
                 }
 
+                var usedCols = new HashSet<int>();
+
                 int? GetCol(params string[] possibleNames)
                 {
+                    // 1. Exact match first
                     foreach (var name in possibleNames)
                     {
-                        if (headers.TryGetValue(name.Trim(), out var colIndex)) return colIndex;
+                        var clean = name.Trim();
+                        if (headers.TryGetValue(clean, out var colIndex) && !usedCols.Contains(colIndex))
+                        {
+                            usedCols.Add(colIndex);
+                            return colIndex;
+                        }
+                    }
+
+                    // 2. Normalized match (remove spaces, underscores, dashes)
+                    foreach (var name in possibleNames)
+                    {
+                        var normTarget = name.Replace(" ", "").Replace("_", "").Replace("-", "").Trim();
                         foreach (var kvp in headers)
                         {
-                            if (kvp.Key.Contains(name.Trim(), StringComparison.OrdinalIgnoreCase) || name.Trim().Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
+                            if (usedCols.Contains(kvp.Value)) continue;
+                            var normHeader = kvp.Key.Replace(" ", "").Replace("_", "").Replace("-", "").Trim();
+                            if (string.Equals(normTarget, normHeader, StringComparison.OrdinalIgnoreCase))
                             {
+                                usedCols.Add(kvp.Value);
                                 return kvp.Value;
                             }
                         }
@@ -5122,12 +5175,12 @@ ORDER BY U.UserName ASC";
                     return null;
                 }
 
-                var colUserCode = GetCol("Ø§Ù„ÙƒÙˆØ¯", "Code", "UserCode", "User Code", "ÙƒÙˆØ¯");
-                var colFullName = GetCol("Ø§Ù„Ø§Ø³Ù…", "Name", "FullName", "Full Name", "UserName", "User Name", "Ø§Ø³Ù…");
-                var colBranchName = GetCol("Ø§Ù„ÙØ±Ø¹", "ÙØ±Ø¹", "Ø§Ù„Ù…Ù†Ø·Ù‚Ø©", "Ù…Ù†Ø·Ù‚Ø©", "Branch", "Location", "BranchName", "Branch Name");
-                var colJobTitle = GetCol("Ø§Ù„ÙˆØ¸ÙŠÙØ©", "ÙˆØ¸ÙŠÙØ©", "JobTitle", "Job Title", "Role", "RoleName", "Role Name");
-                var colEmail = GetCol("Ø§Ù„Ø¨Ø±ÙŠØ¯", "Ø§ÙŠÙ…ÙŠÙ„", "Ø¥ÙŠÙ…ÙŠÙ„", "Email", "E-mail", "Mail");
-                var colPhone = GetCol("Ø§Ù„ØªÙ„ÙŠÙÙˆÙ†", "ØªÙ„ÙŠÙÙˆÙ†", "Ù…ÙˆØ¨Ø§ÙŠÙ„", "Ø§Ù„Ù‡Ø§ØªÙ", "Ø±Ù‚Ù…", "Phone", "PhoneNumber", "Phone Number", "Mobile");
+                var colUserCode = GetCol("UserCode", "User Code", "Code", "الكود", "كود", "كود المتدرب");
+                var colFullName = GetCol("FullName", "Full Name", "Name", "UserName", "User Name", "الاسم", "اسم المتدرب", "الاسم ثلاثي", "الاسم بالكامل");
+                var colBranchName = GetCol("BranchName", "Branch Name", "Branch", "Location", "الفرع", "اسم الفرع", "فرع", "المنطقة", "منطقة");
+                var colJobTitle = GetCol("JobTitle", "Job Title", "Role", "RoleName", "Role Name", "الوظيفة", "وظيفة", "الوظيفه");
+                var colEmail = GetCol("Email", "E-mail", "Mail", "البريد", "البريد الإلكتروني", "البريد الالكتروني", "ايميل", "إيميل");
+                var colPhone = GetCol("Phone", "PhoneNumber", "Phone Number", "Mobile", "التليفون", "تليفون", "الموبايل", "موبايل", "الهاتف", "رقم الهاتف");
 
                 var missingColumns = new List<string>();
                 if (colFullName == null) missingColumns.Add("FullName (الاسم)");
@@ -5578,6 +5631,155 @@ ORDER BY U.UserName ASC";
             }
         }
 
+        [HttpGet]
+        public async Task<IActionResult> Shifts()
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var sql = @"
+                SELECT 
+                    s.Id, 
+                    s.ShiftName, 
+                    s.StartTime, 
+                    s.EndTime,
+                    (SELECT COUNT(1) FROM AspNetUsers u WHERE u.ShiftId = s.Id) AS AssignedUsersCount
+                FROM Shifts s
+                ORDER BY s.StartTime ASC";
+
+            var shifts = (await conn.QueryAsync<ShiftDto>(sql)).ToList();
+            return View(shifts);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddShift(string name, string startTime, string endTime)
+        {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Shifts", "create"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
+            if (string.IsNullOrWhiteSpace(name))
+                return Json(new { success = false, message = "Shift name is required." });
+
+            if (!TimeSpan.TryParse(startTime, out var parsedStart))
+                return Json(new { success = false, message = "Invalid start time format (HH:mm expected)." });
+
+            if (!TimeSpan.TryParse(endTime, out var parsedEnd))
+                return Json(new { success = false, message = "Invalid end time format (HH:mm expected)." });
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var exists = await conn.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(1) FROM Shifts WHERE ShiftName = @Name", 
+                    new { Name = name.Trim() });
+
+                if (exists > 0)
+                    return Json(new { success = false, message = "A shift with this name already exists." });
+
+                await conn.ExecuteAsync(
+                    "INSERT INTO Shifts (ShiftName, StartTime, EndTime) VALUES (@Name, @Start, @End)",
+                    new { Name = name.Trim(), Start = parsedStart, End = parsedEnd });
+
+                return Json(new { success = true, message = "Shift created successfully." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "An error occurred: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditShift(int id, string name, string startTime, string endTime)
+        {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Shifts", "edit"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
+            if (string.IsNullOrWhiteSpace(name))
+                return Json(new { success = false, message = "Shift name is required." });
+
+            if (!TimeSpan.TryParse(startTime, out var parsedStart))
+                return Json(new { success = false, message = "Invalid start time format (HH:mm expected)." });
+
+            if (!TimeSpan.TryParse(endTime, out var parsedEnd))
+                return Json(new { success = false, message = "Invalid end time format (HH:mm expected)." });
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var exists = await conn.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(1) FROM Shifts WHERE ShiftName = @Name AND Id != @Id", 
+                    new { Name = name.Trim(), Id = id });
+
+                if (exists > 0)
+                    return Json(new { success = false, message = "Another shift with this name already exists." });
+
+                await conn.ExecuteAsync(
+                    "UPDATE Shifts SET ShiftName = @Name, StartTime = @Start, EndTime = @End WHERE Id = @Id",
+                    new { Id = id, Name = name.Trim(), Start = parsedStart, End = parsedEnd });
+
+                return Json(new { success = true, message = "Shift updated successfully." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "An error occurred: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteShift(int id)
+        {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Shifts", "delete"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var assignedCount = await conn.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(1) FROM AspNetUsers WHERE ShiftId = @Id", 
+                    new { Id = id });
+
+                if (assignedCount > 0)
+                    return Json(new { success = false, message = $"Cannot delete this shift: {assignedCount} user(s) are currently assigned to it. Please reassign them first." });
+
+                await conn.ExecuteAsync("DELETE FROM Shifts WHERE Id = @Id", new { Id = id });
+                return Json(new { success = true, message = "Shift deleted successfully." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "An error occurred: " + ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetShiftDetails(int id)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var shift = await conn.QueryFirstOrDefaultAsync<ShiftDto>(
+                "SELECT Id, ShiftName, StartTime, EndTime FROM Shifts WHERE Id = @Id",
+                new { Id = id });
+
+            if (shift == null) return NotFound();
+
+            return Json(new
+            {
+                id = shift.Id,
+                name = shift.ShiftName,
+                startTime = shift.StartTime.ToString(@"hh\:mm"),
+                endTime = shift.EndTime.ToString(@"hh\:mm"),
+                durationHours = shift.DurationHours,
+                isOvernight = shift.IsOvernight
+            });
+        }
 
         [HttpGet("Admin/Assignments")]
         [Authorize(Roles = "Admin")]
@@ -6140,21 +6342,42 @@ ORDER BY U.UserName ASC";
         {
             if (currentUser == null) return new List<string>();
 
-            if (User.IsInRole("Admin"))
+            var roles = User.Claims
+                .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
+                .Select(c => c.Value)
+                .ToList();
+
+            // Admin, HR, and any other global roles have full unrestricted access (null means all branches)
+            bool isAdminOrHr = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources")
+                               || roles.Any(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase)
+                                              || r.Equals("HR", StringComparison.OrdinalIgnoreCase)
+                                              || r.Equals("Human Resources", StringComparison.OrdinalIgnoreCase));
+
+            if (isAdminOrHr)
+            {
+                return null;
+            }
+
+            bool isBranchSupervisor = User.IsInRole("Branch Supervisor") || roles.Any(r => r.Equals("Branch Supervisor", StringComparison.OrdinalIgnoreCase));
+            bool isBranchManager = User.IsInRole("Branch Manager") || roles.Any(r => r.Equals("Branch Manager", StringComparison.OrdinalIgnoreCase));
+
+            // ONLY Branch Manager and Branch Supervisor are restricted by branch!
+            if (!isBranchSupervisor && !isBranchManager)
             {
                 return null;
             }
 
             var branchIds = new List<int>();
 
-            if (User.IsInRole("Branch Supervisor"))
+            if (isBranchSupervisor)
             {
                 var supervisorBranchIds = (await conn.QueryAsync<int>(
                     "SELECT BranchId FROM SupervisorBranches WHERE UserId = @UserId", 
                     new { UserId = currentUser.Id })).ToList();
                 branchIds.AddRange(supervisorBranchIds);
             }
-            else if (currentUser.BranchId.HasValue && currentUser.BranchId.Value > 0)
+
+            if (isBranchManager && currentUser.BranchId.HasValue && currentUser.BranchId.Value > 0)
             {
                 branchIds.Add(currentUser.BranchId.Value);
             }

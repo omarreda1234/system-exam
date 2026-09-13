@@ -324,6 +324,11 @@ namespace Exam.DTOs
         public string ShiftName { get; set; }
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
+        public int AssignedUsersCount { get; set; }
+        public double DurationHours => EndTime >= StartTime 
+            ? Math.Round((EndTime - StartTime).TotalHours, 1) 
+            : Math.Round((EndTime + TimeSpan.FromDays(1) - StartTime).TotalHours, 1);
+        public bool IsOvernight => StartTime > EndTime;
     }
 
     // Used for admin dropdown: waves list

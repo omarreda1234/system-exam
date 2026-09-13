@@ -1,0 +1,426 @@
+@model IEnumerable<Exam.DTOs.ShiftDto>
+@using System.Web
+@using System.Text.Encodings.Web
+@inject Exam.Services.IExamService ExamService
+@{
+    ViewData["Title"] = "Work Shifts Management";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+
+    var userRoles = User.Claims
+        .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+        .Select(c => c.Value)
+        .ToList();
+
+    bool HasSpecificPermission(string permissionType)
+    {
+        if (userRoles.Contains("Admin")) return true;
+        return ExamService.HasSpecificPermissionAsync(userRoles, "Admin", "Shifts", permissionType).GetAwaiter().GetResult();
+    }
+
+    var shiftsList = Model?.ToList() ?? new List<Exam.DTOs.ShiftDto>();
+    int totalAssigned = shiftsList.Sum(s => s.AssignedUsersCount);
+    int overnightCount = shiftsList.Count(s => s.IsOvernight);
+}
+
+@Html.AntiForgeryToken()
+
+<div class="min-h-screen pb-20 bg-slate-50/50 dark:bg-slate-950/20">
+    <!-- Header -->
+    <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 pt-24 pb-10">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                    <div class="flex items-center gap-2 text-xs font-black text-brand-600 dark:text-brand-400 uppercase tracking-widest mb-1">
+                        <i class="fas fa-business-time"></i>
+                        <span>Shift Configuration Console</span>
+                    </div>
+                    <h1 class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-3">
+                        <span>Work Shifts Management / إدارة الشيفتات</span>
+                    </h1>
+                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
+                        التحكم الكامل بأوقات الشيفتات، عدد الساعات، وتحديد الفترات الزمنية المسموح للموظفين بأداء الامتحانات خلالها
+                    </p>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <a href="/Admin/AllUsers" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2">
+                        <i class="fas fa-users text-xs"></i>
+                        <span>Personnel Registry</span>
+                    </a>
+                    @if (User.IsInRole("Admin") || HasSpecificPermission("create"))
+                    {
+                        <button onclick="openShiftModal(0)" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-brand-600/20 flex items-center gap-2 group">
+                            <i class="fas fa-plus text-xs group-hover:rotate-90 transition-transform"></i>
+                            <span>Add New Shift / إضافة شيفت</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8">
+                <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Shifts</span>
+                    <p class="text-xl font-black text-slate-900 dark:text-white mt-1">@shiftsList.Count</p>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-emerald-500">Daytime Shifts</span>
+                    <p class="text-xl font-black text-slate-900 dark:text-white mt-1">@(shiftsList.Count - overnightCount)</p>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-indigo-500">Overnight / ليلي</span>
+                    <p class="text-xl font-black text-slate-900 dark:text-white mt-1">@overnightCount</p>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-brand-500">Assigned Personnel</span>
+                    <p class="text-xl font-black text-slate-900 dark:text-white mt-1">@totalAssigned</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shifts Table Section -->
+    <div class="max-w-7xl mx-auto px-6 mt-8">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+            <div class="px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Active Work Windows</h2>
+                    <p class="text-[11px] text-slate-400 font-medium">قائمة الشيفتات المتاحة وتوزيع الموظفين عليها</p>
+                </div>
+                <span class="text-[10px] font-black uppercase tracking-widest px-3 py-1 bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-400 rounded-full border border-brand-200/50">
+                    Live Shift Enforcer
+                </span>
+            </div>
+
+            <div class="overflow-x-auto w-full">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                            <th class="py-4 px-6">Shift Identity</th>
+                            <th class="py-4 px-6">Start Time</th>
+                            <th class="py-4 px-6">End Time</th>
+                            <th class="py-4 px-6">Calculated Duration</th>
+                            <th class="py-4 px-6 text-center">Assigned Users</th>
+                            <th class="py-4 px-6 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        @if (!shiftsList.Any())
+                        {
+                            <tr>
+                                <td colspan="6" class="py-12 text-center text-slate-400 text-xs font-bold">
+                                    No shifts found. Click "Add New Shift" to create one.
+                                </td>
+                            </tr>
+                        }
+                        @foreach (var s in shiftsList)
+                        {
+                            DateTime startDt = DateTime.Today.Add(s.StartTime);
+                            DateTime endDt = DateTime.Today.Add(s.EndTime);
+
+                            <tr id="shift-row-@s.Id" class="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors">
+                                <td class="py-4 px-6">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl @(s.IsOvernight ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400" : "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400") flex items-center justify-center font-black text-sm shadow-sm">
+                                            <i class="fas @(s.IsOvernight ? "fa-moon" : "fa-sun")"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wide">@s.ShiftName</p>
+                                            <span class="text-[10px] font-mono text-slate-400">ID: #@s.Id</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="py-4 px-6">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-mono font-black text-slate-800 dark:text-slate-200">
+                                            @startDt.ToString("hh:mm tt")
+                                        </span>
+                                        <span class="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                            @s.StartTime.ToString(@"hh\:mm")
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="py-4 px-6">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-mono font-black text-slate-800 dark:text-slate-200">
+                                            @endDt.ToString("hh:mm tt")
+                                        </span>
+                                        <span class="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                            @s.EndTime.ToString(@"hh\:mm")
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="py-4 px-6">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="bg-brand-50 text-brand-700 dark:bg-brand-950/50 dark:text-brand-300 border border-brand-200/60 dark:border-brand-800/60 px-2.5 py-1 rounded-lg text-xs font-black font-mono">
+                                            <i class="far fa-clock mr-1 text-[10px]"></i>@s.DurationHours hrs
+                                        </span>
+                                        @if (s.IsOvernight)
+                                        {
+                                            <span class="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider">
+                                                <i class="fas fa-moon mr-0.5 text-[9px]"></i> Overnight
+                                            </span>
+                                        }
+                                    </div>
+                                </td>
+                                <td class="py-4 px-6 text-center">
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold @(s.AssignedUsersCount > 0 ? "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-mono" : "bg-slate-50 dark:bg-slate-800/50 text-slate-400")">
+                                        <i class="fas fa-user text-[10px] text-slate-400"></i>
+                                        @s.AssignedUsersCount
+                                    </span>
+                                </td>
+                                <td class="py-4 px-6 text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        @if (User.IsInRole("Admin") || HasSpecificPermission("edit"))
+                                        {
+                                            <button onclick="openShiftModal(@s.Id, '@JavaScriptEncoder.Default.Encode(s.ShiftName)', '@s.StartTime.ToString(@"hh\:mm")', '@s.EndTime.ToString(@"hh\:mm")')" 
+                                                    class="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950/40 rounded-lg transition-all" title="Edit Shift">
+                                                <i class="fas fa-pen text-xs"></i>
+                                            </button>
+                                        }
+                                        @if (User.IsInRole("Admin") || HasSpecificPermission("delete"))
+                                        {
+                                            <button onclick="deleteShift(@s.Id, '@JavaScriptEncoder.Default.Encode(s.ShiftName)', @s.AssignedUsersCount)" 
+                                                    class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all" title="Delete Shift">
+                                                <i class="fas fa-trash text-xs"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Add / Edit Shift -->
+<div id="shiftModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-8 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+        <button onclick="closeShiftModal()" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+            <i class="fas fa-times text-lg"></i>
+        </button>
+
+        <div class="flex items-center gap-3 mb-6">
+            <div class="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-950/50 text-brand-600 flex items-center justify-center text-xl shadow-inner">
+                <i class="fas fa-business-time"></i>
+            </div>
+            <div>
+                <h3 id="modalTitle" class="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">Add New Shift</h3>
+                <p class="text-xs text-slate-400 font-medium">تحديد اسم الشيفت، وقت البداية، ووقت الانتهاء</p>
+            </div>
+        </div>
+
+        <form id="shiftForm" onsubmit="handleShiftSubmit(event)" class="space-y-5">
+            <input type="hidden" id="shiftId" value="0" />
+
+            <!-- Shift Name -->
+            <div>
+                <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Shift Name / اسم الشيفت</label>
+                <input type="text" id="shiftName" required placeholder="e.g. Morning Shift, Evening Shift B" 
+                       class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500 transition-all" />
+            </div>
+
+            <!-- Times Grid -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                        <i class="far fa-clock mr-1 text-emerald-500"></i> Start Time / وقت البدء
+                    </label>
+                    <input type="time" id="shiftStartTime" required oninput="calculateDurationPreview()"
+                           class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500 transition-all" />
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                        <i class="far fa-clock mr-1 text-rose-500"></i> End Time / وقت الانتهاء
+                    </label>
+                    <input type="time" id="shiftEndTime" required oninput="calculateDurationPreview()"
+                           class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-mono font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500 transition-all" />
+                </div>
+            </div>
+
+            <!-- Quick Duration Preset Buttons -->
+            <div>
+                <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                    Quick Preset Hours / اختصارات سريعة لساعات الشيفت:
+                </label>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="setPresetHours(4)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-slate-800 dark:hover:bg-brand-950/40 rounded-lg text-[11px] font-bold transition-colors">4 Hours</button>
+                    <button type="button" onclick="setPresetHours(6)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-slate-800 dark:hover:bg-brand-950/40 rounded-lg text-[11px] font-bold transition-colors">6 Hours</button>
+                    <button type="button" onclick="setPresetHours(8)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-slate-800 dark:hover:bg-brand-950/40 rounded-lg text-[11px] font-bold transition-colors">8 Hours (Standard)</button>
+                    <button type="button" onclick="setPresetHours(10)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-slate-800 dark:hover:bg-brand-950/40 rounded-lg text-[11px] font-bold transition-colors">10 Hours</button>
+                    <button type="button" onclick="setPresetHours(12)" class="px-2.5 py-1.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-slate-800 dark:hover:bg-brand-950/40 rounded-lg text-[11px] font-bold transition-colors">12 Hours (Long)</button>
+                </div>
+            </div>
+
+            <!-- Live Calculated Duration Box -->
+            <div id="durationPreviewBox" class="p-4 bg-brand-50/50 dark:bg-brand-950/20 border border-brand-200/50 dark:border-brand-800/40 rounded-2xl flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-hourglass-half text-brand-600 text-lg"></i>
+                    <div>
+                        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Shift Length</span>
+                        <p id="durationPreviewText" class="text-sm font-black font-mono text-brand-700 dark:text-brand-300">8.0 Hours</p>
+                    </div>
+                </div>
+                <span id="overnightBadge" class="hidden text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300 px-2.5 py-1 rounded-md">
+                    <i class="fas fa-moon mr-1"></i> Overnight
+                </span>
+            </div>
+
+            <div class="pt-2 flex items-center justify-end gap-3">
+                <button type="button" onclick="closeShiftModal()" class="px-5 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
+                    Cancel
+                </button>
+                <button type="submit" id="btnSubmitShift" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-brand-600/20 transition-all">
+                    Save Shift
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openShiftModal(id, name = '', start = '08:00', end = '16:00') {
+        document.getElementById('shiftId').value = id;
+        document.getElementById('modalTitle').textContent = id > 0 ? 'Edit Shift / تعديل الشيفت' : 'Add New Shift / إضافة شيفت جديد';
+        document.getElementById('shiftName').value = name;
+        document.getElementById('shiftStartTime').value = start || '08:00';
+        document.getElementById('shiftEndTime').value = end || '16:00';
+        
+        calculateDurationPreview();
+        document.getElementById('shiftModal').classList.remove('hidden');
+    }
+
+    function closeShiftModal() {
+        document.getElementById('shiftModal').classList.add('hidden');
+    }
+
+    function setPresetHours(hours) {
+        const startVal = document.getElementById('shiftStartTime').value || '08:00';
+        const parts = startVal.split(':');
+        let startH = parseInt(parts[0], 10) || 0;
+        let startM = parseInt(parts[1], 10) || 0;
+
+        let endH = (startH + hours) % 24;
+        let endHStr = endH.toString().padStart(2, '0');
+        let endMStr = startM.toString().padStart(2, '0');
+
+        document.getElementById('shiftEndTime').value = `${endHStr}:${endMStr}`;
+        calculateDurationPreview();
+    }
+
+    function calculateDurationPreview() {
+        const startVal = document.getElementById('shiftStartTime').value;
+        const endVal = document.getElementById('shiftEndTime').value;
+        const textEl = document.getElementById('durationPreviewText');
+        const badgeEl = document.getElementById('overnightBadge');
+
+        if (!startVal || !endVal) {
+            textEl.textContent = '--';
+            badgeEl.classList.add('hidden');
+            return;
+        }
+
+        const [sH, sM] = startVal.split(':').map(Number);
+        const [eH, eM] = endVal.split(':').map(Number);
+
+        let startMinutes = sH * 60 + sM;
+        let endMinutes = eH * 60 + eM;
+
+        let isOvernight = false;
+        if (endMinutes < startMinutes) {
+            endMinutes += 24 * 60;
+            isOvernight = true;
+        }
+
+        let diffMinutes = endMinutes - startMinutes;
+        let hours = Math.floor(diffMinutes / 60);
+        let minutes = diffMinutes % 60;
+
+        let formatted = `${hours} Hours`;
+        if (minutes > 0) formatted += ` and ${minutes} Minutes`;
+
+        textEl.textContent = `${formatted} (${(diffMinutes / 60).toFixed(1)} hrs)`;
+
+        if (isOvernight) {
+            badgeEl.classList.remove('hidden');
+        } else {
+            badgeEl.classList.add('hidden');
+        }
+    }
+
+    async function handleShiftSubmit(e) {
+        e.preventDefault();
+        const id = parseInt(document.getElementById('shiftId').value, 10);
+        const name = document.getElementById('shiftName').value.trim();
+        const startTime = document.getElementById('shiftStartTime').value;
+        const endTime = document.getElementById('shiftEndTime').value;
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+
+        const url = id > 0 ? '/Admin/EditShift' : '/Admin/AddShift';
+        const formData = new FormData();
+        if (id > 0) formData.append('id', id);
+        formData.append('name', name);
+        formData.append('startTime', startTime);
+        formData.append('endTime', endTime);
+        formData.append('__RequestVerificationToken', token);
+
+        const btn = document.getElementById('btnSubmitShift');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message || 'Failed to save shift.');
+                btn.disabled = false;
+                btn.textContent = 'Save Shift';
+            }
+        } catch (err) {
+            alert('An error occurred: ' + err.message);
+            btn.disabled = false;
+            btn.textContent = 'Save Shift';
+        }
+    }
+
+    async function deleteShift(id, name, assignedCount) {
+        if (assignedCount > 0) {
+            alert(`لا يمكن حذف الشيفت "${name}" لأن هناك ${assignedCount} موظف مسجلين عليه حالياً. يرجى نقلهم لشيفت آخر أولاً.`);
+            return;
+        }
+
+        if (!confirm(`هل أنت متأكد من حذف الشيفت "${name}"؟`)) {
+            return;
+        }
+
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+        const formData = new FormData();
+        formData.append('id', id);
+        formData.append('__RequestVerificationToken', token);
+
+        try {
+            const res = await fetch('/Admin/DeleteShift', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.success) {
+                const row = document.getElementById('shift-row-' + id);
+                if (row) row.remove();
+            } else {
+                alert(data.message || 'Failed to delete shift.');
+            }
+        } catch (err) {
+            alert('An error occurred: ' + err.message);
+        }
+    }
+</script>

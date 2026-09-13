@@ -611,6 +611,13 @@
                                 <span>Homepage CMS</span>
                             </a>
                         }
+                        @if (User.IsInRole("Admin") || HasAccess("Admin", "Shifts"))
+                        {
+                            <a href="@Url.Action("Shifts", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "shifts")">
+                                <i class="fas fa-business-time w-5"></i>
+                                <span>Work Shifts</span>
+                            </a>
+                        }
                     }
                 </nav>
 
