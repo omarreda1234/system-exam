@@ -43,10 +43,10 @@
         <!-- Dynamic Live Search Container -->
         <div class="relative w-full max-w-3xl">
             <div class="relative flex items-center">
-                <i class="fas fa-search absolute left-5 text-slate-400 text-sm pointer-events-none"></i>
+                <i class="fas fa-search absolute left-5 text-slate-400 dark:text-slate-500 text-sm pointer-events-none"></i>
                 <input type="text" id="traineeSearchInput" 
                        placeholder="Enter User Code or Name for instant autocomplete lookup..." 
-                       class="w-full bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl pl-12 pr-12 py-4 text-sm font-bold text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all shadow-inner" 
+                       class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl pl-12 pr-12 py-4 text-sm font-bold text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all shadow-inner" 
                        autocomplete="off" />
                 <div id="searchSpinner" class="hidden absolute right-4 text-brand-500">
                     <i class="fas fa-spinner fa-spin text-sm"></i>
@@ -113,22 +113,22 @@
 
             <!-- Quick Key Metrics Cards Grid -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+                <div class="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
                     <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Weekly Exams</span>
                     <div id="statExamsCount" class="text-xl font-black text-slate-900 dark:text-white font-mono">0</div>
                     <span id="statExamsPassRate" class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Pass Rate: 0%</span>
                 </div>
-                <div class="bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+                <div class="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
                     <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Assignments & Tasks</span>
                     <div id="statAssignmentsCount" class="text-xl font-black text-slate-900 dark:text-white font-mono">0</div>
                     <span id="statAssignmentsAvg" class="text-[10px] font-bold text-purple-600 dark:text-purple-400">Average Score: 0%</span>
                 </div>
-                <div class="bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+                <div class="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
                     <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Enrolled Waves</span>
                     <div id="statWavesCount" class="text-xl font-black text-slate-900 dark:text-white font-mono">0</div>
                     <span class="text-[10px] font-bold text-slate-500">Wave Cycles</span>
                 </div>
-                <div class="bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+                <div class="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-1">
                     <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Verified Certificates</span>
                     <div id="statCertsCount" class="text-xl font-black text-amber-600 dark:text-amber-400 font-mono">0</div>
                     <span class="text-[10px] font-bold text-amber-600 dark:text-amber-400">Official Credentials</span>
@@ -140,7 +140,7 @@
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
             
             <!-- Tab Navigation Header -->
-            <div class="px-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/50 flex items-center gap-2 overflow-x-auto text-xs font-black no-print">
+            <div class="px-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2 overflow-x-auto text-xs font-black no-print">
                 <button class="profile-tab-btn active py-4 px-5 text-brand-600 dark:text-brand-400 border-b-2 border-brand-500 flex items-center gap-2 transition-all" data-tab="pageTabExams">
                     <i class="fas fa-calendar-week text-brand-500"></i> Weekly Exams & Quizzes
                 </button>
@@ -266,12 +266,12 @@
                         $dropdown.empty();
 
                         if (res && res.error) {
-                            $dropdown.html(`<div class="p-4 text-center text-xs text-red-500 font-bold">Error: ${res.error}</div>`).removeClass('hidden');
+                            $dropdown.html(`<div class="p-4 text-center text-xs text-red-500 font-bold bg-white dark:bg-slate-900">Error: ${res.error}</div>`).removeClass('hidden');
                             return;
                         }
 
                         if (!res || res.length === 0) {
-                            $dropdown.html('<div class="p-4 text-center text-xs text-slate-400 font-bold">No trainees found matching search query</div>').removeClass('hidden');
+                            $dropdown.html('<div class="p-4 text-center text-xs text-slate-500 dark:text-slate-400 font-bold bg-white dark:bg-slate-900">No trainees found matching search query</div>').removeClass('hidden');
                             return;
                         }
 
@@ -283,17 +283,17 @@
                             const userId = u.userId || u.UserId || '';
 
                             const $item = $(`
-                                <div class="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer flex items-center justify-between transition-colors select-trainee-item" data-id="${userId}">
+                                <div class="p-3.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer flex items-center justify-between transition-colors select-trainee-item" data-id="${userId}">
                                     <div class="flex items-center gap-3">
                                         <div class="w-8 h-8 rounded-lg bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold text-xs">
                                             <i class="fas fa-user"></i>
                                         </div>
                                         <div>
                                             <div class="text-xs font-black text-slate-900 dark:text-white">${name}</div>
-                                            <div class="text-[10px] text-slate-400 font-bold">${role} - Branch: ${branch}</div>
+                                            <div class="text-[10px] text-slate-500 dark:text-slate-400 font-bold">${role} - Branch: ${branch}</div>
                                         </div>
                                     </div>
-                                    <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[10px] font-black text-brand-600 dark:text-brand-400">Code: ${code}</span>
+                                    <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[10px] font-black text-brand-600 dark:text-brand-400 border border-slate-200/50 dark:border-slate-700/50">Code: ${code}</span>
                                 </div>
                             `);
                             $dropdown.append($item);
@@ -467,7 +467,7 @@
                                     <td class="p-4 font-bold text-slate-900 dark:text-white">${title}</td>
                                     <td class="p-4 text-slate-400 text-[10px] font-black">${wave}</td>
                                     <td class="p-4 text-center">${asstScoreCellContent}</td>
-                                    <td class="p-4 text-center"><span class="px-2.5 py-1 rounded-full text-[9px] font-black bg-purple-50 text-purple-600 border border-purple-200">${status}</span></td>
+                                    <td class="p-4 text-center"><span class="px-2.5 py-1 rounded-full text-[9px] font-black bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400 border border-purple-200 dark:border-purple-800">${status}</span></td>
                                     <td class="p-4 text-right font-mono text-[10px] text-slate-400">${dateStr}</td>
                                 </tr>
                             `;
@@ -497,7 +497,7 @@
                             const joinDateStr = joinDate ? new Date(joinDate).toLocaleDateString('en-US') : '--';
                             const certDateStr = certCreatedAt ? new Date(certCreatedAt).toLocaleDateString('en-US') : '--';
                             const certCodeBadge = certCode
-                                ? `<span class="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-600 font-mono text-[11px] font-bold border border-amber-200 shadow-sm">${certCode}</span>`
+                                ? `<span class="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 font-mono text-[11px] font-bold border border-amber-200 dark:border-amber-800 shadow-sm">${certCode}</span>`
                                 : '<span class="text-slate-400 font-mono">--</span>';
 
                             let certScoreCellContent = '<span class="text-slate-400 font-mono">--</span>';

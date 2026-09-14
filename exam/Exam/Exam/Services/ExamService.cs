@@ -646,8 +646,13 @@ namespace Exam.Services
                         et.TypeName        AS ExamType,
                         tw.WaveName,
                         e.WaveId           AS WaveId,
-                        e.Id               AS ExamId,
-                        uea.Status         AS Status,
+                        CASE 
+                            WHEN uea.Status = 'Completed' OR uea.Status = 'Fail_Timeout' THEN 'Completed'
+                            WHEN uea.Status = 'InProgress' AND uea.EndTime IS NULL THEN 'InProgress'
+                            WHEN uea.Status = 'InProgress' AND uea.EndTime IS NOT NULL THEN 'Completed'
+                            WHEN uea.EndTime IS NOT NULL AND uea.Status NOT LIKE 'Fail_%' THEN 'Completed'
+                            ELSE uea.Status
+                        END AS Status,
                         ISNULL(uea.FinalScore, 0)          AS FinalScore,
                         COALESCE(
                             NULLIF((SELECT ISNULL(SUM(q.Points), 0) FROM UserSeenQuestions usq JOIN Questions q ON usq.QuestionId = q.Id WHERE usq.AttemptId = uea.Id), 0),

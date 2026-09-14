@@ -485,14 +485,23 @@
                     },
                     {
                         data: 'status',
-                        render: function(data) {
-                            if (data === 'InProgress') {
+                        render: function(data, type, row) {
+                            const s = (data || '').toLowerCase();
+                            if (s === 'inprogress') {
                                 return `
                                     <span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200 flex items-center gap-1 w-fit">
                                         <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse flex-shrink-0"></span> In Progress
                                     </span>`;
-                            } else if (data === 'Completed') {
+                            } else if (s === 'completed' || s === 'fail_timeout' || (row.endTimeDate && row.endTimeDate !== '--' && !s.startsWith('fail_'))) {
                                 return `<span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200 w-fit">✓ Completed</span>`;
+                            } else if (s.startsWith('fail_')) {
+                                let label = 'Terminated';
+                                if (s === 'fail_tabswitch') label = 'Tab Switch';
+                                else if (s === 'fail_exitfullscreen') label = 'Exit Fullscreen';
+                                else if (s === 'fail_tabclose') label = 'Tab Close';
+                                else if (s === 'fail_abandoned') label = 'Abandoned';
+                                else if (s === 'fail_windowblur') label = 'Window Blur';
+                                return `<span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-rose-50 text-rose-600 border border-rose-200 w-fit" title="${data}">⚠ ${label}</span>`;
                             } else {
                                 return `<span class="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-slate-100 text-slate-400 w-fit">Not Started</span>`;
                             }
@@ -543,7 +552,9 @@
                     {
                         data: 'isPassed',
                         render: function(data, type, row) {
-                            if (row.status === 'Completed') {
+                            const s = (row.status || '').toLowerCase();
+                            const hasAttempt = row.attemptId || (row.startTimeDate && row.startTimeDate !== '--');
+                            if (s === 'completed' || s === 'fail_timeout' || (hasAttempt && s !== 'inprogress')) {
                                 if (data) {
                                     return `<span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200">PASS</span>`;
                                 } else {

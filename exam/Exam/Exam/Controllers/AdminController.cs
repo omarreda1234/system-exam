@@ -1336,7 +1336,7 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                         worksheet.Cell(currentRow, 14).Value = item.Percentage;
 
                         string resultStr = "--";
-                        if (item.Status == "Completed")
+                        if (item.Status == "Completed" || item.Status == "Fail_Timeout" || (item.EndTime.HasValue && item.Status != "InProgress"))
                         {
                             resultStr = item.IsPassed == true ? "PASS" : "FAILED";
                         }
@@ -1480,9 +1480,9 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
 
             // Stats counts for cards (computed from the matches BEFORE search filter)
             int totalCount = totalRecords;
-            int inProgressCount = results.Count(r => r.Status == "InProgress");
-            int completedCount = results.Count(r => r.Status == "Completed");
-            int notStartedCount = results.Count(r => r.Status == "Not Started");
+            int inProgressCount = results.Count(r => r.Status != null && r.Status.Equals("InProgress", StringComparison.OrdinalIgnoreCase));
+            int completedCount = results.Count(r => r.Status != null && (r.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase) || r.Status.Equals("Fail_Timeout", StringComparison.OrdinalIgnoreCase)));
+            int notStartedCount = results.Count(r => r.Status != null && r.Status.Equals("Not Started", StringComparison.OrdinalIgnoreCase));
 
             // Apply search
             if (!string.IsNullOrEmpty(searchValue))
