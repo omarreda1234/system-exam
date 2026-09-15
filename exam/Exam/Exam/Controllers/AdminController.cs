@@ -163,7 +163,7 @@ namespace Exam.Controllers
                     ISNULL(ROUND(AVG(CAST(uea.Score AS FLOAT)), 1), 0) AS AverageScore
                 FROM Branches b
                 LEFT JOIN AspNetUsers u ON u.BranchId = b.Id
-                LEFT JOIN UserExamAttempts uea ON uea.UserId = u.Id AND uea.Status = 'Completed' 
+                LEFT JOIN UserExamAttempts uea ON uea.UserId = u.Id AND uea.Status IN ('Completed', 'Fail_Timeout') 
                     AND (@ExamId IS NULL OR @ExamId = 0 OR uea.ExamId = @ExamId)
                     AND uea.ExamId IN (SELECT Id FROM Exams WHERE WaveId IS NULL OR Title LIKE 'Weekly%')
                 GROUP BY b.Id, b.BranchName
@@ -1413,20 +1413,21 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
             var dateStr = Request.Form["date"].FirstOrDefault();
             var examIdStr = Request.Form["examId"].FirstOrDefault();
 
-            int start = string.IsNullOrEmpty(startStr) ? 0 : int.Parse(startStr);
-            int length = string.IsNullOrEmpty(lengthStr) ? 10 : int.Parse(lengthStr);
+            try
+            {
+                int start = int.TryParse(startStr, out var s) ? s : 0;
+                int length = int.TryParse(lengthStr, out var l) ? l : 10;
 
-            int? branchId = string.IsNullOrEmpty(branchIdStr) ? null : int.Parse(branchIdStr);
-            int? shiftId = string.IsNullOrEmpty(shiftIdStr) ? null : int.Parse(shiftIdStr);
-            int? waveId = string.IsNullOrEmpty(waveIdStr) ? null : int.Parse(waveIdStr);
-            int? examId = string.IsNullOrEmpty(examIdStr) ? null : int.Parse(examIdStr);
+                int? shiftId = int.TryParse(shiftIdStr, out var sh) ? sh : null;
+                int? waveId = int.TryParse(waveIdStr, out var w) ? w : null;
+                int? examId = int.TryParse(examIdStr, out var ex) ? ex : null;
 
-            DateTime? parsedDate = null;
-            if (!string.IsNullOrWhiteSpace(dateStr) && DateTime.TryParse(dateStr, out var d))
-                parsedDate = d;
+                DateTime? parsedDate = null;
+                if (!string.IsNullOrWhiteSpace(dateStr) && DateTime.TryParse(dateStr, out var d))
+                    parsedDate = d;
 
-            var results = await _examService.GetLiveMonitorDataAsync(
-                null, shiftId, null, status, waveId, parsedDate, examId);
+                var results = await _examService.GetLiveMonitorDataAsync(
+                    null, shiftId, null, status, waveId, parsedDate, examId);
 
             // Branch security guard for Branch Manager & Branch Supervisor
             if (User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor"))
@@ -1575,17 +1576,33 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                 attemptId = r.AttemptId
             });
 
-            return Json(new
+                return Json(new
+                {
+                    draw = draw,
+                    recordsTotal = totalRecords,
+                    recordsFiltered = filteredRecords,
+                    totalCount = totalCount,
+                    inProgressCount = inProgressCount,
+                    completedCount = completedCount,
+                    notStartedCount = notStartedCount,
+                    data = data
+                });
+            }
+            catch (Exception ex)
             {
-                draw = draw,
-                recordsTotal = totalRecords,
-                recordsFiltered = filteredRecords,
-                totalCount = totalCount,
-                inProgressCount = inProgressCount,
-                completedCount = completedCount,
-                notStartedCount = notStartedCount,
-                data = data
-            });
+                return Json(new
+                {
+                    draw = draw,
+                    recordsTotal = 0,
+                    recordsFiltered = 0,
+                    totalCount = 0,
+                    inProgressCount = 0,
+                    completedCount = 0,
+                    notStartedCount = 0,
+                    data = new List<object>(),
+                    error = ex.Message
+                });
+            }
         }
 
 

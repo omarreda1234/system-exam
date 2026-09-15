@@ -646,6 +646,7 @@ namespace Exam.Services
                         et.TypeName        AS ExamType,
                         tw.WaveName,
                         e.WaveId           AS WaveId,
+                        e.Id               AS ExamId,
                         CASE 
                             WHEN uea.Status = 'Completed' OR uea.Status = 'Fail_Timeout' THEN 'Completed'
                             WHEN uea.Status = 'InProgress' AND uea.EndTime IS NULL THEN 'InProgress'
@@ -2759,7 +2760,7 @@ WHERE U.Id = @UserId;";
                     SUM(CASE WHEN IsPassed = 1 THEN 1 ELSE 0 END) as Passed,
                     SUM(CASE WHEN IsPassed = 0 THEN 1 ELSE 0 END) as Failed
                 FROM UserExamAttempts
-                WHERE Status = 'Completed' AND Score IS NOT NULL");
+                WHERE Status IN ('Completed', 'Fail_Timeout') AND Score IS NOT NULL");
 
             if (passStats != null && passStats.Total > 0)
             {
@@ -2781,7 +2782,7 @@ WHERE U.Id = @UserId;";
                            SUM(CASE WHEN SA.IsPassed = 0 THEN 1 ELSE 0 END) as Failed
                     FROM AspNetUsers U
                     INNER JOIN UserExamAttempts SA ON U.Id = SA.UserId
-                    WHERE SA.Status = 'Completed'
+                    WHERE SA.Status IN ('Completed', 'Fail_Timeout')
                     GROUP BY U.BranchId
                 ) PassedFailed ON B.Id = PassedFailed.BranchId
                 ORDER BY UserCount DESC")).ToList();
@@ -2828,7 +2829,7 @@ WHERE U.Id = @UserId;";
                         ROUND(AVG(CAST(uea.Score AS FLOAT)), 1) AS AverageScore
                     FROM UserExamAttempts uea
                     JOIN Exams e ON uea.ExamId = e.Id
-                    WHERE uea.Status = 'Completed' AND (e.WaveId IS NULL OR e.Title LIKE 'Weekly%')
+                    WHERE uea.Status IN ('Completed', 'Fail_Timeout') AND (e.WaveId IS NULL OR e.Title LIKE 'Weekly%')
                     GROUP BY e.Id, e.Title
                     ORDER BY e.Id ASC");
                 dashboard.MonthlyWeeklyExamStats = monthlyWeekly.ToList();
@@ -2847,7 +2848,7 @@ WHERE U.Id = @UserId;";
                         ISNULL(ROUND(AVG(CAST(uea.Score AS FLOAT)), 1), 0) AS AverageScore
                     FROM Branches b
                     LEFT JOIN AspNetUsers u ON u.BranchId = b.Id
-                    LEFT JOIN UserExamAttempts uea ON uea.UserId = u.Id AND uea.Status = 'Completed' 
+                    LEFT JOIN UserExamAttempts uea ON uea.UserId = u.Id AND uea.Status IN ('Completed', 'Fail_Timeout') 
                         AND uea.ExamId IN (SELECT Id FROM Exams WHERE WaveId IS NULL OR Title LIKE 'Weekly%')
                     GROUP BY b.Id, b.BranchName
                     HAVING COUNT(DISTINCT uea.UserId) > 0
@@ -2862,7 +2863,7 @@ WHERE U.Id = @UserId;";
                 FROM UserExamAttempts SA
                 JOIN AspNetUsers U ON SA.UserId = U.Id
                 JOIN Exams E ON SA.ExamId = E.Id
-                WHERE SA.Status = 'Completed' AND SA.Score IS NOT NULL
+                WHERE SA.Status IN ('Completed', 'Fail_Timeout') AND SA.Score IS NOT NULL
                 ORDER BY SA.Score DESC")).ToList();
             
             // 9. Global Question Bank Stats

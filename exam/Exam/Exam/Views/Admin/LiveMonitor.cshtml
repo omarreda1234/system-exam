@@ -389,6 +389,7 @@
         }
 
         $(document).ready(function () {
+            $.fn.dataTable.ext.errMode = 'none';
             table = $('#liveMonitorTable').DataTable({
                 serverSide: true,
                 processing: true,
@@ -407,6 +408,9 @@
                     },
                     headers: {
                         'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    error: function (xhr, error, code) {
+                        console.warn('LiveMonitor DataTables ajax error:', error, code);
                     },
                     dataSrc: function (json) {
                         // Update UI Counts
