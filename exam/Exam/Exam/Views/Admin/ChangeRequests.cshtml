@@ -1,0 +1,713 @@
+@{
+    ViewData["Title"] = "Change Requests & Dev Tickets";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+
+<div class="space-y-6">
+    <!-- Header Card -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 md:p-8 shadow-sm transition-all duration-300">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div>
+                <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[10px] font-black tracking-[0.25em] text-brand-600 dark:text-brand-400 uppercase">Dev Team Ticketing & Change Control</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span> Email Dispatch Active
+                    </span>
+                </div>
+                <h1 class="text-2xl md:text-3xl font-black text-slate-800 dark:text-white tracking-tight flex items-center gap-3">
+                    <i class="fas fa-headset text-brand-500"></i> Change Requests (CR)
+                </h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium max-w-2xl">
+                    Central portal for logging, tracking, and prioritizing system change requests (CR) and bug tickets. Every submission automatically dispatches an instant, detailed email notification to the development team.
+                </p>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-wrap items-center gap-3">
+                <button type="button" onclick="loadTickets()" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold transition-all flex items-center gap-2">
+                    <i class="fas fa-sync-alt" id="refreshIcon"></i> Refresh
+                </button>
+                <button type="button" onclick="openCreateModal()" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-cyan-500 hover:from-brand-500 hover:to-cyan-400 text-white text-xs font-black tracking-wide shadow-lg shadow-brand-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2">
+                    <i class="fas fa-plus"></i> + New Ticket (CR)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Total -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total Tickets</span>
+                <div class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                    <i class="fas fa-ticket-alt"></i>
+                </div>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span id="statTotal" class="text-3xl font-black text-slate-800 dark:text-white">0</span>
+                <span class="text-[10px] text-slate-400 font-bold">tickets</span>
+            </div>
+        </div>
+
+        <!-- Open -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider text-indigo-500">Open / Under Review</span>
+                <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                    <i class="fas fa-clock"></i>
+                </div>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span id="statOpen" class="text-3xl font-black text-indigo-600 dark:text-indigo-400">0</span>
+                <span class="text-[10px] text-slate-400 font-bold">pending review</span>
+            </div>
+        </div>
+
+        <!-- In Progress -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider text-amber-500">In Progress</span>
+                <div class="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                    <i class="fas fa-tools"></i>
+                </div>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span id="statInProgress" class="text-3xl font-black text-amber-600 dark:text-amber-400">0</span>
+                <span class="text-[10px] text-slate-400 font-bold">in development</span>
+            </div>
+        </div>
+
+        <!-- Resolved -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-500">Resolved & Closed</span>
+                <div class="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span id="statResolved" class="text-3xl font-black text-emerald-600 dark:text-emerald-400">0</span>
+                <span class="text-[10px] text-slate-400 font-bold">completed</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters & Table Container -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] p-6 shadow-sm">
+        <!-- Filter Controls -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800/80">
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Status Filter -->
+                <div class="space-y-1">
+                    <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Status</label>
+                    <select id="filterStatus" onchange="loadTickets()" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500">
+                        <option value="All">All Statuses</option>
+                        <option value="Open">Open</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Resolved">Resolved</option>
+                        <option value="Closed">Closed</option>
+                    </select>
+                </div>
+
+                <!-- Priority Filter -->
+                <div class="space-y-1">
+                    <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Priority</label>
+                    <select id="filterPriority" onchange="loadTickets()" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500">
+                        <option value="All">All Priorities</option>
+                        <option value="Critical">Critical (Urgent)</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
+
+                <!-- Category Filter -->
+                <div class="space-y-1">
+                    <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Category</label>
+                    <select id="filterCategory" onchange="loadTickets()" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500">
+                        <option value="All">All Categories</option>
+                        <option value="CR / Modification">Change Request (CR)</option>
+                        <option value="Bug / Issue">Bug / Issue</option>
+                        <option value="Feature Request">New Feature Request</option>
+                        <option value="Data Fix">Data Correction / Recovery</option>
+                        <option value="UI / UX">UI / UX Improvement</option>
+                        <option value="Other">Other Inquiry</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Search Box -->
+            <div class="relative w-full md:w-72">
+                <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Search</label>
+                <div class="relative">
+                    <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" oninput="debounceSearch()" placeholder="Search code, title, module, user..." class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500" />
+                </div>
+            </div>
+        </div>
+
+        <!-- Tickets Table Container -->
+        <div class="mt-4 overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                    <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 font-extrabold uppercase tracking-wider text-[10px]">
+                        <th class="py-3 px-3">Ticket Code</th>
+                        <th class="py-3 px-3">Subject / Module</th>
+                        <th class="py-3 px-3">Requested By</th>
+                        <th class="py-3 px-3">Priority</th>
+                        <th class="py-3 px-3">Category</th>
+                        <th class="py-3 px-3">Status</th>
+                        <th class="py-3 px-3">Created Date</th>
+                        <th class="py-3 px-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="ticketsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+                    <tr>
+                        <td colspan="8" class="text-center py-12 text-slate-400 font-bold">
+                            <i class="fas fa-circle-notch fa-spin mr-2"></i> Loading tickets...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- NEW CHANGE REQUEST MODAL -->
+<!-- ============================================================== -->
+<div id="createTicketModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl transform scale-95 transition-transform duration-300" id="createModalBox">
+        <!-- Modal Header -->
+        <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-brand-50 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold">
+                    <i class="fas fa-plus"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-extrabold text-slate-800 dark:text-white">Submit New Change Request (CR)</h3>
+                    <p class="text-xs text-slate-400">This ticket and any attachments will be dispatched directly to the development lead's email.</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeCreateModal()" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center">
+                <i class="fas fa-times text-xs"></i>
+            </button>
+        </div>
+
+        <!-- Modal Form -->
+        <form id="createTicketForm" onsubmit="submitTicket(event)" enctype="multipart/form-data" class="p-6 overflow-y-auto space-y-4 flex-1">
+            <!-- Title -->
+            <div class="space-y-1.5">
+                <label class="block text-xs font-black text-slate-700 dark:text-slate-300">Ticket Title / Summary <span class="text-rose-500">*</span></label>
+                <input type="text" name="Title" required placeholder="e.g. Adjust success rate calculation in Weekly Exams or add export filter..." class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500 transition-all" />
+            </div>
+
+            <!-- Row: Category & Priority & Module -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <!-- Category -->
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-black text-slate-700 dark:text-slate-300">Category <span class="text-rose-500">*</span></label>
+                    <select name="Category" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500">
+                        <option value="CR / Modification">Change Request (CR)</option>
+                        <option value="Bug / Issue">Bug / Issue</option>
+                        <option value="Feature Request">New Feature Request</option>
+                        <option value="Data Fix">Data Correction / Recovery</option>
+                        <option value="UI / UX">UI / UX Improvement</option>
+                        <option value="Other">Other Inquiry</option>
+                    </select>
+                </div>
+
+                <!-- Priority -->
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-black text-slate-700 dark:text-slate-300">Priority <span class="text-rose-500">*</span></label>
+                    <select name="Priority" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500">
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical (Urgent)</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
+
+                <!-- Module -->
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-black text-slate-700 dark:text-slate-300">Target Module / Screen</label>
+                    <select name="Module" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500">
+                        <option value="Live Monitor">Live Monitor</option>
+                        <option value="Weekly Analytics">Weekly Analytics</option>
+                        <option value="Wave Analytics">Wave Analytics</option>
+                        <option value="Question Bank">Question Bank</option>
+                        <option value="Work Shifts">Work Shifts</option>
+                        <option value="Certificates">Certificates & Results</option>
+                        <option value="Personnel Registry">Personnel & Roles</option>
+                        <option value="System General">General System</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div class="space-y-1.5">
+                <label class="block text-xs font-black text-slate-700 dark:text-slate-300">Detailed Description / Instructions <span class="text-rose-500">*</span></label>
+                <textarea name="Description" rows="4" required placeholder="Describe clearly what is currently occurring and what modification or functionality is required..." class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500 transition-all"></textarea>
+            </div>
+
+            <!-- Expected Result -->
+            <div class="space-y-1.5">
+                <label class="block text-xs font-black text-slate-700 dark:text-slate-300">Expected Result / Outcome (Optional)</label>
+                <textarea name="ExpectedResult" rows="2" placeholder="What is the expected result or design outcome once completed?..." class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500 transition-all"></textarea>
+            </div>
+
+            <!-- Attachment -->
+            <div class="space-y-1.5">
+                <label class="block text-xs font-black text-slate-700 dark:text-slate-300">Attachment / Screenshot (Image, PDF, Excel, Log)</label>
+                <div class="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center hover:border-brand-500 transition-colors bg-slate-50/50 dark:bg-slate-950/50">
+                    <input type="file" id="ticketFileInput" name="Attachment" class="hidden" onchange="handleFileSelected(this)" />
+                    <label for="ticketFileInput" class="cursor-pointer flex flex-col items-center gap-1.5">
+                        <i class="fas fa-cloud-upload-alt text-2xl text-slate-400"></i>
+                        <span class="text-xs font-bold text-slate-600 dark:text-slate-300">Click to choose a file from your device</span>
+                        <span class="text-[10px] text-slate-400">PNG, JPG, PDF, DOCX, XLSX (Max 15MB)</span>
+                    </label>
+                    <div id="fileSelectedDisplay" class="hidden mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-50 dark:bg-brand-950/50 text-brand-700 dark:text-brand-300 text-xs font-bold">
+                        <i class="fas fa-file"></i>
+                        <span id="fileSelectedName">filename.ext</span>
+                        <button type="button" onclick="clearSelectedFile()" class="text-rose-500 hover:text-rose-700 ml-1">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+                <button type="button" onclick="closeCreateModal()" class="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold transition-all">
+                    Cancel
+                </button>
+                <button type="submit" id="btnSubmitTicket" class="px-7 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-cyan-500 hover:from-brand-500 hover:to-cyan-400 text-white text-xs font-black tracking-wide shadow-lg shadow-brand-500/25 transition-all flex items-center gap-2">
+                    <i class="fas fa-paper-plane"></i> Submit Ticket & Notify Dev
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- TICKET DETAILS MODAL -->
+<!-- ============================================================== -->
+<div id="ticketDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl transform scale-95 transition-transform duration-300" id="detailsModalBox">
+        <!-- Details Header -->
+        <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span id="dtlCode" class="px-3 py-1 rounded-xl bg-brand-50 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-black font-mono">
+                    #CR-2026-0000
+                </span>
+                <span id="dtlStatusBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    Open
+                </span>
+                <span id="dtlPriorityBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    High
+                </span>
+            </div>
+            <button type="button" onclick="closeDetailsModal()" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center">
+                <i class="fas fa-times text-xs"></i>
+            </button>
+        </div>
+
+        <!-- Details Body -->
+        <div class="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
+            <!-- Title -->
+            <div>
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Ticket Subject</span>
+                <h2 id="dtlTitle" class="text-base font-extrabold text-slate-800 dark:text-white mt-1"></h2>
+            </div>
+
+            <!-- Meta Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800/80">
+                <div>
+                    <span class="text-[10px] font-bold text-slate-400 block">Category</span>
+                    <span id="dtlCategory" class="font-extrabold text-slate-700 dark:text-slate-200"></span>
+                </div>
+                <div>
+                    <span class="text-[10px] font-bold text-slate-400 block">Module / Screen</span>
+                    <span id="dtlModule" class="font-extrabold text-slate-700 dark:text-slate-200"></span>
+                </div>
+                <div>
+                    <span class="text-[10px] font-bold text-slate-400 block">Requested By</span>
+                    <span id="dtlCreatedBy" class="font-extrabold text-slate-700 dark:text-slate-200"></span>
+                </div>
+                <div>
+                    <span class="text-[10px] font-bold text-slate-400 block">Created Date</span>
+                    <span id="dtlCreatedAt" class="font-extrabold text-slate-700 dark:text-slate-200"></span>
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div>
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Detailed Description</span>
+                <div id="dtlDescription" class="mt-1.5 p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap"></div>
+            </div>
+
+            <!-- Expected Result -->
+            <div id="dtlExpectedBox" class="hidden">
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-500">Expected Outcome</span>
+                <div id="dtlExpectedResult" class="mt-1.5 p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 leading-relaxed text-emerald-800 dark:text-emerald-300 whitespace-pre-wrap"></div>
+            </div>
+
+            <!-- Attachment Download -->
+            <div id="dtlAttachmentBox" class="hidden">
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Attachment</span>
+                <div class="mt-1.5">
+                    <a id="dtlAttachmentLink" href="#" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 font-bold hover:underline">
+                        <i class="fas fa-paperclip"></i> <span id="dtlAttachmentName">Download Attachment</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Developer Notes / Actions Form -->
+            <div class="pt-4 border-t border-slate-100 dark:border-slate-800">
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-brand-600 dark:text-brand-400 block mb-2">Update Ticket Status & Dev Notes</span>
+                <form id="updateStatusForm" onsubmit="submitStatusUpdate(event)" class="space-y-3">
+                    <input type="hidden" id="updateTicketId" name="Id" />
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1">Current Status</label>
+                            <select id="updateStatusSelect" name="Status" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500">
+                                <option value="Open">Open (Under Review)</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Resolved">Resolved / Completed</option>
+                                <option value="Closed">Closed</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1">Developer Response / Notes</label>
+                            <input type="text" id="updateDevNotes" name="DevNotes" placeholder="e.g. Issue resolved in v3.1, deployed on staging..." class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500" />
+                        </div>
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="submit" id="btnSaveStatus" class="px-5 py-2 rounded-xl bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white font-bold text-xs transition-all">
+                            Save Status
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    let searchDebounceTimeout = null;
+
+    $(document).ready(function() {
+        loadTickets();
+    });
+
+    function debounceSearch() {
+        clearTimeout(searchDebounceTimeout);
+        searchDebounceTimeout = setTimeout(function() {
+            loadTickets();
+        }, 300);
+    }
+
+    function loadTickets() {
+        const $icon = $('#refreshIcon');
+        $icon.addClass('fa-spin');
+
+        const status = $('#filterStatus').val();
+        const priority = $('#filterPriority').val();
+        const category = $('#filterCategory').val();
+        const search = $('#searchInput').val();
+
+        $.ajax({
+            url: '/Admin/GetChangeRequestsList',
+            type: 'GET',
+            data: { status: status, priority: priority, category: category, search: search },
+            success: function(res) {
+                $icon.removeClass('fa-spin');
+                if (res.success) {
+                    renderSummary(res.summary);
+                    renderTickets(res.tickets);
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: res.error || 'Failed to load tickets' });
+                }
+            },
+            error: function() {
+                $icon.removeClass('fa-spin');
+                $('#ticketsTableBody').html(`
+                    <tr>
+                        <td colspan="8" class="text-center py-8 text-rose-500 font-bold">
+                            <i class="fas fa-exclamation-triangle mr-2"></i> Could not connect to server to fetch tickets.
+                        </td>
+                    </tr>
+                `);
+            }
+        });
+    }
+
+    function renderSummary(summary) {
+        if (!summary) return;
+        $('#statTotal').text(summary.totalCount || 0);
+        $('#statOpen').text(summary.openCount || 0);
+        $('#statInProgress').text(summary.inProgressCount || 0);
+        $('#statResolved').text(summary.resolvedCount || 0);
+    }
+
+    function renderTickets(tickets) {
+        const $tbody = $('#ticketsTableBody');
+        $tbody.empty();
+
+        if (!tickets || tickets.length === 0) {
+            $tbody.html(`
+                <tr>
+                    <td colspan="8" class="text-center py-12 text-slate-400 font-bold">
+                        <i class="fas fa-inbox text-3xl mb-2 block opacity-40"></i>
+                        No change requests match the current search criteria.
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        tickets.forEach(function(t) {
+            // Priority badge styling
+            let pColor = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+            const p = (t.priority || '').toLowerCase();
+            if (p === 'critical') pColor = 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200 dark:border-rose-900';
+            else if (p === 'high') pColor = 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200 dark:border-amber-900';
+            else if (p === 'medium') pColor = 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 border border-blue-200 dark:border-blue-900';
+
+            // Status badge styling
+            let sColor = 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900';
+            const s = (t.status || '').toLowerCase();
+            if (s === 'in progress') sColor = 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200 dark:border-amber-900';
+            else if (s === 'resolved') sColor = 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900';
+            else if (s === 'closed') sColor = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
+
+            // Attachment icon
+            const attachIcon = t.attachmentPath ? `<i class="fas fa-paperclip text-slate-400 ml-1.5" title="${t.attachmentName || 'Attachment'}"></i>` : '';
+
+            // Date format
+            const dateStr = t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
+
+            const row = `
+                <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                    <td class="py-3 px-3">
+                        <span class="font-mono font-black text-brand-600 dark:text-brand-400 bg-brand-50/60 dark:bg-brand-950/40 px-2 py-1 rounded-lg">
+                            ${t.ticketCode}
+                        </span>
+                    </td>
+                    <td class="py-3 px-3">
+                        <div class="font-bold text-slate-800 dark:text-white flex items-center">
+                            ${t.title} ${attachIcon}
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-semibold mt-0.5">
+                            <span class="text-cyan-600 dark:text-cyan-400">${t.module || 'General'}</span>
+                        </div>
+                    </td>
+                    <td class="py-3 px-3">
+                        <div class="font-bold text-slate-700 dark:text-slate-300">${t.createdByName || 'Admin'}</div>
+                        <div class="text-[10px] text-slate-400">${t.createdByEmail || ''}</div>
+                    </td>
+                    <td class="py-3 px-3">
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${pColor}">
+                            ${t.priority}
+                        </span>
+                    </td>
+                    <td class="py-3 px-3">
+                        <span class="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-bold">
+                            ${t.category}
+                        </span>
+                    </td>
+                    <td class="py-3 px-3">
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${sColor}">
+                            ${t.status}
+                        </span>
+                    </td>
+                    <td class="py-3 px-3 text-slate-500 dark:text-slate-400 text-[11px] font-semibold">
+                        ${dateStr}
+                    </td>
+                    <td class="py-3 px-3 text-right">
+                        <button type="button" onclick="viewTicketDetails(${t.id})" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-brand-500 hover:text-white dark:hover:bg-brand-500 transition-all font-bold text-xs flex items-center gap-1.5 ml-auto">
+                            <i class="fas fa-eye text-[10px]"></i> View
+                        </button>
+                    </td>
+                </tr>
+            `;
+            $tbody.append(row);
+        });
+    }
+
+    // Modal Operations
+    function openCreateModal() {
+        $('#createTicketForm')[0].reset();
+        clearSelectedFile();
+        const $modal = $('#createTicketModal');
+        $modal.removeClass('hidden');
+        setTimeout(() => {
+            $modal.removeClass('opacity-0');
+            $('#createModalBox').removeClass('scale-95');
+        }, 10);
+    }
+
+    function closeCreateModal() {
+        const $modal = $('#createTicketModal');
+        $modal.addClass('opacity-0');
+        $('#createModalBox').addClass('scale-95');
+        setTimeout(() => {
+            $modal.addClass('hidden');
+        }, 300);
+    }
+
+    function handleFileSelected(input) {
+        if (input.files && input.files[0]) {
+            $('#fileSelectedName').text(input.files[0].name);
+            $('#fileSelectedDisplay').removeClass('hidden');
+        }
+    }
+
+    function clearSelectedFile() {
+        $('#ticketFileInput').val('');
+        $('#fileSelectedDisplay').addClass('hidden');
+    }
+
+    function submitTicket(e) {
+        e.preventDefault();
+        const $btn = $('#btnSubmitTicket');
+        const origHtml = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Submitting ticket & notifying team...');
+
+        const formData = new FormData($('#createTicketForm')[0]);
+
+        $.ajax({
+            url: '/Admin/CreateChangeRequest',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(res) {
+                $btn.prop('disabled', false).html(origHtml);
+                if (res.success) {
+                    closeCreateModal();
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Ticket Submitted Successfully!',
+                        html: `Ticket Code: <b class="text-brand-600 font-mono">${res.ticketCode}</b><br/><span class="text-xs text-slate-500">An email notification with all details has been dispatched to the development team.</span>`,
+                        background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                        color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+                    });
+                    loadTickets();
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: res.message });
+                }
+            },
+            error: function(err) {
+                $btn.prop('disabled', false).html(origHtml);
+                Swal.fire({ icon: 'error', title: 'Submission Error', text: 'Failed to submit ticket, please try again.' });
+            }
+        });
+    }
+
+    function viewTicketDetails(id) {
+        $.ajax({
+            url: '/Admin/GetChangeRequestDetails',
+            type: 'GET',
+            data: { id: id },
+            success: function(res) {
+                if (res.success && res.ticket) {
+                    const t = res.ticket;
+                    $('#dtlCode').text(t.ticketCode);
+                    $('#dtlTitle').text(t.title);
+                    $('#dtlCategory').text(t.category);
+                    $('#dtlModule').text(t.module || '--');
+                    $('#dtlCreatedBy').text(t.createdByName || 'Admin');
+                    $('#dtlCreatedAt').text(t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--');
+                    $('#dtlDescription').text(t.description);
+
+                    // Expected Result
+                    if (t.expectedResult && t.expectedResult.trim().length > 0) {
+                        $('#dtlExpectedResult').text(t.expectedResult);
+                        $('#dtlExpectedBox').removeClass('hidden');
+                    } else {
+                        $('#dtlExpectedBox').addClass('hidden');
+                    }
+
+                    // Attachment
+                    if (t.attachmentPath) {
+                        $('#dtlAttachmentLink').attr('href', t.attachmentPath);
+                        $('#dtlAttachmentName').text(t.attachmentName || 'View / Download Attachment');
+                        $('#dtlAttachmentBox').removeClass('hidden');
+                    } else {
+                        $('#dtlAttachmentBox').addClass('hidden');
+                    }
+
+                    // Status Badge
+                    $('#dtlStatusBadge').text(t.status);
+                    $('#dtlPriorityBadge').text(t.priority);
+
+                    // Update Form
+                    $('#updateTicketId').val(t.id);
+                    $('#updateStatusSelect').val(t.status);
+                    $('#updateDevNotes').val(t.devNotes || '');
+
+                    // Open Modal
+                    const $modal = $('#ticketDetailsModal');
+                    $modal.removeClass('hidden');
+                    setTimeout(() => {
+                        $modal.removeClass('opacity-0');
+                        $('#detailsModalBox').removeClass('scale-95');
+                    }, 10);
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: res.message || 'Ticket not found.' });
+                }
+            }
+        });
+    }
+
+    function closeDetailsModal() {
+        const $modal = $('#ticketDetailsModal');
+        $modal.addClass('opacity-0');
+        $('#detailsModalBox').addClass('scale-95');
+        setTimeout(() => {
+            $modal.addClass('hidden');
+        }, 300);
+    }
+
+    function submitStatusUpdate(e) {
+        e.preventDefault();
+        const $btn = $('#btnSaveStatus');
+        const origText = $btn.text();
+        $btn.prop('disabled', true).text('Saving...');
+
+        const formData = new FormData($('#updateStatusForm')[0]);
+
+        $.ajax({
+            url: '/Admin/UpdateChangeRequestStatus',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(res) {
+                $btn.prop('disabled', false).text(origText);
+                if (res.success) {
+                    closeDetailsModal();
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Status Updated!',
+                        timer: 1500,
+                        showConfirmButton: false,
+                        background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                        color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+                    });
+                    loadTickets();
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: res.message });
+                }
+            },
+            error: function() {
+                $btn.prop('disabled', false).text(origText);
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to update ticket status.' });
+            }
+        });
+    }
+</script>
+}

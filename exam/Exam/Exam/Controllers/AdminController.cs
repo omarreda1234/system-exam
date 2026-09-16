@@ -74,7 +74,8 @@ namespace Exam.Controllers
             "EditWave", "DeleteWave", "CreateWave", "CloneWave", "AssignUsersToWave", "WaveDetails", "GetWaveUserIds", "GetUsersByWaveId", "RemoveUserFromWave",
             "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
             "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode",
-            "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails"
+            "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails",
+            "ChangeRequests", "GetChangeRequestsList", "CreateChangeRequest", "GetChangeRequestDetails", "UpdateChangeRequestStatus"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
@@ -6497,6 +6498,395 @@ ORDER BY U.UserName ASC";
             bool success = await _homeCmsService.ToggleFacultyActiveAsync(id);
             return Json(new { success, message = success ? "Faculty status updated." : "Failed to update status." });
         }
+
+        #region Change Requests / Dev Tickets
+        [HttpGet]
+        public IActionResult ChangeRequests()
+        {
+            ViewBag.Title = "Change Requests & Dev Tickets";
+            return View();
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetChangeRequestsList(string? status, string? priority, string? category, string? search)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var sql = @"
+                    SELECT 
+                        Id, TicketCode, Title, Category, Priority, Module,
+                        Description, ExpectedResult, AttachmentPath, AttachmentName,
+                        Status, DevNotes, CreatedByUserId, CreatedByName, CreatedByEmail,
+                        CreatedAt, UpdatedAt, ResolvedAt
+                    FROM ChangeRequests
+                    WHERE (@Status IS NULL OR Status = @Status)
+                      AND (@Priority IS NULL OR Priority = @Priority)
+                      AND (@Category IS NULL OR Category = @Category)
+                      AND (@Search IS NULL OR Title LIKE '%' + @Search + '%' OR TicketCode LIKE '%' + @Search + '%' OR CreatedByName LIKE '%' + @Search + '%')
+                    ORDER BY CreatedAt DESC;
+
+                    SELECT 
+                        COUNT(*) as TotalCount,
+                        ISNULL(SUM(CASE WHEN Status = 'Open' THEN 1 ELSE 0 END), 0) as OpenCount,
+                        ISNULL(SUM(CASE WHEN Status = 'In Progress' THEN 1 ELSE 0 END), 0) as InProgressCount,
+                        ISNULL(SUM(CASE WHEN Status IN ('Resolved', 'Closed') THEN 1 ELSE 0 END), 0) as ResolvedCount
+                    FROM ChangeRequests;
+                ";
+
+                using var multi = await conn.QueryMultipleAsync(sql, new
+                {
+                    Status = string.IsNullOrWhiteSpace(status) || status.Equals("All", StringComparison.OrdinalIgnoreCase) ? null : status,
+                    Priority = string.IsNullOrWhiteSpace(priority) || priority.Equals("All", StringComparison.OrdinalIgnoreCase) ? null : priority,
+                    Category = string.IsNullOrWhiteSpace(category) || category.Equals("All", StringComparison.OrdinalIgnoreCase) ? null : category,
+                    Search = string.IsNullOrWhiteSpace(search) ? null : search.Trim()
+                });
+
+                var tickets = (await multi.ReadAsync<Exam.DTOs.ChangeRequestDto>()).ToList();
+                var summary = await multi.ReadFirstOrDefaultAsync<Exam.DTOs.ChangeRequestsSummaryDto>() ?? new Exam.DTOs.ChangeRequestsSummaryDto();
+
+                return Json(new { success = true, tickets, summary });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, error = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetChangeRequestDetails(int id)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var ticket = await conn.QueryFirstOrDefaultAsync<Exam.DTOs.ChangeRequestDto>(
+                    "SELECT * FROM ChangeRequests WHERE Id = @Id", new { Id = id });
+
+                if (ticket == null)
+                    return Json(new { success = false, message = "التذكرة غير موجودة." });
+
+                return Json(new { success = true, ticket });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, error = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CreateChangeRequest([FromForm] Exam.DTOs.CreateChangeRequestDto model)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(model.Title) || string.IsNullOrWhiteSpace(model.Description))
+                    return Json(new { success = false, message = "يرجى ملء عنوان وتفاصيل التذكرة." });
+
+                var currentUser = await _userManager.GetUserAsync(User);
+                string userId = currentUser?.Id ?? "Admin";
+                string userName = currentUser?.FullName ?? User.Identity?.Name ?? "Administrator";
+                string userEmail = currentUser?.Email ?? User.Identity?.Name ?? "admin@eltarshoubi.com";
+
+                // Generate Unique Ticket Code
+                using var conn = new SqlConnection(_connectionString);
+                var nextSeq = await conn.ExecuteScalarAsync<int>(
+                    "SELECT ISNULL(MAX(Id), 0) + 1 FROM ChangeRequests");
+                string ticketCode = $"CR-{DateTime.Now:yyyy}-{nextSeq:D4}";
+
+                // Handle Attachment
+                string? savedRelPath = null;
+                string? originalFileName = null;
+                byte[]? fileBytes = null;
+
+                if (model.Attachment != null && model.Attachment.Length > 0)
+                {
+                    originalFileName = Path.GetFileName(model.Attachment.FileName);
+                    var ext = Path.GetExtension(originalFileName).ToLowerInvariant();
+                    var allowedExts = new[] { ".jpg", ".jpeg", ".png", ".gif", ".pdf", ".docx", ".xlsx", ".zip", ".txt" };
+                    if (!allowedExts.Contains(ext))
+                        return Json(new { success = false, message = "نوع الملف غير مدعوم. يرجى رفع صورة أو ملف PDF/Docx." });
+
+                    string webRoot = _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                    string uploadDir = Path.Combine(webRoot, "uploads", "tickets");
+                    if (!Directory.Exists(uploadDir))
+                        Directory.CreateDirectory(uploadDir);
+
+                    string uniqueFileName = $"{ticketCode}_{Guid.NewGuid():N}{ext}";
+                    string fullPath = Path.Combine(uploadDir, uniqueFileName);
+
+                    using (var fs = new FileStream(fullPath, FileMode.Create))
+                    {
+                        await model.Attachment.CopyToAsync(fs);
+                    }
+
+                    using (var ms = new MemoryStream())
+                    {
+                        model.Attachment.OpenReadStream().Position = 0;
+                        await model.Attachment.CopyToAsync(ms);
+                        fileBytes = ms.ToArray();
+                    }
+
+                    savedRelPath = $"/uploads/tickets/{uniqueFileName}";
+                }
+
+                // Insert into Database
+                const string insertSql = @"
+                    INSERT INTO ChangeRequests 
+                    (TicketCode, Title, Category, Priority, Module, Description, ExpectedResult, AttachmentPath, AttachmentName, Status, CreatedByUserId, CreatedByName, CreatedByEmail, CreatedAt)
+                    VALUES 
+                    (@TicketCode, @Title, @Category, @Priority, @Module, @Description, @ExpectedResult, @AttachmentPath, @AttachmentName, 'Open', @CreatedByUserId, @CreatedByName, @CreatedByEmail, GETDATE());
+                    SELECT CAST(SCOPE_IDENTITY() AS INT);";
+
+                int newId = await conn.ExecuteScalarAsync<int>(insertSql, new
+                {
+                    TicketCode = ticketCode,
+                    Title = model.Title.Trim(),
+                    Category = string.IsNullOrWhiteSpace(model.Category) ? "General" : model.Category.Trim(),
+                    Priority = string.IsNullOrWhiteSpace(model.Priority) ? "Medium" : model.Priority.Trim(),
+                    Module = string.IsNullOrWhiteSpace(model.Module) ? "System General" : model.Module.Trim(),
+                    Description = model.Description.Trim(),
+                    ExpectedResult = string.IsNullOrWhiteSpace(model.ExpectedResult) ? null : model.ExpectedResult.Trim(),
+                    AttachmentPath = savedRelPath,
+                    AttachmentName = originalFileName,
+                    CreatedByUserId = userId,
+                    CreatedByName = userName,
+                    CreatedByEmail = userEmail
+                });
+
+                // Build Professional HTML Email
+                string priorityColor = (model.Priority ?? "").ToLower() switch
+                {
+                    "critical" => "#e11d48",
+                    "high" => "#f59e0b",
+                    "medium" => "#2563eb",
+                    _ => "#64748b"
+                };
+
+                string priorityBadgeBg = (model.Priority ?? "").ToLower() switch
+                {
+                    "critical" => "#ffe4e6",
+                    "high" => "#fef3c7",
+                    "medium" => "#dbeafe",
+                    _ => "#f1f5f9"
+                };
+
+                string emailSubject = $"[Eltarshoubi LMS] New Change Request #{ticketCode} - {model.Title} ({model.Priority})";
+                string emailBody = $@"
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <title>New Change Request</title>
+</head>
+<body style='margin:0; padding:0; background-color:#f8fafc; font-family:-apple-system,BlinkMacSystemFont,""Segoe UI"",Roboto,Helvetica,Arial,sans-serif; color:#1e293b;'>
+  <table role='presentation' width='100%' cellspacing='0' cellpadding='0' border='0' style='background-color:#f8fafc; padding:30px 15px;'>
+    <tr>
+      <td align='center'>
+        <table role='presentation' width='100%' style='max-width:680px; background-color:#ffffff; border-radius:18px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.06); border:1px solid #e2e8f0;' cellspacing='0' cellpadding='0' border='0'>
+          
+          <!-- Header Banner -->
+          <tr>
+            <td style='background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding:32px 36px; border-bottom:3px solid #06b6d4;'>
+              <table width='100%' cellspacing='0' cellpadding='0' border='0'>
+                <tr>
+                  <td>
+                    <div style='display:inline-block; font-size:11px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:#06b6d4; margin-bottom:8px;'>
+                      Eltarshoubi Academy // Dev Support Portal
+                    </div>
+                    <h1 style='margin:0; font-size:22px; font-weight:800; color:#ffffff; line-height:1.3;'>
+                      New Change Request / Ticket
+                    </h1>
+                  </td>
+                  <td align='right' style='vertical-align:top;'>
+                    <span style='background:#06b6d4; color:#ffffff; font-weight:800; font-size:13px; padding:6px 14px; border-radius:20px; letter-spacing:1px; display:inline-block;'>
+                      {ticketCode}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Badges Bar -->
+          <tr>
+            <td style='padding:18px 36px; background-color:#f1f5f9; border-bottom:1px solid #e2e8f0;'>
+              <table width='100%' cellspacing='0' cellpadding='0' border='0'>
+                <tr>
+                  <td>
+                    <span style='display:inline-block; margin-right:8px; background:{priorityBadgeBg}; color:{priorityColor}; font-weight:800; font-size:11px; padding:4px 12px; border-radius:12px; text-transform:uppercase; border:1px solid {priorityColor}40;'>
+                      Priority: {model.Priority}
+                    </span>
+                    <span style='display:inline-block; margin-right:8px; background:#e0e7ff; color:#4338ca; font-weight:700; font-size:11px; padding:4px 12px; border-radius:12px; text-transform:uppercase;'>
+                      Category: {model.Category}
+                    </span>
+                    <span style='display:inline-block; background:#f3e8ff; color:#7e22ce; font-weight:700; font-size:11px; padding:4px 12px; border-radius:12px; text-transform:uppercase;'>
+                      Module: {model.Module}
+                    </span>
+                  </td>
+                  <td align='right' style='color:#64748b; font-size:12px; font-weight:600;'>
+                    {DateTime.Now:dd/MM/yyyy - hh:mm tt}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body Content -->
+          <tr>
+            <td style='padding:32px 36px;'>
+              
+              <!-- Requester Info Card -->
+              <table width='100%' cellspacing='0' cellpadding='0' border='0' style='background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; margin-bottom:28px;'>
+                <tr>
+                  <td style='padding:16px 20px;'>
+                    <table width='100%' cellspacing='0' cellpadding='0' border='0'>
+                      <tr>
+                        <td width='50'>
+                          <div style='width:40px; height:40px; background-color:#0f172a; color:#ffffff; font-size:16px; font-weight:700; border-radius:10px; text-align:center; line-height:40px;'>
+                            {userName.Substring(0, 1).ToUpper()}
+                          </div>
+                        </td>
+                        <td>
+                          <div style='font-size:14px; font-weight:800; color:#0f172a;'>{userName}</div>
+                          <div style='font-size:12px; color:#64748b;'>{userEmail} &bull; Admin Requester</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Ticket Title -->
+              <div style='margin-bottom:20px;'>
+                <div style='font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1.5px; color:#64748b; margin-bottom:6px;'>
+                  Request Title / Subject
+                </div>
+                <div style='font-size:18px; font-weight:800; color:#0f172a; line-height:1.4;'>
+                  {model.Title}
+                </div>
+              </div>
+
+              <!-- Ticket Description -->
+              <div style='margin-bottom:24px;'>
+                <div style='font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1.5px; color:#64748b; margin-bottom:8px;'>
+                  Detailed Description
+                </div>
+                <div style='background-color:#f8fafc; border:1px solid #e2e8f0; border-left:4px solid #06b6d4; border-radius:8px; padding:18px 20px; font-size:14px; line-height:1.65; color:#334155; white-space:pre-wrap;'>
+{model.Description}
+                </div>
+              </div>
+
+              <!-- Expected Result (if provided) -->
+              {(string.IsNullOrWhiteSpace(model.ExpectedResult) ? "" : $@"
+              <div style='margin-bottom:24px;'>
+                <div style='font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1.5px; color:#64748b; margin-bottom:8px;'>
+                  Expected Outcome / Result
+                </div>
+                <div style='background-color:#f0fdf4; border:1px solid #bbf7d0; border-left:4px solid #10b981; border-radius:8px; padding:16px 20px; font-size:13px; line-height:1.6; color:#166534; white-space:pre-wrap;'>
+{model.ExpectedResult}
+                </div>
+              </div>")}
+
+              <!-- Attachment Info -->
+              {(string.IsNullOrEmpty(originalFileName) ? "" : $@"
+              <div style='margin-bottom:24px; background-color:#eff6ff; border:1px dashed #93c5fd; border-radius:10px; padding:14px 18px;'>
+                <table width='100%' cellspacing='0' cellpadding='0' border='0'>
+                  <tr>
+                    <td style='font-size:13px; font-weight:700; color:#1e40af;'>
+                      📎 Attached File: {originalFileName}
+                    </td>
+                    <td align='right' style='font-size:12px; color:#3b82f6;'>
+                      (Attached directly to this email)
+                    </td>
+                  </tr>
+                </table>
+              </div>")}
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style='background-color:#0f172a; padding:24px 36px; text-align:center; color:#94a3b8; font-size:11px; border-top:1px solid #1e293b;'>
+              <div style='font-weight:700; color:#e2e8f0; margin-bottom:4px;'>
+                Eltarshoubi Examination & LMS Management Platform
+              </div>
+              <div>
+                This email is an automated system notification for Dev Team. Ticket ID: {ticketCode}
+              </div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
+
+                // Dispatch Email to omaraladeeb45@gmail.com
+                try
+                {
+                    if (fileBytes != null && fileBytes.Length > 0 && !string.IsNullOrEmpty(originalFileName))
+                    {
+                        await _emailSender.SendEmailWithAttachmentAsync("omaraladeeb45@gmail.com", emailSubject, emailBody, fileBytes, originalFileName);
+                    }
+                    else
+                    {
+                        await _emailSender.SendEmailAsync("omaraladeeb45@gmail.com", emailSubject, emailBody);
+                    }
+                }
+                catch (Exception emailEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CR Email Error]: {emailEx.Message}");
+                }
+
+                return Json(new
+                {
+                    success = true,
+                    message = "تم إنشاء التذكرة وإرسال إشعار فوري لفريق التطوير بنجاح.",
+                    ticketCode = ticketCode,
+                    id = newId
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateChangeRequestStatus([FromForm] Exam.DTOs.UpdateChangeRequestStatusDto model)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var isResolved = model.Status.Equals("Resolved", StringComparison.OrdinalIgnoreCase) || model.Status.Equals("Closed", StringComparison.OrdinalIgnoreCase);
+                
+                const string updateSql = @"
+                    UPDATE ChangeRequests
+                    SET Status = @Status,
+                        DevNotes = CASE WHEN @DevNotes IS NOT NULL AND @DevNotes <> '' THEN @DevNotes ELSE DevNotes END,
+                        UpdatedAt = GETDATE(),
+                        ResolvedAt = CASE WHEN @IsResolved = 1 THEN GETDATE() ELSE ResolvedAt END
+                    WHERE Id = @Id;";
+
+                await conn.ExecuteAsync(updateSql, new
+                {
+                    Id = model.Id,
+                    Status = model.Status,
+                    DevNotes = model.DevNotes,
+                    IsResolved = isResolved ? 1 : 0
+                });
+
+                return Json(new { success = true, message = "تم تحديث حالة التذكرة بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ: " + ex.Message });
+            }
+        }
+        #endregion
     }
 
     internal static class BranchNameResolver

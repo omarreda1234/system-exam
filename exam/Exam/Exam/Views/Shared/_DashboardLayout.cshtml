@@ -5,13 +5,14 @@
     bool isIframe = Context.Request.Query.ContainsKey("iframe");
 
     var userRoles = User.Claims
-        .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+        .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
         .Select(c => c.Value)
         .ToList();
 
     bool HasAccess(string ctrl, string act)
     {
-        if (userRoles.Contains("Admin")) return true;
+        if (userRoles.Any(r => string.Equals(r, "Admin", StringComparison.OrdinalIgnoreCase))) return true;
+        if (string.Equals(ctrl, "Admin", StringComparison.OrdinalIgnoreCase) && string.Equals(act, "ChangeRequests", StringComparison.OrdinalIgnoreCase)) return true;
         return ExamService.HasPermissionAsync(userRoles, ctrl, act).GetAwaiter().GetResult();
     }
 }
@@ -380,7 +381,7 @@
                             : "flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium transition-all";
                     }
 
-                    @if (HasAccess("Admin", "Index") || HasAccess("Admin", "Items") || HasAccess("Admin", "WeeklyExams") || HasAccess("Admin", "WaveExams") || HasAccess("Admin", "Assignments"))
+                    @if (HasAccess("Admin", "Index") || HasAccess("Admin", "Items") || HasAccess("Admin", "WeeklyExams") || HasAccess("Admin", "WaveExams") || HasAccess("Admin", "Assignments") || HasAccess("Admin", "ChangeRequests"))
                     {
                         <div class="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest px-4 mb-4 mt-6">Main Operations</div>
                         
@@ -391,6 +392,12 @@
                                 <span>LMS Overview</span>
                             </a>
                         }
+
+                        <a href="@Url.Action("ChangeRequests", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "changerequests")">
+                            <i class="fas fa-headset w-5 text-indigo-500"></i>
+                            <span>Change Requests (CR)</span>
+                            <span class="ml-auto px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400">CR</span>
+                        </a>
                         
                         @if (HasAccess("Admin", "Items"))
                         {
@@ -634,6 +641,7 @@
                             </a>
                         }
                     }
+
                 </nav>
 
                 <!-- Profile Small -->
@@ -675,7 +683,14 @@
                     </div>
                 </div>
 
-                <div class="flex items-center gap-6">
+                <div class="flex items-center gap-3 sm:gap-6">
+                    <!-- Quick Change Requests (CR) Link -->
+                    <a href="@Url.Action("ChangeRequests", "Admin")" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-xs font-bold transition-all border border-indigo-200/60 dark:border-indigo-800/60 shadow-sm" title="Change Requests & Support Tickets">
+                        <i class="fas fa-headset text-sm"></i>
+                        <span class="hidden sm:inline">Change Requests</span>
+                        <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-indigo-600 text-white">CR</span>
+                    </a>
+
                     <!-- Home Link -->
                     <a href="@Url.Action("Index", "Home")" class="text-slate-500 hover:text-brand-600 transition-colors tooltip" title="Portal Home">
                         <i class="fas fa-home text-lg"></i>
