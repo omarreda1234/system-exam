@@ -12,7 +12,6 @@
     bool HasAccess(string ctrl, string act)
     {
         if (userRoles.Any(r => string.Equals(r, "Admin", StringComparison.OrdinalIgnoreCase))) return true;
-        if (string.Equals(ctrl, "Admin", StringComparison.OrdinalIgnoreCase) && string.Equals(act, "ChangeRequests", StringComparison.OrdinalIgnoreCase)) return true;
         return ExamService.HasPermissionAsync(userRoles, ctrl, act).GetAwaiter().GetResult();
     }
 }
@@ -393,11 +392,14 @@
                             </a>
                         }
 
-                        <a href="@Url.Action("ChangeRequests", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "changerequests")">
-                            <i class="fas fa-headset w-5 text-indigo-500"></i>
-                            <span>Change Requests (CR)</span>
-                            <span class="ml-auto px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400">CR</span>
-                        </a>
+                        @if (HasAccess("Admin", "ChangeRequests"))
+                        {
+                            <a href="@Url.Action("ChangeRequests", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "changerequests")">
+                                <i class="fas fa-headset w-5 text-indigo-500"></i>
+                                <span>Change Requests (CR)</span>
+                                <span class="ml-auto px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400">CR</span>
+                            </a>
+                        }
                         
                         @if (HasAccess("Admin", "Items"))
                         {
@@ -684,12 +686,15 @@
                 </div>
 
                 <div class="flex items-center gap-3 sm:gap-6">
-                    <!-- Quick Change Requests (CR) Link -->
-                    <a href="@Url.Action("ChangeRequests", "Admin")" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-xs font-bold transition-all border border-indigo-200/60 dark:border-indigo-800/60 shadow-sm" title="Change Requests & Support Tickets">
-                        <i class="fas fa-headset text-sm"></i>
-                        <span class="hidden sm:inline">Change Requests</span>
-                        <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-indigo-600 text-white">CR</span>
-                    </a>
+                    @if (HasAccess("Admin", "ChangeRequests"))
+                    {
+                        <!-- Quick Change Requests (CR) Link -->
+                        <a href="@Url.Action("ChangeRequests", "Admin")" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-xs font-bold transition-all border border-indigo-200/60 dark:border-indigo-800/60 shadow-sm" title="Change Requests & Support Tickets">
+                            <i class="fas fa-headset text-sm"></i>
+                            <span class="hidden sm:inline">Change Requests</span>
+                            <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-indigo-600 text-white">CR</span>
+                        </a>
+                    }
 
                     <!-- Home Link -->
                     <a href="@Url.Action("Index", "Home")" class="text-slate-500 hover:text-brand-600 transition-colors tooltip" title="Portal Home">

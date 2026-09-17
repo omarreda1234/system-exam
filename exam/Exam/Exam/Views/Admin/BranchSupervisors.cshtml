@@ -1,10 +1,26 @@
 @model IEnumerable<Exam.Controllers.BranchSupervisorViewModel>
 @using Exam.DTOs
+@using System.Web
+@inject Exam.Services.IExamService ExamService
 @{
     ViewData["Title"] = "Branch Supervisors Management / إدارة مشرفي الفروع";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
     var allBranches = ViewBag.AllBranches as IEnumerable<BranchDto> ?? new List<BranchDto>();
     var allSupervisorUsers = ViewBag.AllSupervisorUsers as IEnumerable<dynamic> ?? new List<dynamic>();
+
+    var userRoles = User.Claims
+        .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
+        .Select(c => c.Value)
+        .ToList();
+
+    bool HasSpecificPermission(string permissionType)
+    {
+        if (User.IsInRole("Admin") || userRoles.Contains("Admin")) return true;
+        return ExamService.HasSpecificPermissionAsync(userRoles, "Admin", "BranchSupervisors", permissionType).GetAwaiter().GetResult();
+    }
+
+    bool canCreate = User.IsInRole("Admin") || HasSpecificPermission("create");
+    bool canEdit = User.IsInRole("Admin") || HasSpecificPermission("edit");
 }
 
 @Html.AntiForgeryToken()
@@ -21,7 +37,7 @@
                     </h1>
                     <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-1">Assign multi-branch access and visibility for supervisors / تخصيص والتحكم في رؤية الفروع للمشرفين</p>
                 </div>
-                @if (User.IsInRole("Admin"))
+                @if (canCreate || canEdit)
                 {
                     <div class="flex items-center gap-3">
                         <button onclick="openAssignSupervisorModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2 group">
@@ -102,11 +118,15 @@
                                 </td>
                                 <td>
                                     <div class="flex items-center justify-end gap-2">
-                                        @if (User.IsInRole("Admin"))
+                                        @if (canEdit)
                                         {
                                             <button onclick="editBranchesForUser('@sup.UserId', '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(sup.FullName))')" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shrink-0 border border-indigo-100 dark:border-indigo-900/30 flex items-center gap-1.5">
                                                 <i class="fas fa-sliders-h"></i> Edit Branches / تعديل الفروع
                                             </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-[10px] font-bold text-slate-400">View Only / عرض فقط</span>
                                         }
                                     </div>
                                 </td>

@@ -3394,6 +3394,19 @@ DELETE FROM AspNetUsers WHERE Id = @UserId;",
                           WHERE sub.RoleName = rp.RoleName 
                             AND LOWER(sub.ControllerName) = 'admin' 
                             AND LOWER(sub.ActionName) = LOWER(childAction.ActionName)
+                      );
+
+                    -- Sync ChangeRequests sub-actions for any role with ChangeRequests permission
+                    INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
+                    SELECT rp.RoleName, 'Admin', childAction.ActionName, rp.CanAccess, rp.CanCreate, rp.CanEdit, rp.CanDelete
+                    FROM RolePermissions rp
+                    CROSS JOIN (VALUES ('GetChangeRequestsList'), ('CreateChangeRequest'), ('GetChangeRequestDetails'), ('UpdateChangeRequestStatus')) AS childAction(ActionName)
+                    WHERE LOWER(rp.ControllerName) = 'admin' AND LOWER(rp.ActionName) = 'changerequests'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM RolePermissions sub 
+                          WHERE sub.RoleName = rp.RoleName 
+                            AND LOWER(sub.ControllerName) = 'admin' 
+                            AND LOWER(sub.ActionName) = LOWER(childAction.ActionName)
                       );");
             }
             catch (Exception ex)

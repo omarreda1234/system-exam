@@ -74,8 +74,7 @@ namespace Exam.Controllers
             "EditWave", "DeleteWave", "CreateWave", "CloneWave", "AssignUsersToWave", "WaveDetails", "GetWaveUserIds", "GetUsersByWaveId", "RemoveUserFromWave",
             "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
             "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode",
-            "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails",
-            "ChangeRequests", "GetChangeRequestsList", "CreateChangeRequest", "GetChangeRequestDetails", "UpdateChangeRequestStatus"
+            "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
@@ -4098,6 +4097,7 @@ ORDER BY U.UserName ASC";
         private static readonly List<(string Key, string Name, string Ctrl, string Act, string[] AddActs)> DashboardModules = new()
         {
             ("LMS_Overview", "LMS Overview (Examination Dash)", "Admin", "Index", new string[] { }),
+            ("ChangeRequests", "Change Requests (CR)", "Admin", "ChangeRequests", new[] { "GetChangeRequestsList", "CreateChangeRequest", "GetChangeRequestDetails", "UpdateChangeRequestStatus" }),
             ("AttendanceDash", "Attendance Dashboard", "Attendance", "Index", new string[] { }),
             ("ProgramDash", "Program Dashboard", "Materials", "Index", new string[] { }),
             ("Items", "Items Management", "Admin", "Items", new[] { "AddItem", "EditItem", "DeleteItem", "GetItemsPaged", "UpdateItemCustomDefinition", "SyncItems" }),
@@ -6327,6 +6327,20 @@ ORDER BY U.UserName ASC";
         {
             if (dto == null || string.IsNullOrEmpty(dto.UserId))
                 return Json(new { success = false, message = "بيانات غير صالحة" });
+
+            var userRoles = User.Claims
+                .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
+                .Select(c => c.Value)
+                .ToList();
+
+            bool canEdit = User.IsInRole("Admin") || userRoles.Contains("Admin")
+                || await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "BranchSupervisors", "edit")
+                || await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "BranchSupervisors", "create");
+
+            if (!canEdit)
+            {
+                return Json(new { success = false, message = "غير مصرح لك بتعديل فروع المشرفين" });
+            }
 
             using var conn = new SqlConnection(_connectionString);
             await conn.OpenAsync();
