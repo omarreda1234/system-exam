@@ -363,30 +363,42 @@
                 </div>
             </div>
 
+            <!-- Existing Developer Notes Display -->
+            <div id="dtlDevNotesBox" class="hidden">
+                <span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                    <i class="fas fa-comment-dots"></i> Latest Developer Response
+                </span>
+                <div id="dtlDevNotes" class="mt-1.5 p-4 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/60 leading-relaxed text-indigo-950 dark:text-indigo-200 whitespace-pre-wrap font-medium"></div>
+            </div>
+
             <!-- Developer Notes / Actions Form -->
             <div class="pt-4 border-t border-slate-100 dark:border-slate-800">
                 <span class="text-[10px] font-extrabold uppercase tracking-wider text-brand-600 dark:text-brand-400 block mb-2">Update Ticket Status & Dev Notes</span>
-                <form id="updateStatusForm" onsubmit="submitStatusUpdate(event)" class="space-y-3">
+                <form id="updateStatusForm" onsubmit="submitStatusUpdate(event)" class="space-y-4">
                     <input type="hidden" id="updateTicketId" name="Id" />
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-[10px] font-bold text-slate-400 mb-1">Current Status</label>
-                            <select id="updateStatusSelect" name="Status" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500">
+                    
+                    <!-- Developer Response TextArea -->
+                    <div>
+                        <label class="block text-[10px] font-extrabold text-slate-400 mb-1">Developer Response / Notes</label>
+                        <textarea id="updateDevNotes" name="DevNotes" rows="5" placeholder="Write developer feedback, clarification questions, implementation notes, or deployment details here..." class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all resize-y min-h-[120px] leading-relaxed shadow-inner"></textarea>
+                    </div>
+
+                    <!-- Status Selector & Save Button Row -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                        <div class="w-full sm:w-72">
+                            <label class="block text-[10px] font-extrabold text-slate-400 mb-1">Update Status</label>
+                            <select id="updateStatusSelect" name="Status" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500">
                                 <option value="Open">Open (Under Review)</option>
                                 <option value="In Progress">In Progress</option>
                                 <option value="Resolved">Resolved / Completed</option>
                                 <option value="Closed">Closed</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-slate-400 mb-1">Developer Response / Notes</label>
-                            <input type="text" id="updateDevNotes" name="DevNotes" placeholder="e.g. Issue resolved in v3.1, deployed on staging..." class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500" />
+                        <div class="sm:self-end">
+                            <button type="submit" id="btnSaveStatus" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2">
+                                <i class="fas fa-save text-[11px]"></i> Save Status
+                            </button>
                         </div>
-                    </div>
-                    <div class="flex justify-end">
-                        <button type="submit" id="btnSaveStatus" class="px-5 py-2 rounded-xl bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white font-bold text-xs transition-all">
-                            Save Status
-                        </button>
                     </div>
                 </form>
             </div>
@@ -638,6 +650,14 @@
                         $('#dtlAttachmentBox').removeClass('hidden');
                     } else {
                         $('#dtlAttachmentBox').addClass('hidden');
+                    }
+
+                    // Existing Dev Notes Display
+                    if (t.devNotes && t.devNotes.trim().length > 0) {
+                        $('#dtlDevNotes').text(t.devNotes);
+                        $('#dtlDevNotesBox').removeClass('hidden');
+                    } else {
+                        $('#dtlDevNotesBox').addClass('hidden');
                     }
 
                     // Status Badge
