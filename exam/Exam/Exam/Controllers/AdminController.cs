@@ -74,7 +74,8 @@ namespace Exam.Controllers
             "EditWave", "DeleteWave", "CreateWave", "CloneWave", "AssignUsersToWave", "WaveDetails", "GetWaveUserIds", "GetUsersByWaveId", "RemoveUserFromWave",
             "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
             "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode",
-            "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails"
+            "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails",
+            "DownloadBranchUpdateTemplate", "ImportBranchUpdatesFromExcel"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
@@ -4111,7 +4112,7 @@ ORDER BY U.UserName ASC";
             ("Certificates", "Certificates Management", "Admin", "Certificates", new[] { "ExportWaveResultsToExcel", "UploadCertificatesOnlyExcel", "SendCertificates", "MoveUserToWave", "UploadCertificatesPdfs", "GetStudentWaveDetails" }),
             ("TraineeProfile", "Trainee 360° Profile", "Admin", "TraineeProfile", new[] { "GetTraineeDetailsByCode", "GetUnassignedUsersList", "ExportUnassignedUsersToExcel", "SearchTrainees", "GetTrainee360Data" }),
             ("NewCome", "New Come Requests (Pending)", "Admin", "PendingRequests", new[] { "ApproveRequest", "RejectRequest" }),
-            ("PersonnelRegistry", "Personnel Registry (Main Access)", "Admin", "AllUsers", new[] { "GetUsersPaged", "AddUser", "DownloadPersonnelTemplate", "CheckExistence" }),
+            ("PersonnelRegistry", "Personnel Registry (Main Access)", "Admin", "AllUsers", new[] { "GetUsersPaged", "AddUser", "DownloadPersonnelTemplate", "CheckExistence", "DownloadBranchUpdateTemplate", "ImportBranchUpdatesFromExcel" }),
             ("Personnel_EditProfile", "Personnel Action: Edit Profile & Branch", "Admin", "UpdateUserProfile", new string[] { }),
             ("Personnel_EditShift", "Personnel Action: Change Shift", "Admin", "UpdateUserShift", new string[] { }),
             ("Personnel_EditRole", "Personnel Action: Change Role / Classification", "Admin", "UpdateUserRole", new string[] { }),
@@ -5402,6 +5403,288 @@ ORDER BY U.UserName ASC";
                     var content = stream.ToArray();
                     return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Personnel_Import_Template.xlsx");
                 }
+            }
+        }
+
+        [HttpGet]
+        public IActionResult DownloadBranchUpdateTemplate()
+        {
+            using (var workbook = new XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Branch Update Template");
+
+                // Headers
+                worksheet.Cell(1, 1).Value = "UserCode";
+                worksheet.Cell(1, 2).Value = "BranchName";
+
+                // Format header row to look professional
+                var headerRange = worksheet.Range("A1:B1");
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Font.FontColor = XLColor.White;
+                headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f172a"); // Slate 900
+                headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                // Set borders for rows 2 to 20
+                for (int row = 2; row <= 20; row++)
+                {
+                    for (int col = 1; col <= 2; col++)
+                    {
+                        worksheet.Cell(row, col).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        worksheet.Cell(row, col).Style.Border.OutsideBorderColor = XLColor.FromHtml("#cbd5e1"); // Slate 300
+                    }
+                }
+
+                // Sample guidance rows
+                worksheet.Cell(2, 1).Value = "1001";
+                worksheet.Cell(2, 2).Value = "فرع التجمع الخامس";
+                worksheet.Cell(3, 1).Value = "1002";
+                worksheet.Cell(3, 2).Value = "فرع الدقي";
+
+                // Pre-adjust column widths
+                worksheet.Column(1).Width = 22; // UserCode
+                worksheet.Column(2).Width = 35; // BranchName
+
+                using (var stream = new MemoryStream())
+                {
+                    workbook.SaveAs(stream);
+                    var content = stream.ToArray();
+                    return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Branch_Update_Template.xlsx");
+                }
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ImportBranchUpdatesFromExcel(IFormFile branchExcelFile)
+        {
+            if (branchExcelFile == null || branchExcelFile.Length == 0)
+            {
+                return Json(new { success = false, message = "يرجى اختيار ملف إكسيل (.xlsx أو .xls)." });
+            }
+
+            var ext = Path.GetExtension(branchExcelFile.FileName);
+            if (!string.Equals(ext, ".xlsx", StringComparison.OrdinalIgnoreCase) && !string.Equals(ext, ".xls", StringComparison.OrdinalIgnoreCase))
+            {
+                return Json(new { success = false, message = "صيغة الملف غير مدعومة. يرجى رفع ملف إكسيل بصيغة .xlsx." });
+            }
+
+            var successCount = 0;
+            var skippedCount = 0;
+            var errorLines = new List<string>();
+
+            try
+            {
+                using var memoryStream = new MemoryStream();
+                await branchExcelFile.CopyToAsync(memoryStream);
+                memoryStream.Position = 0;
+
+                using var workbook = new XLWorkbook(memoryStream);
+                var worksheet = workbook.Worksheets.FirstOrDefault();
+                if (worksheet == null)
+                {
+                    return Json(new { success = false, message = "ملف الإكسيل لا يحتوي على أي صفحات عمل." });
+                }
+
+                var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                var headerRow = 1;
+
+                // Detect header row in first 5 rows
+                for (int r = 1; r <= 5; r++)
+                {
+                    headers.Clear();
+                    for (int col = 1; col <= 20; col++)
+                    {
+                        var val = worksheet.Cell(r, col).Value.ToString()?.Trim();
+                        if (!string.IsNullOrWhiteSpace(val) && !headers.ContainsKey(val))
+                        {
+                            headers[val] = col;
+                        }
+                    }
+
+                    if (headers.ContainsKey("UserCode") || headers.ContainsKey("Code") || headers.ContainsKey("كود") || 
+                        headers.ContainsKey("BranchName") || headers.ContainsKey("Branch") || headers.ContainsKey("الفرع") ||
+                        headers.ContainsKey("Usercode") || headers.ContainsKey("EmployeeCode"))
+                    {
+                        headerRow = r;
+                        break;
+                    }
+                }
+
+                var usedCols = new HashSet<int>();
+
+                int? GetCol(params string[] possibleNames)
+                {
+                    // 1. Exact match
+                    foreach (var name in possibleNames)
+                    {
+                        var clean = name.Trim();
+                        if (headers.TryGetValue(clean, out var colIndex) && !usedCols.Contains(colIndex))
+                        {
+                            usedCols.Add(colIndex);
+                            return colIndex;
+                        }
+                    }
+
+                    // 2. Normalized match (remove spaces, underscores, dashes)
+                    foreach (var name in possibleNames)
+                    {
+                        var normTarget = name.Replace(" ", "").Replace("_", "").Replace("-", "").Trim();
+                        foreach (var kvp in headers)
+                        {
+                            if (usedCols.Contains(kvp.Value)) continue;
+                            var normHeader = kvp.Key.Replace(" ", "").Replace("_", "").Replace("-", "").Trim();
+                            if (string.Equals(normTarget, normHeader, StringComparison.OrdinalIgnoreCase))
+                            {
+                                usedCols.Add(kvp.Value);
+                                return kvp.Value;
+                            }
+                        }
+                    }
+
+                    return null;
+                }
+
+                var colUserCode = GetCol("UserCode", "User Code", "Code", "الكود", "كود", "كود المستخدم", "كود الموظف", "كود المتدرب", "Usercode", "ID", "EmployeeCode", "NationalId");
+                var colBranchName = GetCol("BranchName", "Branch Name", "Branch", "BranchCode", "Location", "الفرع", "اسم الفرع", "اسم branch", "branch", "فرع", "المنطقة");
+
+                var missingColumns = new List<string>();
+                if (colUserCode == null) missingColumns.Add("UserCode (كود الموظف)");
+                if (colBranchName == null) missingColumns.Add("BranchName (اسم الفرع)");
+
+                if (missingColumns.Any())
+                {
+                    var missingStr = string.Join(", ", missingColumns);
+                    return Json(new
+                    {
+                        success = false,
+                        message = $"الملف المرفوع تنقصه الأعمدة التالية أو لم يتم التعرف عليها: <br/><strong class='text-rose-600'>{missingStr}</strong>.<br/><br/>الأعمدة المطلوبة:<br/>1. <b>UserCode</b> (أو كود الموظف)<br/>2. <b>BranchName</b> (أو اسم الفرع)"
+                    });
+                }
+
+                var branchList = (await _examService.GetAllBranchesAsync())
+                    .Select(b => (
+                        Id: int.TryParse(b.Id, out var bid) ? bid : 0,
+                        Name: (b.BranchName ?? "").Trim(),
+                        Code: (b.BranchCode ?? "").Trim()))
+                    .Where(b => b.Id > 0 && (!string.IsNullOrEmpty(b.Name) || !string.IsNullOrEmpty(b.Code)))
+                    .ToList();
+
+                var branchIdByExcelValue = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
+
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? headerRow;
+
+                for (int row = headerRow + 1; row <= lastRow; row++)
+                {
+                    var cellCode = worksheet.Cell(row, colUserCode.Value);
+                    string rawUserCode = null;
+                    if (cellCode.DataType == XLDataType.Number)
+                    {
+                        rawUserCode = ((long)cellCode.GetDouble()).ToString();
+                    }
+                    else
+                    {
+                        rawUserCode = cellCode.Value.ToString()?.Trim();
+                        if (!string.IsNullOrWhiteSpace(rawUserCode) && double.TryParse(rawUserCode, out var dCode))
+                        {
+                            rawUserCode = ((long)dCode).ToString();
+                        }
+                    }
+
+                    var cellBranch = worksheet.Cell(row, colBranchName.Value);
+                    var rawBranchName = cellBranch.Value.ToString()?.Trim();
+
+                    if (string.IsNullOrWhiteSpace(rawUserCode) && string.IsNullOrWhiteSpace(rawBranchName))
+                    {
+                        continue; // Empty row
+                    }
+
+                    if (string.IsNullOrWhiteSpace(rawUserCode))
+                    {
+                        errorLines.Add($"السطر {row}: كود الموظف (UserCode) فارغ.");
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(rawBranchName))
+                    {
+                        errorLines.Add($"السطر {row}: اسم الفرع فارغ للموظف صاحب الكود '{rawUserCode}'.");
+                        continue;
+                    }
+
+                    string cleanUserCode = rawUserCode.Trim();
+
+                    // Resolve Branch
+                    int? branchId = null;
+                    if (!branchIdByExcelValue.TryGetValue(rawBranchName, out branchId))
+                    {
+                        branchId = BranchNameResolver.ResolveBranchId(rawBranchName, branchList);
+                        branchIdByExcelValue[rawBranchName] = branchId;
+                    }
+
+                    if (!branchId.HasValue)
+                    {
+                        errorLines.Add($"السطر {row}: لم يتم العثور على الفرع '{rawBranchName}' في النظام (كود الموظف: {cleanUserCode}).");
+                        continue;
+                    }
+
+                    // Find matching user(s) by UserCode
+                    var userRows = (await conn.QueryAsync<dynamic>(@"
+                        SELECT Id, FullName, UserName, UserCode, BranchId 
+                        FROM AspNetUsers 
+                        WHERE LTRIM(RTRIM(UserCode)) = @Code 
+                           OR (TRY_CAST(UserCode AS BIGINT) = TRY_CAST(@Code AS BIGINT) AND @Code NOT LIKE '%[^0-9]%')",
+                        new { Code = cleanUserCode })).ToList();
+
+                    if (userRows.Count == 0)
+                    {
+                        errorLines.Add($"السطر {row}: لم يتم العثور على موظف بالكود '{cleanUserCode}'.");
+                        continue;
+                    }
+
+                    bool anyUpdated = false;
+                    foreach (var u in userRows)
+                    {
+                        string userId = (string)u.Id;
+                        int? currentBranchId = u.BranchId != null ? (int?)u.BranchId : null;
+
+                        if (currentBranchId != branchId.Value)
+                        {
+                            await conn.ExecuteAsync("UPDATE AspNetUsers SET BranchId = @BranchId WHERE Id = @UserId", 
+                                new { BranchId = branchId.Value, UserId = userId });
+                            anyUpdated = true;
+                        }
+                    }
+
+                    if (anyUpdated)
+                    {
+                        successCount++;
+                    }
+                    else
+                    {
+                        skippedCount++;
+                    }
+                }
+
+                var msg = $"تم تحديث فرع {successCount} موظف بنجاح.";
+                if (skippedCount > 0)
+                {
+                    msg += $" (تم تخطي {skippedCount} لأنهم مسجلين بالفعل بنفس الفرع)";
+                }
+
+                return Json(new
+                {
+                    success = true,
+                    updatedCount = successCount,
+                    skippedCount = skippedCount,
+                    errors = errorLines,
+                    message = msg
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ أثناء معالجة ملف الإكسيل: " + ex.Message });
             }
         }
 

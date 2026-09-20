@@ -47,9 +47,22 @@
         </div>
     </div>
 
-    @if (ViewBag.CanCreateUser == true)
+    @if (ViewBag.CanCreateUser == true || ViewBag.CanEditProfile == true)
     {
-        <form id="importForm" asp-action="ImportUsersFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
+        <!-- Ingress Action Switcher Tabs -->
+        <div class="flex flex-wrap items-center gap-2 mb-4 p-1 bg-slate-100 dark:bg-slate-800/60 rounded-2xl w-fit border border-slate-200/80 dark:border-slate-700/80">
+            <button type="button" id="tabBtnPersonnel" onclick="switchIngressTab('personnel')" class="px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm">
+                <i class="fas fa-user-plus text-brand-600"></i>
+                <span>Add Personnel (.xlsx) / إضافة موظفين</span>
+            </button>
+            <button type="button" id="tabBtnBranches" onclick="switchIngressTab('branches')" class="px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                <i class="fas fa-building-user text-indigo-600 dark:text-indigo-400"></i>
+                <span>Update Branches (.xlsx) / تغيير وتحديث الفرع</span>
+            </button>
+        </div>
+
+        <!-- Form 1: Personnel Registration Ingestion -->
+        <form id="importForm" asp-action="ImportUsersFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="ingress-tab-pane flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
             @Html.AntiForgeryToken()
             <div class="flex-1 min-w-[300px] space-y-2">
                 <div class="flex justify-between items-center px-1">
@@ -68,6 +81,26 @@
                 <span id="btnImportInner" style="display:flex;align-items:center;gap:10px;">
                     <i class="fas fa-file-import"></i>
                     Execute Ingestion
+                </span>
+            </button>
+        </form>
+
+        <!-- Form 2: Branch Bulk Update -->
+        <form id="branchUpdateForm" asp-action="ImportBranchUpdatesFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="ingress-tab-pane hidden flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
+            @Html.AntiForgeryToken()
+            <div class="flex-1 min-w-[300px] space-y-2">
+                <div class="flex justify-between items-center px-1">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Branch Update Payload (.xlsx) [UserCode + BranchName]</label>
+                    <a href="/Admin/DownloadBranchUpdateTemplate" class="text-[10px] font-extrabold text-indigo-600 hover:text-indigo-700 uppercase tracking-wider flex items-center gap-1">
+                        <i class="fas fa-download"></i> Download Template / تحميل النموذج
+                    </a>
+                </div>
+                <input id="branchExcelFileInput" type="file" name="branchExcelFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-indigo-600 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-white dark:bg-slate-950 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
+            </div>
+            <button type="submit" id="btnBranchUpdate" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg flex items-center gap-3" style="min-width:180px;justify-content:center;">
+                <span id="btnBranchUpdateInner" style="display:flex;align-items:center;gap:10px;">
+                    <i class="fas fa-building-user"></i>
+                    Update Branches / تحديث الفروع
                 </span>
             </button>
         </form>
@@ -644,6 +677,96 @@
             }
             // شلنا الـ finally وحطينا الإخفاء يدوي في كل مسار لضمان الدقة
         });
+
+        function switchIngressTab(tab) {
+            if (tab === 'branches') {
+                $('#importForm').addClass('hidden');
+                $('#branchUpdateForm').removeClass('hidden');
+                $('#tabBtnBranches')
+                    .removeClass('text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white')
+                    .addClass('bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm');
+                $('#tabBtnPersonnel')
+                    .removeClass('bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm')
+                    .addClass('text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white');
+            } else {
+                $('#branchUpdateForm').addClass('hidden');
+                $('#importForm').removeClass('hidden');
+                $('#tabBtnPersonnel')
+                    .removeClass('text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white')
+                    .addClass('bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm');
+                $('#tabBtnBranches')
+                    .removeClass('bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm')
+                    .addClass('text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white');
+            }
+        }
+
+        $('#branchUpdateForm').on('submit', async function (e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('branchExcelFileInput');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                return Swal.fire('تنبيه', 'يرجى اختيار ملف إكسيل (.xlsx) أولاً.', 'warning');
+            }
+
+            const fd = new FormData(this);
+            const $btn = $('#btnBranchUpdate');
+            const originalBtnHtml = $btn.html();
+
+            $btn.prop('disabled', true).css('opacity', 0.6).html('<i class="fas fa-spinner fa-spin mr-2"></i> جاري التحديث...');
+
+            try {
+                const response = await fetch(this.action, {
+                    method: 'POST',
+                    body: fd,
+                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
+                });
+
+                const contentType = response.headers.get("content-type");
+                if (!response.ok || !contentType || !contentType.includes("application/json")) {
+                    throw new Error("استجابة الخادم غير صالحة أو حدث خطأ داخلي.");
+                }
+
+                const res = await response.json();
+
+                if (res.success) {
+                    if (res.errors && res.errors.length > 0) {
+                        let errHtml = '<ul class="text-right text-xs text-rose-500 overflow-y-auto max-h-48 mt-4 list-disc pr-4" dir="rtl">';
+                        res.errors.forEach(e => { errHtml += `<li>${String(e).replace(/</g, '&lt;')}</li>`; });
+                        errHtml += '</ul>';
+
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'اكتمل التحديث مع وجود ملاحظات',
+                            width: '640px',
+                            html: `<p class="text-sm font-bold text-slate-700 dark:text-slate-200">${res.message}</p>${errHtml}`,
+                            confirmButtonText: 'حسناً'
+                        }).then(() => {
+                            if (window.table) window.table.ajax.reload(null, false);
+                            else location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'تم بنجاح',
+                            text: res.message,
+                            timer: 2500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            if (window.table) window.table.ajax.reload(null, false);
+                            else location.reload();
+                        });
+                    }
+                    fileInput.value = '';
+                } else {
+                    Swal.fire('خطأ', res.message || 'فشل تحديث الفروع', 'error');
+                }
+            } catch (err) {
+                console.error("Branch Update Error:", err);
+                Swal.fire('خطأ', 'فشل إرسال طلب التحديث: ' + (err.message || 'Network error'), 'error');
+            } finally {
+                $btn.prop('disabled', false).css('opacity', 1).html(originalBtnHtml);
+            }
+        });
+
         function deactivateUser(userId) {
             Swal.fire({
                 title: 'Deactivate Personnel?',
