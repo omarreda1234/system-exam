@@ -5413,9 +5413,9 @@ ORDER BY U.UserName ASC";
             {
                 var worksheet = workbook.Worksheets.Add("Branch Update Template");
 
-                // Headers: UserCode + BranchCode
-                worksheet.Cell(1, 1).Value = "UserCode";
-                worksheet.Cell(1, 2).Value = "BranchCode";
+                // Headers: كود الموظف + كود الفرع المنقول ليه
+                worksheet.Cell(1, 1).Value = "كود الموظف";
+                worksheet.Cell(1, 2).Value = "كود الفرع المنقول ليه";
 
                 // Format header row to look professional
                 var headerRange = worksheet.Range("A1:B1");
@@ -5457,8 +5457,8 @@ ORDER BY U.UserName ASC";
                 }
 
                 // Pre-adjust column widths
-                worksheet.Column(1).Width = 22; // UserCode
-                worksheet.Column(2).Width = 25; // BranchCode
+                worksheet.Column(1).Width = 22; // كود الموظف
+                worksheet.Column(2).Width = 30; // كود الفرع المنقول ليه
 
                 // Guide Sheet: List of all active system branches and their codes for easy reference
                 var guideSheet = workbook.Worksheets.Add("Active Branches Guide");
@@ -5543,7 +5543,9 @@ ORDER BY U.UserName ASC";
                         }
                     }
 
-                    if (headers.ContainsKey("UserCode") || headers.ContainsKey("Code") || headers.ContainsKey("كود") || 
+                    if (headers.ContainsKey("كود الموظف") || headers.ContainsKey("كود الفرع المنقول ليه") ||
+                        headers.ContainsKey("كود الفرع المنقول اليه") || headers.ContainsKey("UserCode") || 
+                        headers.ContainsKey("Code") || headers.ContainsKey("كود") || 
                         headers.ContainsKey("BranchCode") || headers.ContainsKey("BranchName") || headers.ContainsKey("Branch") || 
                         headers.ContainsKey("الفرع") || headers.ContainsKey("كود الفرع") || headers.ContainsKey("Usercode") || 
                         headers.ContainsKey("EmployeeCode"))
@@ -5587,12 +5589,12 @@ ORDER BY U.UserName ASC";
                     return null;
                 }
 
-                var colUserCode = GetCol("UserCode", "User Code", "Code", "الكود", "كود", "كود المستخدم", "كود الموظف", "كود المتدرب", "Usercode", "ID", "EmployeeCode", "NationalId");
-                var colBranchCode = GetCol("BranchCode", "Branch Code", "Branch_Code", "كود الفرع", "كود فرع", "رمز الفرع", "BranchName", "Branch Name", "Branch", "Location", "الفرع", "اسم الفرع", "اسم branch", "branch", "فرع", "المنطقة");
+                var colUserCode = GetCol("كود الموظف", "كود المستخدم", "كود المتدرب", "UserCode", "User Code", "Code", "الكود", "كود", "Usercode", "ID", "EmployeeCode", "NationalId");
+                var colBranchCode = GetCol("كود الفرع المنقول ليه", "كود الفرع المنقول اليه", "الفرع المنقول ليه", "الفرع المنقول اليه", "BranchCode", "Branch Code", "Branch_Code", "كود الفرع", "كود فرع", "رمز الفرع", "BranchName", "Branch Name", "Branch", "Location", "الفرع", "اسم الفرع", "اسم branch", "branch", "فرع", "المنطقة");
 
                 var missingColumns = new List<string>();
-                if (colUserCode == null) missingColumns.Add("UserCode (كود الموظف)");
-                if (colBranchCode == null) missingColumns.Add("BranchCode (كود الفرع)");
+                if (colUserCode == null) missingColumns.Add("كود الموظف (UserCode)");
+                if (colBranchCode == null) missingColumns.Add("كود الفرع المنقول ليه (BranchCode)");
 
                 if (missingColumns.Any())
                 {
@@ -5600,7 +5602,7 @@ ORDER BY U.UserName ASC";
                     return Json(new
                     {
                         success = false,
-                        message = $"الملف المرفوع تنقصه الأعمدة التالية أو لم يتم التعرف عليها: <br/><strong class='text-rose-600'>{missingStr}</strong>.<br/><br/>الأعمدة المطلوبة:<br/>1. <b>UserCode</b> (كود الموظف)<br/>2. <b>BranchCode</b> (كود الفرع)"
+                        message = $"الملف المرفوع تنقصه الأعمدة التالية أو لم يتم التعرف عليها: <br/><strong class='text-rose-600'>{missingStr}</strong>.<br/><br/>الأعمدة المطلوبة:<br/>1. <b>كود الموظف</b> (أو UserCode)<br/>2. <b>كود الفرع المنقول ليه</b> (أو BranchCode)"
                     });
                 }
 
