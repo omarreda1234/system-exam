@@ -528,6 +528,14 @@ namespace Exam.Controllers
                 using var conn = new SqlConnection(_connectionString);
                 await conn.OpenAsync();
 
+                var branchList = (await _examService.GetAllBranchesAsync())
+                    .Select(b => (
+                        Id: int.TryParse(b.Id, out var bid) ? bid : 0,
+                        Name: (b.BranchName ?? "").Trim(),
+                        Code: (b.BranchCode ?? "").Trim()))
+                    .Where(b => b.Id > 0 && (!string.IsNullOrEmpty(b.Name) || !string.IsNullOrEmpty(b.Code)))
+                    .ToList();
+
                 for (int row = headerRow + 1; row <= lastRow; row++)
                 {
                     var rawUserCode = worksheet.Cell(row, colUserCode.Value).Value.ToString()?.Trim();
@@ -634,11 +642,7 @@ namespace Exam.Controllers
                         int? resolvedBranchId = null;
                         if (!string.IsNullOrWhiteSpace(rawBranchName))
                         {
-                            var dbBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
-                                "SELECT Id FROM dbo.Branches WHERE BranchName = @BranchName",
-                                new { BranchName = rawBranchName });
-
-                            resolvedBranchId = dbBranchId;
+                            resolvedBranchId = BranchNameResolver.ResolveBranchId(rawBranchName, branchList);
                         }
                         else
                         {
@@ -652,11 +656,7 @@ namespace Exam.Controllers
 
                             if (!string.IsNullOrWhiteSpace(hrLocation))
                             {
-                                var dbBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
-                                    "SELECT Id FROM dbo.Branches WHERE BranchName = @BranchName",
-                                    new { BranchName = hrLocation.Trim() });
-
-                                resolvedBranchId = dbBranchId;
+                                resolvedBranchId = BranchNameResolver.ResolveBranchId(hrLocation.Trim(), branchList);
                             }
                         }
 
@@ -714,21 +714,10 @@ namespace Exam.Controllers
                         }
                         if (!string.IsNullOrWhiteSpace(rawBranchName))
                         {
-                            var dbBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
-                                "SELECT Id FROM dbo.Branches WHERE BranchName = @BranchName",
-                                new { BranchName = rawBranchName });
-
-                            if (dbBranchId == null)
+                            var dbBranchId = BranchNameResolver.ResolveBranchId(rawBranchName, branchList);
+                            if (dbBranchId.HasValue && user.BranchId != dbBranchId.Value)
                             {
-                                dbBranchId = await conn.QueryFirstOrDefaultAsync<int>(@"
-                                    INSERT INTO dbo.Branches (BranchName, BranchCode, IsActive)
-                                    VALUES (@BranchName, @BranchName, 1);
-                                    SELECT CAST(SCOPE_IDENTITY() as int);",
-                                    new { BranchName = rawBranchName });
-                            }
-                            if (user.BranchId != dbBranchId)
-                            {
-                                user.BranchId = dbBranchId;
+                                user.BranchId = dbBranchId.Value;
                                 needsUpdate = true;
                             }
                         }
@@ -744,20 +733,12 @@ namespace Exam.Controllers
 
                             if (!string.IsNullOrWhiteSpace(hrLocation))
                             {
-                                var dbBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
-                                    "SELECT Id FROM dbo.Branches WHERE BranchName = @BranchName",
-                                    new { BranchName = hrLocation.Trim() });
-
-                                if (dbBranchId == null)
+                                var dbBranchId = BranchNameResolver.ResolveBranchId(hrLocation.Trim(), branchList);
+                                if (dbBranchId.HasValue && user.BranchId != dbBranchId.Value)
                                 {
-                                    dbBranchId = await conn.QueryFirstOrDefaultAsync<int>(@"
-                                        INSERT INTO dbo.Branches (BranchName, BranchCode, IsActive)
-                                        VALUES (@BranchName, @BranchName, 1);
-                                        SELECT CAST(SCOPE_IDENTITY() as int);",
-                                        new { BranchName = hrLocation.Trim() });
+                                    user.BranchId = dbBranchId.Value;
+                                    needsUpdate = true;
                                 }
-                                user.BranchId = dbBranchId;
-                                needsUpdate = true;
                             }
                         }
 
