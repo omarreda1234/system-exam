@@ -31,13 +31,20 @@
                     </h1>
                     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Manage system branches, codes, and associated resources</p>
                 </div>
-                @if (User.IsInRole("Admin") || HasSpecificPermission("create"))
+                @if (User.IsInRole("Admin") || HasSpecificPermission("create") || HasSpecificPermission("edit"))
                 {
                     <div class="flex items-center gap-3">
-                        <button onclick="openBranchModal()" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-brand-600/20 flex items-center gap-2 group">
-                            <i class="fas fa-plus text-xs group-hover:rotate-90 transition-transform"></i>
-                            Add New Branch
+                        <button onclick="openImportBranchesModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2 group">
+                            <i class="fas fa-file-excel text-xs"></i>
+                            <span>Import from Excel / استيراد بالإكسيل</span>
                         </button>
+                        @if (User.IsInRole("Admin") || HasSpecificPermission("create"))
+                        {
+                            <button onclick="openBranchModal()" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-brand-600/20 flex items-center gap-2 group">
+                                <i class="fas fa-plus text-xs group-hover:rotate-90 transition-transform"></i>
+                                <span>Add New Branch</span>
+                            </button>
+                        }
                     </div>
                 }
             </div>
@@ -298,6 +305,103 @@
                         },
                         error: function () { Swal.fire('Error!', 'An error occurred during merge.', 'error'); }
                     });
+                }
+            });
+        }
+
+        function openImportBranchesModal() {
+            Swal.fire({
+                title: '<span class="text-slate-900 dark:text-white">تحديث بيانات الفروع بالإكسيل</span>',
+                html: `
+                    <div class="text-left space-y-4 p-1">
+                        <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3">
+                            <div class="flex items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200">نموذج الفروع الجاهز (مع البيانات الحالية)</p>
+                                    <p class="text-[10px] text-slate-500 dark:text-slate-400">ملف إكسيل يحتوي على جميع الفروع الحالية لتعديل الاسم والكود مباشرة</p>
+                                </div>
+                                <a href="/Admin/DownloadBranchesTemplate" class="px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 text-xs font-extrabold flex items-center gap-1.5 transition-all border border-indigo-200/50 dark:border-indigo-800/50 shrink-0">
+                                    <i class="fas fa-download"></i>
+                                    <span>تحميل النموذج</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">اختر ملف الإكسيل المحدث (.xlsx / .xls)</label>
+                            <input type="file" id="branchesExcelInput" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-indigo-600 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-slate-50 dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
+                        </div>
+
+                        <div class="text-[10px] text-slate-500 dark:text-slate-400 space-y-1 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20 text-right leading-relaxed" dir="rtl">
+                            <p class="font-bold text-amber-700 dark:text-amber-400"><i class="fas fa-info-circle ml-1"></i> معلومات هامة:</p>
+                            <p>• يمكنك تعديل (اسم الفرع) أو (كود الفرع) أو كليهما لنفس الفرع.</p>
+                            <p>• عمود <b>BranchId</b> يضمن تحديث الفرع الصحيح بنسبة 100% حتى وإن غيرت الاسم والكود معاً.</p>
+                            <p>• لإضافة فروع جديدة، يمكنك كتابة سطور جديدة دون ملء رقم المعرف.</p>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'بدء التحديث / Import Now',
+                cancelButtonText: 'إلغاء',
+                customClass: {
+                    confirmButton: 'bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold uppercase text-xs tracking-widest',
+                    cancelButton: 'text-slate-500 font-bold uppercase text-xs tracking-widest px-8 py-3'
+                },
+                buttonsStyling: false,
+                showLoaderOnConfirm: true,
+                preConfirm: async () => {
+                    const fileInput = document.getElementById('branchesExcelInput');
+                    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                        Swal.showValidationMessage('يرجى اختيار ملف إكسيل أولاً.');
+                        return false;
+                    }
+
+                    const formData = new FormData();
+                    formData.append('branchesExcelFile', fileInput.files[0]);
+
+                    try {
+                        const response = await fetch('@Url.Action("ImportBranchesFromExcel", "Admin")', {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                            }
+                        });
+
+                        const res = await response.json();
+                        if (!res.success) {
+                            Swal.showValidationMessage(res.message || 'فشلت معالجة الملف.');
+                            return false;
+                        }
+                        return res;
+                    } catch (err) {
+                        Swal.showValidationMessage('خطأ في الاتصال بالخادم: ' + err.message);
+                        return false;
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed && result.value) {
+                    const res = result.value;
+                    if (res.errors && res.errors.length > 0) {
+                        let errHtml = '<ul class="text-right text-xs text-rose-500 overflow-y-auto max-h-48 mt-3 list-disc pr-4" dir="rtl">';
+                        res.errors.forEach(e => { errHtml += `<li>${String(e).replace(/</g, '&lt;')}</li>`; });
+                        errHtml += '</ul>';
+
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'اكتمل الاستيراد مع وجود ملاحظات',
+                            html: `<p class="text-sm font-bold text-slate-700 dark:text-slate-200">${res.message}</p>${errHtml}`,
+                            confirmButtonText: 'حسناً'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'تم بنجاح',
+                            text: res.message,
+                            timer: 2500,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    }
                 }
             });
         }

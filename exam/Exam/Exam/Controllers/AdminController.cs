@@ -75,7 +75,7 @@ namespace Exam.Controllers
             "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
             "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode",
             "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails",
-            "DownloadBranchUpdateTemplate", "ImportBranchUpdatesFromExcel"
+            "DownloadBranchUpdateTemplate", "ImportBranchUpdatesFromExcel", "DownloadBranchesTemplate", "ImportBranchesFromExcel"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
@@ -4123,7 +4123,7 @@ ORDER BY U.UserName ASC";
             ("BatchCycles", "Batch Cycles (Waves)", "Admin", "Waves", new[] { "WaveDetails", "GetWaves", "CreateWave", "EditWave", "GetWaveUserIds", "GetUsersByWaveId", "AssignUsersToWave", "ImportUsersToWaveFromExcel", "DeleteWave" }),
             ("BatchCycles_RemoveUser", "Batch Cycles Action: Remove User from Wave", "Admin", "RemoveUserFromWave", new string[] { }),
             ("Companies", "Companies Management", "Admin", "Companies", new[] { "AddCompany", "EditCompany", "DeleteCompany", "ClearCompanyTrainees", "ImportCompanyTraineesFromExcel", "GetCompanyTrainees", "DeleteCompanyTrainee", "AddCompanyTraineeManually" }),
-            ("Branches", "Branches Management", "Admin", "Branches", new[] { "AddBranch", "EditBranch", "DeleteBranch" }),
+            ("Branches", "Branches Management", "Admin", "Branches", new[] { "AddBranch", "EditBranch", "DeleteBranch", "DownloadBranchesTemplate", "ImportBranchesFromExcel", "MergeBranch" }),
             ("BranchSupervisors", "Branch Supervisors Management", "Admin", "BranchSupervisors", new[] { "AddBranchSupervisor", "DeleteBranchSupervisor" }),
             ("WorkShifts", "Work Shifts Management", "Admin", "Shifts", new[] { "AddShift", "EditShift", "DeleteShift", "GetShiftDetails" }),
             ("AttendanceTrends", "Attendance Trends", "Attendance", "Analytics", new string[] { }),
@@ -5872,6 +5872,371 @@ ORDER BY U.UserName ASC";
             catch (Exception ex)
             {
                 return Json(new { success = false, message = "Error: " + ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> DownloadBranchesTemplate()
+        {
+            using (var workbook = new XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Branches");
+
+                // Headers
+                worksheet.Cell(1, 1).Value = "BranchId";
+                worksheet.Cell(1, 2).Value = "BranchName";
+                worksheet.Cell(1, 3).Value = "BranchCode";
+
+                var headerRange = worksheet.Range("A1:C1");
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Font.FontColor = XLColor.White;
+                headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f172a"); // Slate 900
+                headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                var allBranches = (await _examService.GetAllBranchesAsync())
+                    .OrderBy(b => b.BranchName)
+                    .ToList();
+
+                int row = 2;
+                foreach (var b in allBranches)
+                {
+                    worksheet.Cell(row, 1).Value = b.Id;
+                    worksheet.Cell(row, 2).Value = b.BranchName ?? "";
+                    worksheet.Cell(row, 3).Value = b.BranchCode ?? "";
+
+                    for (int col = 1; col <= 3; col++)
+                    {
+                        worksheet.Cell(row, col).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        worksheet.Cell(row, col).Style.Border.OutsideBorderColor = XLColor.FromHtml("#cbd5e1");
+                    }
+                    row++;
+                }
+
+                worksheet.Column(1).Width = 15; // BranchId
+                worksheet.Column(2).Width = 35; // BranchName
+                worksheet.Column(3).Width = 25; // BranchCode
+
+                // Instructions Sheet
+                var instructionsSheet = workbook.Worksheets.Add("تعليمات الاستخدام");
+                instructionsSheet.Cell(1, 1).Value = "دليل استخدام تحديث الفروع بالإكسيل";
+                instructionsSheet.Cell(1, 1).Style.Font.Bold = true;
+                instructionsSheet.Cell(1, 1).Style.Font.FontSize = 14;
+
+                instructionsSheet.Cell(3, 1).Value = "1. يحتوي هذا الملف على جميع الفروع الحالية المسجلة بالنظام.";
+                instructionsSheet.Cell(4, 1).Value = "2. يمكنك تعديل (اسم الفرع - BranchName) أو (كود الفرع - BranchCode) أو كليهما لأي فرع.";
+                instructionsSheet.Cell(5, 1).Value = "3. العمود الأول (BranchId) هو الرقم التعريفي للفرع، لا تقم بتغييره لتحديث الفرع الحالي بدقة.";
+                instructionsSheet.Cell(6, 1).Value = "4. لإضافة فرع جديد، يمكنك كتابة سطر جديد وترك BranchId فارغاً، وكتابة الاسم والكود.";
+                instructionsSheet.Cell(7, 1).Value = "5. بعد الانتهاء، قم بحفظ الملف ورفعه من خلال زر (Import from Excel).";
+
+                instructionsSheet.Column(1).Width = 70;
+
+                using (var stream = new MemoryStream())
+                {
+                    workbook.SaveAs(stream);
+                    var content = stream.ToArray();
+                    return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Branches_Management_Template.xlsx");
+                }
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ImportBranchesFromExcel(IFormFile branchesExcelFile)
+        {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Branches", "edit") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Branches", "create"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
+            if (branchesExcelFile == null || branchesExcelFile.Length == 0)
+            {
+                return Json(new { success = false, message = "يرجى اختيار ملف إكسيل (.xlsx أو .xls)." });
+            }
+
+            var ext = Path.GetExtension(branchesExcelFile.FileName);
+            if (!string.Equals(ext, ".xlsx", StringComparison.OrdinalIgnoreCase) && !string.Equals(ext, ".xls", StringComparison.OrdinalIgnoreCase))
+            {
+                return Json(new { success = false, message = "صيغة الملف غير مدعومة. يرجى رفع ملف إكسيل بصيغة .xlsx." });
+            }
+
+            int updatedCount = 0;
+            int createdCount = 0;
+            int skippedCount = 0;
+            var errorLines = new List<string>();
+
+            try
+            {
+                using var memoryStream = new MemoryStream();
+                await branchesExcelFile.CopyToAsync(memoryStream);
+                memoryStream.Position = 0;
+
+                using var workbook = new XLWorkbook(memoryStream);
+                var worksheet = workbook.Worksheets.FirstOrDefault();
+                if (worksheet == null)
+                {
+                    return Json(new { success = false, message = "ملف الإكسيل لا يحتوي على صفحات عمل." });
+                }
+
+                var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                int headerRow = 1;
+
+                for (int r = 1; r <= 5; r++)
+                {
+                    headers.Clear();
+                    for (int col = 1; col <= 20; col++)
+                    {
+                        var val = worksheet.Cell(r, col).Value.ToString()?.Trim();
+                        if (!string.IsNullOrWhiteSpace(val) && !headers.ContainsKey(val))
+                        {
+                            headers[val] = col;
+                        }
+                    }
+
+                    if (headers.ContainsKey("BranchName") || headers.ContainsKey("BranchCode") || 
+                        headers.ContainsKey("BranchId") || headers.ContainsKey("Id") || 
+                        headers.ContainsKey("اسم الفرع") || headers.ContainsKey("كود الفرع") || 
+                        headers.ContainsKey("الفرع") || headers.ContainsKey("Branch"))
+                    {
+                        headerRow = r;
+                        break;
+                    }
+                }
+
+                var usedCols = new HashSet<int>();
+
+                int? GetCol(params string[] possibleNames)
+                {
+                    // 1. Exact match
+                    foreach (var name in possibleNames)
+                    {
+                        var clean = name.Trim();
+                        if (headers.TryGetValue(clean, out var colIndex) && !usedCols.Contains(colIndex))
+                        {
+                            usedCols.Add(colIndex);
+                            return colIndex;
+                        }
+                    }
+
+                    // 2. Normalized match
+                    foreach (var name in possibleNames)
+                    {
+                        var normTarget = name.Replace(" ", "").Replace("_", "").Replace("-", "").Trim();
+                        foreach (var kvp in headers)
+                        {
+                            if (usedCols.Contains(kvp.Value)) continue;
+                            var normHeader = kvp.Key.Replace(" ", "").Replace("_", "").Replace("-", "").Trim();
+                            if (string.Equals(normTarget, normHeader, StringComparison.OrdinalIgnoreCase))
+                            {
+                                usedCols.Add(kvp.Value);
+                                return kvp.Value;
+                            }
+                        }
+                    }
+
+                    return null;
+                }
+
+                var colId = GetCol("BranchId", "Id", "معرف الفرع", "رقم الفرع", "Branch_Id");
+                var colName = GetCol("BranchName", "Branch Name", "Name", "اسم الفرع", "الفرع", "اسم فرع", "Branch");
+                var colCode = GetCol("BranchCode", "Branch Code", "Code", "كود الفرع", "كود", "رمز الفرع", "Branch_Code");
+                var colNewName = GetCol("NewBranchName", "New Branch Name", "NewName", "اسم الفرع الجديد", "الاسم الجديد");
+                var colNewCode = GetCol("NewBranchCode", "New Branch Code", "NewCode", "كود الفرع الجديد", "الكود الجديد");
+
+                if (colName == null && colCode == null && colId == null)
+                {
+                    return Json(new
+                    {
+                        success = false,
+                        message = "الملف المرفوع يجب أن يحتوي على عمود (اسم الفرع - BranchName) أو (كود الفرع - BranchCode) على الأقل."
+                    });
+                }
+
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                // Load current branches
+                var existingBranches = (await conn.QueryAsync<(int Id, string BranchName, string BranchCode)>(
+                    "SELECT Id, BranchName, BranchCode FROM Branches")).ToList();
+
+                var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? headerRow;
+
+                for (int row = headerRow + 1; row <= lastRow; row++)
+                {
+                    // Read Id if present
+                    int? rowId = null;
+                    if (colId != null)
+                    {
+                        var cellId = worksheet.Cell(row, colId.Value);
+                        if (cellId.DataType == XLDataType.Number)
+                        {
+                            rowId = (int)cellId.GetDouble();
+                        }
+                        else
+                        {
+                            var idStr = cellId.Value.ToString()?.Trim();
+                            if (int.TryParse(idStr, out var parsedId)) rowId = parsedId;
+                        }
+                    }
+
+                    // Read Name
+                    string rawName = null;
+                    if (colName != null)
+                    {
+                        rawName = worksheet.Cell(row, colName.Value).Value.ToString()?.Trim();
+                    }
+
+                    // Read Code
+                    string rawCode = null;
+                    if (colCode != null)
+                    {
+                        var cellC = worksheet.Cell(row, colCode.Value);
+                        if (cellC.DataType == XLDataType.Number)
+                            rawCode = ((long)cellC.GetDouble()).ToString();
+                        else
+                            rawCode = cellC.Value.ToString()?.Trim();
+                    }
+
+                    // Read NewName if present
+                    string rawNewName = null;
+                    if (colNewName != null)
+                    {
+                        rawNewName = worksheet.Cell(row, colNewName.Value).Value.ToString()?.Trim();
+                    }
+
+                    // Read NewCode if present
+                    string rawNewCode = null;
+                    if (colNewCode != null)
+                    {
+                        var cellNC = worksheet.Cell(row, colNewCode.Value);
+                        if (cellNC.DataType == XLDataType.Number)
+                            rawNewCode = ((long)cellNC.GetDouble()).ToString();
+                        else
+                            rawNewCode = cellNC.Value.ToString()?.Trim();
+                    }
+
+                    if (string.IsNullOrWhiteSpace(rawName) && string.IsNullOrWhiteSpace(rawCode) && !rowId.HasValue)
+                    {
+                        continue; // Empty row
+                    }
+
+                    // Determine target branch
+                    (int Id, string BranchName, string BranchCode)? targetBranch = null;
+
+                    // 1. By ID
+                    if (rowId.HasValue && rowId.Value > 0)
+                    {
+                        var found = existingBranches.FirstOrDefault(b => b.Id == rowId.Value);
+                        if (found.Id > 0) targetBranch = found;
+                    }
+
+                    // 2. By Code if not matched by ID
+                    if (!targetBranch.HasValue && !string.IsNullOrWhiteSpace(rawCode))
+                    {
+                        var found = existingBranches.FirstOrDefault(b => !string.IsNullOrEmpty(b.BranchCode) && string.Equals(b.BranchCode.Trim(), rawCode.Trim(), StringComparison.OrdinalIgnoreCase));
+                        if (found.Id > 0) targetBranch = found;
+                    }
+
+                    // 3. By Name if not matched
+                    if (!targetBranch.HasValue && !string.IsNullOrWhiteSpace(rawName))
+                    {
+                        var found = existingBranches.FirstOrDefault(b => !string.IsNullOrEmpty(b.BranchName) && string.Equals(b.BranchName.Trim(), rawName.Trim(), StringComparison.OrdinalIgnoreCase));
+                        if (found.Id > 0) targetBranch = found;
+                    }
+
+                    // Final target names/codes to update
+                    string finalName = !string.IsNullOrWhiteSpace(rawNewName) ? rawNewName : rawName;
+                    string finalCode = !string.IsNullOrWhiteSpace(rawNewCode) ? rawNewCode : rawCode;
+
+                    if (targetBranch.HasValue)
+                    {
+                        var t = targetBranch.Value;
+                        string currentDbName = t.BranchName ?? "";
+                        string currentDbCode = t.BranchCode ?? "";
+
+                        if (string.IsNullOrWhiteSpace(finalName)) finalName = currentDbName;
+                        if (string.IsNullOrWhiteSpace(finalCode) && colCode == null && colNewCode == null) finalCode = currentDbCode;
+
+                        bool nameChanged = !string.Equals(currentDbName, finalName, StringComparison.Ordinal);
+                        bool codeChanged = !string.Equals(currentDbCode, finalCode, StringComparison.Ordinal);
+
+                        if (!nameChanged && !codeChanged)
+                        {
+                            skippedCount++;
+                            continue; // Nothing to change
+                        }
+
+                        if (nameChanged)
+                        {
+                            var dup = existingBranches.Any(b => b.Id != t.Id && string.Equals(b.BranchName?.Trim(), finalName.Trim(), StringComparison.OrdinalIgnoreCase));
+                            if (dup)
+                            {
+                                errorLines.Add($"السطر {row}: تعذر تعديل الفرع '{currentDbName}'، يوجد فرع آخر مسجل بنفس الاسم '{finalName}'.");
+                                continue;
+                            }
+                        }
+
+                        await conn.ExecuteAsync("UPDATE Branches SET BranchName = @Name, BranchCode = @Code WHERE Id = @Id",
+                            new { Name = finalName.Trim(), Code = finalCode?.Trim(), Id = t.Id });
+
+                        if (nameChanged)
+                        {
+                            await conn.ExecuteAsync("UPDATE CompanyTrainees SET BranchName = @NewName WHERE BranchName = @OldName",
+                                new { NewName = finalName.Trim(), OldName = currentDbName });
+                        }
+
+                        existingBranches.Remove(t);
+                        existingBranches.Add((t.Id, finalName.Trim(), finalCode?.Trim() ?? ""));
+
+                        updatedCount++;
+                    }
+                    else
+                    {
+                        if (!string.IsNullOrWhiteSpace(finalName))
+                        {
+                            var dup = existingBranches.Any(b => string.Equals(b.BranchName?.Trim(), finalName.Trim(), StringComparison.OrdinalIgnoreCase));
+                            if (dup)
+                            {
+                                errorLines.Add($"السطر {row}: يوجد فرع مسجل مسبقاً بنفس الاسم '{finalName}'.");
+                                continue;
+                            }
+
+                            var newId = await conn.QuerySingleAsync<int>(@"
+                                INSERT INTO Branches (BranchName, BranchCode, IsActive) 
+                                VALUES (@Name, @Code, 1);
+                                SELECT CAST(SCOPE_IDENTITY() as int);",
+                                new { Name = finalName.Trim(), Code = finalCode?.Trim() });
+
+                            existingBranches.Add((newId, finalName.Trim(), finalCode?.Trim() ?? ""));
+                            createdCount++;
+                        }
+                        else
+                        {
+                            errorLines.Add($"السطر {row}: لم يتم التعرف على الفرع، واسم الفرع فارغ.");
+                        }
+                    }
+                }
+
+                var messageParts = new List<string>();
+                if (updatedCount > 0) messageParts.Add($"تم تحديث بيانات {updatedCount} فرع");
+                if (createdCount > 0) messageParts.Add($"تم إضافة {createdCount} فرع جديد");
+                if (skippedCount > 0) messageParts.Add($"تم تخطي {skippedCount} فرع (بدون تغييرات)");
+
+                var finalMessage = messageParts.Any() ? string.Join("، و", messageParts) + " بنجاح." : "لم يتم إجراء أي تغييرات.";
+
+                return Json(new
+                {
+                    success = true,
+                    updatedCount = updatedCount,
+                    createdCount = createdCount,
+                    skippedCount = skippedCount,
+                    errors = errorLines,
+                    message = finalMessage
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ أثناء معالجة ملف الإكسيل: " + ex.Message });
             }
         }
 
