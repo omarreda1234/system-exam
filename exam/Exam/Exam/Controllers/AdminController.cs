@@ -3071,8 +3071,64 @@ ORDER BY U.UserName ASC";
         {
             if (!ModelState.IsValid)
             {
-                TempData["ErrorMessage"] = "Invalid data. Please check all fields.";
-                return RedirectToAction("AllUsers");
+                var errors = string.Join(", ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
+                return Json(new { success = false, message = "بيانات غير مكتملة أو غير صالحة: " + errors });
+            }
+
+            // 1. Restriction: Branch is required and must exist
+            if (!dto.BranchId.HasValue || dto.BranchId.Value <= 0)
+            {
+                return Json(new { success = false, message = "الفرع إلزامي! لا يمكن إضافة موظف بدون تحديد فرع." });
+            }
+
+            using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            var branchExists = await conn.ExecuteScalarAsync<int>(
+                "SELECT COUNT(1) FROM Branches WHERE Id = @BranchId", new { BranchId = dto.BranchId.Value });
+            if (branchExists == 0)
+            {
+                return Json(new { success = false, message = "الفرع المحدد غير موجود في قاعدة البيانات." });
+            }
+
+            // 2. Restriction: UserCode is required and must not already exist
+            if (string.IsNullOrWhiteSpace(dto.UserCode))
+            {
+                return Json(new { success = false, message = "كود الموظف إلزامي!" });
+            }
+
+            string cleanCode = dto.UserCode.Trim();
+            if (double.TryParse(cleanCode, out var ucNum))
+            {
+                cleanCode = ((long)ucNum).ToString();
+            }
+
+            var existingByCode = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                SELECT TOP 1 Id, UserName, FullName, Email, UserCode 
+                FROM AspNetUsers 
+                WHERE LTRIM(RTRIM(UserCode)) = @Code 
+                   OR (TRY_CAST(UserCode AS BIGINT) IS NOT NULL 
+                       AND TRY_CAST(@Code AS BIGINT) IS NOT NULL 
+                       AND TRY_CAST(UserCode AS BIGINT) = TRY_CAST(@Code AS BIGINT))",
+                new { Code = cleanCode });
+
+            if (existingByCode != null)
+            {
+                string existingName = existingByCode.FullName ?? existingByCode.UserName ?? "";
+                return Json(new { success = false, message = $"كود الموظف '{dto.UserCode}' موجود مسبقاً في النظام ومسجل باسم ({existingName}). لا يمكن تكرار الكود." });
+            }
+
+            // 3. Restriction: Email must not already exist
+            var existingByEmail = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                SELECT TOP 1 Id, UserName, FullName, Email 
+                FROM AspNetUsers 
+                WHERE LOWER(LTRIM(RTRIM(Email))) = LOWER(@Email)",
+                new { Email = dto.Email.Trim() });
+
+            if (existingByEmail != null)
+            {
+                string existingName = existingByEmail.FullName ?? existingByEmail.UserName ?? "";
+                return Json(new { success = false, message = $"البريد الإلكتروني '{dto.Email}' مسجل مسبقاً لمستخدم آخر ({existingName})." });
             }
 
             var user = new ApplicationUser
@@ -3081,7 +3137,7 @@ ORDER BY U.UserName ASC";
                 Email = dto.Email,
                 PhoneNumber = dto.Phone,
                 BranchId = dto.BranchId,
-                UserCode = dto.UserCode,
+                UserCode = cleanCode,
                 ShiftId = dto.ShiftId,
                 CertificateCode = dto.CertificateCode,
                 IsActive = true
@@ -3094,7 +3150,7 @@ ORDER BY U.UserName ASC";
                 var role = string.IsNullOrEmpty(dto.RoleName) ? "User" : dto.RoleName;
 
                 // Enforce English Only
-                if (System.Text.RegularExpressions.Regex.IsMatch(role, @"\p{IsArabic}") || role.Contains("ØµÙŠØ¯Ù„ÙŠ") || role.Contains("Ù…Ø³Ø§Ø¹Ø¯"))
+                if (System.Text.RegularExpressions.Regex.IsMatch(role, @"\p{IsArabic}") || role.Contains("صيدلي") || role.Contains("مساعد"))
                 {
                     return Json(new { success = false, message = "Arabic roles are no longer supported. Please use English (e.g., Pharmacist, Assistant)." });
                 }
@@ -3240,6 +3296,8 @@ ORDER BY U.UserName ASC";
                 using var conn = new SqlConnection(_connectionString);
                 await conn.OpenAsync();
                 var branchIdByExcelValue = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
+                var seenUserCodesInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var seenEmailsInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? headerRow;
 
@@ -3268,6 +3326,7 @@ ORDER BY U.UserName ASC";
                             continue;
                         }
 
+                        // --- UserCode Processing & Restrictions ---
                         var rawUserCode = colUserCode != null ? worksheet.Cell(row, colUserCode.Value).Value.ToString()?.Trim() : null;
                         string cleanUserCode = null;
                         if (!string.IsNullOrWhiteSpace(rawUserCode))
@@ -3279,25 +3338,44 @@ ORDER BY U.UserName ASC";
                             }
                         }
 
-                        // RESTRICTION: Do not upload or re-add if UserCode already exists in database
-                        if (!string.IsNullOrWhiteSpace(cleanUserCode))
+                        // RESTRICTION 1: UserCode is required (لا يضاف الموظف إذا لم يكن له كود)
+                        if (string.IsNullOrWhiteSpace(cleanUserCode))
                         {
-                            var existingByCode = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                                SELECT TOP 1 Id, UserName, FullName, Email, UserCode 
-                                FROM AspNetUsers 
-                                WHERE LTRIM(RTRIM(UserCode)) = @Code 
-                                   OR (TRY_CAST(UserCode AS BIGINT) = TRY_CAST(@Code AS BIGINT) AND @Code NOT LIKE '%[^0-9]%')",
-                                new { Code = cleanUserCode });
-
-                            if (existingByCode != null)
-                            {
-                                string existingName = existingByCode.FullName ?? existingByCode.UserName ?? "";
-                                errorLines.Add($"Row {row}: User with Code '{cleanUserCode}' already exists in system ({existingName}). Skipped.");
-                                continue;
-                            }
+                            errorLines.Add($"Row {row}: كود الموظف (UserCode) غير موجود للموظف '{userName ?? email}'. كود الموظف إلزامي ولا يمكن الإضافة بدونه. تم تخطي الصف.");
+                            continue;
                         }
 
-                        // RESTRICTION: Do not upload if Email already exists in database
+                        // RESTRICTION 2: UserCode must not be duplicated in the uploaded file
+                        if (seenUserCodesInFile.Contains(cleanUserCode))
+                        {
+                            errorLines.Add($"Row {row}: كود الموظف '{cleanUserCode}' مكرر أكثر من مرة داخل نفس ملف الإكسل المرفوع. تم تخطي الصف.");
+                            continue;
+                        }
+
+                        // RESTRICTION 3: Do not upload or add if UserCode already exists in database (لما الكود يبقي موجود ميضافش)
+                        var existingByCode = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                            SELECT TOP 1 Id, UserName, FullName, Email, UserCode 
+                            FROM AspNetUsers 
+                            WHERE LTRIM(RTRIM(UserCode)) = @Code 
+                               OR (TRY_CAST(UserCode AS BIGINT) IS NOT NULL 
+                                   AND TRY_CAST(@Code AS BIGINT) IS NOT NULL 
+                                   AND TRY_CAST(UserCode AS BIGINT) = TRY_CAST(@Code AS BIGINT))",
+                            new { Code = cleanUserCode });
+
+                        if (existingByCode != null)
+                        {
+                            string existingName = existingByCode.FullName ?? existingByCode.UserName ?? "";
+                            errorLines.Add($"Row {row}: كود الموظف '{cleanUserCode}' موجود مسبقاً في النظام ومسجل باسم ({existingName}). تم تخطي الصف.");
+                            continue;
+                        }
+
+                        // --- Email Processing & Restrictions ---
+                        if (seenEmailsInFile.Contains(email))
+                        {
+                            errorLines.Add($"Row {row}: البريد الإلكتروني '{email}' مكرر داخل نفس ملف الإكسل المرفوع. تم تخطي الصف.");
+                            continue;
+                        }
+
                         var existingByEmail = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                             SELECT TOP 1 Id, UserName, FullName, Email, UserCode 
                             FROM AspNetUsers 
@@ -3307,11 +3385,31 @@ ORDER BY U.UserName ASC";
                         if (existingByEmail != null)
                         {
                             string existingName = existingByEmail.FullName ?? existingByEmail.UserName ?? "";
-                            errorLines.Add($"Row {row}: User with Email '{email}' already exists in system ({existingName}). Skipped.");
+                            errorLines.Add($"Row {row}: البريد الإلكتروني '{email}' موجود مسبقاً في النظام ومسجل باسم ({existingName}). تم تخطي الصف.");
                             continue;
                         }
 
+                        // --- Branch Processing & Restrictions (لو مفيش فرع لليوزر ميضافش) ---
                         var branchName = colBranchName != null ? worksheet.Cell(row, colBranchName.Value).Value.ToString()?.Trim() : null;
+                        if (string.IsNullOrWhiteSpace(branchName))
+                        {
+                            errorLines.Add($"Row {row}: لم يتم تحديد فرع للموظف '{userName ?? email}' (كود: {cleanUserCode}). لا يمكن إضافة موظف بدون فرع. تم تخطي الصف.");
+                            continue;
+                        }
+
+                        int? bId = null;
+                        if (!branchIdByExcelValue.TryGetValue(branchName, out bId))
+                        {
+                            bId = BranchNameResolver.ResolveBranchId(branchName, branchList);
+                            branchIdByExcelValue[branchName] = bId;
+                        }
+
+                        if (!bId.HasValue || bId.Value <= 0)
+                        {
+                            errorLines.Add($"Row {row}: الفرع '{branchName}' غير موجود في النظام للموظف '{userName ?? email}' (كود: {cleanUserCode}). لا يمكن إضافة موظف بفرع غير معتمد. تم تخطي الصف.");
+                            continue;
+                        }
+
                         var certCode = colCertificateCode != null ? worksheet.Cell(row, colCertificateCode.Value).Value.ToString()?.Trim() : null;
                         var shiftIdStr = colshiftid != null ? worksheet.Cell(row, colshiftid.Value).Value.ToString()?.Trim() : null;
                         int? sId = null;
@@ -3320,17 +3418,9 @@ ORDER BY U.UserName ASC";
                             if (double.TryParse(shiftIdStr, out var dValue)) sId = (int)dValue;
                         }
 
-                        int? bId = null;
-                        if (!string.IsNullOrWhiteSpace(branchName))
-                        {
-                            if (!branchIdByExcelValue.TryGetValue(branchName, out bId))
-                            {
-                                bId = BranchNameResolver.ResolveBranchId(branchName, branchList);
-                                branchIdByExcelValue[branchName] = bId;
-                            }
-                            if (!bId.HasValue)
-                                errorLines.Add($"Row {row}: Branch '{branchName}' did not match any branch from sp_Admin_GetAllBranches (after normalize/contains).");
-                        }
+                        // Mark unique identifiers as seen in file
+                        seenUserCodesInFile.Add(cleanUserCode);
+                        seenEmailsInFile.Add(email);
 
                         var user = new ApplicationUser
                         {
@@ -3340,7 +3430,7 @@ ORDER BY U.UserName ASC";
                             PhoneNumber = phone,
                             UserCode = cleanUserCode,
                             CertificateCode = certCode,
-                            BranchId = bId,
+                            BranchId = bId.Value,
                             ShiftId = sId,
                             IsActive = true
                         };
@@ -3415,7 +3505,21 @@ ORDER BY U.UserName ASC";
                 };
                 System.IO.File.WriteAllLines("import_debug.txt", debugInfo.Concat(errorLines));
                 
-                return Json(new { success = true, message = $"Successfully processed {successCount} users.", errors = errorLines });
+                string finalMsg;
+                if (successCount == 0 && errorLines.Any())
+                {
+                    finalMsg = "لم تتم إضافة أي موظف. يرجى مراجعة تفاصيل الأخطاء والقيود الموضحة أدناه.";
+                }
+                else if (errorLines.Any())
+                {
+                    finalMsg = $"تمت إضافة {successCount} موظف بنجاح، وتم تخطي الصفوف التي بها تعارضات أو أخطاء.";
+                }
+                else
+                {
+                    finalMsg = $"تمت إضافة {successCount} موظف بنجاح.";
+                }
+
+                return Json(new { success = true, message = finalMsg, errors = errorLines, count = successCount });
             }
             catch (Exception ex)
             {

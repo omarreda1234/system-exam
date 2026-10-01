@@ -433,7 +433,7 @@
                     return `<option value="${sid}">${name.toUpperCase()} (${time})</option>`;
                 }).join('');
 
-                let branchOptions = branchesData.map(b => {
+                let branchOptions = '<option value="">-- Choose Branch / اختر الفرع --</option>' + branchesData.map(b => {
                     let name = getVal(b, 'BranchName');
                     let bid = getVal(b, 'Id');
                     return `<option value="${bid}">${name.toUpperCase()}</option>`;
@@ -482,8 +482,8 @@
                             </div>
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Branch</label>
-                                    <select name="BranchId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Branch <span class="text-rose-500">*</span></label>
+                                    <select name="BranchId" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">
                                         ${branchOptions}
                                     </select>
                                 </div>
