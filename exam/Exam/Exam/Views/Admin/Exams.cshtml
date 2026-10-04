@@ -14,6 +14,10 @@
         </div>
         
         <div class="flex flex-wrap items-center gap-4">
+            <button type="button" onclick="createNewExamProtocol();" class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2">
+                <i class="fas fa-plus"></i>
+                <span>Create Exam</span>
+            </button>
             <div class="space-y-2">
                 <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Classification Hub</label>
                 <select id="examTypeFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3 text-sm font-bold focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all min-w-[220px]">
@@ -249,6 +253,29 @@
                 await loadWavesIntoDropdown();
                 await refreshExams(typeId, 0);
             });
+
+            window.createNewExamProtocol = function() {
+                const selectedType = $('#examTypeFilter').val();
+                let url = '@Url.Action("Create", "Exams")';
+                if (selectedType && selectedType !== '0') {
+                    url += '?selectedTypeId=' + selectedType;
+                    const selectedWave = $('#waveFilter').val();
+                    if (selectedWave && selectedWave !== '0') {
+                        url += '&waveId=' + selectedWave;
+                    }
+                }
+                if (window.parent && typeof window.parent.openNewTab === 'function') {
+                    window.parent.openNewTab('Create Protocol', 'fas fa-plus', url);
+                } else {
+                    window.location.href = url;
+                }
+            };
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const preSelectedTypeId = urlParams.get('selectedTypeId') || urlParams.get('typeId') || '@(ViewBag.SelectedTypeId ?? "")';
+            if (preSelectedTypeId && preSelectedTypeId !== '0' && preSelectedTypeId !== '') {
+                $('#examTypeFilter').val(preSelectedTypeId).trigger('change');
+            }
                     // منطق حذف الامتحان
         $(document).on('click', '.delete-btn', function() {
             const examId = $(this).data('examid');

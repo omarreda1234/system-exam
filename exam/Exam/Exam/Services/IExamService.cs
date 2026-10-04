@@ -89,7 +89,7 @@ namespace Exam.Services
         Task<IEnumerable<adminExamDto>> GetAllExamsWithDetailsAsync();
         Task<IEnumerable<adminExamDto>> GetExamsByWaveIdAsync(int waveId);
         Task<IEnumerable<adminExamDto>> GetExamsByTypeAsync(int typeId);
-        Task<int> AssignUsersToWaveAsync(int waveId, List<string> userIds, string siteUrl = "");
+        Task<int> AssignUsersToWaveAsync(int waveId, List<string> userIds, string siteUrl = "", bool sendEmail = true, string? customSubject = null, string? customBody = null, bool saveAsDefault = false);
         Task<IEnumerable<UserDto>> GetUsersByWaveIdAsync(int waveId);
         Task<int> AssignExamToStudentsAsync(int examId, List<string> studentIds, string siteUrl = "");
         Task<DashboardDto> GetDashboardDataAsync();

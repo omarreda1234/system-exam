@@ -72,6 +72,7 @@ namespace Exam.Controllers
             "ImportUsersToWaveFromExcel", "UpdateTopicSchema", "SyncFromLive",
             "BranchSupervisors", "GetSupervisorBranches", "SaveSupervisorBranches",
             "EditWave", "DeleteWave", "CreateWave", "CloneWave", "AssignUsersToWave", "WaveDetails", "GetWaveUserIds", "GetUsersByWaveId", "RemoveUserFromWave",
+            "GetWaveEmailTemplate", "SaveWaveEmailTemplate", "SendCustomEmailToWavePersonnel",
             "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
             "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode",
             "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails",
@@ -290,8 +291,9 @@ namespace Exam.Controllers
             return Json(new { exists = false, message = "هذا الكود جديد بالكامل، لم يتم العثور على كود مكرر." });
         }
 
-        public async Task<IActionResult> Exams()
+        public async Task<IActionResult> Exams(int? typeId = null)
         {
+            ViewBag.SelectedTypeId = typeId;
             ViewBag.ExamTypes = await _examService.GetAllExamTypesAsync();
             var exams = await _examService.GetAllExamsWithDetailsAsync();
             return View(exams);
@@ -3910,9 +3912,55 @@ ORDER BY U.UserName ASC";
         }
 
         [HttpPost]
-        public async Task<IActionResult> AssignUsersToWave(int waveId, [FromBody] List<string> userIds)
+        public async Task<IActionResult> AssignUsersToWave(int waveId, [FromBody] System.Text.Json.JsonElement payload)
         {
-            if (userIds == null || !userIds.Any())
+            var userIds = new List<string>();
+            bool sendEmail = true;
+            string? customSubject = null;
+            string? customBody = null;
+            bool saveAsDefault = false;
+
+            if (payload.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var el in payload.EnumerateArray())
+                {
+                    var s = el.GetString();
+                    if (!string.IsNullOrEmpty(s)) userIds.Add(s);
+                }
+            }
+            else if (payload.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (payload.TryGetProperty("userIds", out var idsProp) && idsProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var el in idsProp.EnumerateArray())
+                    {
+                        var s = el.GetString();
+                        if (!string.IsNullOrEmpty(s)) userIds.Add(s);
+                    }
+                }
+                if (payload.TryGetProperty("sendEmail", out var sendProp) && (sendProp.ValueKind == System.Text.Json.JsonValueKind.True || sendProp.ValueKind == System.Text.Json.JsonValueKind.False))
+                {
+                    sendEmail = sendProp.GetBoolean();
+                }
+                if (payload.TryGetProperty("customSubject", out var subProp) && subProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    customSubject = subProp.GetString();
+                }
+                if (payload.TryGetProperty("customBody", out var bodyProp) && bodyProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    customBody = bodyProp.GetString();
+                }
+                if (payload.TryGetProperty("saveAsDefault", out var saveProp) && (saveProp.ValueKind == System.Text.Json.JsonValueKind.True || saveProp.ValueKind == System.Text.Json.JsonValueKind.False))
+                {
+                    saveAsDefault = saveProp.GetBoolean();
+                }
+            }
+            else
+            {
+                return BadRequest("Invalid request payload.");
+            }
+
+            if (!userIds.Any())
             {
                 return BadRequest("No users selected.");
             }
@@ -3920,7 +3968,8 @@ ORDER BY U.UserName ASC";
             try
             {
                 var siteLink = "http://41.33.149.186:5208";
-                var assignedCount = await _examService.AssignUsersToWaveAsync(waveId, userIds, siteLink);
+                var assignedCount = await _examService.AssignUsersToWaveAsync(
+                    waveId, userIds, siteLink, sendEmail, customSubject, customBody, saveAsDefault);
                 return Ok(new { AssignedCount = assignedCount });
             }
             catch (Exception ex)
@@ -4208,6 +4257,7 @@ ORDER BY U.UserName ASC";
             ("Items", "Items Management", "Admin", "Items", new[] { "AddItem", "EditItem", "DeleteItem", "GetItemsPaged", "UpdateItemCustomDefinition", "SyncItems" }),
             ("WeeklyExams", "Weekly Exams Matrix", "Admin", "WeeklyExams", new[] { "GetWeeklyExamsForFilter", "GetGenerationRules", "GetExamsForFilter" }),
             ("WaveExams", "Wave Exams Matrix", "Admin", "WaveExams", new[] { "GetWaveExamsForFilter", "GetExamsForFilter" }),
+            ("AllExams", "All Exams Matrix (Custom & Varieties)", "Admin", "Exams", new[] { "GetExamsForFilter", "ImportQuestionsFromExcel" }),
             ("Assignments", "Wave Assignments", "Admin", "Assignments", new[] { "GetEligibleUsersForExam", "AssignExamToStudents", "ReassignExamToStudents", "RemoveStudentFromExam", "RemoveAllStudentsFromExam", "WipeStudentData" }),
             ("WeeklyAnalytics", "Weekly Analytics", "Admin", "WeeklyResults", new[] { "GetWeeklyResultsPaged", "ExportAllStudentsToExcel", "SendFailEmails" }),
             ("WaveAnalytics", "Wave Analytics", "Admin", "WaveyResults", new string[] { }),

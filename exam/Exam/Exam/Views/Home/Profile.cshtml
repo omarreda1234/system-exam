@@ -1,0 +1,326 @@
+@model Exam.DTOs.UserProfileViewModel
+@{
+    ViewData["Title"] = "My Profile - الملف الشخصي";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+
+    <!-- 1. USER PROFILE CARD (SIMPLE & CLEAN) -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            
+            <!-- User Basic Info -->
+            <div class="flex items-center gap-4">
+                <div class="w-16 h-16 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 font-black text-2xl flex-shrink-0">
+                    @(string.IsNullOrWhiteSpace(Model.FullName) ? "U" : Model.FullName.Trim()[0].ToString().ToUpper())
+                </div>
+
+                <div class="space-y-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h1 class="text-xl font-bold text-slate-900">@Model.FullName</h1>
+                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
+                            @Model.RoleName
+                        </span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                        <span><i class="far fa-user text-slate-400 mr-1"></i> @Model.UserName</span>
+                        @if (!string.IsNullOrWhiteSpace(Model.Email))
+                        {
+                            <span>•</span>
+                            <span><i class="far fa-envelope text-slate-400 mr-1"></i> @Model.Email</span>
+                        }
+                    </div>
+
+                    <!-- Code Badge -->
+                    <div class="pt-1 flex items-center gap-2 text-xs">
+                        <span class="text-slate-400">الكود الأكاديمي:</span>
+                        <button onclick="copyToClipboard('@Model.UserCode', this)" 
+                                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-md font-mono font-bold transition-all text-xs" 
+                                title="نسخ الكود">
+                            <span>@(string.IsNullOrWhiteSpace(Model.UserCode) ? "N/A" : Model.UserCode)</span>
+                            <i class="far fa-copy text-slate-400 text-[10px]"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Branch & Shift details -->
+            <div class="flex flex-wrap items-center gap-3 sm:border-l sm:border-slate-100 sm:pl-6">
+                <div class="bg-slate-50 rounded-xl px-4 py-2.5 border border-slate-100 text-left min-w-[130px]">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Branch</span>
+                    <span class="text-xs font-bold text-slate-800 block truncate">@Model.BranchName</span>
+                </div>
+
+                <div class="bg-slate-50 rounded-xl px-4 py-2.5 border border-slate-100 text-left min-w-[130px]">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Shift</span>
+                    <span class="text-xs font-bold text-brand-600 block truncate">@Model.ShiftName</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 2. PROFILE NAVIGATION TABS -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-2 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2 p-1 bg-slate-100 rounded-xl" id="profileTabsNav" role="tablist">
+                <!-- Tab 1: My Certificates -->
+                <button type="button" 
+                        onclick="switchProfileTab('certificates')" 
+                        id="tabBtn-certificates"
+                        class="profile-tab-btn px-4 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 bg-white text-brand-700 shadow-sm">
+                    <i class="fas fa-award text-sm text-brand-600"></i>
+                    <span>شهاداتي (My Certificates)</span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-50 text-brand-600">
+                        @Model.Certificates.Count()
+                    </span>
+                </button>
+
+                <!-- Tab 2: Wave Form -->
+                <button type="button" 
+                        onclick="switchProfileTab('waveform')" 
+                        id="tabBtn-waveform"
+                        class="profile-tab-btn px-4 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 text-slate-600 hover:text-slate-900 hover:bg-white/60">
+                    <i class="fas fa-clipboard-list text-sm text-amber-500"></i>
+                    <span>استمارة الويف (Wave Form)</span>
+                </button>
+
+                <!-- Direct External Link Quick Action -->
+                <a href="@Model.WaveFormUrl" target="_blank" rel="noopener noreferrer" 
+                   class="px-3.5 py-2 rounded-lg text-xs font-bold text-amber-700 hover:text-white hover:bg-amber-600 transition-all flex items-center gap-1.5 border border-amber-200 hover:border-amber-600 shadow-xs"
+                   title="فتح استمارة الويف مباشرة في نافذة جديدة">
+                    <span>فتح الرابط مباشرة</span>
+                    <i class="fas fa-external-link-alt text-[10px]"></i>
+                </a>
+
+                <!-- Future Navigation Tabs can be added here easily -->
+            </div>
+
+            <div class="hidden sm:flex items-center gap-2 px-3 text-xs text-slate-400 font-medium">
+                <i class="fas fa-layer-group text-slate-300"></i>
+                <span>Navigation Sections</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. TAB CONTENT 1: MY CERTIFICATES -->
+    <div id="tabContent-certificates" class="profile-tab-content space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fas fa-award text-brand-600"></i>
+                    <span>شهاداتي (My Certificates)</span>
+                </h2>
+                <span class="text-xs font-bold text-slate-400">@Model.Certificates.Count() شهادة</span>
+            </div>
+
+            @if (Model.Certificates != null && Model.Certificates.Any())
+            {
+                <div class="divide-y divide-slate-100">
+                    @foreach (var cert in Model.Certificates)
+                    {
+                        <div class="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div class="flex items-start gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500 text-base flex-shrink-0 mt-0.5">
+                                    <i class="fas fa-certificate text-brand-600"></i>
+                                </div>
+
+                                <div class="space-y-0.5">
+                                    <p class="text-sm font-bold text-slate-900">@cert.WaveName</p>
+                                    <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                        <span class="font-mono bg-slate-100 px-2 py-0.5 rounded text-[11px] text-slate-700 font-bold">@cert.CertificateCode</span>
+                                        @if (cert.Score.HasValue)
+                                        {
+                                            <span>• النتيجة: <strong class="text-brand-600">@cert.Score.Value.ToString("0.##")%</strong></span>
+                                        }
+                                        @if (cert.CreatedAt.HasValue)
+                                        {
+                                            <span>• @cert.CreatedAt.Value.ToString("dd/MM/yyyy")</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2 sm:self-center">
+                                @if (cert.HasFileOnDisk && !string.IsNullOrEmpty(cert.DownloadUrl))
+                                {
+                                    <a href="@cert.DownloadUrl" download 
+                                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-all shadow-sm">
+                                        <i class="fas fa-download"></i>
+                                        <span>تحميل الشهادة</span>
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span class="text-xs text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                                        معتمدة بالنظام
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="py-8 text-center text-slate-400 text-xs font-medium">
+                    <i class="fas fa-file-alt text-2xl text-slate-300 mb-2 block"></i>
+                    لا توجد شهادات مرفوعة لك حالياً. ستظهر هنا فور اعتمادها ورفعها من الأكاديمية.
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- 4. TAB CONTENT 2: WAVE EXAM REGISTRATION FORM -->
+    <div id="tabContent-waveform" class="profile-tab-content hidden space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+            
+            <!-- Header Notice -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center text-xl flex-shrink-0">
+                        <i class="fas fa-clipboard-check"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <span>استمارة تسجيل امتحان الويف</span>
+                            <span class="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">Wave Exam Registration</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1">يرجى الضغط على الرابط أدناه لفتح الاستمارة في نافذة جديدة واستيفاء البيانات المطلوبة قبل موعد الامتحان.</p>
+                    </div>
+                </div>
+
+                <a href="@Model.WaveFormUrl" target="_blank" rel="noopener noreferrer" 
+                   class="inline-flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-amber-500/20 hover:shadow-amber-500/30 flex-shrink-0">
+                    <span>فتح الاستمارة (Open Form)</span>
+                    <i class="fas fa-external-link-alt text-xs"></i>
+                </a>
+            </div>
+
+            <!-- Trainee Quick Copy Helper (كود الطالب وبياناته للتسهيل عند ملء الاستمارة) -->
+            <div class="bg-slate-50 rounded-2xl p-5 border border-slate-200/80 space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-id-card text-brand-600"></i> بياناتك المطلوب إدخالها في الاستمارة (اضغط للنسخ):
+                    </span>
+                    <span class="text-[11px] text-slate-400">تأكد من مطابقة هذه البيانات في النموذج</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <!-- Academic Code -->
+                    <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-xs flex items-center justify-between">
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">كود المستخدم / الطالب</span>
+                            <span class="text-xs font-mono font-bold text-slate-900 block mt-0.5">@(string.IsNullOrWhiteSpace(Model.UserCode) ? "N/A" : Model.UserCode)</span>
+                        </div>
+                        <button type="button" onclick="copyToClipboard('@Model.UserCode', this)" 
+                                class="p-2 rounded-lg bg-slate-100 hover:bg-brand-50 text-slate-500 hover:text-brand-600 text-xs transition-all"
+                                title="نسخ الكود">
+                            <i class="far fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <!-- User Name -->
+                    <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-xs flex items-center justify-between">
+                        <div class="truncate mr-2">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">الاسم المسجل</span>
+                            <span class="text-xs font-bold text-slate-900 block mt-0.5 truncate">@Model.FullName</span>
+                        </div>
+                        <button type="button" onclick="copyToClipboard('@Model.FullName', this)" 
+                                class="p-2 rounded-lg bg-slate-100 hover:bg-brand-50 text-slate-500 hover:text-brand-600 text-xs transition-all"
+                                title="نسخ الاسم">
+                            <i class="far fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <!-- Branch -->
+                    <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-xs flex items-center justify-between">
+                        <div class="truncate mr-2">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">الفرع</span>
+                            <span class="text-xs font-bold text-slate-900 block mt-0.5 truncate">@Model.BranchName</span>
+                        </div>
+                        <button type="button" onclick="copyToClipboard('@Model.BranchName', this)" 
+                                class="p-2 rounded-lg bg-slate-100 hover:bg-brand-50 text-slate-500 hover:text-brand-600 text-xs transition-all"
+                                title="نسخ الفرع">
+                            <i class="far fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prominent Direct Action Banner -->
+            <div class="border-2 border-dashed border-amber-200 rounded-2xl p-8 text-center bg-amber-50/40 space-y-4">
+                <div class="w-16 h-16 rounded-full bg-amber-500 text-white flex items-center justify-center text-2xl mx-auto shadow-lg shadow-amber-500/20">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <div class="max-w-md mx-auto space-y-1">
+                    <p class="text-base font-black text-slate-900">جاهز لتسجيل بياناتك في الاستمارة؟</p>
+                    <p class="text-xs text-slate-500 leading-relaxed">
+                        سيتم فتح نموذج Google Forms في علامة تبويب جديدة لتسجيل الدخول بأمان وتجنب أي تعارض في حسابات البريد الإلكتروني.
+                    </p>
+                </div>
+                <div class="pt-2">
+                    <a href="@Model.WaveFormUrl" target="_blank" rel="noopener noreferrer" 
+                       class="inline-flex items-center gap-3 px-8 py-3.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-amber-600/20 hover:shadow-amber-600/30 transform hover:-translate-y-0.5">
+                        <span>الانتقال إلى الاستمارة الرسمية (Open Form)</span>
+                        <i class="fas fa-arrow-up-right-from-square text-xs"></i>
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function copyToClipboard(text, elem) {
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+            const originalHtml = elem.innerHTML;
+            elem.innerHTML = '<span class="text-emerald-600 font-bold text-xs"><i class="fas fa-check mr-1"></i> تم النسخ</span>';
+            setTimeout(() => {
+                elem.innerHTML = originalHtml;
+            }, 1500);
+        });
+    }
+
+    function switchProfileTab(tabKey) {
+        // Update button states
+        document.querySelectorAll('.profile-tab-btn').forEach(btn => {
+            btn.classList.remove('bg-white', 'text-brand-700', 'shadow-sm');
+            btn.classList.add('text-slate-600', 'hover:text-slate-900', 'hover:bg-white/60');
+        });
+
+        // Hide all tab contents
+        document.querySelectorAll('.profile-tab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+
+        const activeBtn = document.getElementById('tabBtn-' + tabKey);
+        const activeContent = document.getElementById('tabContent-' + tabKey);
+
+        if (activeBtn) {
+            activeBtn.classList.add('bg-white', 'text-brand-700', 'shadow-sm');
+            activeBtn.classList.remove('text-slate-600', 'hover:text-slate-900', 'hover:bg-white/60');
+        }
+
+        if (activeContent) {
+            activeContent.classList.remove('hidden');
+        }
+
+        if (history.replaceState) {
+            history.replaceState(null, null, '#' + tabKey);
+        }
+    }
+
+    // Support direct linking via hash e.g. #waveform
+    document.addEventListener('DOMContentLoaded', () => {
+        const hash = window.location.hash.replace('#', '');
+        if (hash === 'waveform' || hash === 'certificates') {
+            switchProfileTab(hash);
+        }
+    });
+</script>

@@ -307,13 +307,16 @@
                     return;
                 }
                 
-                if (defaultType === 'wave') {
-                    if (!isWaveType) {
-                        $(this).remove();
-                    }
-                } else if (defaultType === 'weekly') {
-                    if (isWaveType) {
-                        $(this).remove();
+                // Only filter if no explicit selectedTypeId was requested
+                if (!selectedTypeId || selectedTypeId === '0' || selectedTypeId === '') {
+                    if (defaultType === 'wave') {
+                        if (!isWaveType) {
+                            $(this).remove();
+                        }
+                    } else if (defaultType === 'weekly') {
+                        if (isWaveType) {
+                            $(this).remove();
+                        }
                     }
                 }
             });

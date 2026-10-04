@@ -2417,7 +2417,14 @@ WHERE U.Id = @UserId;";
                 commandType: CommandType.StoredProcedure);
         }
 
-        public async Task<int> AssignUsersToWaveAsync(int waveId, List<string> userIds, string siteUrl = "http://41.33.149.186:5208")
+        public async Task<int> AssignUsersToWaveAsync(
+            int waveId, 
+            List<string> userIds, 
+            string siteUrl = "http://41.33.149.186:5208", 
+            bool sendEmail = true, 
+            string? customSubject = null, 
+            string? customBody = null, 
+            bool saveAsDefault = false)
         {
             if (userIds == null || !userIds.Any()) return 0;
 
@@ -2425,9 +2432,24 @@ WHERE U.Id = @UserId;";
             {
                 await conn.OpenAsync();
                 
-                // 1. Get wave info once (including StartDate)
+                // 1. Get wave info once (including StartDate and saved custom email fields)
                 var waveInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(
-                    "SELECT TOP 1 WaveName, StartDate FROM TrainingWaves WHERE Id = @Id", new { Id = waveId });
+                    "SELECT TOP 1 WaveName, StartDate, EndDate, IsOnline, Mode, CustomEmailSubject, CustomEmailBody FROM TrainingWaves WHERE Id = @Id", 
+                    new { Id = waveId });
+
+                // If saveAsDefault is true, or if custom template provided and save requested, update TrainingWaves
+                if (saveAsDefault && (!string.IsNullOrWhiteSpace(customSubject) || !string.IsNullOrWhiteSpace(customBody)))
+                {
+                    try
+                    {
+                        await conn.ExecuteAsync(@"
+                            UPDATE dbo.TrainingWaves 
+                            SET CustomEmailSubject = @CustomSubject, CustomEmailBody = @CustomBody 
+                            WHERE Id = @WaveId", 
+                            new { CustomSubject = customSubject?.Trim(), CustomBody = customBody?.Trim(), WaveId = waveId });
+                    }
+                    catch { }
+                }
 
                 // 2. Perform DB assignment in ONE BATCH
                 string sqlBatch = @"
@@ -2468,6 +2490,12 @@ WHERE U.Id = @UserId;";
                      // Suppress to not break main wave registration flow
                  }
 
+                // If email notifications are turned off, return immediately without sending
+                if (!sendEmail)
+                {
+                    return count;
+                }
+
                 // 3. Materialize ONLY NEWLY ASSIGNED user data for background emails
                 var usersForEmail = (await conn.QueryAsync<UserEmailInfo>(
                     @"SELECT UserName, Email FROM AspNetUsers 
@@ -2483,66 +2511,131 @@ WHERE U.Id = @UserId;";
                     string waveName = waveInfo?.WaveName ?? "New Batch";
                     DateTime? startDate = waveInfo?.StartDate;
                     string formattedDate = startDate.HasValue ? startDate.Value.ToString("MMMM dd, yyyy - hh:mm tt") : "To be announced";
+                    bool isOnline = (waveInfo?.IsOnline == true) || (waveInfo?.Mode != null && waveInfo.Mode.ToString().ToLower().Contains("online"));
+                    string location = isOnline ? "Online" : (!string.IsNullOrWhiteSpace(waveInfo?.Mode?.ToString()) ? waveInfo.Mode.ToString() : "Offline in Main Branch");
+
+                    // Subject determination: provided customSubject -> wave saved custom subject -> default
+                    string subjectTemplate = !string.IsNullOrWhiteSpace(customSubject) 
+                        ? customSubject.Trim() 
+                        : (!string.IsNullOrWhiteSpace((string?)waveInfo?.CustomEmailSubject) 
+                            ? (string)waveInfo.CustomEmailSubject 
+                            : $"Welcome to {waveName} - Registration Confirmed");
+
+                    // Body determination: provided customBody -> wave saved custom body -> default
+                    string? bodyTemplate = !string.IsNullOrWhiteSpace(customBody) 
+                        ? customBody.Trim() 
+                        : (!string.IsNullOrWhiteSpace((string?)waveInfo?.CustomEmailBody) 
+                            ? (string)waveInfo.CustomEmailBody 
+                            : null);
 
                     foreach (var user in usersForEmail)
                     {
                         try 
                         {
-                            string firstName = user.UserName.Split(' ')[0];
+                            string fullName = user.UserName ?? "Trainee";
+                            string firstName = fullName.Split(' ')[0];
 
-                            string subject = $"Welcome to {waveName} - Registration Confirmed";
+                            // Resolve placeholders in subject
+                            string resolvedSubject = subjectTemplate
+                                .Replace("{Name}", firstName)
+                                .Replace("{FullName}", fullName)
+                                .Replace("{UserName}", fullName)
+                                .Replace("{WaveName}", waveName)
+                                .Replace("{StartDate}", formattedDate)
+                                .Replace("{Location}", location)
+                                .Replace("{PortalLink}", siteUrl);
 
                             string siteButton = (!string.IsNullOrEmpty(siteUrl) ? $@"
                                 <div style='text-align: center; margin: 30px 0;'>
-                                    <a href='{siteUrl}' style='background-color: #10b981; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);'>Go to Portal Instance</a>
+                                    <a href='{siteUrl}' style='background-color: #10b981; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2); display: inline-block;'>Go to Portal Instance</a>
                                 </div>" : "");
 
+                            string innerContentHtml;
+
+                            if (!string.IsNullOrWhiteSpace(bodyTemplate))
+                            {
+                                // Replace placeholders in custom body
+                                string customized = bodyTemplate
+                                    .Replace("{Name}", firstName)
+                                    .Replace("{FullName}", fullName)
+                                    .Replace("{UserName}", fullName)
+                                    .Replace("{WaveName}", waveName)
+                                    .Replace("{StartDate}", formattedDate)
+                                    .Replace("{Location}", location)
+                                    .Replace("{PortalLink}", siteUrl);
+
+                                // If user provided HTML, preserve it; otherwise format line breaks
+                                if (customized.Contains("<p>") || customized.Contains("<div>") || customized.Contains("<br>"))
+                                {
+                                    innerContentHtml = customized;
+                                }
+                                else
+                                {
+                                    var paragraphs = customized.Split(new[] { "\r\n\r\n", "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
+                                    var formattedParagraphs = paragraphs.Select(p => $"<p style='margin-bottom: 15px;'>{p.Replace("\r\n", "<br/>").Replace("\n", "<br/>")}</p>");
+                                    innerContentHtml = string.Join("", formattedParagraphs);
+                                }
+
+                                if (!bodyTemplate.Contains("{PortalLink}") && !string.IsNullOrEmpty(siteUrl))
+                                {
+                                    innerContentHtml += siteButton;
+                                }
+                            }
+                            else
+                            {
+                                // Default Fallback Template
+                                innerContentHtml = $@"
+                                    <p style='font-size: 18px;'>Dear <b>{firstName}</b>,</p>
+                                    
+                                    <p>Welcome to <b>{waveName}</b> of Pharmacy Basics Program — we’re glad to have you with us!</p>
+                                    
+                                    <p>Your registration has been successfully confirmed. Here are your session details:</p>
+
+                                    <div style='background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin: 25px 0;'>
+                                        <p style='margin: 0 0 10px 0;'>📅 <b>Date & Time:</b> {formattedDate}</p>
+                                        <p style='margin: 0;'>📍 <b>Location:</b> {location}</p>
+                                    </div>
+
+                                    {siteButton}
+
+                                    <hr style='border: 0; border-top: 1px solid #eee; margin: 30px 0;'>
+
+                                    <p style='font-weight: bold; color: #111827;'>A quick note before we start:</p>
+                                    <ul style='padding-left: 20px;'>
+                                        <li style='margin-bottom: 10px;'>Please arrive 10–15 minutes early to ensure a smooth check-in.</li>
+                                        <li>Keep an eye on your email for any further updates or announcements.</li>
+                                    </ul>
+
+                                    <p>If you have any questions or face any issues, feel free to reach out to us.</p>
+                                    
+                                    <p>Looking forward to seeing you and having a great Training Program together.</p>
+
+                                    <p style='margin-top: 40px; line-height: 1.2;'>
+                                        Best regards,<br>
+                                        <span style='color: #10b981; font-weight: bold;'>Eltarshoubi Training Academy Team</span>
+                                    </p>";
+                            }
+
                             string htmlBody = $@"
-<div style='background-color: #f4f7fa; padding: 40px; font-family: ""Segoe UI"", Roboto, Helvetica, Arial, sans-serif;'>
-    <div style='max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08);'>
+<div style='background-color: #f4f7fa; padding: 30px 15px; font-family: ""Segoe UI"", Roboto, Helvetica, Arial, sans-serif;'>
+    <div style='max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;'>
         
-        <div style='background: #10b981; padding: 30px; text-align: center;'>
-            <h2 style='color: white; margin: 0; font-size: 22px;'>Pharmacy Basics Program</h2>
+        <div style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 28px; text-align: center;'>
+            <h2 style='color: white; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.5px;'>Eltarshouby Training Academy</h2>
+            <p style='color: #d1fae5; margin: 6px 0 0 0; font-size: 14px;'>{waveName}</p>
         </div>
 
-        <div style='padding: 30px; color: #374151; line-height: 1.6;'>
-            <p style='font-size: 18px;'>Dear <b>{firstName}</b>,</p>
-            
-            <p>Welcome to <b>{waveName}</b> of Pharmacy Basics Program — we’re glad to have you with us!</p>
-            
-            <p>Your registration has been successfully confirmed. Here are your session details:</p>
-
-            <div style='background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin: 25px 0;'>
-                <p style='margin: 0 0 10px 0;'>📅 <b>Date & Time:</b> {formattedDate}</p>
-                <p style='margin: 0;'>📍 <b>Location:</b> offline in Main Branch</p>
-            </div>
-
-            {siteButton}
-
-            <hr style='border: 0; border-top: 1px solid #eee; margin: 30px 0;'>
-
-            <p style='font-weight: bold; color: #111827;'>A quick note before we start:</p>
-            <ul style='padding-left: 20px;'>
-                <li style='margin-bottom: 10px;'>Please arrive 10–15 minutes early to ensure a smooth check-in.</li>
-                <li>Keep an eye on your email for any further updates or announcements.</li>
-            </ul>
-
-            <p>If you have any questions or face any issues, feel free to reach out to us.</p>
-            
-            <p>Looking forward to seeing you and having a great Training Program together.</p>
-
-            <p style='margin-top: 40px; line-height: 1.2;'>
-                Best regards,<br>
-                <span style='color: #10b981; font-weight: bold;'>Eltarshoubi Training Academy Team</span>
-            </p>
+        <div dir='auto' style='padding: 30px; color: #374151; line-height: 1.7; font-size: 15px;'>
+            {innerContentHtml}
         </div>
 
         <div style='background: #f9fafb; padding: 20px; text-align: center; color: #9ca3af; font-size: 12px; border-top: 1px solid #f3f4f6;'>
-            <p>&copy; {DateTime.Now.Year} Eltarshouby Pharmacies Group. All rights reserved.</p>
+            <p style='margin: 0;'>&copy; {DateTime.Now.Year} Eltarshouby Pharmacies Group. All rights reserved.</p>
         </div>
     </div>
 </div>";
-                            await _emailSender.SendEmailAsync(user.Email, subject, htmlBody);
+
+                            await _emailSender.SendEmailAsync(user.Email, resolvedSubject, htmlBody);
                         }
                         catch { /* Background failure safety */ }
                     }

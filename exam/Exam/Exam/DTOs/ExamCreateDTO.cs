@@ -341,6 +341,31 @@ namespace Exam.DTOs
         public bool IsOnline { get; set; }
         public string? Mode { get; set; }
         public bool IsActive { get; set; } = true;
+        public string? CustomEmailSubject { get; set; }
+        public string? CustomEmailBody { get; set; }
+    }
+
+    public class AssignUsersToWaveDto
+    {
+        public List<string> UserIds { get; set; } = new();
+        public bool SendEmail { get; set; } = true;
+        public string? CustomSubject { get; set; }
+        public string? CustomBody { get; set; }
+        public bool SaveAsDefault { get; set; }
+    }
+
+    public class WaveEmailTemplateDto
+    {
+        public string? CustomSubject { get; set; }
+        public string? CustomBody { get; set; }
+    }
+
+    public class SendWaveEmailDto
+    {
+        public List<string>? UserIds { get; set; }
+        public string? CustomSubject { get; set; }
+        public string? CustomBody { get; set; }
+        public bool SaveAsDefault { get; set; }
     }
 
     // Aggregate result per student for an entire wave (all 12 exams)

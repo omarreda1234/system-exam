@@ -602,7 +602,7 @@
                     }
 
                     <!-- 5. Exam & Assessment Management -->
-                    @if (HasAccess("Admin", "getallcategories") || HasAccess("Admin", "getallexamtypes") || HasAccess("Admin", "WeeklyExams") || HasAccess("Admin", "WaveExams") || HasAccess("Admin", "ManageInstructions"))
+                    @if (HasAccess("Admin", "getallcategories") || HasAccess("Admin", "getallexamtypes") || HasAccess("Admin", "WeeklyExams") || HasAccess("Admin", "WaveExams") || HasAccess("Admin", "Exams") || HasAccess("Admin", "ManageInstructions"))
                     {
                         <div class="nav-group">
                             <button type="button" onclick="toggleNavGroup('group-exam', this)"
@@ -647,6 +647,15 @@
                                         <a href="@Url.Action("WaveExams", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "waveexams")">
                                             <i class="fas fa-water w-4 text-center"></i>
                                             <span>Wave Exams</span>
+                                        </a>
+                                    </li>
+                                }
+                                @if (HasAccess("Admin", "Exams") || HasAccess("Admin", "WeeklyExams") || HasAccess("Admin", "WaveExams") || User.IsInRole("Admin"))
+                                {
+                                    <li>
+                                        <a href="@Url.Action("Exams", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "exams")">
+                                            <i class="fas fa-cubes w-4 text-center"></i>
+                                            <span>All Exams Matrix</span>
                                         </a>
                                     </li>
                                 }
@@ -773,19 +782,20 @@
 
                 <!-- Profile Small -->
                 <div class="p-4 mt-auto">
-                    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 flex items-center gap-3 border border-slate-100 dark:border-slate-800/50">
-                        <div class="w-10 h-10 rounded-xl bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-brand-600 dark:text-brand-400 font-bold">
+                    <a href="@Url.Action("Profile", "Home")" class="block bg-slate-50 dark:bg-slate-800/50 hover:bg-brand-50/50 dark:hover:bg-brand-950/30 rounded-2xl p-4 flex items-center gap-3 border border-slate-100 dark:border-slate-800/50 transition-all group" title="View My Profile & Certificates">
+                        <div class="w-10 h-10 rounded-xl bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-brand-600 dark:text-brand-400 font-bold group-hover:scale-105 transition-transform">
                             @User.Identity.Name?.Substring(0,1).ToUpper()
                         </div>
                         <div class="flex-1 min-w-0">
-                            <p class="text-xs font-bold truncate">@User.Identity.Name</p>
+                            <p class="text-xs font-bold truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">@User.Identity.Name</p>
                             @{
                                 var roleClaim = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value;
                                 string sidebarRole = !string.IsNullOrEmpty(roleClaim) ? roleClaim : "Trainee";
                             }
                             <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold truncate" title="@sidebarRole">@sidebarRole</p>
                         </div>
-                    </div>
+                        <i class="fas fa-arrow-right text-[10px] text-slate-300 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors"></i>
+                    </a>
                 </div>
             </div>
         </aside>
