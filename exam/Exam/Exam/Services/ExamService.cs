@@ -2817,10 +2817,10 @@ WHERE U.Id = @UserId;";
                         WHEN LOWER(R.Name) = 'assistant' OR R.Name LIKE N'%مساعد%' THEN 'assistant'
                         ELSE 'other'
                     END as RoleCategory, 
-                    COUNT(DISTINCT U.Id) as Count
-                FROM AspNetUsers U
-                INNER JOIN AspNetUserRoles UR ON U.Id = UR.UserId
-                INNER JOIN AspNetRoles R ON UR.RoleId = R.Id
+                    COUNT(UR.UserId) as Count
+                FROM AspNetRoles R WITH (NOLOCK)
+                INNER JOIN AspNetUserRoles UR WITH (NOLOCK) ON R.Id = UR.RoleId
+                WHERE LOWER(R.Name) = 'pharmacist' OR R.Name LIKE N'%صيدل%' OR LOWER(R.Name) = 'assistant' OR R.Name LIKE N'%مساعد%'
                 GROUP BY CASE 
                     WHEN LOWER(R.Name) = 'pharmacist' OR R.Name LIKE N'%صيدل%' THEN 'pharmacist'
                     WHEN LOWER(R.Name) = 'assistant' OR R.Name LIKE N'%مساعد%' THEN 'assistant'
@@ -2832,19 +2832,19 @@ WHERE U.Id = @UserId;";
 
             // 2. Active Exams
             dashboard.ActiveExamsCount = await conn.ExecuteScalarAsync<int>(@"
-                SELECT COUNT(*) FROM Exams WHERE IsActive = 1 AND EndTime > GETDATE()");
+                SELECT COUNT(*) FROM Exams WITH (NOLOCK) WHERE IsActive = 1 AND EndTime > GETDATE()");
 
             // 3. Assigned Assistants to Active Exams
             dashboard.AssignedAssistantsCount = await conn.ExecuteScalarAsync<int>(@"
                 SELECT COUNT(DISTINCT SA.UserId) 
-                FROM UserExamAttempts SA
-                JOIN AspNetUserRoles UR ON SA.UserId = UR.UserId
-                JOIN AspNetRoles R ON UR.RoleId = R.Id
-                JOIN Exams E ON SA.ExamId = E.Id
-                WHERE R.Name = 'assistant' AND E.IsActive = 1 AND E.EndTime > GETDATE()" );
+                FROM UserExamAttempts SA WITH (NOLOCK)
+                JOIN AspNetUserRoles UR WITH (NOLOCK) ON SA.UserId = UR.UserId
+                JOIN AspNetRoles R WITH (NOLOCK) ON UR.RoleId = R.Id
+                JOIN Exams E WITH (NOLOCK) ON SA.ExamId = E.Id
+                WHERE R.Name = 'assistant' AND E.IsActive = 1 AND E.EndTime > GETDATE()");
 
             // 4. Total Waves
-            dashboard.TotalWavesCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM TrainingWaves");
+            dashboard.TotalWavesCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM TrainingWaves WITH (NOLOCK)");
 
             // 5. Pass Rate Overview (Dynamic)
             var passStats = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
@@ -2852,7 +2852,7 @@ WHERE U.Id = @UserId;";
                     COUNT(*) as Total,
                     SUM(CASE WHEN IsPassed = 1 THEN 1 ELSE 0 END) as Passed,
                     SUM(CASE WHEN IsPassed = 0 THEN 1 ELSE 0 END) as Failed
-                FROM UserExamAttempts
+                FROM UserExamAttempts WITH (NOLOCK)
                 WHERE Status IN ('Completed', 'Fail_Timeout') AND Score IS NOT NULL");
 
             if (passStats != null && passStats.Total > 0)
@@ -2864,20 +2864,28 @@ WHERE U.Id = @UserId;";
 
             // 6. Pharmacists per Branch (Dynamic calculation)
             dashboard.PharmacistsPerBranch = (await conn.QueryAsync<BranchStatsDto>(@"
-                SELECT B.BranchName, 
-                       (SELECT COUNT(*) FROM AspNetUsers U WHERE U.BranchId = B.Id) as UserCount,
-                       ISNULL(PassedFailed.Passed, 0) as Passed,
-                       ISNULL(PassedFailed.Failed, 0) as Failed
-                FROM Branches B
-                LEFT JOIN (
+                WITH BranchUsers AS (
+                    SELECT BranchId, COUNT(*) as UserCount
+                    FROM AspNetUsers WITH (NOLOCK)
+                    WHERE BranchId IS NOT NULL
+                    GROUP BY BranchId
+                ),
+                PassedFailed AS (
                     SELECT U.BranchId,
                            SUM(CASE WHEN SA.IsPassed = 1 THEN 1 ELSE 0 END) as Passed,
                            SUM(CASE WHEN SA.IsPassed = 0 THEN 1 ELSE 0 END) as Failed
-                    FROM AspNetUsers U
-                    INNER JOIN UserExamAttempts SA ON U.Id = SA.UserId
-                    WHERE SA.Status IN ('Completed', 'Fail_Timeout')
+                    FROM AspNetUsers U WITH (NOLOCK)
+                    INNER JOIN UserExamAttempts SA WITH (NOLOCK) ON U.Id = SA.UserId
+                    WHERE SA.Status IN ('Completed', 'Fail_Timeout') AND U.BranchId IS NOT NULL
                     GROUP BY U.BranchId
-                ) PassedFailed ON B.Id = PassedFailed.BranchId
+                )
+                SELECT B.BranchName, 
+                       ISNULL(BU.UserCount, 0) as UserCount,
+                       ISNULL(PF.Passed, 0) as Passed,
+                       ISNULL(PF.Failed, 0) as Failed
+                FROM Branches B WITH (NOLOCK)
+                LEFT JOIN BranchUsers BU ON B.Id = BU.BranchId
+                LEFT JOIN PassedFailed PF ON B.Id = PF.BranchId
                 ORDER BY UserCount DESC")).ToList();
 
             // 7. Wave Enrollment Trend
@@ -2885,7 +2893,7 @@ WHERE U.Id = @UserId;";
             {
                 var trend = await conn.QueryAsync<dynamic>(@"
                     SELECT TOP 12 YEAR(JoinDate) as Yr, MONTH(JoinDate) as Mn, COUNT(*) as EnrollmentCount
-                    FROM UserWaves
+                    FROM UserWaves WITH (NOLOCK)
                     WHERE JoinDate IS NOT NULL
                     GROUP BY YEAR(JoinDate), MONTH(JoinDate)
                     ORDER BY Yr, Mn");
@@ -2902,7 +2910,7 @@ WHERE U.Id = @UserId;";
             {
                 var weeklyExams = await conn.QueryAsync<WeeklyExamOptionDto>(@"
                     SELECT Id, Title 
-                    FROM Exams 
+                    FROM Exams WITH (NOLOCK)
                     WHERE WaveId IS NULL OR Title LIKE 'Weekly%'
                     ORDER BY Id ASC");
                 dashboard.WeeklyExamsList = weeklyExams.ToList();
@@ -2912,20 +2920,28 @@ WHERE U.Id = @UserId;";
             // 7c. Per-Weekly Exam Telemetry (Hover showing Weekly Exam Title)
             try
             {
-                var monthlyWeekly = await conn.QueryAsync<MonthlyWeeklyExamStatsDto>(@"
+                var monthlyWeekly = await conn.QueryAsync<dynamic>(@"
                     SELECT 
                         e.Id AS ExamId,
                         e.Title AS ExamTitle,
-                        FORMAT(MIN(uea.StartTime), 'MMM yyyy') AS Month,
+                        MIN(uea.StartTime) AS MonthDate,
                         COUNT(DISTINCT uea.UserId) AS ExamineesCount,
                         COUNT(uea.Id) AS TotalAttempts,
                         ROUND(AVG(CAST(uea.Score AS FLOAT)), 1) AS AverageScore
-                    FROM UserExamAttempts uea
-                    JOIN Exams e ON uea.ExamId = e.Id
+                    FROM UserExamAttempts uea WITH (NOLOCK)
+                    JOIN Exams e WITH (NOLOCK) ON uea.ExamId = e.Id
                     WHERE uea.Status IN ('Completed', 'Fail_Timeout') AND (e.WaveId IS NULL OR e.Title LIKE 'Weekly%')
                     GROUP BY e.Id, e.Title
                     ORDER BY e.Id ASC");
-                dashboard.MonthlyWeeklyExamStats = monthlyWeekly.ToList();
+                dashboard.MonthlyWeeklyExamStats = monthlyWeekly.Select(x => new MonthlyWeeklyExamStatsDto
+                {
+                    ExamId = (int)x.ExamId,
+                    ExamTitle = (string)x.ExamTitle,
+                    Month = x.MonthDate != null ? ((DateTime)x.MonthDate).ToString("MMM yyyy") : "",
+                    ExamineesCount = (int)x.ExamineesCount,
+                    TotalAttempts = (int)x.TotalAttempts,
+                    AverageScore = Convert.ToDouble(x.AverageScore ?? 0)
+                }).ToList();
             }
             catch { }
 
@@ -2939,12 +2955,12 @@ WHERE U.Id = @UserId;";
                         COUNT(DISTINCT uea.UserId) AS ExamineesCount,
                         COUNT(uea.Id) AS TotalAttempts,
                         ISNULL(ROUND(AVG(CAST(uea.Score AS FLOAT)), 1), 0) AS AverageScore
-                    FROM Branches b
-                    LEFT JOIN AspNetUsers u ON u.BranchId = b.Id
-                    LEFT JOIN UserExamAttempts uea ON uea.UserId = u.Id AND uea.Status IN ('Completed', 'Fail_Timeout') 
-                        AND uea.ExamId IN (SELECT Id FROM Exams WHERE WaveId IS NULL OR Title LIKE 'Weekly%')
+                    FROM UserExamAttempts uea WITH (NOLOCK)
+                    JOIN Exams e WITH (NOLOCK) ON uea.ExamId = e.Id AND (e.WaveId IS NULL OR e.Title LIKE 'Weekly%')
+                    JOIN AspNetUsers u WITH (NOLOCK) ON uea.UserId = u.Id
+                    JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                    WHERE uea.Status IN ('Completed', 'Fail_Timeout')
                     GROUP BY b.Id, b.BranchName
-                    HAVING COUNT(DISTINCT uea.UserId) > 0
                     ORDER BY ExamineesCount DESC, b.BranchName ASC");
                 dashboard.BranchWeeklyExamStats = branchWeekly.ToList();
             }
@@ -2952,41 +2968,100 @@ WHERE U.Id = @UserId;";
 
             // 8. Top Performing Pharmacists
             dashboard.TopPerformingPharmacists = (await conn.QueryAsync<TopPharmacistDto>(@"
-                SELECT TOP 5 U.UserName as Name, U.UserCode, E.Title as ExamTitle, SA.Score as Score
-                FROM UserExamAttempts SA
-                JOIN AspNetUsers U ON SA.UserId = U.Id
-                JOIN Exams E ON SA.ExamId = E.Id
+                DECLARE @Top TABLE (UserId nvarchar(450), ExamId int, Score decimal(18,2));
+                INSERT INTO @Top
+                SELECT TOP 5 SA.UserId, SA.ExamId, SA.Score
+                FROM UserExamAttempts SA WITH (NOLOCK)
                 WHERE SA.Status IN ('Completed', 'Fail_Timeout') AND SA.Score IS NOT NULL
-                ORDER BY SA.Score DESC")).ToList();
+                ORDER BY SA.Score DESC;
+
+                SELECT U.UserName as Name, U.UserCode, E.Title as ExamTitle, t.Score as Score
+                FROM @Top t
+                JOIN AspNetUsers U WITH (NOLOCK) ON t.UserId = U.Id
+                JOIN Exams E WITH (NOLOCK) ON t.ExamId = E.Id
+                ORDER BY t.Score DESC")).ToList();
             
             // 9. Global Question Bank Stats
-            dashboard.TotalQuestionsCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Questions");
+            dashboard.TotalQuestionsCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Questions WITH (NOLOCK)");
             
             var categoryStats = (await conn.QueryAsync<dynamic>(@"
                 SELECT 
                     ISNULL(C.CategoryName, 'Uncategorized') as CategoryName,
                     ISNULL(T.TopicName, 'General') as TopicName,
                     COUNT(Q.Id) as Count
-                FROM Questions Q
-                LEFT JOIN Categories C ON Q.CategoryId = C.Id
-                LEFT JOIN Topics T ON Q.TopicId = T.Id
+                FROM Questions Q WITH (NOLOCK)
+                LEFT JOIN Categories C WITH (NOLOCK) ON Q.CategoryId = C.Id
+                LEFT JOIN Topics T WITH (NOLOCK) ON Q.TopicId = T.Id
                 GROUP BY C.CategoryName, T.TopicName
                 ORDER BY C.CategoryName, T.TopicName")).ToList();
 
             foreach (var r in categoryStats)
             {
-                var catName = (string)r.CategoryName;
-                var topName = (string)r.TopicName;
+                var rawCat = ((string)r.CategoryName ?? "Uncategorized").Trim();
+                var rawTop = ((string)r.TopicName ?? "General").Trim();
                 var count = (int)r.Count;
 
-                var cat = dashboard.QuestionsPerCategory.FirstOrDefault(c => c.CategoryName == catName);
+                // Category Normalization (unify duplicates like CustomerService/Customer Service, SoftSkills/Soft Skills, Medical/Medicine)
+                string normCat = rawCat;
+                string cleanCat = rawCat.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+                if (cleanCat == "cosmo" || cleanCat == "cosmetics") normCat = "Cosmo";
+                else if (cleanCat == "medical" || cleanCat == "medicine" || cleanCat == "med") normCat = "Medical";
+                else if (cleanCat == "customerservice" || cleanCat == "customer") normCat = "Customer Service";
+                else if (cleanCat == "softskills" || cleanCat == "softskill") normCat = "Soft Skills";
+                else if (cleanCat == "insurance") normCat = "Insurance";
+                else if (cleanCat == "branchessystem" || cleanCat == "branches") normCat = "Branches System";
+
+                // Topic Normalization (unify duplicates and typos)
+                string normTop = rawTop;
+                string cleanTop = rawTop.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+                if (cleanTop == "womenhealth" || cleanTop == "womenhealh") normTop = "Women Health";
+                else if (cleanTop == "dermatology") normTop = "Dermatology";
+                else if (cleanTop == "git") normTop = "GIT";
+                else if (cleanTop == "pediatrics") normTop = "Pediatrics";
+                else if (cleanTop == "ent") normTop = "ENT";
+                else if (cleanTop == "paramedical") normTop = "Paramedical";
+                else if (cleanTop == "refrigerateddrugs") normTop = "Refrigerated Drugs";
+                else if (cleanTop == "influnzavaccines" || cleanTop == "influenzavaccines") normTop = "Influenza Vaccines";
+                else if (cleanTop == "drugdruginteraction") normTop = "Drug-Drug Interaction";
+                else if (cleanTop == "eyedisorders") normTop = "Eye Disorders";
+                else if (cleanTop == "communicationskills" || cleanTop == "communicationskill") normTop = "Communication Skills";
+                else if (cleanTop == "bodycare") normTop = "Bodycare";
+                else if (cleanTop == "haircare") normTop = "Haircare";
+                else if (cleanTop == "skincare1") normTop = "Skincare 1";
+                else if (cleanTop == "skincare2") normTop = "Skincare 2";
+                else if (cleanTop == "suncreen101" || cleanTop == "sunscreen101") normTop = "Sunscreen 101";
+                else if (cleanTop == "bottels&nippels" || cleanTop == "bottles&nipples") normTop = "Bottles & Nipples";
+                else if (cleanTop == "deoderants&antiperspirants" || cleanTop == "deodorants&antiperspirants") normTop = "Deodorants & Anti-Perspirants";
+                else if (cleanTop == "demacylabsguide") normTop = "Demacy Labs Guide";
+                else if (cleanTop == "wegovy") normTop = "Wegovy";
+                else if (cleanTop == "wheyprotein") normTop = "Whey Protein";
+                else if (cleanTop == "omega3") normTop = "Omega-3";
+
+                var cat = dashboard.QuestionsPerCategory.FirstOrDefault(c => c.CategoryName.Equals(normCat, StringComparison.OrdinalIgnoreCase));
                 if (cat == null)
                 {
-                    cat = new CategoryStatDto { CategoryName = catName, Count = 0 };
+                    cat = new CategoryStatDto { CategoryName = normCat, Count = 0 };
                     dashboard.QuestionsPerCategory.Add(cat);
                 }
                 cat.Count += count;
-                cat.Topics.Add(new TopicStatDto { TopicName = topName, Count = count });
+
+                var top = cat.Topics.FirstOrDefault(t => t.TopicName.Equals(normTop, StringComparison.OrdinalIgnoreCase));
+                if (top == null)
+                {
+                    cat.Topics.Add(new TopicStatDto { TopicName = normTop, Count = count });
+                }
+                else
+                {
+                    top.Count += count;
+                }
+            }
+
+            // Order categories by Count descending
+            dashboard.QuestionsPerCategory = dashboard.QuestionsPerCategory.OrderByDescending(c => c.Count).ToList();
+            // Order topics within each category by Count descending
+            foreach (var c in dashboard.QuestionsPerCategory)
+            {
+                c.Topics = c.Topics.OrderByDescending(t => t.Count).ToList();
             }
 
             // 10. Data Integrity: Find Mismatched Category/Topic

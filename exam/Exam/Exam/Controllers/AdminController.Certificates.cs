@@ -1682,35 +1682,29 @@ namespace Exam.Controllers
         public async Task<WaveAnalyticsResultDto> FetchWaveAnalyticsAsync(int? waveId)
         {
             using var conn = new SqlConnection(_connectionString);
-            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName, ISNULL(IsActive, 1) as IsActive FROM dbo.TrainingWaves ORDER BY Id DESC")).ToList();
+            var waves = (await conn.QueryAsync<dynamic>("SELECT Id, WaveName, ISNULL(IsActive, 1) as IsActive FROM dbo.TrainingWaves WITH (NOLOCK) ORDER BY Id DESC")).ToList();
 
             int targetWaveId = waveId ?? 0;
 
             var sql = @"
-                WITH UserRoles AS (
-                    SELECT UR.UserId,
-                           MAX(CASE WHEN LOWER(R.Name) = 'pharmacist' OR R.Name LIKE N'%صيدل%' THEN 'Pharmacist'
-                                    WHEN LOWER(R.Name) = 'assistant' OR R.Name LIKE N'%مساعد%' THEN 'Assistant'
-                                    ELSE 'Other' END) as RoleCategory
-                    FROM AspNetUserRoles UR
-                    JOIN AspNetRoles R ON UR.RoleId = R.Id
-                    GROUP BY UR.UserId
-                )
                 SELECT 
                     U.Id as UserId,
                     ISNULL(U.FullName, U.UserName) as StudentName,
                     ISNULL(B.BranchName, N'بدون فرع / Global') as BranchName,
-                    ISNULL(UR.RoleCategory, 'Other') as RoleCategory,
+                    ISNULL(CASE WHEN LOWER(R.Name) = 'pharmacist' OR R.Name LIKE N'%صيدل%' THEN 'Pharmacist'
+                                WHEN LOWER(R.Name) = 'assistant' OR R.Name LIKE N'%مساعد%' THEN 'Assistant'
+                                ELSE 'Other' END, 'Other') as RoleCategory,
                     W.Id as WaveId,
                     W.WaveName,
                     wc.Score as CertScore,
                     wc.CertificateCode
-                FROM AspNetUsers U
-                JOIN UserWaves UW ON U.Id = UW.UserId
-                JOIN TrainingWaves W ON UW.WaveId = W.Id
-                LEFT JOIN UserRoles UR ON U.Id = UR.UserId
-                LEFT JOIN Branches B ON U.BranchId = B.Id
-                LEFT JOIN UserWaveCertificates wc ON wc.UserId = U.Id AND wc.WaveId = W.Id
+                FROM UserWaves UW WITH (NOLOCK)
+                JOIN AspNetUsers U WITH (NOLOCK) ON UW.UserId = U.Id
+                JOIN TrainingWaves W WITH (NOLOCK) ON UW.WaveId = W.Id
+                LEFT JOIN AspNetUserRoles UR WITH (NOLOCK) ON U.Id = UR.UserId
+                LEFT JOIN AspNetRoles R WITH (NOLOCK) ON UR.RoleId = R.Id
+                LEFT JOIN Branches B WITH (NOLOCK) ON U.BranchId = B.Id
+                LEFT JOIN UserWaveCertificates wc WITH (NOLOCK) ON wc.UserId = U.Id AND wc.WaveId = W.Id
                 WHERE (@WaveId IS NULL OR @WaveId = 0 OR W.Id = @WaveId)";
 
             var rows = (await conn.QueryAsync<dynamic>(sql, new { WaveId = targetWaveId })).ToList();
@@ -1789,9 +1783,9 @@ namespace Exam.Controllers
                     SUM(CASE WHEN wc.Score > 75 THEN 1 ELSE 0 END) as CertifiedCount,
                     SUM(CASE WHEN wc.Score >= 70 AND wc.Score <= 75 THEN 1 ELSE 0 END) as PassedNoCertCount,
                     SUM(CASE WHEN wc.Score > 0 AND wc.Score < 70 THEN 1 ELSE 0 END) as FailedCount
-                FROM TrainingWaves W
-                JOIN UserWaves UW ON W.Id = UW.WaveId
-                LEFT JOIN UserWaveCertificates wc ON wc.UserId = UW.UserId AND wc.WaveId = W.Id
+                FROM TrainingWaves W WITH (NOLOCK)
+                JOIN UserWaves UW WITH (NOLOCK) ON W.Id = UW.WaveId
+                LEFT JOIN UserWaveCertificates wc WITH (NOLOCK) ON wc.UserId = UW.UserId AND wc.WaveId = W.Id
                 WHERE W.StartDate IS NOT NULL
                 GROUP BY FORMAT(W.StartDate, 'MMM yyyy')
                 ORDER BY MIN(W.StartDate) ASC";
@@ -1819,20 +1813,42 @@ namespace Exam.Controllers
             result.MonthlyTrends = monthlyTrends;
 
             var sessionAttendanceSql = @"
-                SELECT 
+                WITH WaveUserCounts AS (
+                    SELECT WaveId, COUNT(DISTINCT UserId) as EnrolledCount
+                    FROM dbo.UserWaves WITH (NOLOCK)
+                    WHERE (@WaveId = 0 OR WaveId = @WaveId)
+                    GROUP BY WaveId
+                ),
+                SessionAttendanceAgg AS (
+                    SELECT SessionId, 
+                           COUNT(DISTINCT UserId) as TotalPresent
+                    FROM dbo.UserAttendance WITH (NOLOCK)
+                    WHERE IsPresent = 1
+                    GROUP BY SessionId
+                ),
+                SessionRawEnrolled AS (
+                    SELECT SessionId,
+                           COUNT(DISTINCT UserId) as TotalEnrolled
+                    FROM dbo.UserAttendance WITH (NOLOCK)
+                    GROUP BY SessionId
+                )
+                SELECT " + (targetWaveId == 0 ? "TOP 25 " : "") + @"
                     S.Id as SessionId,
                     S.SessionName,
                     S.SessionDate,
                     ISNULL(W.WaveName, N'عام / Global') as WaveName,
-                    ISNULL((
+                    ISNULL(
                         CASE 
-                            WHEN S.WaveId IS NOT NULL AND S.WaveId > 0 THEN (SELECT COUNT(DISTINCT UW.UserId) FROM dbo.UserWaves UW WHERE UW.WaveId = S.WaveId)
-                            ELSE (SELECT COUNT(DISTINCT UA.UserId) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id)
-                        END
-                    ), 0) as RawEnrolled,
-                    ISNULL((SELECT COUNT(DISTINCT UA.UserId) FROM dbo.UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1), 0) as PresentCount
-                FROM dbo.AttendanceSessions S
-                LEFT JOIN dbo.TrainingWaves W ON S.WaveId = W.Id
+                            WHEN S.WaveId IS NOT NULL AND S.WaveId > 0 THEN WUC.EnrolledCount
+                            ELSE SRE.TotalEnrolled
+                        END, 0
+                    ) as RawEnrolled,
+                    ISNULL(SAA.TotalPresent, 0) as PresentCount
+                FROM dbo.AttendanceSessions S WITH (NOLOCK)
+                LEFT JOIN dbo.TrainingWaves W WITH (NOLOCK) ON S.WaveId = W.Id
+                LEFT JOIN WaveUserCounts WUC ON S.WaveId = WUC.WaveId
+                LEFT JOIN SessionAttendanceAgg SAA ON S.Id = SAA.SessionId
+                LEFT JOIN SessionRawEnrolled SRE ON S.Id = SRE.SessionId
                 WHERE (@WaveId IS NULL OR @WaveId = 0 OR S.WaveId = @WaveId)
                 ORDER BY S.SessionDate DESC";
 

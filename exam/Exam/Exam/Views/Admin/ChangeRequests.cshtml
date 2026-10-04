@@ -149,7 +149,7 @@
 
         <!-- Tickets Table Container -->
         <div class="mt-4 overflow-x-auto">
-            <table class="w-full text-left text-xs border-collapse">
+            <table id="changeRequestsTable" class="saas-table display nowrap w-full text-xs">
                 <thead>
                     <tr class="border-b border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 font-extrabold uppercase tracking-wider text-[10px]">
                         <th class="py-3 px-3">Ticket Code</th>
@@ -473,7 +473,13 @@
         $('#statResolved').text(summary.resolvedCount || 0);
     }
 
+    let crDataTable = null;
+
     function renderTickets(tickets) {
+        if ($.fn.DataTable.isDataTable('#changeRequestsTable')) {
+            $('#changeRequestsTable').DataTable().destroy();
+        }
+
         const $tbody = $('#ticketsTableBody');
         $tbody.empty();
 
@@ -507,8 +513,9 @@
             // Attachment icon
             const attachIcon = t.attachmentPath ? `<i class="fas fa-paperclip text-slate-400 ml-1.5" title="${t.attachmentName || 'Attachment'}"></i>` : '';
 
-            // Date format
+            // Date format and raw timestamp for accurate column sorting
             const dateStr = t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
+            const dateTimestamp = t.createdAt ? new Date(t.createdAt).getTime() : 0;
 
             const row = `
                 <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
@@ -529,7 +536,7 @@
                         <div class="font-bold text-slate-700 dark:text-slate-300">${t.createdByName || 'Admin'}</div>
                         <div class="text-[10px] text-slate-400">${t.createdByEmail || ''}</div>
                     </td>
-                    <td class="py-3 px-3">
+                    <td class="py-3 px-3" data-order="${p}">
                         <select onchange="updateTicketPriorityQuick(${t.id}, this.value, this)" 
                                 title="Click to change priority"
                                 class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase cursor-pointer border outline-none transition-all shadow-sm ${pColor}">
@@ -544,12 +551,12 @@
                             ${t.category}
                         </span>
                     </td>
-                    <td class="py-3 px-3">
+                    <td class="py-3 px-3" data-order="${s}">
                         <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${sColor}">
                             ${t.status}
                         </span>
                     </td>
-                    <td class="py-3 px-3 text-slate-500 dark:text-slate-400 text-[11px] font-semibold">
+                    <td class="py-3 px-3 text-slate-500 dark:text-slate-400 text-[11px] font-semibold" data-order="${dateTimestamp}">
                         ${dateStr}
                     </td>
                     <td class="py-3 px-3 text-right">
@@ -561,6 +568,29 @@
             `;
             $tbody.append(row);
         });
+
+        crDataTable = $('#changeRequestsTable').DataTable({
+            pageLength: 10,
+            lengthMenu: [10, 25, 50, 100],
+            order: [[6, 'desc']], // Sort by Created Date descending
+            columnDefs: [
+                { orderable: false, targets: [3, 7] } // Priority select and Actions not sortable
+            ],
+            language: {
+                search: "",
+                searchPlaceholder: "In-table filter...",
+                lengthMenu: "Show _MENU_ entries",
+                info: "Showing _START_ to _END_ of _TOTAL_ tickets",
+                infoEmpty: "Showing 0 tickets",
+                paginate: {
+                    previous: "<i class='fas fa-chevron-left'></i>",
+                    next: "<i class='fas fa-chevron-right'></i>"
+                }
+            }
+        });
+
+        $('.dataTables_filter input').addClass('bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs outline-none focus:border-brand-500 mb-3');
+        $('.dataTables_length select').addClass('bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2 py-1.5 text-xs outline-none focus:border-brand-500 mb-3');
     }
 
     // Modal Operations

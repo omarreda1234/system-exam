@@ -466,62 +466,134 @@
         </div>
     </div>
 
-    <!-- Question Bank Inventory & Wave Topic Analysis -->
+    <!-- Question Bank Inventory & Topic Distribution -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
-        <div class="p-8 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-800/20">
+        <div class="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-800/20">
             <div>
                 <h3 class="font-black text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                    <i class="fas fa-layer-group text-brand-500"></i> INVENTORY & WAVE TOPIC TELEMETRY ANALYSIS
+                    <i class="fas fa-layer-group text-brand-500"></i> QUESTION BANK TELEMETRY & TOPIC DISTRIBUTION
                 </h3>
-                <p class="text-xl font-bold mt-1 text-slate-900 dark:text-white">Global Question Bank & Wave Topic Performance Overview</p>
+                <p class="text-xl font-bold mt-1 text-slate-900 dark:text-white">Academy Question Bank Analytics & Topic Volume Overview</p>
             </div>
             
             <div class="flex flex-wrap items-center gap-3">
-                <!-- Wave Filter Dropdown -->
+                <!-- Scope Filter Dropdown -->
                 <div class="flex items-center gap-2">
-                    <label for="invWaveFilter" class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Wave Analytics Filter:</label>
-                    <select id="invWaveFilter" onchange="syncAndFilterWaveAnalytics(this.value)" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-sm transition-all cursor-pointer">
-                        <option value="0">All Waves (جميع الدفعات)</option>
-                        @if (ViewBag.WavesList != null)
-                        {
-                            foreach (var w in (IEnumerable<dynamic>)ViewBag.WavesList)
-                            {
-                                <option value="@w.Id">@w.WaveName</option>
-                            }
-                        }
+                    <label for="qbScopeFilter" class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Exam Scope:</label>
+                    <select id="qbScopeFilter" onchange="filterQuestionBankScope(this.value)" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold rounded-xl px-3.5 py-2 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-sm transition-all cursor-pointer">
+                        <option value="all">Global Question Bank (بنك الأسئلة الشامل)</option>
+                        <option value="weekly">Weekly Exams Questions (أسئلة الويكلي)</option>
+                        <option value="wave">Wave Exams Questions (أسئلة الدفعات)</option>
                     </select>
                 </div>
 
-                <span class="px-4 py-2 bg-brand-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-brand-500/20">
-                    <i class="fas fa-database mr-2"></i> @Model.TotalQuestionsCount Questions Total
+                <span id="qbTotalBadge" class="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 flex items-center gap-2">
+                    <i class="fas fa-database text-xs"></i> <span id="qbTotalCount">@Model.TotalQuestionsCount</span> Questions Total
                 </span>
             </div>
         </div>
+
+        <!-- Visual Analytics Charts Row -->
+        <div class="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/30 dark:bg-slate-950/20">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                <!-- Donut Chart: Category Share -->
+                <div class="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 rounded-3xl shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                            <i class="fas fa-chart-pie text-emerald-500"></i> Category Volume Share
+                        </h4>
+                        <span class="text-[10px] font-bold text-slate-400">Proportions</span>
+                    </div>
+                    <div class="relative h-64 flex items-center justify-center">
+                        <canvas id="qbCategoryDonutChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Horizontal Bar Chart: Top Topics -->
+                <div class="lg:col-span-7 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 rounded-3xl shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                            <i class="fas fa-chart-bar text-cyan-500"></i> Highest Topic Question Volumes
+                        </h4>
+                        <span class="text-[10px] font-bold text-slate-400">Top Academic Topics</span>
+                    </div>
+                    <div class="relative h-64">
+                        <canvas id="qbTopTopicsBarChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
         
-        <div class="p-8">
-            <div id="invCategoriesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <!-- Category Breakdown Cards Grid -->
+        <div class="p-6 md:p-8">
+            <div class="flex items-center justify-between mb-4">
+                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">Normalized Academic Categories & Core Topics</h4>
+                <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Click any card to inspect full topic syllabus</span>
+            </div>
+
+            <div id="invCategoriesContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
                 @foreach (var cat in Model.QuestionsPerCategory)
                 {
-                    <div class="bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 hover:shadow-lg transition-all border-l-4 border-l-brand-500">
-                        <div class="flex items-center justify-between mb-4">
-                            <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider truncate mr-2">@cat.CategoryName</h4>
-                            <span class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] font-black px-2.5 py-1 rounded-xl text-slate-600 dark:text-slate-400">@cat.Count Qs</span>
+                    var catColorClass = "border-l-emerald-500";
+                    var catBadgeClass = "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60";
+                    var catIcon = "fa-stethoscope";
+                    var lower = cat.CategoryName.ToLowerInvariant();
+                    if (lower.Contains("cosmo")) {
+                        catColorClass = "border-l-rose-500";
+                        catBadgeClass = "text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/60";
+                        catIcon = "fa-spa";
+                    } else if (lower.Contains("insurance")) {
+                        catColorClass = "border-l-amber-500";
+                        catBadgeClass = "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/60";
+                        catIcon = "fa-shield-alt";
+                    } else if (lower.Contains("customer")) {
+                        catColorClass = "border-l-sky-500";
+                        catBadgeClass = "text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800/60";
+                        catIcon = "fa-headset";
+                    } else if (lower.Contains("soft")) {
+                        catColorClass = "border-l-purple-500";
+                        catBadgeClass = "text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800/60";
+                        catIcon = "fa-comments";
+                    }
+
+                    var pct = Model.TotalQuestionsCount > 0 ? Math.Round((double)cat.Count * 100.0 / Model.TotalQuestionsCount, 1) : 0;
+                    var escapedName = cat.CategoryName.Replace("'", "\\'");
+
+                    <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 hover:shadow-lg transition-all border-l-4 @catColorClass flex flex-col justify-between cursor-pointer group" onclick="showCategoryTopicsModal('@escapedName')">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider truncate mr-1 flex items-center gap-1.5">
+                                    <i class="fas @catIcon text-[11px] opacity-70 group-hover:scale-110 transition-transform"></i>
+                                    @cat.CategoryName
+                                </h4>
+                                <span class="border text-[10px] font-black px-2 py-0.5 rounded-xl @catBadgeClass whitespace-nowrap">@cat.Count Qs (@pct%)</span>
+                            </div>
+                            <div class="space-y-1.5 pt-1">
+                                @foreach (var top in cat.Topics.Take(5))
+                                {
+                                    <div class="flex justify-between items-center text-[10px] text-slate-600 dark:text-slate-400 font-bold">
+                                        <span class="flex items-center gap-1.5 truncate">
+                                            <i class="fas fa-caret-right text-[8px] text-brand-500/50"></i>
+                                            @top.TopicName
+                                        </span>
+                                        <span class="text-slate-400 font-mono text-[9px]">@top.Count</span>
+                                    </div>
+                                }
+                            </div>
                         </div>
-                        <div class="space-y-2">
-                            @foreach (var top in cat.Topics.Take(5))
-                            {
-                                <div class="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-500 font-bold">
-                                    <span class="flex items-center gap-1.5 truncate">
-                                        <i class="fas fa-caret-right text-[8px] text-brand-500/50"></i>
-                                        @top.TopicName
-                                    </span>
-                                    <span class="text-slate-400 font-mono">@top.Count Qs</span>
-                                </div>
-                            }
-                            @if (cat.Topics.Count > 5)
-                            {
-                                <p class="text-[9px] text-slate-400 italic mt-2">+ @(cat.Topics.Count - 5) more topics...</p>
-                            }
+
+                        <div class="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
+                            <span class="text-[9px] font-bold text-slate-400 group-hover:text-brand-500 transition-colors">
+                                @if (cat.Topics.Count > 5)
+                                {
+                                    <span>+ @(cat.Topics.Count - 5) more topics</span>
+                                }
+                                else
+                                {
+                                    <span>@(cat.Topics.Count) Topic(s) total</span>
+                                }
+                            </span>
+                            <i class="fas fa-arrow-right text-[9px] text-slate-300 dark:text-slate-600 group-hover:text-brand-500 group-hover:translate-x-0.5 transition-all"></i>
                         </div>
                     </div>
                 }
@@ -1077,7 +1149,309 @@
                     renderBranchWeeklyChart(labels, examinees, scores);
                 });
             });
+
+            // Initial Question Bank Charts Render
+            renderQuestionBankCharts(qbGlobalCategories, null, qbGlobalTotal);
         });
+
+        // Question Bank Charts & Data Logic
+        let qbDonutChartInstance = null;
+        let qbBarChartInstance = null;
+        let qbGlobalCategories = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.QuestionsPerCategory.Select(c => new {
+            categoryName = c.CategoryName,
+            count = c.Count,
+            percentage = Model.TotalQuestionsCount > 0 ? Math.Round((double)c.Count * 100.0 / Model.TotalQuestionsCount, 1) : 0,
+            topics = c.Topics.Select(t => new { topicName = t.TopicName, count = t.Count }).ToList()
+        })));
+        let qbGlobalTotal = @Model.TotalQuestionsCount;
+
+        function getCatColor(catName) {
+            const lower = (catName || '').toLowerCase();
+            if (lower.includes('med')) return '#10b981'; // Emerald
+            if (lower.includes('cosmo')) return '#f43f5e'; // Rose
+            if (lower.includes('insur')) return '#f59e0b'; // Amber
+            if (lower.includes('custom')) return '#0ea5e9'; // Sky
+            if (lower.includes('soft')) return '#8b5cf6'; // Purple
+            return '#64748b';
+        }
+
+        function renderQuestionBankCharts(categories, topTopics, totalCount) {
+            const isDark = document.documentElement.classList.contains('dark');
+            const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+            const textColor = isDark ? '#94a3b8' : '#64748b';
+
+            // 1. Donut Chart
+            const ctxDonut = document.getElementById('qbCategoryDonutChart')?.getContext('2d');
+            if (ctxDonut) {
+                if (qbDonutChartInstance) qbDonutChartInstance.destroy();
+
+                const labels = categories.map(c => c.categoryName);
+                const data = categories.map(c => c.count);
+                const bgColors = categories.map(c => getCatColor(c.categoryName));
+
+                qbDonutChartInstance = new Chart(ctxDonut, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: bgColors,
+                            borderWidth: isDark ? 2 : 1,
+                            borderColor: isDark ? '#0f172a' : '#ffffff',
+                            hoverOffset: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '70%',
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    boxWidth: 10,
+                                    usePointStyle: true,
+                                    font: { size: 10, weight: '700' },
+                                    color: textColor,
+                                    generateLabels: function(chart) {
+                                        const original = Chart.overrides.doughnut.plugins.legend.labels.generateLabels(chart);
+                                        original.forEach(lbl => {
+                                            const val = chart.data.datasets[0].data[lbl.index];
+                                            const pct = totalCount > 0 ? ((val / totalCount) * 100).toFixed(1) : 0;
+                                            lbl.text = `${lbl.text}: ${val} (${pct}%)`;
+                                        });
+                                        return original;
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) {
+                                        const val = ctx.raw || 0;
+                                        const pct = totalCount > 0 ? ((val / totalCount) * 100).toFixed(1) : 0;
+                                        return ` ${ctx.label}: ${val} Questions (${pct}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // 2. Horizontal Bar Chart for Top Topics
+            const ctxBar = document.getElementById('qbTopTopicsBarChart')?.getContext('2d');
+            if (ctxBar) {
+                if (qbBarChartInstance) qbBarChartInstance.destroy();
+
+                let topicsList = topTopics;
+                if (!topicsList || topicsList.length === 0) {
+                    topicsList = [];
+                    categories.forEach(c => {
+                        (c.topics || []).forEach(t => {
+                            topicsList.push({
+                                topicName: t.topicName,
+                                count: t.count,
+                                categoryName: c.categoryName
+                            });
+                        });
+                    });
+                    topicsList.sort((a, b) => b.count - a.count);
+                    topicsList = topicsList.slice(0, 8);
+                }
+
+                const topicLabels = topicsList.map(t => t.topicName);
+                const topicData = topicsList.map(t => t.count);
+                const topicColors = topicsList.map(t => getCatColor(t.categoryName));
+
+                qbBarChartInstance = new Chart(ctxBar, {
+                    type: 'bar',
+                    data: {
+                        labels: topicLabels,
+                        datasets: [{
+                            label: 'Questions Count',
+                            data: topicData,
+                            backgroundColor: topicColors.map(c => c + 'cc'),
+                            borderColor: topicColors,
+                            borderWidth: 1.5,
+                            borderRadius: 6,
+                            barPercentage: 0.65
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) {
+                                        return ` Questions: ${ctx.raw} Qs`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: gridColor, drawBorder: false },
+                                beginAtZero: true,
+                                ticks: { font: { size: 9, weight: '700' }, color: textColor }
+                            },
+                            y: {
+                                grid: { display: false },
+                                ticks: { font: { size: 10, weight: '700' }, color: textColor }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function filterQuestionBankScope(scope) {
+            let examTypeId = null;
+            if (scope === 'weekly') examTypeId = 1;
+            else if (scope === 'wave') examTypeId = 2;
+
+            $.get('/Admin/GetQuestionBankAnalytics', { examTypeId: examTypeId }, function(res) {
+                if (res && res.success) {
+                    $('#qbTotalCount').text(res.totalQuestionsCount);
+                    qbGlobalCategories = res.categories;
+                    qbGlobalTotal = res.totalQuestionsCount;
+
+                    renderQuestionBankCharts(res.categories, res.topTopics, res.totalQuestionsCount);
+
+                    let cardsHtml = '';
+                    res.categories.forEach(cat => {
+                        let catColorClass = "border-l-emerald-500";
+                        let catBadgeClass = "text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60";
+                        let catIcon = "fa-stethoscope";
+                        const lower = (cat.categoryName || '').toLowerCase();
+                        if (lower.includes("cosmo")) {
+                            catColorClass = "border-l-rose-500";
+                            catBadgeClass = "text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/60";
+                            catIcon = "fa-spa";
+                        } else if (lower.includes("insurance")) {
+                            catColorClass = "border-l-amber-500";
+                            catBadgeClass = "text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/60";
+                            catIcon = "fa-shield-alt";
+                        } else if (lower.includes("customer")) {
+                            catColorClass = "border-l-sky-500";
+                            catBadgeClass = "text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800/60";
+                            catIcon = "fa-headset";
+                        } else if (lower.includes("soft")) {
+                            catColorClass = "border-l-purple-500";
+                            catBadgeClass = "text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800/60";
+                            catIcon = "fa-comments";
+                        }
+
+                        const escapedName = (cat.categoryName || '').replace(/'/g, "\\'");
+                        cardsHtml += `
+                            <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 hover:shadow-lg transition-all border-l-4 ${catColorClass} flex flex-col justify-between cursor-pointer group" onclick="showCategoryTopicsModal('${escapedName}')">
+                                <div>
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider truncate mr-1 flex items-center gap-1.5">
+                                            <i class="fas ${catIcon} text-[11px] opacity-70 group-hover:scale-110 transition-transform"></i>
+                                            ${cat.categoryName}
+                                        </h4>
+                                        <span class="border text-[10px] font-black px-2 py-0.5 rounded-xl ${catBadgeClass} whitespace-nowrap">${cat.count} Qs (${cat.percentage}%)</span>
+                                    </div>
+                                    <div class="space-y-1.5 pt-1">
+                                        ${(cat.topics || []).slice(0, 5).map(top => `
+                                            <div class="flex justify-between items-center text-[10px] text-slate-600 dark:text-slate-400 font-bold">
+                                                <span class="flex items-center gap-1.5 truncate">
+                                                    <i class="fas fa-caret-right text-[8px] text-brand-500/50"></i>
+                                                    ${top.topicName}
+                                                </span>
+                                                <span class="text-slate-400 font-mono text-[9px]">${top.count}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+
+                                <div class="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
+                                    <span class="text-[9px] font-bold text-slate-400 group-hover:text-brand-500 transition-colors">
+                                        ${cat.topics && cat.topics.length > 5 ? `+ ${cat.topics.length - 5} more topics` : `${cat.topics ? cat.topics.length : 0} Topic(s) total`}
+                                    </span>
+                                    <i class="fas fa-arrow-right text-[9px] text-slate-300 dark:text-slate-600 group-hover:text-brand-500 group-hover:translate-x-0.5 transition-all"></i>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    $('#invCategoriesContainer').html(cardsHtml);
+                }
+            });
+        }
+
+        function showCategoryTopicsModal(catName) {
+            const cat = (qbGlobalCategories || []).find(c => (c.categoryName || '').toLowerCase() === (catName || '').toLowerCase());
+            if (!cat) return;
+
+            const isDark = document.documentElement.classList.contains('dark');
+            const totalInCat = cat.count || 1;
+
+            const rowsHtml = (cat.topics || []).map((t, idx) => {
+                const pct = ((t.count / totalInCat) * 100).toFixed(1);
+                return `
+                    <tr class="border-b border-slate-100 dark:border-slate-800/60 hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                        <td class="py-2.5 px-3 font-mono text-[10px] text-slate-400">${idx + 1}</td>
+                        <td class="py-2.5 px-3 font-bold text-slate-800 dark:text-white text-xs">${t.topicName}</td>
+                        <td class="py-2.5 px-3 text-center font-mono font-bold text-brand-600 dark:text-brand-400 text-xs">${t.count} Qs</td>
+                        <td class="py-2.5 px-3 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <div class="w-16 bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                    <div class="bg-brand-500 h-full rounded-full" style="width: ${pct}%"></div>
+                                </div>
+                                <span class="font-mono text-[10px] text-slate-400">${pct}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            Swal.fire({
+                title: `
+                    <div class="text-left border-b border-slate-100 dark:border-slate-800 pb-3">
+                        <span class="text-[10px] font-black uppercase tracking-widest text-brand-600">Category Topic Syllabus</span>
+                        <h3 class="text-xl font-black text-slate-900 dark:text-white uppercase">${cat.categoryName} (${cat.count} Questions)</h3>
+                    </div>
+                `,
+                html: `
+                    <div class="text-left max-h-[60vh] overflow-y-auto mt-2">
+                        <div class="mb-3">
+                            <input type="text" id="swalTopicFilter" placeholder="Filter topics in ${cat.categoryName}..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-brand-500">
+                        </div>
+                        <table class="w-full text-left text-xs" id="swalTopicsTable">
+                            <thead>
+                                <tr class="text-slate-400 uppercase font-bold text-[9px] border-b border-slate-200 dark:border-slate-800">
+                                    <th class="py-2 px-3">#</th>
+                                    <th class="py-2 px-3">Topic Name</th>
+                                    <th class="py-2 px-3 text-center">Questions</th>
+                                    <th class="py-2 px-3 text-right">Proportion</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                `,
+                width: '680px',
+                showConfirmButton: false,
+                showCloseButton: true,
+                background: isDark ? '#0f172a' : '#ffffff',
+                color: isDark ? '#f8fafc' : '#0f172a',
+                didOpen: () => {
+                    $('#swalTopicFilter').on('input', function() {
+                        const q = $(this).val().toLowerCase();
+                        $('#swalTopicsTable tbody tr').each(function() {
+                            const name = $(this).find('td:nth-child(2)').text().toLowerCase();
+                            $(this).toggle(name.includes(q));
+                        });
+                    });
+                }
+            });
+        }
 
         function onInventoryWaveChange(waveId) {
             $.get('/Admin/GetWaveTopicAnalyticsData', { waveId: waveId }, function (data) {

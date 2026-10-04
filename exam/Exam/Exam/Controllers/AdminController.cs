@@ -72,7 +72,7 @@ namespace Exam.Controllers
             "ImportUsersToWaveFromExcel", "UpdateTopicSchema", "SyncFromLive",
             "BranchSupervisors", "GetSupervisorBranches", "SaveSupervisorBranches",
             "EditWave", "DeleteWave", "CreateWave", "CloneWave", "AssignUsersToWave", "WaveDetails", "GetWaveUserIds", "GetUsersByWaveId", "RemoveUserFromWave",
-            "GetWaveEmailTemplate", "SaveWaveEmailTemplate", "SendCustomEmailToWavePersonnel",
+            "GetWaveEmailTemplate", "SaveWaveEmailTemplate", "SendCustomEmailToWavePersonnel", "GetQuestionBankAnalytics",
             "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
             "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode",
             "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails",
@@ -144,10 +144,16 @@ namespace Exam.Controllers
             {
                 return RedirectToAction("Index", "SkillTracks");
             }
-            var data = await _examService.GetDashboardDataAsync();
+            var dataTask = _examService.GetDashboardDataAsync();
+            var waveAnalyticsTask = FetchWaveAnalyticsAsync(0);
+            var wavesListTask = _examService.GetAllWavesAsync();
+
+            await Task.WhenAll(dataTask, waveAnalyticsTask, wavesListTask);
+
+            var data = await dataTask;
             try {
-                ViewBag.WaveAnalytics = await FetchWaveAnalyticsAsync(0);
-                ViewBag.WavesList = await _examService.GetAllWavesAsync();
+                ViewBag.WaveAnalytics = await waveAnalyticsTask;
+                ViewBag.WavesList = await wavesListTask;
             } catch { }
             return View(data);
         }
@@ -163,16 +169,176 @@ namespace Exam.Controllers
                     COUNT(DISTINCT uea.UserId) AS ExamineesCount,
                     COUNT(uea.Id) AS TotalAttempts,
                     ISNULL(ROUND(AVG(CAST(uea.Score AS FLOAT)), 1), 0) AS AverageScore
-                FROM Branches b
-                LEFT JOIN AspNetUsers u ON u.BranchId = b.Id
-                LEFT JOIN UserExamAttempts uea ON uea.UserId = u.Id AND uea.Status IN ('Completed', 'Fail_Timeout') 
-                    AND (@ExamId IS NULL OR @ExamId = 0 OR uea.ExamId = @ExamId)
-                    AND uea.ExamId IN (SELECT Id FROM Exams WHERE WaveId IS NULL OR Title LIKE 'Weekly%')
+                FROM UserExamAttempts uea WITH (NOLOCK)
+                JOIN Exams e WITH (NOLOCK) ON uea.ExamId = e.Id AND (e.WaveId IS NULL OR e.Title LIKE 'Weekly%')
+                JOIN AspNetUsers u WITH (NOLOCK) ON uea.UserId = u.Id
+                JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                WHERE uea.Status IN ('Completed', 'Fail_Timeout')
+                  AND (@ExamId IS NULL OR @ExamId = 0 OR uea.ExamId = @ExamId)
                 GROUP BY b.Id, b.BranchName
-                HAVING COUNT(DISTINCT uea.UserId) > 0 OR @ExamId IS NULL OR @ExamId = 0
                 ORDER BY ExamineesCount DESC, b.BranchName ASC", new { ExamId = examId });
 
             return Json(branchWeekly);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetQuestionBankAnalytics(int? examTypeId, int? waveId)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            string sql;
+            object param;
+
+            if (waveId.HasValue && waveId.Value > 0)
+            {
+                sql = @"
+                    SELECT 
+                        ISNULL(C.CategoryName, 'Uncategorized') as CategoryName,
+                        ISNULL(T.TopicName, 'General') as TopicName,
+                        COUNT(DISTINCT Q.Id) as Count
+                    FROM Questions Q
+                    INNER JOIN ExamQuestions EQ ON EQ.QuestionId = Q.Id
+                    INNER JOIN Exams E ON EQ.ExamId = E.Id
+                    LEFT JOIN Categories C ON Q.CategoryId = C.Id
+                    LEFT JOIN Topics T ON Q.TopicId = T.Id
+                    WHERE E.WaveId = @WaveId
+                    GROUP BY C.CategoryName, T.TopicName
+                    ORDER BY C.CategoryName, T.TopicName";
+                param = new { WaveId = waveId.Value };
+            }
+            else if (examTypeId.HasValue && examTypeId.Value > 0)
+            {
+                sql = @"
+                    SELECT 
+                        ISNULL(C.CategoryName, 'Uncategorized') as CategoryName,
+                        ISNULL(T.TopicName, 'General') as TopicName,
+                        COUNT(DISTINCT Q.Id) as Count
+                    FROM Questions Q
+                    LEFT JOIN Categories C ON Q.CategoryId = C.Id
+                    LEFT JOIN Topics T ON Q.TopicId = T.Id
+                    WHERE (C.ExamTypeId = @ExamTypeId OR Q.Id IN (
+                        SELECT DISTINCT EQ.QuestionId 
+                        FROM ExamQuestions EQ 
+                        INNER JOIN Exams E ON EQ.ExamId = E.Id 
+                        WHERE E.ExamTypeId = @ExamTypeId
+                    ))
+                    GROUP BY C.CategoryName, T.TopicName
+                    ORDER BY C.CategoryName, T.TopicName";
+                param = new { ExamTypeId = examTypeId.Value };
+            }
+            else
+            {
+                sql = @"
+                    SELECT 
+                        ISNULL(C.CategoryName, 'Uncategorized') as CategoryName,
+                        ISNULL(T.TopicName, 'General') as TopicName,
+                        COUNT(Q.Id) as Count
+                    FROM Questions Q
+                    LEFT JOIN Categories C ON Q.CategoryId = C.Id
+                    LEFT JOIN Topics T ON Q.TopicId = T.Id
+                    GROUP BY C.CategoryName, T.TopicName
+                    ORDER BY C.CategoryName, T.TopicName";
+                param = new { };
+            }
+
+            var rawStats = (await conn.QueryAsync<dynamic>(sql, param)).ToList();
+
+            var categories = new List<CategoryStatDto>();
+            int totalCount = 0;
+
+            foreach (var r in rawStats)
+            {
+                var rawCat = ((string)r.CategoryName ?? "Uncategorized").Trim();
+                var rawTop = ((string)r.TopicName ?? "General").Trim();
+                var count = (int)r.Count;
+                totalCount += count;
+
+                // Category Normalization
+                string normCat = rawCat;
+                string cleanCat = rawCat.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+                if (cleanCat == "cosmo" || cleanCat == "cosmetics") normCat = "Cosmo";
+                else if (cleanCat == "medical" || cleanCat == "medicine" || cleanCat == "med") normCat = "Medical";
+                else if (cleanCat == "customerservice" || cleanCat == "customer") normCat = "Customer Service";
+                else if (cleanCat == "softskills" || cleanCat == "softskill") normCat = "Soft Skills";
+                else if (cleanCat == "insurance") normCat = "Insurance";
+                else if (cleanCat == "branchessystem" || cleanCat == "branches") normCat = "Branches System";
+
+                // Topic Normalization
+                string normTop = rawTop;
+                string cleanTop = rawTop.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+                if (cleanTop == "womenhealth" || cleanTop == "womenhealh") normTop = "Women Health";
+                else if (cleanTop == "dermatology") normTop = "Dermatology";
+                else if (cleanTop == "git") normTop = "GIT";
+                else if (cleanTop == "pediatrics") normTop = "Pediatrics";
+                else if (cleanTop == "ent") normTop = "ENT";
+                else if (cleanTop == "paramedical") normTop = "Paramedical";
+                else if (cleanTop == "refrigerateddrugs") normTop = "Refrigerated Drugs";
+                else if (cleanTop == "influnzavaccines" || cleanTop == "influenzavaccines") normTop = "Influenza Vaccines";
+                else if (cleanTop == "drugdruginteraction") normTop = "Drug-Drug Interaction";
+                else if (cleanTop == "eyedisorders") normTop = "Eye Disorders";
+                else if (cleanTop == "communicationskills" || cleanTop == "communicationskill") normTop = "Communication Skills";
+                else if (cleanTop == "bodycare") normTop = "Bodycare";
+                else if (cleanTop == "haircare") normTop = "Haircare";
+                else if (cleanTop == "skincare1") normTop = "Skincare 1";
+                else if (cleanTop == "skincare2") normTop = "Skincare 2";
+                else if (cleanTop == "suncreen101" || cleanTop == "sunscreen101") normTop = "Sunscreen 101";
+                else if (cleanTop == "bottels&nippels" || cleanTop == "bottles&nipples") normTop = "Bottles & Nipples";
+                else if (cleanTop == "deoderants&antiperspirants" || cleanTop == "deodorants&antiperspirants") normTop = "Deodorants & Anti-Perspirants";
+                else if (cleanTop == "demacylabsguide") normTop = "Demacy Labs Guide";
+                else if (cleanTop == "wegovy") normTop = "Wegovy";
+                else if (cleanTop == "wheyprotein") normTop = "Whey Protein";
+                else if (cleanTop == "omega3") normTop = "Omega-3";
+
+                var cat = categories.FirstOrDefault(c => c.CategoryName.Equals(normCat, StringComparison.OrdinalIgnoreCase));
+                if (cat == null)
+                {
+                    cat = new CategoryStatDto { CategoryName = normCat, Count = 0 };
+                    categories.Add(cat);
+                }
+                cat.Count += count;
+
+                var top = cat.Topics.FirstOrDefault(t => t.TopicName.Equals(normTop, StringComparison.OrdinalIgnoreCase));
+                if (top == null)
+                {
+                    cat.Topics.Add(new TopicStatDto { TopicName = normTop, Count = count });
+                }
+                else
+                {
+                    top.Count += count;
+                }
+            }
+
+            categories = categories.OrderByDescending(c => c.Count).ToList();
+            foreach (var c in categories)
+            {
+                c.Topics = c.Topics.OrderByDescending(t => t.Count).ToList();
+            }
+
+            var allTopics = categories.SelectMany(c => c.Topics.Select(t => new {
+                topicName = t.TopicName,
+                count = t.Count,
+                categoryName = c.CategoryName
+            }))
+            .GroupBy(t => t.topicName)
+            .Select(g => new {
+                topicName = g.Key,
+                count = g.Sum(x => x.count),
+                categoryName = g.First().categoryName
+            })
+            .OrderByDescending(t => t.count)
+            .Take(10)
+            .ToList();
+
+            return Json(new {
+                success = true,
+                totalQuestionsCount = totalCount,
+                categories = categories.Select(c => new {
+                    categoryName = c.CategoryName,
+                    count = c.Count,
+                    percentage = totalCount > 0 ? Math.Round((double)c.Count * 100.0 / totalCount, 1) : 0,
+                    topics = c.Topics.Select(t => new { topicName = t.TopicName, count = t.Count }).ToList()
+                }),
+                topTopics = allTopics
+            });
         }
 
         [HttpGet]
