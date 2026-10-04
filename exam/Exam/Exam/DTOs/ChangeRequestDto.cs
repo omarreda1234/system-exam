@@ -40,6 +40,7 @@ namespace Exam.DTOs
     {
         public int Id { get; set; }
         public string Status { get; set; } = "In Progress";
+        public string? Priority { get; set; }
         public string? DevNotes { get; set; }
     }
 

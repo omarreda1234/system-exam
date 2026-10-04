@@ -383,9 +383,9 @@
                         <textarea id="updateDevNotes" name="DevNotes" rows="5" placeholder="Write developer feedback, clarification questions, implementation notes, or deployment details here..." class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all resize-y min-h-[120px] leading-relaxed shadow-inner"></textarea>
                     </div>
 
-                    <!-- Status Selector & Save Button Row -->
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                        <div class="w-full sm:w-72">
+                    <!-- Status & Priority Row -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div>
                             <label class="block text-[10px] font-extrabold text-slate-400 mb-1">Update Status</label>
                             <select id="updateStatusSelect" name="Status" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500">
                                 <option value="Open">Open (Under Review)</option>
@@ -394,11 +394,20 @@
                                 <option value="Closed">Closed</option>
                             </select>
                         </div>
-                        <div class="sm:self-end">
-                            <button type="submit" id="btnSaveStatus" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2">
-                                <i class="fas fa-save text-[11px]"></i> Save Status
-                            </button>
+                        <div>
+                            <label class="block text-[10px] font-extrabold text-slate-400 mb-1">Update Priority</label>
+                            <select id="updatePrioritySelect" name="Priority" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500">
+                                <option value="Critical">Critical (Urgent)</option>
+                                <option value="High">High</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Low">Low</option>
+                            </select>
                         </div>
+                    </div>
+                    <div class="flex justify-end pt-2">
+                        <button type="submit" id="btnSaveStatus" class="w-full sm:w-auto px-7 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-brand-600 dark:hover:bg-brand-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2">
+                            <i class="fas fa-save text-[11px]"></i> Save Updates
+                        </button>
                     </div>
                 </form>
             </div>
@@ -521,9 +530,14 @@
                         <div class="text-[10px] text-slate-400">${t.createdByEmail || ''}</div>
                     </td>
                     <td class="py-3 px-3">
-                        <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${pColor}">
-                            ${t.priority}
-                        </span>
+                        <select onchange="updateTicketPriorityQuick(${t.id}, this.value, this)" 
+                                title="Click to change priority"
+                                class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase cursor-pointer border outline-none transition-all shadow-sm ${pColor}">
+                            <option value="Critical" ${p === 'critical' ? 'selected' : ''} class="bg-white dark:bg-slate-900 text-rose-600 font-bold">CRITICAL</option>
+                            <option value="High" ${p === 'high' ? 'selected' : ''} class="bg-white dark:bg-slate-900 text-amber-600 font-bold">HIGH</option>
+                            <option value="Medium" ${p === 'medium' ? 'selected' : ''} class="bg-white dark:bg-slate-900 text-blue-600 font-bold">MEDIUM</option>
+                            <option value="Low" ${p === 'low' ? 'selected' : ''} class="bg-white dark:bg-slate-900 text-slate-600 font-bold">LOW</option>
+                        </select>
                     </td>
                     <td class="py-3 px-3">
                         <span class="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-bold">
@@ -662,11 +676,12 @@
 
                     // Status Badge
                     $('#dtlStatusBadge').text(t.status);
-                    $('#dtlPriorityBadge').text(t.priority);
+                    $('#dtlPriorityBadge').text(t.priority).attr('class', 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ' + getPriorityBadgeClass(t.priority));
 
                     // Update Form
                     $('#updateTicketId').val(t.id);
                     $('#updateStatusSelect').val(t.status);
+                    $('#updatePrioritySelect').val(t.priority || 'Medium');
                     $('#updateDevNotes').val(t.devNotes || '');
 
                     // Open Modal
@@ -692,11 +707,57 @@
         }, 300);
     }
 
+    function getPriorityBadgeClass(p) {
+        p = (p || '').toLowerCase();
+        if (p === 'critical') return 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200 dark:border-rose-900';
+        if (p === 'high') return 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200 dark:border-amber-900';
+        if (p === 'medium') return 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 border border-blue-200 dark:border-blue-900';
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
+    }
+
+    function updateTicketPriorityQuick(id, newPriority, selectElem) {
+        const $sel = $(selectElem);
+        const originalVal = $sel.data('current-val') || $sel.val();
+        $sel.prop('disabled', true).addClass('opacity-60');
+
+        $.ajax({
+            url: '/Admin/UpdateChangeRequestPriority',
+            type: 'POST',
+            data: { id: id, priority: newPriority },
+            success: function(res) {
+                $sel.prop('disabled', false).removeClass('opacity-60');
+                if (res.success) {
+                    $sel.data('current-val', res.priority || newPriority);
+                    $sel.attr('class', `px-2.5 py-1 rounded-full text-[10px] font-black uppercase cursor-pointer border outline-none transition-all shadow-sm ${getPriorityBadgeClass(newPriority)}`);
+                    
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: `Priority updated to ${newPriority}`,
+                        showConfirmButton: false,
+                        timer: 2000,
+                        background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                        color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+                    });
+                } else {
+                    $sel.val(originalVal);
+                    Swal.fire({ icon: 'error', title: 'Error', text: res.message || 'Failed to update priority.' });
+                }
+            },
+            error: function() {
+                $sel.prop('disabled', false).removeClass('opacity-60');
+                $sel.val(originalVal);
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Communication error while updating priority.' });
+            }
+        });
+    }
+
     function submitStatusUpdate(e) {
         e.preventDefault();
         const $btn = $('#btnSaveStatus');
-        const origText = $btn.text();
-        $btn.prop('disabled', true).text('Saving...');
+        const origText = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin text-[11px]"></i> Saving...');
 
         const formData = new FormData($('#updateStatusForm')[0]);
 
@@ -707,12 +768,12 @@
             processData: false,
             contentType: false,
             success: function(res) {
-                $btn.prop('disabled', false).text(origText);
+                $btn.prop('disabled', false).html(origText);
                 if (res.success) {
                     closeDetailsModal();
                     Swal.fire({
                         icon: 'success',
-                        title: 'Status Updated!',
+                        title: 'Ticket Updated Successfully!',
                         timer: 1500,
                         showConfirmButton: false,
                         background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
@@ -724,8 +785,8 @@
                 }
             },
             error: function() {
-                $btn.prop('disabled', false).text(origText);
-                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to update ticket status.' });
+                $btn.prop('disabled', false).html(origText);
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to update ticket.' });
             }
         });
     }

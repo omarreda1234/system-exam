@@ -4202,7 +4202,7 @@ ORDER BY U.UserName ASC";
         private static readonly List<(string Key, string Name, string Ctrl, string Act, string[] AddActs)> DashboardModules = new()
         {
             ("LMS_Overview", "LMS Overview (Examination Dash)", "Admin", "Index", new string[] { }),
-            ("ChangeRequests", "Change Requests (CR)", "Admin", "ChangeRequests", new[] { "GetChangeRequestsList", "CreateChangeRequest", "GetChangeRequestDetails", "UpdateChangeRequestStatus" }),
+            ("ChangeRequests", "Change Requests (CR)", "Admin", "ChangeRequests", new[] { "GetChangeRequestsList", "CreateChangeRequest", "GetChangeRequestDetails", "UpdateChangeRequestStatus", "UpdateChangeRequestPriority" }),
             ("AttendanceDash", "Attendance Dashboard", "Attendance", "Index", new string[] { }),
             ("ProgramDash", "Program Dashboard", "Materials", "Index", new string[] { }),
             ("Items", "Items Management", "Admin", "Items", new[] { "AddItem", "EditItem", "DeleteItem", "GetItemsPaged", "UpdateItemCustomDefinition", "SyncItems" }),
@@ -7705,11 +7705,13 @@ ORDER BY U.UserName ASC";
             try
             {
                 using var conn = new SqlConnection(_connectionString);
-                var isResolved = model.Status.Equals("Resolved", StringComparison.OrdinalIgnoreCase) || model.Status.Equals("Closed", StringComparison.OrdinalIgnoreCase);
+                var isResolved = !string.IsNullOrWhiteSpace(model.Status) && 
+                    (model.Status.Equals("Resolved", StringComparison.OrdinalIgnoreCase) || model.Status.Equals("Closed", StringComparison.OrdinalIgnoreCase));
                 
                 const string updateSql = @"
                     UPDATE ChangeRequests
-                    SET Status = @Status,
+                    SET Status = CASE WHEN @Status IS NOT NULL AND @Status <> '' THEN @Status ELSE Status END,
+                        Priority = CASE WHEN @Priority IS NOT NULL AND @Priority <> '' THEN @Priority ELSE Priority END,
                         DevNotes = CASE WHEN @DevNotes IS NOT NULL AND @DevNotes <> '' THEN @DevNotes ELSE DevNotes END,
                         UpdatedAt = GETDATE(),
                         ResolvedAt = CASE WHEN @IsResolved = 1 THEN GETDATE() ELSE ResolvedAt END
@@ -7719,11 +7721,47 @@ ORDER BY U.UserName ASC";
                 {
                     Id = model.Id,
                     Status = model.Status,
+                    Priority = model.Priority,
                     DevNotes = model.DevNotes,
                     IsResolved = isResolved ? 1 : 0
                 });
 
-                return Json(new { success = true, message = "تم تحديث حالة التذكرة بنجاح." });
+                return Json(new { success = true, message = "تم تحديث التذكرة بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateChangeRequestPriority(int id, string priority)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(priority))
+                {
+                    return Json(new { success = false, message = "يجب تحديد الأولوية (Priority)." });
+                }
+
+                var cleanPriority = priority.Trim();
+                var validPriorities = new[] { "Critical", "High", "Medium", "Low" };
+                var match = validPriorities.FirstOrDefault(p => p.Equals(cleanPriority, StringComparison.OrdinalIgnoreCase)) ?? cleanPriority;
+
+                using var conn = new SqlConnection(_connectionString);
+                const string sql = @"
+                    UPDATE ChangeRequests
+                    SET Priority = @Priority,
+                        UpdatedAt = GETDATE()
+                    WHERE Id = @Id;";
+
+                var rows = await conn.ExecuteAsync(sql, new { Id = id, Priority = match });
+                if (rows > 0)
+                {
+                    return Json(new { success = true, priority = match, message = $"تم تغيير الأولوية إلى {match} بنجاح." });
+                }
+
+                return Json(new { success = false, message = "التذكرة غير موجودة." });
             }
             catch (Exception ex)
             {

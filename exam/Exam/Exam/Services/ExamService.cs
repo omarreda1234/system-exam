@@ -3400,7 +3400,7 @@ DELETE FROM AspNetUsers WHERE Id = @UserId;",
                     INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
                     SELECT rp.RoleName, 'Admin', childAction.ActionName, rp.CanAccess, rp.CanCreate, rp.CanEdit, rp.CanDelete
                     FROM RolePermissions rp
-                    CROSS JOIN (VALUES ('GetChangeRequestsList'), ('CreateChangeRequest'), ('GetChangeRequestDetails'), ('UpdateChangeRequestStatus')) AS childAction(ActionName)
+                    CROSS JOIN (VALUES ('GetChangeRequestsList'), ('CreateChangeRequest'), ('GetChangeRequestDetails'), ('UpdateChangeRequestStatus'), ('UpdateChangeRequestPriority')) AS childAction(ActionName)
                     WHERE LOWER(rp.ControllerName) = 'admin' AND LOWER(rp.ActionName) = 'changerequests'
                       AND NOT EXISTS (
                           SELECT 1 FROM RolePermissions sub 
