@@ -25,6 +25,13 @@ namespace Exam.DTOs
 
         // Certificates list
         public List<UserCertificateItemViewModel> Certificates { get; set; } = new();
+
+        // Trainee Hub Navigation Sections
+        public IEnumerable<ExamDto> Exams { get; set; } = new List<ExamDto>();
+        public UserShiftDto? UserShift { get; set; }
+        public IEnumerable<dynamic> Assignments { get; set; } = new List<dynamic>();
+        public string? ActiveWaveName { get; set; }
+        public bool HasProgramDashAccess { get; set; }
     }
 
     public class UserCertificateItemViewModel

@@ -276,6 +276,47 @@ namespace Exam.Controllers
             }
 
             profile.Certificates = finalCerts;
+
+            // 3. Fetch Student Assigned Exams
+            try
+            {
+                var exams = await _examService.GetStudentExamsByStudentIdAsync(userId);
+                profile.Exams = exams ?? new List<ExamDto>();
+                profile.UserShift = await _examService.GetUserShiftAsync(userId);
+            }
+            catch { }
+
+            // 4. Fetch Student Active Wave & Continuous Assignments
+            try
+            {
+                var activeWave = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT uw.WaveId, w.WaveName 
+                    FROM dbo.UserWaves uw WITH (NOLOCK)
+                    INNER JOIN dbo.TrainingWaves w WITH (NOLOCK) ON uw.WaveId = w.Id
+                    WHERE uw.UserId = @UserId AND uw.IsActive = 1", 
+                    new { UserId = userId });
+
+                if (activeWave != null)
+                {
+                    profile.ActiveWaveName = activeWave.WaveName;
+                    int waveId = Convert.ToInt32(activeWave.WaveId);
+                    var assignments = await conn.QueryAsync<dynamic>(@"
+                        SELECT a.*, 
+                               (SELECT COUNT(*) FROM dbo.AssignmentSubmissions s WITH (NOLOCK) WHERE s.AssignmentId = a.Id AND s.UserId = @UserId) as SubmissionsCount
+                        FROM dbo.ContinuousAssignments a WITH (NOLOCK)
+                        WHERE a.WaveId = @WaveId AND a.IsActive = 1
+                        ORDER BY a.ScheduledEndTime DESC",
+                        new { WaveId = waveId, UserId = userId });
+                    profile.Assignments = assignments;
+                }
+            }
+            catch { }
+
+            // 5. Program Dash Access Check
+            var roleClaimsList = User.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
+            profile.HasProgramDashAccess = User.IsInRole("Admin") || 
+                roleClaimsList.Any(r => r.ToLower().Contains("pharmacist") || r.ToLower().Contains("صيدل") || r.ToLower().Contains("assistant") || r.ToLower().Contains("مساعد") || r.ToLower().Contains("doctor"));
+
             return View(profile);
         }
 
