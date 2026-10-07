@@ -1,9 +1,27 @@
 @model Exam.DTOs.ExamDetailsDto
+@{
+    var distinctTopics = Model.Questions
+        .Where(q => q.TopicId.HasValue && q.TopicId.Value > 0 && !string.IsNullOrWhiteSpace(q.TopicName))
+        .GroupBy(q => q.TopicId.Value)
+        .Select(g => new { 
+            TopicId = g.Key, 
+            TopicName = g.First().TopicName, 
+            CategoryId = g.First().CategoryId 
+        })
+        .OrderBy(t => t.TopicName)
+        .ToList();
+
+    var examPoints = Model.Questions.Select(q => q.Points).Distinct().ToList();
+    var availablePoints = examPoints.Union(new[] { 1, 2, 3 }).Distinct().OrderBy(p => p).ToList();
+}
 
 <div class="p-2 custom-scrollbar">
-    <div class="flex flex-wrap items-center justify-between gap-4 mb-10 pb-6 border-b border-slate-200 dark:border-slate-800">
+    <div class="flex flex-wrap items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-200 dark:border-slate-800">
         <div>
-            <h5 class="text-2xl font-black text-slate-900 dark:text-white italic tracking-tighter uppercase mb-1">Questions Library</h5>
+            <div class="flex items-center gap-3 mb-1">
+                <h5 class="text-2xl font-black text-slate-900 dark:text-white italic tracking-tighter uppercase">Questions Library</h5>
+                <span id="filterCountBadge" class="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">@Model.Questions.Count Questions</span>
+            </div>
             <p class="text-[10px] font-bold text-brand-500 uppercase tracking-[0.3em]">Exam: @Model.Title.ToUpper()</p>
         </div>
 
@@ -15,9 +33,10 @@
             </span>
         </button>
 
-        <div class="flex items-center gap-3">
-            <div class="relative hidden md:block">
-                <select id="categoryFilter" class="pr-8 pl-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none transition-all appearance-none cursor-pointer min-w-[160px]">
+        <div class="flex flex-wrap items-center gap-2.5">
+            <!-- Category Filter -->
+            <div class="relative">
+                <select id="categoryFilter" class="pr-8 pl-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none transition-all appearance-none cursor-pointer min-w-[140px]">
                     <option value="">ALL CATEGORIES</option>
                     @if (ViewBag.Categories != null)
                     {
@@ -29,13 +48,56 @@
                 </select>
                 <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
             </div>
+
+            <!-- Topic Filter -->
+            <div class="relative">
+                <select id="topicFilter" class="pr-8 pl-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none transition-all appearance-none cursor-pointer min-w-[140px]">
+                    <option value="">ALL TOPICS</option>
+                    @foreach (var top in distinctTopics)
+                    {
+                        <option value="@top.TopicId" data-category-id="@top.CategoryId">@top.TopicName.ToUpper()</option>
+                    }
+                </select>
+                <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
+            </div>
+
+            <!-- Difficulty Filter -->
+            <div class="relative">
+                <select id="difficultyFilter" class="pr-8 pl-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none transition-all appearance-none cursor-pointer min-w-[130px]">
+                    <option value="">ALL DIFFICULTIES</option>
+                    <option value="1">EASY</option>
+                    <option value="2">MEDIUM</option>
+                    <option value="3">HARD</option>
+                </select>
+                <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
+            </div>
+
+            <!-- Points Filter -->
+            <div class="relative">
+                <select id="pointsFilter" class="pr-8 pl-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none transition-all appearance-none cursor-pointer min-w-[110px]">
+                    <option value="">ALL POINTS</option>
+                    @foreach (var pt in availablePoints)
+                    {
+                        <option value="@pt">@pt @(pt == 1 ? "POINT" : "POINTS")</option>
+                    }
+                </select>
+                <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
+            </div>
+
+            <!-- Search Bar -->
             <div class="relative">
                 <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                <input type="text" id="questionSearch" placeholder="Search questions..." class="pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none w-48 md:w-64 transition-all" />
+                <input type="text" id="questionSearch" placeholder="Search questions..." class="pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none w-44 md:w-56 transition-all" />
             </div>
+
+            <!-- Reset Filters -->
+            <button type="button" id="resetFiltersBtn" class="hidden text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5" title="Reset all filters">
+                <i class="fas fa-times-circle"></i> Clear
+            </button>
+
             @if (Model.Questions.Any())
             {
-                <button type="button" id="deleteAllQuestionsBtn" class="bg-rose-50 hover:bg-rose-500 text-rose-500 hover:text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm border border-rose-100 flex items-center gap-2">
+                <button type="button" id="deleteAllQuestionsBtn" class="bg-rose-50 hover:bg-rose-500 text-rose-500 hover:text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm border border-rose-100 dark:border-rose-900/30 dark:bg-rose-500/10 flex items-center gap-2">
                     <i class="fas fa-trash-alt"></i> Delete All
                 </button>
             }
@@ -52,10 +114,24 @@
         </div>
     }
 
+    <!-- Empty filtered results notice -->
+    <div id="noQuestionsMatchNotice" class="hidden text-center py-16 bg-slate-50 dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[32px] mx-4 my-6">
+        <div class="w-14 h-14 bg-white dark:bg-slate-950 rounded-full shadow-sm flex items-center justify-center mx-auto mb-4 text-slate-400">
+            <i class="fas fa-filter text-xl text-brand-500"></i>
+        </div>
+        <p class="text-slate-700 dark:text-slate-300 text-sm font-black uppercase tracking-tight mb-1">No matching questions found</p>
+        <p class="text-slate-400 text-xs font-semibold">Try adjusting your filters or search keywords.</p>
+    </div>
+
     <div class="space-y-8 px-4 pb-8">
         @foreach (var q in Model.Questions)
         {
-            <div class="question-panel bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden group/q hover:border-brand-500/30 transition-all">
+            <div class="question-panel bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden group/q hover:border-brand-500/30 transition-all"
+                 data-question-id="@q.QuestionId"
+                 data-category-id="@q.CategoryId"
+                 data-topic-id="@(q.TopicId?.ToString() ?? "")"
+                 data-difficulty="@(q.Difficulty == 0 ? 1 : q.Difficulty)"
+                 data-points="@q.Points">
                 <div class="p-8">
                     <form class="update-question-form relative">
                         @Html.AntiForgeryToken()
@@ -170,6 +246,39 @@
         const topicCache = {};
         const pendingTopicRequests = {};
 
+        let allFilterTopics = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(distinctTopics.Select(t => new { id = t.TopicId.ToString(), name = t.TopicName, categoryId = t.CategoryId.ToString() })));
+
+        function updateTopicFilterDropdown() {
+            const selectedCat = ($('#categoryFilter').val() || '').toString();
+            const currentSelectedTopic = ($('#topicFilter').val() || '').toString();
+            
+            let html = '<option value="">ALL TOPICS</option>';
+            const filtered = allFilterTopics.filter(t => !selectedCat || t.categoryId.toString() === selectedCat);
+            
+            const seen = new Set();
+            const unique = [];
+            filtered.forEach(t => {
+                if (!seen.has(t.id.toString())) {
+                    seen.add(t.id.toString());
+                    unique.push(t);
+                }
+            });
+
+            unique.sort((a, b) => a.name.localeCompare(b.name));
+            
+            unique.forEach(t => {
+                html += `<option value="${t.id}">${t.name.toUpperCase()}</option>`;
+            });
+            
+            $('#topicFilter').html(html);
+            
+            if (currentSelectedTopic && unique.some(t => t.id.toString() === currentSelectedTopic)) {
+                $('#topicFilter').val(currentSelectedTopic);
+            } else {
+                $('#topicFilter').val('');
+            }
+        }
+
         async function loadTopicsForSelector($catSelector, $topicSelector, selectedTopicId) {
             const catId = $catSelector.val();
             if (!catId) return;
@@ -200,11 +309,8 @@
                 }
 
                 if (selectedTopicId) {
-                    // Convert to string for reliable comparison
                     const targetId = selectedTopicId.toString();
                     $topicSelector.val(targetId);
-                    
-                    // Double check and force if .val() failed
                     if ($topicSelector.val() != targetId) {
                         $topicSelector.find(`option[value="${targetId}"]`).prop('selected', true);
                     }
@@ -231,10 +337,15 @@
                 let optionsHtml = '<option value="">ALL TOPICS</option>';
                 if (topics && Array.isArray(topics)) {
                     topics.forEach(t => {
-                        const tId = t.id !== undefined ? t.id : t.Id;
+                        const tId = (t.id !== undefined ? t.id : t.Id)?.toString();
                         const tName = t.topicName || t.TopicName || "Unnamed Topic";
                         optionsHtml += `<option value="${tId}">${tName.toUpperCase()}</option>`;
+
+                        if (tId && !allFilterTopics.some(x => x.id === tId)) {
+                            allFilterTopics.push({ id: tId, name: tName, categoryId: catId.toString() });
+                        }
                     });
+                    updateTopicFilterDropdown();
                 }
                 
                 catGroups[catId].forEach(catEl => {
@@ -250,11 +361,38 @@
             }).catch(err => console.error("Failed to batch load topics", err));
         }
 
-        // Handle category change for existing questions
+        // Keep question panel data attributes in sync with inputs
         $(document).on('change', '.cat-selector', function() {
             const $cat = $(this);
+            const $panel = $cat.closest('.question-panel');
+            $panel.attr('data-category-id', $cat.val());
             const $top = $cat.closest('.grid').find('.topic-selector');
             loadTopicsForSelector($cat, $top, null);
+            if ($('#categoryFilter').val()) {
+                filterQuestions();
+            }
+        });
+
+        $(document).on('change', '.topic-selector', function() {
+            const val = $(this).val();
+            $(this).closest('.question-panel').attr('data-topic-id', val || '');
+            if ($('#topicFilter').val()) {
+                filterQuestions();
+            }
+        });
+
+        $(document).on('input change', 'input[name="points"]', function() {
+            $(this).closest('.question-panel').attr('data-points', $(this).val() || '');
+            if ($('#pointsFilter').val()) {
+                filterQuestions();
+            }
+        });
+
+        $(document).on('change', 'input[name="difficulty"]', function() {
+            $(this).closest('.question-panel').attr('data-difficulty', $(this).val() || '');
+            if ($('#difficultyFilter').val()) {
+                filterQuestions();
+            }
         });
 
         function antiForgery() { return $('input[name="__RequestVerificationToken"]').first().val(); }
@@ -344,7 +482,10 @@
                 if (result.isConfirmed) {
                     $.post('@Url.Action("DeleteQuestion", "Exams")', { questionId: qId, __RequestVerificationToken: antiForgery() })
                         .done(function() {
-                            $panel.fadeOut(300, function() { $(this).remove(); });
+                            $panel.fadeOut(300, function() { 
+                                $(this).remove(); 
+                                filterQuestions();
+                            });
                             Swal.fire({
                                 icon: 'success',
                                 title: 'Question Deleted',
@@ -448,31 +589,106 @@
             }).then((r) => { if (r.isConfirmed) $.post('@Url.Action("AddQuestion", "Exams")', { examId: examId, questionText: r.value.txt, points: r.value.pts, questionTypeId: r.value.tid, difficulty: r.value.diff, topicId: r.value.topicId, __RequestVerificationToken: antiForgery() }).done(function() { triggerRefresh(true); }); });
         });
 
-        // Search & Filter Logic
+        // Search & Multi-filter Logic
         function filterQuestions() {
-            var term = $('#questionSearch').val().toLowerCase();
-            var selectedCat = $('#categoryFilter').val();
+            var term = ($('#questionSearch').val() || '').toLowerCase().trim();
+            var selectedCat = ($('#categoryFilter').val() || '').toString();
+            var selectedTopic = ($('#topicFilter').val() || '').toString();
+            var selectedDiff = ($('#difficultyFilter').val() || '').toString();
+            var selectedPoints = ($('#pointsFilter').val() || '').toString();
 
-            $('.question-panel').each(function() {
+            var hasActiveFilters = term !== '' || selectedCat !== '' || selectedTopic !== '' || selectedDiff !== '' || selectedPoints !== '';
+            if (hasActiveFilters) {
+                $('#resetFiltersBtn').removeClass('hidden');
+            } else {
+                $('#resetFiltersBtn').addClass('hidden');
+            }
+
+            var visibleCount = 0;
+            var $panels = $('.question-panel');
+            var totalCount = $panels.length;
+
+            $panels.each(function() {
                 var $panel = $(this);
-                var qText = $panel.find('textarea[name="questionText"]').val().toLowerCase();
-                var cText = $panel.find('.choices input[name="choiceText"]').map(function(){ return $(this).val().toLowerCase(); }).get().join(" ");
-                var qIdText = $panel.find('.delete-question').data('question-id').toString();
-                var qCat = $panel.find('select[name="categoryId"]').val();
                 
-                var textMatch = qText.includes(term) || cText.includes(term) || qIdText.includes(term);
-                var catMatch = !selectedCat || qCat === selectedCat;
+                // Question Text & Choices & ID Match
+                var qText = ($panel.find('textarea[name="questionText"]').val() || '').toLowerCase();
+                var cText = $panel.find('.choices input[name="choiceText"]').map(function(){ return $(this).val().toLowerCase(); }).get().join(" ");
+                var qIdText = ($panel.attr('data-question-id') || $panel.find('.delete-question').data('question-id') || '').toString();
+                
+                var textMatch = !term || qText.includes(term) || cText.includes(term) || qIdText.includes(term);
 
-                if (textMatch && catMatch) {
+                // Category match
+                var qCat = ($panel.find('select[name="categoryId"]').val() || $panel.attr('data-category-id') || '').toString();
+                var catMatch = !selectedCat || (qCat === selectedCat);
+
+                // Topic match
+                var qTopic = ($panel.find('select[name="topicId"]').val() || $panel.attr('data-topic-id') || '').toString();
+                var topicMatch = !selectedTopic || (qTopic === selectedTopic);
+
+                // Difficulty match
+                var qDiff = ($panel.find('input[name="difficulty"]:checked').val() || $panel.attr('data-difficulty') || '1').toString();
+                if (qDiff === '0') qDiff = '1';
+                var diffMatch = !selectedDiff || (qDiff === selectedDiff);
+
+                // Points match
+                var qPoints = ($panel.find('input[name="points"]').val() || $panel.attr('data-points') || '').toString();
+                var pointsMatch = !selectedPoints || (qPoints === selectedPoints);
+
+                if (textMatch && catMatch && topicMatch && diffMatch && pointsMatch) {
                     $panel.show();
+                    visibleCount++;
                 } else {
                     $panel.hide();
                 }
             });
+
+            if (visibleCount === 0 && totalCount > 0) {
+                $('#noQuestionsMatchNotice').removeClass('hidden');
+            } else {
+                $('#noQuestionsMatchNotice').addClass('hidden');
+            }
+
+            if (totalCount > 0) {
+                $('#filterCountBadge').text(hasActiveFilters ? `Showing ${visibleCount} of ${totalCount}` : `${totalCount} Questions`);
+            }
         }
 
         $('#questionSearch').on('input', filterQuestions);
-        $('#categoryFilter').on('change', filterQuestions);
+        
+        $('#categoryFilter').on('change', function() {
+            const catId = $(this).val();
+            if (catId && !allFilterTopics.some(t => t.categoryId === catId.toString())) {
+                $.get(`/Admin/GetTopicsByCategoryId?categoryId=${catId}`).then(topics => {
+                    if (topics && Array.isArray(topics)) {
+                        topics.forEach(t => {
+                            const tId = (t.id !== undefined ? t.id : t.Id)?.toString();
+                            const tName = t.topicName || t.TopicName || "Unnamed Topic";
+                            if (tId && !allFilterTopics.some(x => x.id === tId)) {
+                                allFilterTopics.push({ id: tId, name: tName, categoryId: catId.toString() });
+                            }
+                        });
+                        updateTopicFilterDropdown();
+                    }
+                });
+            }
+            updateTopicFilterDropdown();
+            filterQuestions();
+        });
+
+        $('#topicFilter').on('change', filterQuestions);
+        $('#difficultyFilter').on('change', filterQuestions);
+        $('#pointsFilter').on('change', filterQuestions);
+
+        $('#resetFiltersBtn').on('click', function() {
+            $('#categoryFilter').val('');
+            $('#difficultyFilter').val('');
+            $('#pointsFilter').val('');
+            $('#questionSearch').val('');
+            updateTopicFilterDropdown();
+            $('#topicFilter').val('');
+            filterQuestions();
+        });
 
         // Delete All Logic
         $('#deleteAllQuestionsBtn').on('click', function() {

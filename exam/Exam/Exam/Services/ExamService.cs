@@ -2981,25 +2981,26 @@ WHERE U.Id = @UserId;";
                 JOIN Exams E WITH (NOLOCK) ON t.ExamId = E.Id
                 ORDER BY t.Score DESC")).ToList();
             
-            // 9. Global Question Bank Stats
-            dashboard.TotalQuestionsCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Questions WITH (NOLOCK)");
-            
-            var categoryStats = (await conn.QueryAsync<dynamic>(@"
+            // 9. Global Question Bank Stats (Calculated on Distinct Unique Questions to eliminate duplicates)
+            var rawQuestions = (await conn.QueryAsync<dynamic>(@"
                 SELECT 
+                    LTRIM(RTRIM(Q.QuestionText)) as QuestionText,
                     ISNULL(C.CategoryName, 'Uncategorized') as CategoryName,
-                    ISNULL(T.TopicName, 'General') as TopicName,
-                    COUNT(Q.Id) as Count
+                    ISNULL(T.TopicName, 'General') as TopicName
                 FROM Questions Q WITH (NOLOCK)
                 LEFT JOIN Categories C WITH (NOLOCK) ON Q.CategoryId = C.Id
                 LEFT JOIN Topics T WITH (NOLOCK) ON Q.TopicId = T.Id
-                GROUP BY C.CategoryName, T.TopicName
-                ORDER BY C.CategoryName, T.TopicName")).ToList();
+                WHERE Q.QuestionText IS NOT NULL AND LTRIM(RTRIM(Q.QuestionText)) <> ''")).ToList();
 
-            foreach (var r in categoryStats)
+            var uniqueTracker = new Dictionary<string, (string Category, string Topic)>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var r in rawQuestions)
             {
+                var qText = ((string)r.QuestionText ?? "").Trim();
+                if (string.IsNullOrEmpty(qText)) continue;
+
                 var rawCat = ((string)r.CategoryName ?? "Uncategorized").Trim();
                 var rawTop = ((string)r.TopicName ?? "General").Trim();
-                var count = (int)r.Count;
 
                 // Category Normalization (unify duplicates like CustomerService/Customer Service, SoftSkills/Soft Skills, Medical/Medicine)
                 string normCat = rawCat;
@@ -3037,22 +3038,35 @@ WHERE U.Id = @UserId;";
                 else if (cleanTop == "wheyprotein") normTop = "Whey Protein";
                 else if (cleanTop == "omega3") normTop = "Omega-3";
 
+                if (!uniqueTracker.ContainsKey(qText))
+                {
+                    uniqueTracker[qText] = (normCat, normTop);
+                }
+            }
+
+            dashboard.TotalQuestionsCount = uniqueTracker.Count;
+
+            foreach (var item in uniqueTracker.Values)
+            {
+                var normCat = item.Category;
+                var normTop = item.Topic;
+
                 var cat = dashboard.QuestionsPerCategory.FirstOrDefault(c => c.CategoryName.Equals(normCat, StringComparison.OrdinalIgnoreCase));
                 if (cat == null)
                 {
                     cat = new CategoryStatDto { CategoryName = normCat, Count = 0 };
                     dashboard.QuestionsPerCategory.Add(cat);
                 }
-                cat.Count += count;
+                cat.Count++;
 
                 var top = cat.Topics.FirstOrDefault(t => t.TopicName.Equals(normTop, StringComparison.OrdinalIgnoreCase));
                 if (top == null)
                 {
-                    cat.Topics.Add(new TopicStatDto { TopicName = normTop, Count = count });
+                    cat.Topics.Add(new TopicStatDto { TopicName = normTop, Count = 1 });
                 }
                 else
                 {
-                    top.Count += count;
+                    top.Count++;
                 }
             }
 
