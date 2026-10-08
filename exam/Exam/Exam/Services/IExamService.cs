@@ -18,7 +18,7 @@ namespace Exam.Services
         Task DeleteTopicAsync(int topicId);
         Task<int> AddChoiceForExistingQuestionAsync(int questionId, string choiceText, bool isCorrect);
         Task DeleteQuestionAsync(int questionId);
-        Task DeleteAllQuestionsForExamAsync(int examId);
+        Task DeleteAllQuestionsForExamAsync(int examId, IEnumerable<int>? questionIds = null);
         Task DeleteChoiceAsync(int choiceId);
         Task<ExamDetailsDto> GetSmartQuestionsByRoleAsync(int examId, string userId, int attemptId, string role);
         Task<IEnumerable<StudentDto>> GetAllStudentsAsync();

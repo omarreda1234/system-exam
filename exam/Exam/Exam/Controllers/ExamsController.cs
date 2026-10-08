@@ -446,9 +446,19 @@ namespace Exam.Controllers
         [Authorize(Roles = "Admin")]
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteAllQuestions(int examId)
+        public async Task<IActionResult> DeleteAllQuestions(int examId, string? questionIds = null)
         {
-            await _examService.DeleteAllQuestionsForExamAsync(examId);
+            List<int>? qIdList = null;
+            if (!string.IsNullOrWhiteSpace(questionIds))
+            {
+                qIdList = questionIds
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(s => int.TryParse(s, out int id) ? id : 0)
+                    .Where(id => id > 0)
+                    .ToList();
+            }
+
+            await _examService.DeleteAllQuestionsForExamAsync(examId, qIdList);
             return Ok(new { success = true });
         }
 

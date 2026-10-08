@@ -98,7 +98,7 @@
             @if (Model.Questions.Any())
             {
                 <button type="button" id="deleteAllQuestionsBtn" class="bg-rose-50 hover:bg-rose-500 text-rose-500 hover:text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm border border-rose-100 dark:border-rose-900/30 dark:bg-rose-500/10 flex items-center gap-2">
-                    <i class="fas fa-trash-alt"></i> Delete All
+                    <i class="fas fa-trash-alt"></i> <span id="deleteAllBtnText">Delete All</span>
                 </button>
             }
         </div>
@@ -417,55 +417,121 @@
             });
         }
 
-        $('.save-question').on('click', function () {
-            var form = $(this).closest('form');
-            $.post('@Url.Action("UpdateQuestion", "Exams")', form.serialize())
+        // In-modal non-intrusive toast notification (does not dismiss the Swal modal)
+        function showInModalToast(message, type) {
+            $('.in-modal-toast-notice').remove();
+            var isSuccess = type === 'success';
+            var bgClass = isSuccess ? 'bg-emerald-600 text-white shadow-emerald-500/20' : 'bg-rose-600 text-white shadow-rose-500/20';
+            var iconClass = isSuccess ? 'fa-check-circle' : 'fa-exclamation-circle';
+            
+            var $toast = $(`
+                <div class="in-modal-toast-notice fixed top-6 right-8 z-[999999] flex items-center gap-2.5 px-5 py-3 rounded-2xl shadow-2xl ${bgClass} text-xs font-black uppercase tracking-wider transition-all transform -translate-y-2 opacity-0 pointer-events-none">
+                    <i class="fas ${iconClass} text-sm"></i>
+                    <span>${message}</span>
+                </div>
+            `);
+            $('body').append($toast);
+            
+            setTimeout(function() {
+                $toast.removeClass('-translate-y-2 opacity-0').addClass('translate-y-0 opacity-100');
+            }, 10);
+            
+            setTimeout(function() {
+                $toast.removeClass('translate-y-0 opacity-100').addClass('-translate-y-2 opacity-0');
+                setTimeout(function() { $toast.remove(); }, 300);
+            }, 2200);
+        }
+
+        $(document).on('click', '.save-question', function () {
+            var $btn = $(this);
+            var $form = $btn.closest('form');
+            var $panel = $btn.closest('.question-panel');
+            var origHtml = $btn.html();
+            
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Saving...');
+
+            $.post('@Url.Action("UpdateQuestion", "Exams")', $form.serialize())
                 .done(function () { 
-                    Swal.fire({ 
-                        icon: 'success', 
-                        title: 'Question Saved', 
-                        toast: true, 
-                        position: 'top-end', 
-                        timer: 2000, 
-                        showConfirmButton: false 
-                    }); 
-                    triggerRefresh(); 
+                    var catVal = $form.find('select[name="categoryId"]').val() || '';
+                    var topVal = $form.find('select[name="topicId"]').val() || '';
+                    var diffVal = $form.find('input[name="difficulty"]:checked').val() || '1';
+                    var ptsVal = $form.find('input[name="points"]').val() || '';
+                    
+                    $panel.attr('data-category-id', catVal);
+                    $panel.attr('data-topic-id', topVal);
+                    $panel.attr('data-difficulty', diffVal);
+                    $panel.attr('data-points', ptsVal);
+
+                    $btn.removeClass('bg-brand-50 text-brand-600 border-brand-500/10 hover:bg-brand-600')
+                        .addClass('bg-emerald-600 text-white border-emerald-600 shadow-md')
+                        .html('<i class="fas fa-check mr-1.5"></i> Saved!');
+
+                    showInModalToast('Question updated successfully', 'success');
+
+                    setTimeout(function() {
+                        $btn.prop('disabled', false)
+                            .removeClass('bg-emerald-600 text-white border-emerald-600 shadow-md')
+                            .addClass('bg-brand-50 text-brand-600 border-brand-500/10 hover:bg-brand-600')
+                            .html(origHtml);
+                    }, 1800);
                 })
                 .fail(function(xhr) { 
+                    $btn.prop('disabled', false).html(origHtml);
                     var msg = xhr.responseJSON ? xhr.responseJSON.message : "Database update failed";
-                    Swal.fire({ icon: 'error', title: 'Save Failed', text: msg }); 
+                    showInModalToast(msg, 'error');
                 });
         });
 
         // Textarea height initialization skipped for performance on large exams
 
-        $('.save-choice').on('click', function () {
-            var form = $(this).closest('form');
+        $(document).on('click', '.save-choice', function () {
+            var $btn = $(this);
+            var form = $btn.closest('form');
             var isChecked = form.find('input[name="isCorrect"]').is(':checked');
             var data = form.serializeArray();
             data = data.filter(function(item) { return item.name !== 'isCorrect'; });
             data.push({ name: 'isCorrect', value: isChecked });
+
+            var origHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin text-xs"></i>');
+
             $.post('@Url.Action("UpdateChoice", "Exams")', data)
                 .done(function () { 
-                    Swal.fire({ 
-                        icon: 'success', 
-                        title: 'Choice Saved', 
-                        toast: true, 
-                        position: 'top-end', 
-                        timer: 1500, 
-                        showConfirmButton: false 
-                    }); 
-                    triggerRefresh();
+                    $btn.removeClass('text-brand-500 bg-brand-50')
+                        .addClass('text-emerald-600 bg-emerald-50 dark:bg-emerald-950')
+                        .html('<i class="fas fa-check text-xs"></i>');
+                    
+                    showInModalToast('Choice saved', 'success');
+
+                    setTimeout(function() {
+                        $btn.prop('disabled', false)
+                            .removeClass('text-emerald-600 bg-emerald-50 dark:bg-emerald-950')
+                            .addClass('text-brand-500 bg-brand-50')
+                            .html(origHtml);
+                    }, 1500);
                 })
                 .fail(function(xhr) {
+                    $btn.prop('disabled', false).html(origHtml);
                     var msg = xhr.responseJSON ? xhr.responseJSON.message : "Choice update failed";
-                    Swal.fire({ icon: 'error', title: 'Error', text: msg });
+                    showInModalToast(msg, 'error');
                 });
         });
 
-        $('.delete-choice').on('click', function () {
-            var cId = $(this).data('choice-id');
-            $.post('@Url.Action("DeleteChoice", "Exams")', { choiceId: cId, __RequestVerificationToken: antiForgery() }).done(function() { triggerRefresh(); });
+        $(document).on('click', '.delete-choice', function () {
+            var $btn = $(this);
+            var $choiceForm = $btn.closest('.update-choice-form');
+            var cId = $btn.data('choice-id');
+            
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin text-xs"></i>');
+            $.post('@Url.Action("DeleteChoice", "Exams")', { choiceId: cId, __RequestVerificationToken: antiForgery() })
+                .done(function() { 
+                    $choiceForm.fadeOut(250, function() { $(this).remove(); });
+                    showInModalToast('Choice removed', 'success');
+                })
+                .fail(function() {
+                    $btn.prop('disabled', false).html('<i class="fas fa-trash text-xs"></i>');
+                    showInModalToast('Failed to delete choice', 'error');
+                });
         });
 
         $(document).on('click', '.delete-question', function () {
@@ -486,32 +552,62 @@
                                 $(this).remove(); 
                                 filterQuestions();
                             });
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Question Deleted',
-                                toast: true,
-                                position: 'top-end',
-                                timer: 2000,
-                                showConfirmButton: false,
-                                timerProgressBar: true
-                            });
+                            showInModalToast('Question deleted successfully', 'success');
                         })
                         .fail(function() {
-                            Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to delete question.' });
+                            showInModalToast('Failed to delete question', 'error');
                         });
                 }
             });
         });
 
-        $('.add-choice').on('click', function () {
+        $(document).on('click', '.add-choice', function () {
             var qId = $(this).data('question-id');
-            Swal.fire({
-                title: 'New Choice',
-                input: 'text',
-                inputPlaceholder: 'Enter choice text...',
-                showCancelButton: true,
-                confirmButtonText: 'Add Choice',
-            }).then((result) => { if (result.value) $.post('@Url.Action("AddChoice", "Exams")', { questionId: qId, choiceText: result.value, isCorrect: false, __RequestVerificationToken: antiForgery() }).done(function() { triggerRefresh(); }); });
+            var $choicesContainer = $(this).closest('.p-8').find('.choices');
+            var choiceText = prompt("Enter new choice text:");
+            if (choiceText && choiceText.trim() !== '') {
+                $.post('@Url.Action("AddChoice", "Exams")', { 
+                    questionId: qId, 
+                    choiceText: choiceText.trim(), 
+                    isCorrect: false, 
+                    __RequestVerificationToken: antiForgery() 
+                }).done(function(res) {
+                    if (res && res.success) {
+                        var cId = res.choiceId;
+                        var newChoiceHtml = `
+                            <form class="update-choice-form flex items-center gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-brand-500/30 transition-all group/choice shadow-sm">
+                                <input type="hidden" name="__RequestVerificationToken" value="${antiForgery()}" />
+                                <input type="hidden" name="choiceId" value="${cId}" />
+                                <input type="hidden" name="questionId" value="${qId}" />
+
+                                <label class="relative flex items-center cursor-pointer">
+                                    <input type="checkbox" name="isCorrect" value="true" class="peer hidden" />
+                                    <div class="w-6 h-6 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-xl flex items-center justify-center peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all shadow-sm">
+                                        <i class="fas fa-check text-[10px] text-white opacity-0 peer-checked:opacity-100 transition-opacity"></i>
+                                    </div>
+                                </label>
+
+                                <input type="text" name="choiceText" value="${$('<div>').text(choiceText.trim()).html()}" class="block flex-1 bg-transparent border-0 text-base font-black text-slate-900 dark:text-white focus:ring-0 outline-none w-full" />
+
+                                <div class="flex items-center gap-1 opacity-50 group-hover/choice:opacity-100 transition-opacity">
+                                    <button type="button" class="p-2 text-brand-500 bg-brand-50 dark:bg-brand-500/10 hover:bg-brand-600 hover:text-white rounded-lg transition-all save-choice" title="Save Choice">
+                                        <i class="fas fa-save text-xs"></i>
+                                    </button>
+                                    <button type="button" class="p-2 text-rose-500 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-600 hover:text-white rounded-lg transition-all delete-choice" data-choice-id="${cId}" title="Delete Choice">
+                                        <i class="fas fa-trash text-xs"></i>
+                                    </button>
+                                </div>
+                            </form>
+                        `;
+                        $choicesContainer.append(newChoiceHtml);
+                        showInModalToast('Choice added successfully', 'success');
+                    } else {
+                        showInModalToast(res.message || 'Failed to add choice', 'error');
+                    }
+                }).fail(function() {
+                    showInModalToast('Network error adding choice', 'error');
+                });
+            }
         });
 
         $('#addQuestionBtnInModal').on('click', function () {
@@ -651,6 +747,11 @@
 
             if (totalCount > 0) {
                 $('#filterCountBadge').text(hasActiveFilters ? `Showing ${visibleCount} of ${totalCount}` : `${totalCount} Questions`);
+                if (hasActiveFilters && visibleCount < totalCount) {
+                    $('#deleteAllBtnText').text(`Delete Filtered (${visibleCount})`);
+                } else {
+                    $('#deleteAllBtnText').text('Delete All');
+                }
             }
         }
 
@@ -690,29 +791,64 @@
             filterQuestions();
         });
 
-        // Delete All Logic
+        // Delete Questions (All or Filtered) Logic
         $('#deleteAllQuestionsBtn').on('click', function() {
+            var visiblePanels = $('.question-panel:visible');
+            var visibleIds = [];
+            visiblePanels.each(function() {
+                var qId = $(this).attr('data-question-id') || $(this).data('question-id');
+                if (qId) visibleIds.push(qId);
+            });
+
+            if (visibleIds.length === 0) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'No Questions Found',
+                    text: 'There are no questions matching your current filter to delete.',
+                    background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                    color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+                });
+                return;
+            }
+
+            var totalCount = $('.question-panel').length;
+            var isFiltered = visibleIds.length < totalCount;
+            var confirmTitle = isFiltered ? `Delete ${visibleIds.length} Filtered Question(s)?` : 'Are you absolutely sure?';
+            var confirmText = isFiltered 
+                ? `This will permanently delete ONLY the ${visibleIds.length} currently filtered questions from this exam!`
+                : "This will wipe ALL questions and choices from this exam permanently!";
+            var confirmBtnText = isFiltered
+                ? `<i class="fas fa-trash-alt mr-2"></i> Yes, Delete (${visibleIds.length}) Questions`
+                : '<i class="fas fa-trash-alt mr-2"></i> Yes, DELETE ALL';
+
             Swal.fire({
-                title: 'Are you absolutely sure?',
-                text: "This will wipe ALL questions and choices from this exam permanently!",
+                title: confirmTitle,
+                text: confirmText,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#ef4444',
                 cancelButtonColor: '#334155',
-                confirmButtonText: '<i class="fas fa-trash-alt mr-2"></i> Yes, DELETE ALL',
+                confirmButtonText: confirmBtnText,
                 background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
                 color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
             }).then((result) => {
                 if (result.isConfirmed) {
                     $.post('@Url.Action("DeleteAllQuestions", "Exams")', {
                         examId: examId,
+                        questionIds: visibleIds.join(','),
                         __RequestVerificationToken: antiForgery()
                     }).done(function (res) {
                         if(res.success) {
-                            Swal.fire({ icon: 'success', title: 'Wiped', text: 'All questions have been deleted.', timer: 2000, showConfirmButton: false });
+                            Swal.fire({ 
+                                icon: 'success', 
+                                title: isFiltered ? 'Deleted' : 'Wiped', 
+                                text: isFiltered ? `${visibleIds.length} filtered questions have been deleted.` : 'All questions have been deleted.', 
+                                timer: 2000, 
+                                showConfirmButton: false 
+                            });
                             triggerRefresh();
                         } else {
-                            Swal.fire('Error', res.message || 'Failed to delete all questions.', 'error');
+                            Swal.fire('Error', res.message || 'Failed to delete questions.', 'error');
                         }
                     }).fail(function () { 
                         Swal.fire('Error', 'Network or Server error occurred.', 'error'); 

@@ -2366,15 +2366,26 @@ WHERE U.Id = @UserId;";
                 throw;
             }
         }
-        public async Task DeleteAllQuestionsForExamAsync(int examId)
+        public async Task DeleteAllQuestionsForExamAsync(int examId, IEnumerable<int>? questionIds = null)
         {
             using var conn = new SqlConnection(_connectionString);
-            var questionIds = await conn.QueryAsync<int>(
-                "SELECT QuestionId FROM ExamQuestions WHERE ExamId = @examId", new { examId });
-
-            if (questionIds.Any())
+            
+            IEnumerable<int> targetQuestionIds;
+            if (questionIds != null && questionIds.Any())
             {
-                foreach (var qId in questionIds)
+                var examQIds = (await conn.QueryAsync<int>(
+                    "SELECT QuestionId FROM ExamQuestions WHERE ExamId = @examId", new { examId })).ToHashSet();
+                targetQuestionIds = questionIds.Where(id => examQIds.Contains(id)).ToList();
+            }
+            else
+            {
+                targetQuestionIds = await conn.QueryAsync<int>(
+                    "SELECT QuestionId FROM ExamQuestions WHERE ExamId = @examId", new { examId });
+            }
+
+            if (targetQuestionIds.Any())
+            {
+                foreach (var qId in targetQuestionIds)
                 {
                     await conn.ExecuteAsync(
                         "sp_DeleteQuestion",
