@@ -359,12 +359,12 @@
         <aside id="main-sidebar" class="fixed inset-y-0 left-0 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50 transition-all duration-300">
             <div class="flex flex-col h-full">
                 <!-- Logo Area -->
-                <div class="h-20 flex items-center px-8 border-b border-slate-100 dark:border-slate-800/50">
-                    <div class="w-10 h-10 bg-white rounded-xl overflow-hidden flex items-center justify-center text-white shadow-lg border border-slate-100 shadow-brand-500/20 mr-3 p-1">
+                <div class="h-20 flex items-center px-8 border-b border-slate-100 dark:border-slate-800/50 cursor-pointer select-none group" onclick="switchToDashboard()" title="Go to Dashboard">
+                    <div class="w-10 h-10 bg-white rounded-xl overflow-hidden flex items-center justify-center text-white shadow-lg border border-slate-100 shadow-brand-500/20 mr-3 p-1 transition-transform group-hover:scale-105">
                         <img src="~/images/logo.jpeg" alt="Eltarshoubi Logo" class="w-full h-full object-contain" />
                     </div>
                     <div>
-                        <span class="text-xl font-black tracking-tighter block leading-none">ELTARSHOUBI</span>
+                        <span class="text-xl font-black tracking-tighter block leading-none group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">ELTARSHOUBI</span>
                         <span class="text-[10px] font-bold text-brand-600 dark:text-brand-400 tracking-[0.2em] uppercase">Control Center</span>
                     </div>
                 </div>
@@ -404,7 +404,7 @@
                                 @if (HasAccess("Admin", "Index"))
                                 {
                                     <li>
-                                        <a href="@Url.Action("Index", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "index")">
+                                        <a href="@Url.Action("Index", "Admin")" id="nav-link-lms-overview" data-is-dashboard="true" class="@linkClass(currentController == "admin" && currentAction == "index")">
                                             <i class="fas fa-chart-line w-4 text-center"></i>
                                             <span>LMS Overview</span>
                                         </a>
@@ -1022,6 +1022,21 @@
                 $(document).on('click', 'a', function(e) {
                     var href = $(this).attr('href');
                     if (href && href !== '#' && !href.startsWith('javascript:') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
+                        var cleanHref = href.split('?')[0].split('#')[0].toLowerCase().trim();
+                        if (cleanHref.endsWith('/') && cleanHref.length > 1) cleanHref = cleanHref.slice(0, -1);
+                        var adminPath = '@Url.Action("Index", "Admin")'.toLowerCase().trim();
+                        if (adminPath.endsWith('/') && adminPath.length > 1) adminPath = adminPath.slice(0, -1);
+
+                        if (cleanHref === '/admin' || cleanHref === '/admin/index' || cleanHref === adminPath || cleanHref.endsWith('/admin') || cleanHref.endsWith('/admin/index')) {
+                            e.preventDefault();
+                            if (window.parent && typeof window.parent.switchToDashboard === 'function') {
+                                window.parent.switchToDashboard();
+                            } else {
+                                window.top.location.href = href;
+                            }
+                            return;
+                        }
+
                         // Avoid double appending
                         if (href.indexOf('iframe=true') === -1) {
                             e.preventDefault();
@@ -1962,6 +1977,83 @@
         }
     });
     
+    // Helper to check if URL points to the main Dashboard
+    function isDashboardUrl(url) {
+        if (!url) return false;
+        var cleanUrl = url.split('?')[0].split('#')[0].toLowerCase().trim();
+        if (cleanUrl.endsWith('/') && cleanUrl.length > 1) {
+            cleanUrl = cleanUrl.slice(0, -1);
+        }
+        var adminUrl = '@Url.Action("Index", "Admin")'.toLowerCase().trim();
+        if (adminUrl.endsWith('/') && adminUrl.length > 1) {
+            adminUrl = adminUrl.slice(0, -1);
+        }
+
+        return cleanUrl === adminUrl || 
+               cleanUrl === '/admin' || 
+               cleanUrl === '/admin/index' || 
+               cleanUrl.endsWith('/admin') || 
+               cleanUrl.endsWith('/admin/index');
+    }
+
+    // Switch to Dashboard
+    window.switchToDashboard = function() {
+        var isTopWindowAdminDashboard = isDashboardUrl(window.location.pathname);
+        if (isTopWindowAdminDashboard && $('#tab-pane-home').length > 0) {
+            switchTab('home');
+            setActiveSidebarLink('@Url.Action("Index", "Admin")');
+            if (window.innerWidth < 768) {
+                closeSidebar();
+            }
+            return;
+        }
+        window.location.href = '@Url.Action("Index", "Admin")';
+    };
+
+    // Synchronize active classes on sidebar items
+    function setActiveSidebarLink(url) {
+        if (!url) return;
+        var cleanTarget = url.split('?')[0].split('#')[0].toLowerCase().trim();
+        if (cleanTarget.endsWith('/') && cleanTarget.length > 1) {
+            cleanTarget = cleanTarget.slice(0, -1);
+        }
+
+        var isTargetDashboard = isDashboardUrl(cleanTarget);
+        var activeClasses = 'bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400 font-bold border-l-2 border-brand-500 shadow-xs';
+        var inactiveClasses = 'text-slate-500 dark:text-slate-400 font-medium';
+
+        $('#main-sidebar nav a').each(function() {
+            var $link = $(this);
+            var linkHref = ($link.attr('href') || '').split('?')[0].split('#')[0].toLowerCase().trim();
+            if (linkHref.endsWith('/') && linkHref.length > 1) {
+                linkHref = linkHref.slice(0, -1);
+            }
+
+            var isThisDashboard = isDashboardUrl(linkHref) || $link.data('is-dashboard') === true || $link.data('is-dashboard') === 'true';
+
+            var match = false;
+            if (isTargetDashboard) {
+                match = isThisDashboard;
+            } else {
+                match = !isThisDashboard && (linkHref === cleanTarget || (cleanTarget && linkHref.endsWith(cleanTarget)));
+            }
+
+            if (match) {
+                $link.addClass(activeClasses).removeClass(inactiveClasses);
+                // Expand group if closed
+                var $group = $link.closest('ul[id^="group-"]');
+                if ($group.length && $group.hasClass('hidden')) {
+                    $group.removeClass('hidden');
+                    var $btn = $group.prev('button');
+                    $btn.find('.chevron-icon').addClass('rotate-180');
+                    $btn.addClass('bg-slate-100/80 dark:bg-slate-800/80 text-brand-600 dark:text-brand-400 font-black');
+                }
+            } else {
+                $link.removeClass(activeClasses).addClass(inactiveClasses);
+            }
+        });
+    }
+
     $(document).on('click', '#main-sidebar a', function(e) {
         var href = $(this).attr('href');
         // Ignore dummy links or logout
@@ -1969,12 +2061,18 @@
         if ($(this).closest('form').length > 0) return; // Ignore links inside forms (like logout)
 
         e.preventDefault();
-        
-        var title = $(this).find('span').text().trim() || 'New Tab';
-        var icon = $(this).find('i').attr('class') || 'fas fa-file';
-        
+
+        // If clicking LMS Overview / Dashboard link
+        if (isDashboardUrl(href) || $(this).data('is-dashboard') === true || $(this).data('is-dashboard') === 'true') {
+            switchToDashboard();
+            return;
+        }
+
+        var title = $(this).find('span').first().text().trim() || 'New Tab';
+        var icon = $(this).find('i').first().attr('class') || 'fas fa-file';
+
         openNewTab(title, icon, href);
-        
+
         // Close sidebar on mobile
         if (window.innerWidth < 768) {
             closeSidebar();
@@ -1994,6 +2092,11 @@
     }
 
     function openNewTab(title, iconClass, url) {
+        if (isDashboardUrl(url)) {
+            switchToDashboard();
+            return;
+        }
+
         // Unhide tab container if it's hidden
         $('#mTabsContainer').removeClass('hidden');
 
@@ -2069,6 +2172,17 @@
                               .removeClass('bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500');
                               
         $('#tab-pane-' + tabId).addClass('active');
+
+        // Sync sidebar active highlight
+        if (tabId === 'home') {
+            setActiveSidebarLink('@Url.Action("Index", "Admin")');
+        } else {
+            var $pane = $('#tab-pane-' + tabId);
+            var iframeSrc = $pane.find('iframe.iframe-pane').attr('src');
+            if (iframeSrc) {
+                setActiveSidebarLink(iframeSrc);
+            }
+        }
     }
 
     function refreshTab(event, tabId) {
