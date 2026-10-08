@@ -88,41 +88,46 @@
 
 </div>
 
-<!-- Modals -->
-<div class="modal fade" id="academicModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content bg-white dark:bg-slate-900 border-0 rounded-3xl shadow-2xl overflow-hidden">
-            <div class="p-8">
-                <div class="flex items-center gap-4 mb-8">
-                    <div id="modalIcon" class="w-12 h-12 rounded-2xl bg-brand-50 flex items-center justify-center text-brand-600">
+<!-- Modals: Academic Item Creation Modal (Tailwind Fixed Overlay) -->
+<div id="academicModal" class="fixed inset-0 z-50 hidden bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden w-full max-w-lg transition-all transform scale-100">
+        <div class="p-6 sm:p-8">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-4">
+                    <div id="modalIcon" class="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center text-brand-600 dark:text-brand-400">
                         <i class="fas fa-plus"></i>
                     </div>
                     <div>
                         <h5 id="modalTitle" class="text-xl font-black text-slate-900 dark:text-white">Add New Item</h5>
-                        <p id="modalSub" class="text-xs text-slate-500 font-bold uppercase tracking-widest">Global Registry</p>
+                        <p id="modalSub" class="text-xs text-slate-400 font-bold uppercase tracking-widest">Global Registry</p>
                     </div>
                 </div>
-                
-                <form id="academicForm" class="space-y-6">
-                    <input type="hidden" id="itemParentId" name="parentId" />
-                    <input type="hidden" id="itemType" />
-                    
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Label Name</label>
-                        <input type="text" id="itemName" name="name" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm font-bold focus:ring-4 focus:ring-brand-500/10 outline-none transition-all" placeholder="Enter name..." required />
-                    </div>
-
-                    <div id="parentDisplay" class="hidden p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
-                        <span class="text-[10px] font-bold text-slate-400 block mb-1">PARENT ASSOCIATION</span>
-                        <span id="parentNameText" class="text-xs font-black text-brand-600 dark:text-brand-400">---</span>
-                    </div>
-
-                    <div class="flex gap-3 pt-4">
-                        <button type="button" data-bs-dismiss="modal" class="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Cancel</button>
-                        <button type="submit" class="flex-1 py-4 bg-brand-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-brand-700 shadow-xl shadow-brand-500/30 transition-all">Create Item</button>
-                    </div>
-                </form>
+                <button type="button" onclick="closeAcademicModal()" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center justify-center transition-all">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
             </div>
+            
+            <form id="academicForm" class="space-y-6">
+                <input type="hidden" id="itemParentId" name="parentId" />
+                <input type="hidden" id="itemType" />
+                
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">Label Name</label>
+                    <input type="text" id="itemName" name="name" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-sm font-bold focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all text-slate-900 dark:text-white" placeholder="Enter name..." required autocomplete="off" />
+                </div>
+
+                <div id="parentDisplay" class="hidden p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+                    <span class="text-[10px] font-bold text-slate-400 block mb-1">PARENT ASSOCIATION</span>
+                    <span id="parentNameText" class="text-xs font-black text-brand-600 dark:text-brand-400">---</span>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeAcademicModal()" class="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Cancel</button>
+                    <button type="submit" id="submitAcademicBtn" class="flex-1 py-4 bg-brand-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-brand-700 shadow-xl shadow-brand-500/30 transition-all flex items-center justify-center gap-2">
+                        <span>Create Item</span>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -237,50 +242,117 @@
                     $.post('@Url.Action("UpdateTopic", "Admin")', { topicId: id, topicName: result.value.trim() }, function(res) {
                         if (res.success) {
                             loadTopics(currentCatId);
-                            Swal.fire({ icon: 'success', title: 'Updated!', timer: 1000, showConfirmButton: false });
+                            showChicToast('Topic Updated', 'Topic name has been updated successfully');
                         } else {
-                            Swal.fire('Error', res.message, 'error');
+                            showChicToast('Update Failed', res.message || 'Error updating topic', 'error');
                         }
                     });
                 }
             });
         }
 
-        // Modal Handlers
+        // Chic Floating Toast Notification
+        function showChicToast(title, subtitle, type = 'success') {
+            $('.chic-toast-notice').remove();
+            const isSuccess = type === 'success';
+            const bgGradient = isSuccess 
+                ? 'from-emerald-600 to-teal-700 text-white border-emerald-400/30 shadow-emerald-600/30' 
+                : 'from-rose-600 to-red-700 text-white border-rose-400/30 shadow-rose-600/30';
+            const icon = isSuccess ? 'fa-check-circle' : 'fa-exclamation-triangle';
+
+            const $toast = $(`
+                <div class="chic-toast-notice fixed top-6 right-6 z-[999999] flex items-center gap-3.5 px-5 py-3.5 rounded-2xl shadow-2xl bg-gradient-to-r ${bgGradient} border backdrop-blur-md transition-all duration-300 transform -translate-y-4 opacity-0 scale-95 pointer-events-none">
+                    <div class="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white shrink-0">
+                        <i class="fas ${icon} text-base"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-black tracking-wide">${title}</div>
+                        ${subtitle ? `<div class="text-[10px] font-semibold opacity-90 tracking-normal">${subtitle}</div>` : ''}
+                    </div>
+                </div>
+            `);
+            $('body').append($toast);
+
+            setTimeout(() => {
+                $toast.removeClass('-translate-y-4 opacity-0 scale-95').addClass('translate-y-0 opacity-100 scale-100');
+            }, 20);
+
+            setTimeout(() => {
+                $toast.removeClass('translate-y-0 opacity-100 scale-100').addClass('-translate-y-4 opacity-0 scale-95');
+                setTimeout(() => { $toast.remove(); }, 350);
+            }, 2500);
+        }
+
+        // Modal Handlers (Pure Tailwind Overlay)
+        function showAcademicModal() {
+            $('#academicModal').removeClass('hidden').addClass('flex');
+            setTimeout(() => { $('#itemName').focus(); }, 100);
+        }
+
+        function closeAcademicModal() {
+            $('#academicModal').addClass('hidden').removeClass('flex');
+            $('#itemName').val('');
+            $('#submitAcademicBtn').prop('disabled', false).html('<span>Create Item</span>');
+        }
+
+        $('#academicModal').on('click', function(e) {
+            if (e.target === this) closeAcademicModal();
+        });
+
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Escape' && !$('#academicModal').hasClass('hidden')) {
+                closeAcademicModal();
+            }
+        });
+
         function openTypeModal() {
             $('#itemType').val('type');
             $('#modalTitle').text('New Exam Variety');
-            $('#modalIcon').attr('class', 'w-12 h-12 rounded-2xl bg-brand-50 flex items-center justify-center text-brand-600');
+            $('#modalIcon').attr('class', 'w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center text-brand-600 dark:text-brand-400');
             $('#parentDisplay').hide();
-            $('#academicModal').modal('show');
+            showAcademicModal();
         }
 
         function openCatModal() {
+            if (!currentTypeId) {
+                showChicToast('Select Variety First', 'Please click on an exam variety on the left', 'error');
+                return;
+            }
             $('#itemType').val('category');
             $('#itemParentId').val(currentTypeId);
             $('#modalTitle').text('New Category');
-            $('#modalIcon').attr('class', 'w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600');
-            $('#parentNameText').text($('.type-item.active').data('name'));
+            $('#modalIcon').attr('class', 'w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400');
+            const varietyName = $('.type-item.active').data('name') || 'Selected Variety';
+            $('#parentNameText').text(varietyName);
             $('#parentDisplay').show();
-            $('#academicModal').modal('show');
+            showAcademicModal();
         }
 
         function openTopicModal() {
+            if (!currentCatId) {
+                showChicToast('Select Category First', 'Please click on a category to add topics to it', 'error');
+                return;
+            }
             $('#itemType').val('topic');
             $('#itemParentId').val(currentCatId);
             $('#modalTitle').text('New Lecture Topic');
-            $('#modalIcon').attr('class', 'w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600');
-            $('#parentNameText').text($('.cat-item.active').find('span').first().text());
+            $('#modalIcon').attr('class', 'w-12 h-12 rounded-2xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-600 dark:text-orange-400');
+            
+            let catText = $('.cat-item.active span.font-bold').contents().first().text().trim();
+            if (!catText) catText = $('.cat-item.active').text().trim();
+            $('#parentNameText').text(catText || 'Selected Category');
             $('#parentDisplay').show();
-            $('#academicModal').modal('show');
+            showAcademicModal();
         }
 
         // Form Submit
         $('#academicForm').on('submit', function(e) {
             e.preventDefault();
             const type = $('#itemType').val();
-            const name = $('#itemName').val();
+            const name = $('#itemName').val().trim();
             const parentId = $('#itemParentId').val();
+
+            if (!name) return;
 
             let url = '';
             let data = {};
@@ -296,17 +368,30 @@
                 data = { topicName: name, categoryId: parentId };
             }
 
+            const $btn = $('#submitAcademicBtn');
+            const origBtnHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="fas fa-circle-notch fa-spin mr-1.5"></i> <span>Creating...</span>');
+
             $.post(url, data, function(res) {
+                $btn.prop('disabled', false).html(origBtnHtml);
                 if (res.success) {
-                    $('#academicModal').modal('hide');
-                    $('#itemName').val('');
-                    if (type === 'type') location.reload();
-                    else if (type === 'category') loadCategories(currentTypeId);
-                    else loadTopics(currentCatId);
-                    Swal.fire({ icon: 'success', title: 'Success', timer: 1000, showConfirmButton: false });
+                    closeAcademicModal();
+                    if (type === 'type') {
+                        showChicToast('Exam Variety Created', `${name} added successfully`);
+                        setTimeout(() => location.reload(), 600);
+                    } else if (type === 'category') {
+                        loadCategories(currentTypeId);
+                        showChicToast('Category Created', `${name} mapped successfully`);
+                    } else {
+                        loadTopics(currentCatId);
+                        showChicToast('Lecture Topic Created', `${name} added successfully`);
+                    }
                 } else {
-                    Swal.fire('Error', res.message || 'Operation failed', 'error');
+                    showChicToast('Creation Failed', res.message || 'Operation failed', 'error');
                 }
+            }).fail(function() {
+                $btn.prop('disabled', false).html(origBtnHtml);
+                showChicToast('Network Error', 'Could not save item', 'error');
             });
         });
 
@@ -331,13 +416,20 @@
         function deleteCategory(id) {
             Swal.fire({
                 title: 'Are you sure?',
+                text: "Deleting a category will remove its associated topic links!",
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonColor: '#e11d48'
+                confirmButtonColor: '#e11d48',
+                confirmButtonText: 'Yes, delete category'
             }).then((result) => {
                 if (result.isConfirmed) {
                     $.post('@Url.Action("deletecategory", "Admin")', { id: id }, function(res) {
-                        if (res.success) loadCategories(currentTypeId);
+                        if (res.success) {
+                            loadCategories(currentTypeId);
+                            showChicToast('Category Deleted', 'Category has been removed');
+                        } else {
+                            showChicToast('Deletion Failed', res.message || 'Could not delete category', 'error');
+                        }
                     });
                 }
             });
@@ -346,13 +438,20 @@
         function deleteTopic(id) {
             Swal.fire({
                 title: 'Are you sure?',
+                text: "This topic will be deleted from the syllabus.",
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonColor: '#e11d48'
+                confirmButtonColor: '#e11d48',
+                confirmButtonText: 'Yes, delete topic'
             }).then((result) => {
                 if (result.isConfirmed) {
                     $.post('@Url.Action("DeleteTopic", "Admin")', { topicId: id }, function(res) {
-                        if (res.success) loadTopics(currentCatId);
+                        if (res.success) {
+                            loadTopics(currentCatId);
+                            showChicToast('Topic Deleted', 'Lecture topic has been removed');
+                        } else {
+                            showChicToast('Deletion Failed', res.message || 'Could not delete topic', 'error');
+                        }
                     });
                 }
             });
