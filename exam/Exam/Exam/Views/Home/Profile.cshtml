@@ -397,7 +397,7 @@
 
                             @if (canStart)
                             {
-                                <a href="@Url.Action("StartExam", "Exams", new { examId = e.ExamId })" 
+                                <a href="@Url.Action("Start", "Exams", new { id = e.ExamId })" 
                                    class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow-sm transition-all">
                                     <span>بدء الامتحان الآن</span>
                                     <i class="fas fa-play text-[10px]"></i>

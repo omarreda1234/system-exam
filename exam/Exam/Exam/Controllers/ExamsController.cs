@@ -212,15 +212,43 @@ namespace Exam.Controllers
 
         [HttpGet]
         [Authorize]
-        public async Task<IActionResult> Start(int id)
+        public async Task<IActionResult> StartExam(int? examId, int? id)
         {
+            var targetId = examId ?? id ?? 0;
+            if (targetId <= 0)
+            {
+                TempData["ErrorMessage"] = "عذراً، رقم الامتحان غير صحيح أو غير محدد.";
+                return RedirectToAction("Profile", "Home");
+            }
+            return await Start(targetId);
+        }
+
+        [HttpGet]
+        [Authorize]
+        public async Task<IActionResult> Start(int id, int? examId = null)
+        {
+            if (id <= 0 && examId.HasValue)
+            {
+                id = examId.Value;
+            }
+
+            if (id <= 0)
+            {
+                TempData["ErrorMessage"] = "عذراً، رقم الامتحان غير صحيح.";
+                return RedirectToAction("Profile", "Home");
+            }
+
             // 1. جلب معرف المستخدم الحالي
             var userId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId)) return Challenge();
 
             // 2. جلب بيانات الامتحان الأساسية (الاسم، الوقت، إلخ)
             var examInfo = await _examService.GetExamByIdAsync(id);
-            if (examInfo == null) return NotFound();
+            if (examInfo == null)
+            {
+                TempData["ErrorMessage"] = "عذراً، هذا الامتحان غير موجود أو تم حذفه.";
+                return RedirectToAction("Profile", "Home");
+            }
 
             // 3. التحقق من المواعيد (التحقق البروفيشنال الجديد)
             var assignment = await _examService.GetStudentAssignmentAsync(id, userId);
@@ -324,7 +352,8 @@ namespace Exam.Controllers
 
             if (exam == null || exam.Questions == null || !exam.Questions.Any())
             {
-                return NotFound("No questions available for this exam based on your role.");
+                TempData["ErrorMessage"] = "عذراً، لا توجد أسئلة متاحة لهذا الامتحان حالياً تتطابق مع دورك الوظيفي/التدريبي.";
+                return RedirectToAction("Profile", "Home");
             }
 
             // Record assigned questions in UserSeenQuestions to fix scoring and prevent refresh shuffle
