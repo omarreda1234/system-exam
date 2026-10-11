@@ -108,10 +108,17 @@ namespace Exam.Controllers
 
             var examId = await _examService.CreateExamWithQuestionsAsync(m);
 
-            TempData["SuccessMessage"] = "Exam created successfully";
+            string siteUrl = $"{Request.Scheme}://{Request.Host}";
+            int assignedCount = await _examService.AutoAssignExamStudentsAsync(examId, siteUrl);
+
+            string successMsg = assignedCount > 0 
+                ? $"تم إنشاء الامتحان وتعيينه تلقائياً لعدد {assignedCount} متدرب بنجاح." 
+                : "تم إنشاء الامتحان بنجاح.";
+
+            TempData["SuccessMessage"] = successMsg;
             if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
             {
-                return Json(new { success = true, message = "Exam created successfully", examId = examId });
+                return Json(new { success = true, message = successMsg, examId = examId, assignedCount = assignedCount });
             }
             return RedirectToAction("Index", "Admin");
         }

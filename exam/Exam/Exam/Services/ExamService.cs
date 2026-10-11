@@ -597,6 +597,15 @@ namespace Exam.Services
                 },
                 commandType: CommandType.StoredProcedure);
 
+            try
+            {
+                await AutoAssignExamStudentsAsync(examId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"AutoAssignExamStudentsAsync error in AddExamAsync: {ex.Message}");
+            }
+
             return examId;
         }
 
@@ -1200,6 +1209,16 @@ namespace Exam.Services
                 }
 
                 transaction.Commit();
+
+                try
+                {
+                    await AutoAssignExamStudentsAsync(examId);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"AutoAssignExamStudentsAsync error in CreateExamWithQuestionsAsync: {ex.Message}");
+                }
+
                 return examId;
             }
             catch
@@ -2758,6 +2777,128 @@ WHERE U.Id = @UserId;";
             }
         }
 
+        public async Task<int> AutoAssignExamStudentsAsync(int examId, string siteUrl = "")
+        {
+            if (examId <= 0) return 0;
+
+            using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            var exam = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                SELECT E.Id, E.Title, E.StartTime, E.EndTime, E.WaveId, E.ExamTypeId, ET.TypeName AS ExamTypeName
+                FROM Exams E WITH(NOLOCK)
+                LEFT JOIN ExamTypes ET WITH(NOLOCK) ON E.ExamTypeId = ET.Id
+                WHERE E.Id = @ExamId", new { ExamId = examId });
+
+            if (exam == null) return 0;
+
+            string examTypeName = (string)(exam.ExamTypeName ?? "");
+            int? waveId = (int?)exam.WaveId;
+            DateTime? startTime = exam.StartTime;
+            DateTime? endTime = exam.EndTime;
+
+            bool isWaveExam = (waveId.HasValue && waveId.Value > 0) || examTypeName.ToLower().Contains("wave");
+            bool isWeeklyExam = examTypeName.ToLower().Contains("weekly") || (exam.ExamTypeId != null && (int)exam.ExamTypeId == 1);
+
+            int newlyAssignedCount = 0;
+
+            if (isWaveExam && waveId.HasValue && waveId.Value > 0)
+            {
+                // WAVE EXAM: Auto-assign all active trainees enrolled in this specific Wave
+                string sqlWave = @"
+                    INSERT INTO ExamAssignments (ExamId, StudentId, ScheduledStartTime, ScheduledEndTime, IsEmailSent)
+                    SELECT DISTINCT @ExamId, u.Id, @StartTime, @EndTime, 0
+                    FROM AspNetUsers u WITH(NOLOCK)
+                    INNER JOIN dbo.UserWaves uw WITH(NOLOCK) ON u.Id = uw.UserId
+                    WHERE uw.WaveId = @WaveId 
+                      AND uw.IsActive = 1
+                      AND u.IsActive = 1
+                      AND NOT EXISTS (
+                          SELECT 1 FROM AspNetUserRoles urAdmin WITH(NOLOCK)
+                          INNER JOIN AspNetRoles rAdmin WITH(NOLOCK) ON urAdmin.RoleId = rAdmin.Id
+                          WHERE urAdmin.UserId = u.Id AND LOWER(rAdmin.Name) IN ('admin', 'superadmin')
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ExamAssignments EA WITH(NOLOCK)
+                          WHERE EA.ExamId = @ExamId AND EA.StudentId = u.Id
+                      );";
+
+                newlyAssignedCount = await conn.ExecuteAsync(sqlWave, new { 
+                    ExamId = examId, 
+                    WaveId = waveId.Value, 
+                    StartTime = startTime, 
+                    EndTime = endTime 
+                });
+
+                // Dispatch background notification emails to enrolled wave students
+                if (newlyAssignedCount > 0)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            using var emailConn = new SqlConnection(_connectionString);
+                            await emailConn.OpenAsync();
+                            var waveUsers = (await emailConn.QueryAsync<UserDto>(@"
+                                SELECT u.Id, u.UserName, u.Email 
+                                FROM AspNetUsers u WITH(NOLOCK)
+                                INNER JOIN dbo.UserWaves uw WITH(NOLOCK) ON u.Id = uw.UserId
+                                WHERE uw.WaveId = @WaveId AND uw.IsActive = 1 AND u.IsActive = 1 AND u.Email IS NOT NULL AND u.Email != ''",
+                                new { WaveId = waveId.Value })).ToList();
+
+                            foreach (var u in waveUsers)
+                            {
+                                try
+                                {
+                                    await SendExamAssignmentEmailAsync(u.Id, examId, siteUrl);
+                                }
+                                catch { }
+                            }
+                        }
+                        catch { }
+                    });
+                }
+            }
+            else if (isWeeklyExam)
+            {
+                // WEEKLY EXAM: Auto-assign all active users who have Assistant or Pharmacist role
+                string sqlWeekly = @"
+                    INSERT INTO ExamAssignments (ExamId, StudentId, ScheduledStartTime, ScheduledEndTime, IsEmailSent)
+                    SELECT DISTINCT @ExamId, u.Id, @StartTime, @EndTime, 0
+                    FROM AspNetUsers u WITH(NOLOCK)
+                    INNER JOIN AspNetUserRoles ur WITH(NOLOCK) ON u.Id = ur.UserId
+                    INNER JOIN AspNetRoles r WITH(NOLOCK) ON ur.RoleId = r.Id
+                    WHERE u.IsActive = 1
+                      AND (
+                          LOWER(r.Name) IN ('assistant', 'pharmacist')
+                          OR r.Name LIKE '%assistant%'
+                          OR r.Name LIKE '%pharmacist%'
+                          OR r.Name LIKE N'%صيدل%'
+                          OR r.Name LIKE N'%مساعد%'
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1 FROM AspNetUserRoles urAdmin WITH(NOLOCK)
+                          INNER JOIN AspNetRoles rAdmin WITH(NOLOCK) ON urAdmin.RoleId = rAdmin.Id
+                          WHERE urAdmin.UserId = u.Id AND LOWER(rAdmin.Name) IN ('admin', 'superadmin')
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ExamAssignments EA WITH(NOLOCK)
+                          WHERE EA.ExamId = @ExamId AND EA.StudentId = u.Id
+                      );";
+
+                newlyAssignedCount = await conn.ExecuteAsync(sqlWeekly, new { 
+                    ExamId = examId, 
+                    StartTime = startTime, 
+                    EndTime = endTime 
+                });
+            }
+
+            int totalAssigned = await conn.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM ExamAssignments WITH(NOLOCK) WHERE ExamId = @ExamId", new { ExamId = examId });
+
+            return totalAssigned;
+        }
+
         public async Task SendExamAssignmentEmailAsync(string userId, int examId, string siteUrl = "")
         {
             using var conn = new SqlConnection(_connectionString);
@@ -3100,15 +3241,15 @@ WHERE U.Id = @UserId;";
 
             return dashboard;
         }
-        public async Task DeactivateUserAsync(string userId)
+        public async Task DeactivateUserAsync(string userId, string? updatedBy = null)
         {
             using var conn = new SqlConnection(_connectionString);
-            await conn.ExecuteAsync("UPDATE AspNetUsers SET IsActive = 0 WHERE Id = @userId", new { userId });
+            await conn.ExecuteAsync("UPDATE AspNetUsers SET IsActive = 0, UpdatedAt = GETDATE(), UpdatedBy = COALESCE(@updatedBy, UpdatedBy, 'Admin') WHERE Id = @userId", new { userId, updatedBy });
         }
-        public async Task ActivateUserAsync(string userId)
+        public async Task ActivateUserAsync(string userId, string? updatedBy = null)
         {
             using var conn = new SqlConnection(_connectionString);
-            await conn.ExecuteAsync("UPDATE AspNetUsers SET IsActive = 1 WHERE Id = @userId", new { userId });
+            await conn.ExecuteAsync("UPDATE AspNetUsers SET IsActive = 1, UpdatedAt = GETDATE(), UpdatedBy = COALESCE(@updatedBy, UpdatedBy, 'Admin') WHERE Id = @userId", new { userId, updatedBy });
         }
 
         public async Task DeleteUserCascadeAsync(string userId)
@@ -3298,6 +3439,25 @@ DELETE FROM AspNetUsers WHERE Id = @UserId;",
             try
             {
                 await conn.OpenAsync();
+
+                // Ensure AspNetUsers audit columns exist
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.AspNetUsers') AND name = 'CreatedAt')
+                    BEGIN
+                        ALTER TABLE dbo.AspNetUsers ADD CreatedAt DATETIME NULL;
+                    END;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.AspNetUsers') AND name = 'CreatedBy')
+                    BEGIN
+                        ALTER TABLE dbo.AspNetUsers ADD CreatedBy NVARCHAR(150) NULL;
+                    END;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.AspNetUsers') AND name = 'UpdatedAt')
+                    BEGIN
+                        ALTER TABLE dbo.AspNetUsers ADD UpdatedAt DATETIME NULL;
+                    END;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.AspNetUsers') AND name = 'UpdatedBy')
+                    BEGIN
+                        ALTER TABLE dbo.AspNetUsers ADD UpdatedBy NVARCHAR(150) NULL;
+                    END;");
 
                 // 0. Create UserSavedPasswords Table
                 await conn.ExecuteAsync(@"

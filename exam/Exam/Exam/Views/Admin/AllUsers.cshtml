@@ -210,16 +210,31 @@
     </div>
 
     <div class="overflow-x-auto">
+        <style>
+            #personnelTable {
+                min-width: unset !important;
+                width: 100% !important;
+                table-layout: auto !important;
+            }
+            #personnelTable th, #personnelTable td {
+                vertical-align: middle !important;
+                padding-left: 0.625rem !important;
+                padding-right: 0.625rem !important;
+                padding-top: 0.625rem !important;
+                padding-bottom: 0.625rem !important;
+            }
+        </style>
         <table class="saas-table" id="personnelTable">
             <thead>
                 <tr>
-                    <th class="pl-8">User Name</th>
+                    <th class="pl-3">Personnel</th>
                     <th class="hidden lg:table-cell">E-Mail</th>
                     <th class="hidden sm:table-cell">Branch</th>
-                    <th class="hidden md:table-cell">Security Code</th>
+                    <th class="hidden 2xl:table-cell">Code</th>
                     <th class="text-center">Classification</th>
                     <th class="hidden xl:table-cell">Shift Window</th>
-                    <th class="text-right pr-8">Actions</th>
+                    <th class="hidden lg:table-cell">Audit / السجل</th>
+                    <th class="text-right pr-3">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -381,18 +396,19 @@
                     }
                 },
                 columns: [
-                    { data: 'personnel', className: 'pl-8', orderable: true },
+                    { data: 'personnel', className: 'pl-3', orderable: true },
                     { data: 'email', className: 'hidden lg:table-cell', orderable: true },
                     { data: 'branch', className: 'hidden sm:table-cell', orderable: true },
-                    { data: 'code', className: 'hidden md:table-cell', orderable: true },
+                    { data: 'code', className: 'hidden 2xl:table-cell', orderable: true },
                     { data: 'classification', className: 'text-center', orderable: true },
                     { data: 'shift', className: 'hidden xl:table-cell', orderable: false },
-                    { data: 'actions', className: 'text-right pr-8', orderable: false }
+                    { data: 'audit', className: 'hidden lg:table-cell', orderable: true },
+                    { data: 'actions', className: 'text-right pr-3', orderable: false }
                 ],
                 deferRender: true,
                 autoWidth: false,
                 orderClasses: false,
-                stateSave: true,
+                stateSave: false,
                 pageLength: 10,
                 lengthMenu: [[10, 25, 50], [10, 25, 50]],
                 dom: '<"flex flex-col sm:flex-row justify-between items-center mb-4"lf>rt<"flex flex-col sm:flex-row justify-between items-center mt-4"ip>',

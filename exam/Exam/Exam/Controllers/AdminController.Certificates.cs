@@ -1931,10 +1931,10 @@ namespace Exam.Controllers
                     uea.Score,
                     uea.FinalScore,
                     COALESCE(
-                        (SELECT NULLIF(SUM(q.Points), 0) FROM UserSeenQuestions usq JOIN Questions q ON usq.QuestionId = q.Id WHERE usq.AttemptId = uea.Id),
-                        (SELECT NULLIF(COUNT(*), 0) FROM UserSeenQuestions usq WHERE usq.AttemptId = uea.Id),
                         CASE WHEN uea.Score > 0 AND uea.FinalScore > 0 THEN CAST(ROUND((uea.FinalScore / uea.Score) * 100.0, 0) AS INT) ELSE NULL END,
                         NULLIF(e.TotalQuestionsToShow, 0),
+                        (SELECT NULLIF(SUM(q.Points), 0) FROM UserSeenQuestions usq JOIN Questions q ON usq.QuestionId = q.Id WHERE usq.AttemptId = uea.Id),
+                        NULLIF(e.TotalPoints, 0),
                         10
                     ) as TotalPoints,
                     uea.IsPassed,

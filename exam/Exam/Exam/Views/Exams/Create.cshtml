@@ -621,6 +621,17 @@
                             const paneId = window.frameElement.parentNode.id;
                             if (paneId && paneId.startsWith('tab-pane-')) {
                                 const tabId = paneId.replace('tab-pane-', '');
+
+                                if (window.parent.Swal) {
+                                    window.parent.Swal.fire({
+                                        toast: true,
+                                        position: 'bottom-end',
+                                        icon: 'success',
+                                        title: res.message || 'Exam created successfully!',
+                                        showConfirmButton: false,
+                                        timer: 3500
+                                    });
+                                }
                                 
                                 // Find which tab will become active before we close the current one
                                 let targetActiveTabId = 'home';

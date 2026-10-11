@@ -93,11 +93,12 @@ namespace Exam.Services
         Task<IEnumerable<UserDto>> GetUsersByWaveIdAsync(int waveId);
         Task<int> AssignExamToStudentsAsync(int examId, List<string> studentIds, string siteUrl = "");
         Task<DashboardDto> GetDashboardDataAsync();
-        Task DeactivateUserAsync(string userId);
-        Task ActivateUserAsync(string userId);
+        Task DeactivateUserAsync(string userId, string? updatedBy = null);
+        Task ActivateUserAsync(string userId, string? updatedBy = null);
         Task DeleteUserCascadeAsync(string userId);
         Task<UserWithRoleDto?> GetUserWithRoleByIdAsync(string userId);
         Task SendExamAssignmentEmailAsync(string userId, int examId, string siteUrl = "");
+        Task<int> AutoAssignExamStudentsAsync(int examId, string siteUrl = "");
         Task WipeStudentExamDataAsync(int examId, string studentId);
         Task<UserAttemptSummaryDto?> GetAttemptByIdAsync(int attemptId);
         Task<int> GetAssignmentCountAsync(int examId, string studentId);

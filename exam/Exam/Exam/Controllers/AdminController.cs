@@ -1783,8 +1783,6 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
             }
         }
 
-
-
         [HttpGet]
         public async Task<IActionResult> WeeklyResults(int? examId, int? typeId = null, int? month = null, int? year = null)
         {
@@ -2874,6 +2872,8 @@ WHERE 1 = 1";
             else if (orderColumnIndex == "2") sortColumn = "B.BranchName";
             else if (orderColumnIndex == "3") sortColumn = "U.UserCode";
             else if (orderColumnIndex == "4") sortColumn = "R.Name";
+            else if (orderColumnIndex == "5") sortColumn = "S.ShiftName";
+            else if (orderColumnIndex == "6") sortColumn = "COALESCE(U.UpdatedAt, U.CreatedAt)";
 
             string sortDirection = (orderDir == "desc") ? "DESC" : "ASC";
 
@@ -2894,7 +2894,11 @@ SELECT
     S.ShiftName,
     U.CertificateCode,
     U.IsActive,
-    R.Name AS RoleName
+    R.Name AS RoleName,
+    U.CreatedAt,
+    U.CreatedBy,
+    U.UpdatedAt,
+    U.UpdatedBy
 {sqlBase}
 ORDER BY {sortColumn} {sortDirection}
 OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
@@ -2944,47 +2948,28 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     : userCode;
 
                 string personnelHtml = $@"
-                    <div class='flex items-center gap-3'>
-                        <div class='js-user-avatar w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center font-bold text-slate-400'>{avatarChar}</div>
-                        <div class='flex flex-col'>
-                            <span class='js-user-display font-bold text-slate-900 dark:text-white'>{displayUserName}</span>
+                    <div class='flex items-center gap-2.5'>
+                        <div class='js-user-avatar w-8 h-8 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center font-bold text-xs text-slate-400 shrink-0'>{avatarChar}</div>
+                        <div class='flex flex-col min-w-0'>
+                            <span class='js-user-display font-bold text-xs text-slate-900 dark:text-white truncate max-w-[150px]'>{displayUserName}</span>
                             <span class='js-user-sub text-[9px] font-bold text-slate-400 uppercase'>{subCode}</span>
                         </div>
                     </div>";
 
                 // Email Column
-                string emailHtml = $"<span class='js-user-email text-xs font-medium text-slate-500'>{email}</span>";
+                string emailHtml = $"<span class='js-user-email text-xs font-medium text-slate-500 truncate max-w-[160px] inline-block' title='{email}'>{email}</span>";
 
                 // Branch Column
-                string activeBadge = !isActive ? "<span class='ml-2 text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-1 rounded border border-rose-100 dark:border-rose-800 uppercase'>Inactive</span>" : "";
+                string activeBadge = !isActive ? "<span class='ml-1.5 text-[9px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-100 dark:border-rose-800 uppercase'>Inactive</span>" : "";
                 string branchHtml = $@"
-                    <span class='js-user-branch-name text-[10px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest bg-brand-50 dark:bg-brand-500/10 px-2 py-1 rounded'>{branchNameVal}</span>
-                    {activeBadge}";
+                    <div class='flex items-center gap-1'>
+                        <span class='js-user-branch-name text-[9px] font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider bg-brand-50 dark:bg-brand-500/10 px-2 py-0.5 rounded'>{branchNameVal}</span>
+                        {activeBadge}
+                    </div>";
 
                 // Security Code Column
-                string codeHtml = $"<span class='js-user-code font-mono font-bold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded'>{userCode}</span>";
+                string codeHtml = $"<span class='js-user-code font-mono font-bold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded text-xs'>{userCode}</span>";
 
-                // Classification Column
-                string roleHtml = $"<span class='text-[9px] font-bold text-white bg-slate-900 dark:bg-brand-500/20 dark:text-brand-400 px-2.5 py-1 rounded-full uppercase tracking-widest'>{roleName.ToUpper()}</span>";
-
-                // Shift Column
-                string shiftHtml = "";
-                if (!string.IsNullOrWhiteSpace(shiftName))
-                {
-                    string startTimeStr = u.StartTime is TimeSpan st ? st.ToString(@"hh\:mm") : "00:00";
-                    string endTimeStr = u.EndTime is TimeSpan et ? et.ToString(@"hh\:mm") : "00:00";
-                    shiftHtml = $@"
-                        <div class='flex flex-col'>
-                            <span class='text-[10px] font-bold italic uppercase'>{shiftName}</span>
-                            <span class='text-[8px] font-bold text-slate-400'>{startTimeStr} — {endTimeStr}</span>
-                        </div>";
-                }
-                else
-                {
-                    shiftHtml = "<span class='text-[9px] font-bold text-rose-500/50 uppercase'>Unassigned</span>";
-                }
-
-                // Actions Column
                 // Role Options
                 string roleSelectOptions = "";
                 foreach (var r in allRoles)
@@ -2993,8 +2978,25 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     roleSelectOptions += $"<option value='{r.RoleId}' {sel}>{r.RoleName.ToUpper()}</option>";
                 }
 
+                // Classification Column (Self-contained Role Selector if permitted, or Badge)
+                string roleHtml = "";
+                if (canChangeRole)
+                {
+                    roleHtml = $@"
+                        <form action='/Admin/UpdateUserRole' method='post' class='ajax-update-form m-0 p-0 inline-block' data-type='role'>
+                            <input type='hidden' name='userId' value='{userId}' />
+                            <select name='roleId' onchange=""$(this).closest('form').submit();"" class='bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider outline-none focus:ring-2 focus:ring-brand-500 transition-all cursor-pointer shadow-sm max-w-[120px] truncate'>
+                                {roleSelectOptions}
+                            </select>
+                        </form>";
+                }
+                else
+                {
+                    roleHtml = $"<span class='text-[9px] font-bold text-white bg-slate-900 dark:bg-brand-500/20 dark:text-brand-400 px-2 py-0.5 rounded-full uppercase tracking-wider'>{roleName.ToUpper()}</span>";
+                }
+
                 // Shift Options
-                string shiftSelectOptions = "<option value='0'>-- SYNC SHIFT --</option>";
+                string shiftSelectOptions = "<option value='0'>-- NO SHIFT --</option>";
                 foreach (var s in allShifts)
                 {
                     string sel = string.Equals(shiftName, s.ShiftName, StringComparison.OrdinalIgnoreCase) ? "selected" : "";
@@ -3004,79 +3006,132 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     shiftSelectOptions += $"<option value='{s.Id}' data-name='{s.ShiftName.ToUpper()}' data-time='{startTimeStr} — {endTimeStr}' {sel}>{s.ShiftName.ToUpper()} ({startTimeStr} - {endTimeStr}{durationStr})</option>";
                 }
 
-                string statusButton = "";
-                if (isActive)
+                // Shift Column (Self-contained Shift Selector if permitted, or Shift Info)
+                string shiftHtml = "";
+                if (canEditShift)
                 {
-                    statusButton = $@"
-                        <button type='button' onclick=""deactivateUser('{userId}')"" class='flex-1 bg-rose-50 hover:bg-rose-500 hover:text-white text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 py-1.5 px-2 rounded-xl transition-all border border-rose-100 dark:border-rose-900/50 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
-                            <i class='fas fa-ban text-[9px]'></i> Deactivate
-                        </button>";
+                    shiftHtml = $@"
+                        <form action='/Admin/UpdateUserShift' method='post' class='ajax-update-form m-0 p-0 inline-block' data-type='shift'>
+                            <input type='hidden' name='userId' value='{userId}' />
+                            <select name='newShiftId' onchange=""$(this).closest('form').submit();"" class='bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-1.5 py-1 text-[9px] font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-amber-500 transition-all cursor-pointer max-w-[130px] shadow-sm truncate'>
+                                {shiftSelectOptions}
+                            </select>
+                        </form>";
+                }
+                else if (!string.IsNullOrWhiteSpace(shiftName))
+                {
+                    string startTimeStr = u.StartTime is TimeSpan st ? st.ToString(@"hh\:mm") : "00:00";
+                    string endTimeStr = u.EndTime is TimeSpan et ? et.ToString(@"hh\:mm") : "00:00";
+                    shiftHtml = $@"
+                        <div class='flex flex-col'>
+                            <span class='text-[9px] font-bold italic uppercase'>{shiftName}</span>
+                            <span class='text-[8px] font-bold text-slate-400'>{startTimeStr} — {endTimeStr}</span>
+                        </div>";
                 }
                 else
                 {
-                    statusButton = $@"
-                        <button type='button' onclick=""activateUser('{userId}')"" class='flex-1 bg-emerald-50 hover:bg-emerald-500 hover:text-white text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 py-1.5 px-2 rounded-xl transition-all border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
-                            <i class='fas fa-check-circle text-[9px]'></i> Activate
-                        </button>";
+                    shiftHtml = "<span class='text-[9px] font-bold text-rose-500/50 uppercase'>Unassigned</span>";
+                }
+
+                // Audit / Activity Column (Combined Created + Last Modified in a compact, sleek badge)
+                string auditHtml;
+                DateTime? cd = u.CreatedAt != null ? (DateTime?)u.CreatedAt : null;
+                DateTime? ud = u.UpdatedAt != null ? (DateTime?)u.UpdatedAt : null;
+
+                if (cd.HasValue || ud.HasValue)
+                {
+                    string createdPart = "";
+                    if (cd.HasValue)
+                    {
+                        string cDateStr = cd.Value.ToString("dd/MM/yy HH:mm");
+                        string cByStr = string.IsNullOrWhiteSpace((string?)u.CreatedBy) ? "System" : (string)u.CreatedBy;
+                        createdPart = $@"
+                            <div class='flex items-center gap-1 whitespace-nowrap' title='Created: {cd.Value:yyyy-MM-dd HH:mm} by {cByStr}'>
+                                <span class='px-1 py-0.2 rounded text-[7px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 uppercase'>Add</span>
+                                <span class='text-[9px] font-bold text-slate-700 dark:text-slate-300'>{cDateStr}</span>
+                                <span class='text-[8px] font-bold text-slate-400 uppercase truncate max-w-[60px]'>@{cByStr}</span>
+                            </div>";
+                    }
+
+                    string updatedPart = "";
+                    if (ud.HasValue)
+                    {
+                        string uDateStr = ud.Value.ToString("dd/MM/yy HH:mm");
+                        string uByStr = string.IsNullOrWhiteSpace((string?)u.UpdatedBy) ? "System" : (string)u.UpdatedBy;
+                        updatedPart = $@"
+                            <div class='flex items-center gap-1 whitespace-nowrap' title='Last Modified: {ud.Value:yyyy-MM-dd HH:mm} by {uByStr}'>
+                                <span class='px-1 py-0.2 rounded text-[7px] font-black bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/60 uppercase'>Edit</span>
+                                <span class='text-[9px] font-bold text-slate-700 dark:text-slate-300'>{uDateStr}</span>
+                                <span class='text-[8px] font-bold text-brand-600 dark:text-brand-400 uppercase truncate max-w-[60px]'>@{uByStr}</span>
+                            </div>";
+                    }
+
+                    auditHtml = $@"<div class='flex flex-col gap-0.5 py-0.5'>{createdPart}{updatedPart}</div>";
+                }
+                else
+                {
+                    auditHtml = "<span class='text-slate-300 dark:text-slate-600 text-xs font-bold'>—</span>";
+                }
+
+                // Actions Column (Ultra-compact 2-row layout with guaranteed fit, no horizontal scroll)
+                string statusButton = "";
+                if (canToggleStatus)
+                {
+                    if (isActive)
+                    {
+                        statusButton = $@"
+                            <button type='button' onclick=""deactivateUser('{userId}')"" class='flex-1 bg-rose-50 hover:bg-rose-500 hover:text-white text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 py-1 px-2 rounded-lg transition-all border border-rose-100 dark:border-rose-900/50 flex items-center justify-center gap-1 text-[9px] font-bold uppercase shadow-xs whitespace-nowrap' title='Deactivate Personnel'>
+                                <i class='fas fa-ban text-[8px]'></i> Deactivate
+                            </button>";
+                    }
+                    else
+                    {
+                        statusButton = $@"
+                            <button type='button' onclick=""activateUser('{userId}')"" class='flex-1 bg-emerald-50 hover:bg-emerald-500 hover:text-white text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 py-1 px-2 rounded-lg transition-all border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center gap-1 text-[9px] font-bold uppercase shadow-xs whitespace-nowrap' title='Activate Personnel'>
+                                <i class='fas fa-check-circle text-[8px]'></i> Activate
+                            </button>";
+                    }
                 }
 
                 var userNameEscaped = userName.Replace("'", "\\'");
 
                 string editBtn = (canEditProfile || canEditShift) ? $@"
-                    <button type='button' class='js-edit-personnel flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 py-1.5 px-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-900/20 transition-all flex items-center justify-center gap-1.5'>
-                        <i class='fas fa-pen text-[9px]'></i> Edit
+                    <button type='button' class='js-edit-personnel px-2 py-1 rounded-lg bg-slate-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-[9px] font-extrabold uppercase transition-all flex items-center gap-1 shadow-xs' title='Edit Personnel'>
+                        <i class='fas fa-pen text-[8px]'></i> Edit
                     </button>" : "";
 
                 string deleteBtn = canDeleteUser ? $@"
-                    <button type='button' onclick=""deleteUser('{userId}')"" class='flex-1 bg-white dark:bg-slate-900 text-slate-500 hover:text-rose-600 py-1.5 px-2 rounded-xl border border-slate-200 dark:border-slate-700 text-[9px] font-bold uppercase transition-all flex items-center justify-center gap-1.5'>
-                        <i class='fas fa-trash-alt text-[9px]'></i> Delete
+                    <button type='button' onclick=""deleteUser('{userId}')"" class='w-6 h-6 rounded-lg bg-slate-50 hover:bg-rose-500 hover:text-white dark:bg-slate-900 text-slate-400 hover:border-rose-500 border border-slate-200 dark:border-slate-700 text-[9px] transition-all flex items-center justify-center shadow-xs' title='Delete Personnel'>
+                        <i class='fas fa-trash-alt text-[9px]'></i>
                     </button>" : "";
 
                 string sendMsgBtn = canSendMessage ? $@"
-                    <button type='button' onclick=""openSendMailModal('{userId}', '{userNameEscaped}')"" class='w-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 py-1.5 px-2 rounded-xl border border-brand-100 dark:border-brand-800 text-[9px] font-bold uppercase hover:bg-brand-600 hover:text-white transition-all flex items-center justify-center gap-1.5'>
-                        <i class='fas fa-paper-plane text-[9px]'></i> Send Custom Message
+                    <button type='button' onclick=""openSendMailModal('{userId}', '{userNameEscaped}')"" class='w-6 h-6 rounded-lg bg-sky-50 hover:bg-sky-500 hover:text-white dark:bg-sky-950/30 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-900/40 text-[9px] transition-all flex items-center justify-center shadow-xs' title='Send Custom Message'>
+                        <i class='fas fa-paper-plane text-[8px]'></i>
                     </button>" : "";
 
-                string roleFormHtml = canChangeRole ? $@"
-                    <form action='/Admin/UpdateUserRole' method='post' class='ajax-update-form m-0 p-0' data-type='role'>
-                        <input type='hidden' name='userId' value='{userId}' />
-                        <select name='roleId' onchange=""$(this).closest('form').submit();"" class='w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-600 dark:text-slate-300 focus:border-brand-500 outline-none transition-all cursor-pointer'>
-                            {roleSelectOptions}
-                        </select>
-                    </form>" : "";
-
-                string shiftFormHtml = canEditShift ? $@"
-                    <form action='/Admin/UpdateUserShift' method='post' class='ajax-update-form m-0 p-0' data-type='shift'>
-                        <input type='hidden' name='userId' value='{userId}' />
-                        <select name='newShiftId' onchange=""$(this).closest('form').submit();"" class='w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-[9px] font-bold text-slate-600 dark:text-slate-300 focus:border-amber-500 outline-none transition-all cursor-pointer'>
-                            {shiftSelectOptions}
-                        </select>
-                    </form>" : "";
-
-                string resetPassRow = canResetPassword ? $@"
-                    <div class='flex items-center gap-1.5 w-full'>
-                        <button type='button' onclick=""resetPassword('{userId}')"" class='flex-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-600 hover:text-white py-1.5 px-2 rounded-xl transition-all border border-amber-100 dark:border-amber-800 flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
-                            <i class='fas fa-key text-[9px]'></i> Reset Password
+                string passwordGroup = canResetPassword ? $@"
+                    <div class='inline-flex rounded-lg shadow-xs border border-amber-200 dark:border-amber-800/80 overflow-hidden bg-amber-50 dark:bg-amber-950/30'>
+                        <button type='button' onclick=""resetPassword('{userId}')"" class='px-1.5 py-1 text-amber-700 hover:bg-amber-500 hover:text-white dark:text-amber-400 text-[9px] font-extrabold uppercase transition-all flex items-center gap-0.5' title='Reset Password'>
+                            <i class='fas fa-key text-[8px]'></i> Pass
                         </button>
-                        <button type='button' onclick=""viewSavedPassword('{userId}', '{userNameEscaped}')"" title='Show Saved Password' class='bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white px-2.5 py-1.5 rounded-xl transition-all border border-indigo-100 dark:border-indigo-800 flex items-center justify-center gap-1 text-[9px] font-bold uppercase shadow-sm whitespace-nowrap'>
-                            <i class='fas fa-eye text-[10px]'></i>
+                        <button type='button' onclick=""viewSavedPassword('{userId}', '{userNameEscaped}')"" class='px-1.5 py-1 border-l border-amber-200 dark:border-amber-800/80 text-amber-700 hover:bg-amber-500 hover:text-white dark:text-amber-400 text-[9px] transition-all flex items-center justify-center' title='Show Saved Password'>
+                            <i class='fas fa-eye text-[9px]'></i>
                         </button>
                     </div>" : "";
 
-                string statusRow = canToggleStatus ? $"<div class='flex items-center gap-1.5 w-full'>{statusButton}</div>" : "";
-
-                string topRowActions = (string.IsNullOrEmpty(editBtn) && string.IsNullOrEmpty(deleteBtn))
+                string topRowActions = (string.IsNullOrEmpty(editBtn) && string.IsNullOrEmpty(sendMsgBtn) && string.IsNullOrEmpty(deleteBtn))
                     ? ""
-                    : $"<div class='flex items-center gap-1.5'>{editBtn}{deleteBtn}</div>";
+                    : $@"<div class='flex items-center justify-end gap-1'>{editBtn}{sendMsgBtn}{deleteBtn}</div>";
+
+                string bottomRowActions = (string.IsNullOrEmpty(statusButton) && string.IsNullOrEmpty(passwordGroup))
+                    ? ""
+                    : $@"<div class='flex items-center justify-end gap-1'>{statusButton}{passwordGroup}</div>";
 
                 string actionsHtml = $@"
-                    <div class='flex flex-col gap-1.5 py-1 min-w-[240px] max-w-[260px] ml-auto'>
+                    <div class='flex flex-col gap-1 py-0.5 w-[165px] ml-auto'>
                         {topRowActions}
-                        {sendMsgBtn}
-                        {roleFormHtml}
-                        {shiftFormHtml}
-                        {statusRow}
-                        {resetPassRow}
+                        {bottomRowActions}
                     </div>";
 
                 dataList.Add(new {
@@ -3086,6 +3141,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     code = codeHtml,
                     classification = roleHtml,
                     shift = shiftHtml,
+                    audit = auditHtml,
                     actions = actionsHtml,
                     DT_RowId = userId,
                     DT_RowAttr = new { 
@@ -3194,7 +3250,11 @@ SELECT
     U.UserCode AS Code,
     B.BranchName,
     S.ShiftName,
-    R.Name AS RoleName
+    R.Name AS RoleName,
+    U.CreatedAt,
+    U.CreatedBy,
+    U.UpdatedAt,
+    U.UpdatedBy
 {sqlBase}
 ORDER BY U.UserName ASC";
 
@@ -3211,8 +3271,12 @@ ORDER BY U.UserName ASC";
             worksheet.Cell(1, 6).Value = "Security Code";
             worksheet.Cell(1, 7).Value = "Classification";
             worksheet.Cell(1, 8).Value = "Shift";
+            worksheet.Cell(1, 9).Value = "Created At";
+            worksheet.Cell(1, 10).Value = "Created By";
+            worksheet.Cell(1, 11).Value = "Last Modified At";
+            worksheet.Cell(1, 12).Value = "Last Modified By";
 
-            var headerRange = worksheet.Range("A1:H1");
+            var headerRange = worksheet.Range("A1:L1");
             headerRange.Style.Font.Bold = true;
             headerRange.Style.Font.FontColor = XLColor.White;
             headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f172a");
@@ -3229,6 +3293,13 @@ ORDER BY U.UserName ASC";
                 worksheet.Cell(rowIdx, 6).Value = u.Code ?? "";
                 worksheet.Cell(rowIdx, 7).Value = (u.RoleName ?? "Trainee").ToString().ToUpper();
                 worksheet.Cell(rowIdx, 8).Value = u.ShiftName ?? "Unassigned";
+
+                DateTime? ca = u.CreatedAt != null ? (DateTime?)u.CreatedAt : null;
+                DateTime? ua = u.UpdatedAt != null ? (DateTime?)u.UpdatedAt : null;
+                worksheet.Cell(rowIdx, 9).Value = ca.HasValue ? ca.Value.ToString("yyyy-MM-dd HH:mm:ss") : "";
+                worksheet.Cell(rowIdx, 10).Value = (string?)u.CreatedBy ?? "";
+                worksheet.Cell(rowIdx, 11).Value = ua.HasValue ? ua.Value.ToString("yyyy-MM-dd HH:mm:ss") : "";
+                worksheet.Cell(rowIdx, 12).Value = (string?)u.UpdatedBy ?? "";
                 rowIdx++;
             }
 
@@ -3308,6 +3379,7 @@ ORDER BY U.UserName ASC";
                 return Json(new { success = false, message = $"البريد الإلكتروني '{dto.Email}' مسجل مسبقاً لمستخدم آخر ({existingName})." });
             }
 
+            string adminName = User.Identity?.Name ?? "Admin";
             var user = new ApplicationUser
             {
                 UserName = dto.UserName,
@@ -3317,7 +3389,11 @@ ORDER BY U.UserName ASC";
                 UserCode = cleanCode,
                 ShiftId = dto.ShiftId,
                 CertificateCode = dto.CertificateCode,
-                IsActive = true
+                IsActive = true,
+                CreatedAt = DateTime.Now,
+                CreatedBy = adminName,
+                UpdatedAt = DateTime.Now,
+                UpdatedBy = adminName
             };
 
             var result = await _userManager.CreateAsync(user, dto.Password);
@@ -3599,6 +3675,7 @@ ORDER BY U.UserName ASC";
                         seenUserCodesInFile.Add(cleanUserCode);
                         seenEmailsInFile.Add(email);
 
+                        string adminName = User.Identity?.Name ?? "Admin";
                         var user = new ApplicationUser
                         {
                             UserName = userName ?? email,
@@ -3609,15 +3686,23 @@ ORDER BY U.UserName ASC";
                             CertificateCode = certCode,
                             BranchId = bId.Value,
                             ShiftId = sId,
-                            IsActive = true
+                            IsActive = true,
+                            CreatedAt = DateTime.Now,
+                            CreatedBy = adminName,
+                            UpdatedAt = DateTime.Now,
+                            UpdatedBy = adminName
                         };
                         var res = await _userManager.CreateAsync(user, password);
                         if (!res.Succeeded) { errorLines.Add($"Row {row}: {res.Errors.First().Description}"); continue; }
 
-                        if (sId.HasValue)
-                        {
-                            await conn.ExecuteAsync("UPDATE AspNetUsers SET ShiftId = @sid WHERE Email = @em", new { sid = sId, em = email });
-                        }
+                        await conn.ExecuteAsync(@"
+                            UPDATE AspNetUsers 
+                            SET ShiftId = CASE WHEN @sid IS NOT NULL THEN @sid ELSE ShiftId END,
+                                CreatedAt = ISNULL(CreatedAt, GETDATE()),
+                                CreatedBy = ISNULL(CreatedBy, @admin),
+                                UpdatedAt = GETDATE(),
+                                UpdatedBy = @admin
+                            WHERE Email = @em", new { sid = sId, admin = adminName, em = email });
 
                         // Role should already exist. We won't auto-create Arabic roles anymore.
                         if (!await _roleManager.RoleExistsAsync(roleName)) 
@@ -3966,6 +4051,8 @@ ORDER BY U.UserName ASC";
             try
             {
                 await _examService.UpdateUserRoleByIdAsync(userId, roleId);
+                using var conn = new SqlConnection(_connectionString);
+                await conn.ExecuteAsync("UPDATE AspNetUsers SET UpdatedAt = GETDATE(), UpdatedBy = @AdminName WHERE Id = @UserId", new { AdminName = User.Identity?.Name ?? "Admin", UserId = userId });
                 return Json(new { success = true, message = "User role updated." });
             }
             catch (Exception ex)
@@ -3986,6 +4073,8 @@ ORDER BY U.UserName ASC";
             try
             {
                 await _examService.UpdateUserShiftAsync(userId, newShiftId);
+                using var conn = new SqlConnection(_connectionString);
+                await conn.ExecuteAsync("UPDATE AspNetUsers SET UpdatedAt = GETDATE(), UpdatedBy = @AdminName WHERE Id = @UserId", new { AdminName = User.Identity?.Name ?? "Admin", UserId = userId });
                 return Json(new { success = true, message = "User shift updated." });
             }
             catch (Exception ex)
@@ -4005,7 +4094,7 @@ ORDER BY U.UserName ASC";
 
             try
             {
-                await _examService.DeactivateUserAsync(userId);
+                await _examService.DeactivateUserAsync(userId, User.Identity?.Name ?? "Admin");
                 return Json(new { success = true, message = "User deactivated successfully." });
             }
             catch (Exception ex)
@@ -4025,7 +4114,7 @@ ORDER BY U.UserName ASC";
 
             try
             {
-                await _examService.ActivateUserAsync(userId);
+                await _examService.ActivateUserAsync(userId, User.Identity?.Name ?? "Admin");
                 return Json(new { success = true, message = "User activated successfully." });
             }
             catch (Exception ex)
@@ -4793,6 +4882,9 @@ ORDER BY U.UserName ASC";
             if (!setEmail.Succeeded)
                 return Json(new { success = false, message = string.Join("; ", setEmail.Errors.Select(e => e.Description)) });
 
+            user.UpdatedAt = DateTime.Now;
+            user.UpdatedBy = User.Identity?.Name ?? "Admin";
+
             var update = await _userManager.UpdateAsync(user);
             if (!update.Succeeded)
                 return Json(new { success = false, message = string.Join("; ", update.Errors.Select(e => e.Description)) });
@@ -4901,7 +4993,11 @@ ORDER BY U.UserName ASC";
                             BEGIN
                                 INSERT INTO UserSavedPasswords (UserId, PlainPassword, UpdatedAt, UpdatedBy) 
                                 VALUES (@UserId, @PlainPassword, GETDATE(), 'Admin');
-                            END", new { UserId = userId, PlainPassword = newPassword });
+                            END;
+
+                            UPDATE AspNetUsers 
+                            SET UpdatedAt = GETDATE(), UpdatedBy = @AdminName 
+                            WHERE Id = @UserId;", new { UserId = userId, PlainPassword = newPassword, AdminName = User.Identity?.Name ?? "Admin" });
                     }
                     catch { }
 
@@ -6058,8 +6154,14 @@ ORDER BY U.UserName ASC";
 
                         if (currentBranchId != branchId.Value)
                         {
-                            await conn.ExecuteAsync("UPDATE AspNetUsers SET BranchId = @BranchId WHERE Id = @UserId", 
-                                new { BranchId = branchId.Value, UserId = userId });
+                            string adminName = User.Identity?.Name ?? "Admin";
+                            await conn.ExecuteAsync(@"
+                                UPDATE AspNetUsers 
+                                SET BranchId = @BranchId,
+                                    UpdatedAt = GETDATE(),
+                                    UpdatedBy = @AdminName
+                                WHERE Id = @UserId", 
+                                new { BranchId = branchId.Value, AdminName = adminName, UserId = userId });
                             anyUpdated = true;
                         }
                     }

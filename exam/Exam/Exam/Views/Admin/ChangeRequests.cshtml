@@ -800,23 +800,63 @@
             success: function(res) {
                 $btn.prop('disabled', false).html(origText);
                 if (res.success) {
-                    closeDetailsModal();
+                    // Keep modal open and update live data inside it
+                    const newStatus = $('#updateStatusSelect').val();
+                    const newPriority = $('#updatePrioritySelect').val();
+                    const newDevNotes = $('#updateDevNotes').val();
+
+                    if (newStatus) {
+                        $('#dtlStatusBadge').text(newStatus);
+                    }
+                    if (newPriority) {
+                        $('#dtlPriorityBadge').text(newPriority).attr('class', 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ' + getPriorityBadgeClass(newPriority));
+                    }
+                    if (newDevNotes && newDevNotes.trim().length > 0) {
+                        $('#dtlDevNotes').text(newDevNotes);
+                        $('#dtlDevNotesBox').removeClass('hidden');
+                    } else {
+                        $('#dtlDevNotesBox').addClass('hidden');
+                    }
+
+                    // Toast notification (replaces SweetAlert modal and does not close modal/page)
                     Swal.fire({
+                        toast: true,
+                        position: 'top-end',
                         icon: 'success',
-                        title: 'Ticket Updated Successfully!',
-                        timer: 1500,
+                        title: res.message || 'Ticket Updated Successfully!',
                         showConfirmButton: false,
+                        timer: 2500,
                         background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
                         color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
                     });
+
+                    // Refresh table data in background
                     loadTickets();
                 } else {
-                    Swal.fire({ icon: 'error', title: 'Error', text: res.message });
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'error',
+                        title: res.message || 'Error updating ticket.',
+                        showConfirmButton: false,
+                        timer: 3000,
+                        background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                        color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+                    });
                 }
             },
             error: function() {
                 $btn.prop('disabled', false).html(origText);
-                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to update ticket.' });
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'error',
+                    title: 'Communication error while updating ticket.',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                    color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+                });
             }
         });
     }
