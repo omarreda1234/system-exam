@@ -20,10 +20,12 @@ namespace Exam.Controllers
             _connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
         }
 
+        private const string DefaultProgramDashUrl = "https://sites.google.com/view/tarshoubiacademyweeklymessage";
+
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            // Ensure Materials table exists and has PosterPath column
+            // Ensure Materials table and SystemSettings table exist
             using (var conn = new SqlConnection(_connectionString))
             {
                 await conn.ExecuteAsync(@"
@@ -44,11 +46,69 @@ namespace Exam.Controllers
                     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Materials]') AND name = 'PosterPath')
                     BEGIN
                         ALTER TABLE [dbo].[Materials] ADD [PosterPath] NVARCHAR(MAX) NULL
+                    END
+                    
+                    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SystemSettings]') AND type in (N'U'))
+                    BEGIN
+                        CREATE TABLE [dbo].[SystemSettings] (
+                            [SettingKey] NVARCHAR(100) NOT NULL PRIMARY KEY,
+                            [SettingValue] NVARCHAR(MAX) NULL,
+                            [UpdatedAt] DATETIME NULL
+                        )
                     END");
+
+                var portalUrl = await conn.QueryFirstOrDefaultAsync<string>(
+                    "SELECT SettingValue FROM SystemSettings WHERE SettingKey = 'ProgramDashUrl'");
+
+                if (string.IsNullOrWhiteSpace(portalUrl) || portalUrl.Contains("/preview?authuser="))
+                {
+                    portalUrl = DefaultProgramDashUrl;
+                    await conn.ExecuteAsync(
+                        "IF EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'ProgramDashUrl') " +
+                        "UPDATE SystemSettings SET SettingValue = @Url, UpdatedAt = GETDATE() WHERE SettingKey = 'ProgramDashUrl' " +
+                        "ELSE INSERT INTO SystemSettings (SettingKey, SettingValue, UpdatedAt) VALUES ('ProgramDashUrl', @Url, GETDATE())",
+                        new { Url = DefaultProgramDashUrl });
+                }
+
+                ViewBag.ProgramDashUrl = portalUrl;
 
                 var materials = await conn.QueryAsync<Material>("SELECT * FROM Materials ORDER BY UploadedAt DESC");
                 return View(materials);
             }
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateProgramDashUrl([FromForm] string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return Json(new { success = false, message = "URL cannot be empty." });
+
+            url = url.Trim();
+
+            using (var conn = new SqlConnection(_connectionString))
+            {
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SystemSettings]') AND type in (N'U'))
+                    BEGIN
+                        CREATE TABLE [dbo].[SystemSettings] (
+                            [SettingKey] NVARCHAR(100) NOT NULL PRIMARY KEY,
+                            [SettingValue] NVARCHAR(MAX) NULL,
+                            [UpdatedAt] DATETIME NULL
+                        )
+                    END
+
+                    IF EXISTS (SELECT 1 FROM SystemSettings WHERE SettingKey = 'ProgramDashUrl')
+                    BEGIN
+                        UPDATE SystemSettings SET SettingValue = @Url, UpdatedAt = GETDATE() WHERE SettingKey = 'ProgramDashUrl'
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO SystemSettings (SettingKey, SettingValue, UpdatedAt) VALUES ('ProgramDashUrl', @Url, GETDATE())
+                    END", new { Url = url });
+            }
+
+            return Json(new { success = true, message = "Program Dash Academy URL updated successfully.", url });
         }
 
         [HttpPost]

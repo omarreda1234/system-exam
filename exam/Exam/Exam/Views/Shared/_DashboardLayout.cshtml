@@ -778,6 +778,26 @@
                         </div>
                     }
 
+                    <!-- Program Dash & Portals Hub -->
+                    <div class="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-1">
+                        <div class="px-3 mb-1 text-[9px] font-black uppercase tracking-widest text-slate-400">Training & Programs</div>
+                        <a href="@Url.Action("Index", "Materials")" class="@linkClass(currentController == "materials" && currentAction == "index")">
+                            <i class="fas fa-project-diagram w-4 text-center text-teal-500"></i>
+                            <span>Program Dash</span>
+                        </a>
+                        @if (User.IsInRole("pharmacist") || User.IsInRole("assistant") || User.IsInRole("صيدلي") || User.IsInRole("مساعد صيدلي") || User.IsInRole("Pharmacist") || User.IsInRole("Assistant") || User.IsInRole("Doctor"))
+                        {
+                            <a href="@Url.Action("StudentExams", "Home")" class="@linkClass(currentController == "home" && currentAction == "studentexams")">
+                                <i class="fas fa-file-signature w-4 text-center text-indigo-500"></i>
+                                <span>My Exams</span>
+                            </a>
+                            <a href="@Url.Action("Index", "Assignments")" class="@linkClass(currentController == "assignments" && currentAction == "index")">
+                                <i class="fas fa-tasks w-4 text-center text-amber-500"></i>
+                                <span>My Assignments</span>
+                            </a>
+                        }
+                    </div>
+
                 </nav>
 
                 <!-- Profile Small -->
