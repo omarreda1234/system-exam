@@ -4,6 +4,7 @@
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
     var roles = ViewBag.Roles as IEnumerable<Exam.DTOs.RoleDto> ?? Enumerable.Empty<Exam.DTOs.RoleDto>();
     var shifts = ViewBag.Shifts as IEnumerable<Exam.DTOs.ShiftDto> ?? Enumerable.Empty<Exam.DTOs.ShiftDto>();
+    bool isAdmin = User.IsInRole("Admin");
 }
 
 <!-- Fullscreen Import Overlay -->
@@ -233,7 +234,10 @@
                     <th class="hidden 2xl:table-cell">Code</th>
                     <th class="text-center">Classification</th>
                     <th class="hidden xl:table-cell">Shift Window</th>
-                    <th class="hidden lg:table-cell">Audit / السجل</th>
+                    @if (isAdmin)
+                    {
+                        <th class="hidden lg:table-cell">Audit / السجل</th>
+                    }
                     <th class="text-right pr-3">Actions</th>
                 </tr>
             </thead>
@@ -402,7 +406,7 @@
                     { data: 'code', className: 'hidden 2xl:table-cell', orderable: true },
                     { data: 'classification', className: 'text-center', orderable: true },
                     { data: 'shift', className: 'hidden xl:table-cell', orderable: false },
-                    { data: 'audit', className: 'hidden lg:table-cell', orderable: true },
+                    @(isAdmin ? Html.Raw("{ data: 'audit', className: 'hidden lg:table-cell', orderable: true },") : Html.Raw(""))
                     { data: 'actions', className: 'text-right pr-3', orderable: false }
                 ],
                 deferRender: true,

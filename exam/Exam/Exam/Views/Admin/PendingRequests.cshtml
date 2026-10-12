@@ -146,9 +146,10 @@
                 allowOutsideClick: () => !Swal.isLoading()
             }).then((result) => {
                 if (result.isConfirmed) {
+                    var msg = (result.value && result.value.message) ? result.value.message : 'تمت الموافقة على الطلب بنجاح';
                     Toast.fire({
                         icon: 'success',
-                        title: 'User approved successfully'
+                        title: msg
                     });
 
                     // Remove row from UI without reload

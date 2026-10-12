@@ -42,7 +42,10 @@ namespace Exam.Services
                 UserCode = registerDto.UserCode,
                 ShiftId = registerDto.ShiftId,
                 CertificateCode = registerDto.CertificateCode,
-                IsActive = true
+                IsActive = true,
+                CreatedAt = DateTime.Now,
+                CreationSource = "Accept New Come",
+                UpdatedAt = DateTime.Now
             };
 
             var result = await _userManager.CreateAsync(user, registerDto.Password);

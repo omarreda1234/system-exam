@@ -125,7 +125,7 @@ namespace Exam.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<IActionResult> CreateDraft([FromBody] ExamCreateDTO model)
+        public async Task<IActionResult> CreateDraft(ExamCreateDTO model)
         {
             if (model == null)
                 return Json(new { success = false, message = "Could not parse exam data. Please check required fields." });
@@ -176,6 +176,13 @@ namespace Exam.Controllers
                     // New draft
                     examId = await _examService.AddExamAsync(model);
                 }
+
+                try
+                {
+                    await _examService.AutoAssignExamStudentsAsync(examId);
+                }
+                catch { }
+
                 return Json(new { success = true, examId = examId });
             }
             catch (System.Exception ex)
@@ -546,6 +553,12 @@ namespace Exam.Controllers
             try
             {
                 await _examService.UpdateExamAsync(model);
+                try
+                {
+                    await _examService.AutoAssignExamStudentsAsync(model.Id);
+                }
+                catch { }
+
                 return Json(new { success = true, message = "Exam updated successfully" });
             }
             catch (System.Exception ex)

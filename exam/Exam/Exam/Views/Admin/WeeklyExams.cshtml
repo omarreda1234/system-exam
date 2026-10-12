@@ -98,14 +98,14 @@
                         <td class="text-center">
                             @if (exam.IsActive)
                             {
-                                <span class="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-emerald-50 dark:bg-emerald-500/10 rounded-full">
+                                <span class="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-emerald-50 dark:bg-emerald-500/10 rounded-full cursor-pointer toggle-status-btn hover:opacity-80 transition-all shadow-sm" data-examid="@exam.Id" data-active="true" title="Click to Deactivate">
                                     <i class="fas fa-circle text-[6px] animate-pulse"></i>
                                     ACTIVE
                                 </span>
                             }
                             else
                             {
-                                <span class="inline-flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-slate-100 dark:bg-slate-800/50 rounded-full">
+                                <span class="inline-flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-slate-100 dark:bg-slate-800/50 rounded-full cursor-pointer toggle-status-btn hover:text-emerald-600 hover:bg-emerald-50 transition-all shadow-sm" data-examid="@exam.Id" data-active="false" title="Click to Activate & Auto-Assign">
                                     <i class="fas fa-circle text-[6px]"></i>
                                     INACTIVE
                                 </span>
@@ -208,7 +208,7 @@
                                 </div>
                             </td>
                             <td class="text-center">
-                                ${isActive ? '<span class="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-emerald-50 dark:bg-emerald-500/10 rounded-full"><i class="fas fa-circle text-[6px] animate-pulse"></i>ACTIVE</span>' : '<span class="inline-flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-slate-100 dark:bg-slate-800/50 rounded-full"><i class="fas fa-circle text-[6px]"></i>INACTIVE</span>'}
+                                ${isActive ? '<span class="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-emerald-50 dark:bg-emerald-500/10 rounded-full cursor-pointer toggle-status-btn hover:opacity-80 transition-all shadow-sm" data-examid="' + id + '" data-active="true" title="Click to Deactivate"><i class="fas fa-circle text-[6px] animate-pulse"></i>ACTIVE</span>' : '<span class="inline-flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-slate-100 dark:bg-slate-800/50 rounded-full cursor-pointer toggle-status-btn hover:text-emerald-600 hover:bg-emerald-50 transition-all shadow-sm" data-examid="' + id + '" data-active="false" title="Click to Activate & Auto-Assign"><i class="fas fa-circle text-[6px]"></i>INACTIVE</span>'}
                             </td>
                             <td class="text-right px-8">
                                 <div class="flex items-center justify-end gap-2">
@@ -243,6 +243,38 @@
             $('#examTypeFilter').on('change', async function() {
                 const typeId = parseInt($(this).val());
                 await refreshExams(typeId);
+            });
+
+            // Toggle Exam Status directly from table
+            $(document).on('click', '.toggle-status-btn', async function() {
+                const $btn = $(this);
+                const examId = $btn.data('examid');
+                const currentActive = ($btn.data('active') === true || $btn.data('active') === 'true');
+                const newActive = !currentActive;
+
+                $btn.css('pointer-events', 'none').fadeTo(200, 0.5);
+
+                try {
+                    const res = await $.post('@Url.Action("ToggleExamStatus", "Admin")', { id: examId, isActive: newActive });
+                    if (res && res.success) {
+                        Swal.fire({
+                            toast: true,
+                            position: 'bottom-end',
+                            icon: 'success',
+                            title: res.message || 'Status updated',
+                            showConfirmButton: false,
+                            timer: 2000
+                        });
+                        const currentTypeId = parseInt($('#examTypeFilter').val()) || 0;
+                        await refreshExams(currentTypeId);
+                    } else {
+                        Swal.fire('Error', (res && res.message) ? res.message : 'Failed to update status', 'error');
+                        $btn.css('pointer-events', 'auto').fadeTo(200, 1.0);
+                    }
+                } catch(err) {
+                    Swal.fire('Error', 'Communication failed', 'error');
+                    $btn.css('pointer-events', 'auto').fadeTo(200, 1.0);
+                }
             });
                     // منطق حذف الامتحان
         $(document).on('click', '.delete-btn', function() {

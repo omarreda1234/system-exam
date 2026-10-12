@@ -1424,6 +1424,16 @@ WHERE U.Id = @UserId;";
                 await conn.ExecuteAsync(cloneRulesSql, new { NewId = newExamId, OldId = oldExamId }, transaction);
 
                 transaction.Commit();
+
+                try
+                {
+                    await AutoAssignExamStudentsAsync(newExamId);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"AutoAssignExamStudentsAsync error in CloneExamAsync: {ex.Message}");
+                }
+
                 return newExamId;
             }
             catch
@@ -1931,6 +1941,16 @@ WHERE U.Id = @UserId;";
                       AND UA.AttemptDate >= ISNULL(ExamAssignments.ScheduledStartTime, @StartTime)
                 )";
             await conn.ExecuteAsync(updateAssignmentsSql, new { Id = dto.Id, StartTime = dto.StartTime, EndTime = dto.EndTime });
+
+            // Ensure all eligible pharmacists and assistants are assigned if this is an active/updated weekly exam
+            try
+            {
+                await AutoAssignExamStudentsAsync(dto.Id);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"AutoAssignExamStudentsAsync error in UpdateExamAsync: {ex.Message}");
+            }
         }
 
         public async Task<IEnumerable<ResultDetailDto>> GetResultReportAsync(int attemptId)
@@ -2798,7 +2818,7 @@ WHERE U.Id = @UserId;";
             DateTime? endTime = exam.EndTime;
 
             bool isWaveExam = (waveId.HasValue && waveId.Value > 0) || examTypeName.ToLower().Contains("wave");
-            bool isWeeklyExam = examTypeName.ToLower().Contains("weekly") || (exam.ExamTypeId != null && (int)exam.ExamTypeId == 1);
+            bool isWeeklyExam = !isWaveExam;
 
             int newlyAssignedCount = 0;
 
@@ -2812,7 +2832,7 @@ WHERE U.Id = @UserId;";
                     INNER JOIN dbo.UserWaves uw WITH(NOLOCK) ON u.Id = uw.UserId
                     WHERE uw.WaveId = @WaveId 
                       AND uw.IsActive = 1
-                      AND u.IsActive = 1
+                      AND (u.IsActive = 1 OR u.IsActive IS NULL)
                       AND NOT EXISTS (
                           SELECT 1 FROM AspNetUserRoles urAdmin WITH(NOLOCK)
                           INNER JOIN AspNetRoles rAdmin WITH(NOLOCK) ON urAdmin.RoleId = rAdmin.Id
@@ -2843,7 +2863,7 @@ WHERE U.Id = @UserId;";
                                 SELECT u.Id, u.UserName, u.Email 
                                 FROM AspNetUsers u WITH(NOLOCK)
                                 INNER JOIN dbo.UserWaves uw WITH(NOLOCK) ON u.Id = uw.UserId
-                                WHERE uw.WaveId = @WaveId AND uw.IsActive = 1 AND u.IsActive = 1 AND u.Email IS NOT NULL AND u.Email != ''",
+                                WHERE uw.WaveId = @WaveId AND uw.IsActive = 1 AND (u.IsActive = 1 OR u.IsActive IS NULL) AND u.Email IS NOT NULL AND u.Email != ''",
                                 new { WaveId = waveId.Value })).ToList();
 
                             foreach (var u in waveUsers)
@@ -2861,6 +2881,9 @@ WHERE U.Id = @UserId;";
             }
             else if (isWeeklyExam)
             {
+                startTime ??= DateTime.Now;
+                endTime ??= DateTime.Now.AddDays(7);
+
                 // WEEKLY EXAM: Auto-assign all active users who have Assistant or Pharmacist role
                 string sqlWeekly = @"
                     INSERT INTO ExamAssignments (ExamId, StudentId, ScheduledStartTime, ScheduledEndTime, IsEmailSent)
@@ -2868,7 +2891,7 @@ WHERE U.Id = @UserId;";
                     FROM AspNetUsers u WITH(NOLOCK)
                     INNER JOIN AspNetUserRoles ur WITH(NOLOCK) ON u.Id = ur.UserId
                     INNER JOIN AspNetRoles r WITH(NOLOCK) ON ur.RoleId = r.Id
-                    WHERE u.IsActive = 1
+                    WHERE (u.IsActive = 1 OR u.IsActive IS NULL)
                       AND (
                           LOWER(r.Name) IN ('assistant', 'pharmacist')
                           OR r.Name LIKE '%assistant%'
@@ -3449,6 +3472,10 @@ DELETE FROM AspNetUsers WHERE Id = @UserId;",
                     IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.AspNetUsers') AND name = 'CreatedBy')
                     BEGIN
                         ALTER TABLE dbo.AspNetUsers ADD CreatedBy NVARCHAR(150) NULL;
+                    END;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.AspNetUsers') AND name = 'CreationSource')
+                    BEGIN
+                        ALTER TABLE dbo.AspNetUsers ADD CreationSource NVARCHAR(50) NULL;
                     END;
                     IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.AspNetUsers') AND name = 'UpdatedAt')
                     BEGIN

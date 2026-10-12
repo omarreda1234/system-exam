@@ -63,7 +63,7 @@ namespace Exam.Controllers
         // Shared utility actions that are always permitted if the user has any valid role
         private static readonly HashSet<string> _sharedActions = new(StringComparer.OrdinalIgnoreCase)
         {
-            "GetFilteredExams", "GetWeeklyExamsForFilter", "GetExamTypes", "GetBranches",
+            "GetFilteredExams", "GetWeeklyExamsForFilter", "GetExamTypes", "GetBranches", "ToggleExamStatus",
             "Permissions", "SavePermissions", "GetPermissionsForRole",
             "ResetAdminPasswordTemp", "CheckPasswordTemp", "Roles", "AddRole", "DeleteRole",
             "SendFailEmails", "ReassignExamToStudents", "GetStudentExamReview",
@@ -425,10 +425,65 @@ namespace Exam.Controllers
             if (result.Succeeded)
             {
                 // 3. Update Request Status
+                string adminName = User.Identity?.Name ?? "Admin";
                 await conn.ExecuteAsync("UPDATE RegistrationRequests SET Status = 'Approved', ProcessedDate = GETDATE(), ProcessedBy = @By WHERE Id = @Id", 
-                    new { Id = requestId, By = User.Identity.Name });
+                    new { Id = requestId, By = adminName });
 
-                return Json(new { success = true, message = "ت م ت   ا ل م و ا ف ق ة   ع ل ى   ا ل ط ل ب   ب ن ج ا ح !" });
+                // 4. Ensure AspNetUsers has exact audit and creation source
+                await conn.ExecuteAsync(@"
+                    UPDATE AspNetUsers 
+                    SET CreatedAt = ISNULL(CreatedAt, GETDATE()),
+                        CreatedBy = @By,
+                        CreationSource = 'Accept New Come',
+                        UpdatedAt = GETDATE(),
+                        UpdatedBy = @By
+                    WHERE (Email = @Email) OR (UserCode IS NOT NULL AND LTRIM(RTRIM(UserCode)) <> '' AND UserCode = @Code)", 
+                    new { By = adminName, Email = req.Email.Trim(), Code = req.UserCode?.Trim() });
+
+                // 5. Auto-assign new user to any currently active Weekly Exam if user is Pharmacist or Assistant
+                int assignedExamsCount = 0;
+                bool isEligibleRole = targetRole.Equals("Pharmacist", StringComparison.OrdinalIgnoreCase) 
+                                   || targetRole.Equals("Assistant", StringComparison.OrdinalIgnoreCase)
+                                   || (!string.IsNullOrEmpty(req.JobTitle) && (
+                                       req.JobTitle.Contains("صيدل") || req.JobTitle.ToLower().Contains("pharmacist") ||
+                                       req.JobTitle.Contains("مساعد") || req.JobTitle.ToLower().Contains("assistant")));
+
+                if (isEligibleRole)
+                {
+                    var newUserId = await conn.QueryFirstOrDefaultAsync<string>(@"
+                        SELECT TOP 1 Id 
+                        FROM AspNetUsers WITH(NOLOCK)
+                        WHERE Email = @Email 
+                           OR (UserCode IS NOT NULL AND LTRIM(RTRIM(UserCode)) <> '' AND UserCode = @Code)
+                        ORDER BY CASE WHEN Email = @Email THEN 0 ELSE 1 END",
+                        new { Email = req.Email.Trim(), Code = req.UserCode?.Trim() });
+
+                    if (!string.IsNullOrEmpty(newUserId))
+                    {
+                        // Find all active weekly exams (IsActive = 1, EndTime >= GETDATE(), not wave-specific)
+                        string assignWeeklySql = @"
+                            INSERT INTO ExamAssignments (ExamId, StudentId, ScheduledStartTime, ScheduledEndTime, IsEmailSent)
+                            SELECT E.Id, @UserId, E.StartTime, E.EndTime, 0
+                            FROM Exams E WITH(NOLOCK)
+                            LEFT JOIN ExamTypes ET WITH(NOLOCK) ON E.ExamTypeId = ET.Id
+                            WHERE E.IsActive = 1
+                              AND E.EndTime >= GETDATE()
+                              AND (E.WaveId IS NULL OR E.WaveId <= 0)
+                              AND (ET.TypeName IS NULL OR LOWER(ET.TypeName) NOT LIKE '%wave%')
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM ExamAssignments EA WITH(NOLOCK)
+                                  WHERE EA.ExamId = E.Id AND EA.StudentId = @UserId
+                              );";
+
+                        assignedExamsCount = await conn.ExecuteAsync(assignWeeklySql, new { UserId = newUserId });
+                    }
+                }
+
+                string successMsg = assignedExamsCount > 0 
+                    ? $"تمت الموافقة على الطلب وتعيين المستخدم تلقائياً في {assignedExamsCount} امتحان أسبوعي نشط بنجاح!" 
+                    : "تمت الموافقة على الطلب بنجاح!";
+
+                return Json(new { success = true, message = successMsg, assignedExamsCount = assignedExamsCount });
             }
 
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
@@ -464,6 +519,29 @@ namespace Exam.Controllers
             }
 
             return Json(new { exists = false, message = "هذا الكود جديد بالكامل، لم يتم العثور على كود مكرر." });
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPost]
+        public async Task<IActionResult> ToggleExamStatus(int id, bool isActive)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            await conn.ExecuteAsync("UPDATE Exams SET IsActive = @IsActive WHERE Id = @Id", new { Id = id, IsActive = isActive });
+
+            int assignedCount = 0;
+            if (isActive)
+            {
+                assignedCount = await _examService.AutoAssignExamStudentsAsync(id);
+            }
+
+            return Json(new { 
+                success = true, 
+                isActive = isActive, 
+                assignedCount = assignedCount,
+                message = isActive 
+                    ? (assignedCount > 0 ? $"تم تفعيل الامتحان وتعيين {assignedCount} متدرب تلقائياً بنجاح" : "تم تفعيل الامتحان بنجاح") 
+                    : "تم إلغاء تفعيل الامتحان بنجاح" 
+            });
         }
 
         public async Task<IActionResult> Exams(int? typeId = null)
@@ -2750,6 +2828,7 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
             var currentUser = await _userManager.GetUserAsync(User);
             var userRoles = currentUser != null ? (await _userManager.GetRolesAsync(currentUser)).ToList() : new List<string>();
             bool isAdmin = User.IsInRole("Admin");
+            ViewBag.IsAdmin = isAdmin;
 
             ViewBag.CanEditProfile = isAdmin || (currentUser != null && await _examService.HasPermissionAsync(userRoles, "Admin", "UpdateUserProfile"));
             ViewBag.CanEditShift = isAdmin || (currentUser != null && await _examService.HasPermissionAsync(userRoles, "Admin", "UpdateUserShift"));
@@ -2813,7 +2892,7 @@ WHERE 1 = 1";
 
             if (!string.IsNullOrEmpty(searchValue))
             {
-                sqlBase += " AND (U.UserName LIKE @Search OR U.Email LIKE @Search OR U.UserCode LIKE @Search)";
+                sqlBase += " AND (U.UserName LIKE @Search OR U.FullName LIKE @Search OR U.Email LIKE @Search OR U.UserCode LIKE @Search)";
                 parameters.Add("Search", $"%{searchValue}%");
             }
 
@@ -2865,6 +2944,8 @@ WHERE 1 = 1";
             // Get filtered count
             int filteredRecords = await conn.ExecuteScalarAsync<int>($"SELECT COUNT(1) {sqlBase}", parameters);
 
+            bool isAdmin = User.IsInRole("Admin");
+
             // Determine sort column
             string sortColumn = "U.UserName";
             if (orderColumnIndex == "0") sortColumn = "U.UserName";
@@ -2873,7 +2954,7 @@ WHERE 1 = 1";
             else if (orderColumnIndex == "3") sortColumn = "U.UserCode";
             else if (orderColumnIndex == "4") sortColumn = "R.Name";
             else if (orderColumnIndex == "5") sortColumn = "S.ShiftName";
-            else if (orderColumnIndex == "6") sortColumn = "COALESCE(U.UpdatedAt, U.CreatedAt)";
+            else if (orderColumnIndex == "6" && isAdmin) sortColumn = "COALESCE(U.UpdatedAt, U.CreatedAt)";
 
             string sortDirection = (orderDir == "desc") ? "DESC" : "ASC";
 
@@ -2897,6 +2978,7 @@ SELECT
     R.Name AS RoleName,
     U.CreatedAt,
     U.CreatedBy,
+    U.CreationSource,
     U.UpdatedAt,
     U.UpdatedBy
 {sqlBase}
@@ -2915,7 +2997,6 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
             var currentLoggedInUser = await _userManager.GetUserAsync(User);
             var loggedInUserRoles = currentLoggedInUser != null ? (await _userManager.GetRolesAsync(currentLoggedInUser)).ToList() : new List<string>();
-            bool isAdmin = User.IsInRole("Admin");
 
             bool canEditProfile = isAdmin || (currentLoggedInUser != null && await _examService.HasPermissionAsync(loggedInUserRoles, "Admin", "UpdateUserProfile"));
             bool canEditShift = isAdmin || (currentLoggedInUser != null && await _examService.HasPermissionAsync(loggedInUserRoles, "Admin", "UpdateUserShift"));
@@ -3033,23 +3114,63 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     shiftHtml = "<span class='text-[9px] font-bold text-rose-500/50 uppercase'>Unassigned</span>";
                 }
 
-                // Audit / Activity Column (Combined Created + Last Modified in a compact, sleek badge)
-                string auditHtml;
-                DateTime? cd = u.CreatedAt != null ? (DateTime?)u.CreatedAt : null;
-                DateTime? ud = u.UpdatedAt != null ? (DateTime?)u.UpdatedAt : null;
-
-                if (cd.HasValue || ud.HasValue)
+                // Audit / Activity Column (Combined Creation Source & Creator + Last Modified in a sleek, compact layout - visible to Admin only)
+                string auditHtml = "";
+                if (isAdmin)
                 {
+                    DateTime? cd = u.CreatedAt != null ? (DateTime?)u.CreatedAt : null;
+                    DateTime? ud = u.UpdatedAt != null ? (DateTime?)u.UpdatedAt : null;
+                    string? cSource = (string?)u.CreationSource;
+                    string cByStr = string.IsNullOrWhiteSpace((string?)u.CreatedBy) ? "System" : (string)u.CreatedBy;
+                    string uByStr = string.IsNullOrWhiteSpace((string?)u.UpdatedBy) ? "System" : (string)u.UpdatedBy;
+
                     string createdPart = "";
-                    if (cd.HasValue)
+                    if (cd.HasValue || !string.IsNullOrWhiteSpace(cSource) || !string.IsNullOrWhiteSpace((string?)u.CreatedBy))
                     {
-                        string cDateStr = cd.Value.ToString("dd/MM/yy HH:mm");
-                        string cByStr = string.IsNullOrWhiteSpace((string?)u.CreatedBy) ? "System" : (string)u.CreatedBy;
+                        string cDateStr = cd.HasValue ? cd.Value.ToString("dd/MM/yy HH:mm") : "";
+                        string cDateFull = cd.HasValue ? cd.Value.ToString("yyyy-MM-dd HH:mm") : "Initial Registry";
+
+                        string badgeLabel;
+                        string badgeColor;
+                        string iconClass;
+                        string tooltipSource;
+
+                        if (!string.IsNullOrEmpty(cSource) && cSource.Contains("New Come", StringComparison.OrdinalIgnoreCase))
+                        {
+                            badgeLabel = "NEW COME";
+                            badgeColor = "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200/60";
+                            iconClass = "fa-user-check";
+                            tooltipSource = "Accept New Come (قبول طلب انضمام)";
+                        }
+                        else if (!string.IsNullOrEmpty(cSource) && cSource.Contains("Manual", StringComparison.OrdinalIgnoreCase))
+                        {
+                            badgeLabel = "MANUAL";
+                            badgeColor = "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400 border-purple-200/60";
+                            iconClass = "fa-user-plus";
+                            tooltipSource = "Manual Registration (إضافة يدوية)";
+                        }
+                        else // Upload File (.xlsx)
+                        {
+                            badgeLabel = "UPLOAD";
+                            badgeColor = "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400 border-sky-200/60";
+                            iconClass = "fa-file-excel";
+                            tooltipSource = "File Upload (.xlsx) (رفع ملف إكسيل)";
+                        }
+
+                        string fullTitle = $"Created via: {tooltipSource}&#10;Date: {cDateFull}&#10;By: @{cByStr}";
+                        string dateText = !string.IsNullOrEmpty(cDateStr)
+                            ? $"<span class='text-[9px] font-bold text-slate-700 dark:text-slate-300'>{cDateStr}</span>"
+                            : "<span class='text-[8px] font-semibold text-slate-400 italic'>Batch File</span>";
+
                         createdPart = $@"
-                            <div class='flex items-center gap-1 whitespace-nowrap' title='Created: {cd.Value:yyyy-MM-dd HH:mm} by {cByStr}'>
-                                <span class='px-1 py-0.2 rounded text-[7px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 uppercase'>Add</span>
-                                <span class='text-[9px] font-bold text-slate-700 dark:text-slate-300'>{cDateStr}</span>
-                                <span class='text-[8px] font-bold text-slate-400 uppercase truncate max-w-[60px]'>@{cByStr}</span>
+                            <div class='flex flex-col gap-0.5' title='{fullTitle}'>
+                                <div class='flex items-center gap-1.5 whitespace-nowrap'>
+                                    <span class='px-1.5 py-0.5 rounded text-[8px] font-black border uppercase {badgeColor} inline-flex items-center gap-0.5 shrink-0'>
+                                        <i class='fas {iconClass} text-[7px]'></i> {badgeLabel}
+                                    </span>
+                                    {dateText}
+                                </div>
+                                <div class='text-[8px] font-semibold text-slate-500 dark:text-slate-400 uppercase break-words leading-tight pl-0.5'>@{cByStr}</div>
                             </div>";
                     }
 
@@ -3057,20 +3178,28 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     if (ud.HasValue)
                     {
                         string uDateStr = ud.Value.ToString("dd/MM/yy HH:mm");
-                        string uByStr = string.IsNullOrWhiteSpace((string?)u.UpdatedBy) ? "System" : (string)u.UpdatedBy;
+                        string uDateFull = ud.Value.ToString("yyyy-MM-dd HH:mm");
+                        string editTitle = $"Last Modified (آخر تعديل):&#10;Date: {uDateFull}&#10;By: @{uByStr}";
                         updatedPart = $@"
-                            <div class='flex items-center gap-1 whitespace-nowrap' title='Last Modified: {ud.Value:yyyy-MM-dd HH:mm} by {uByStr}'>
-                                <span class='px-1 py-0.2 rounded text-[7px] font-black bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/60 uppercase'>Edit</span>
-                                <span class='text-[9px] font-bold text-slate-700 dark:text-slate-300'>{uDateStr}</span>
-                                <span class='text-[8px] font-bold text-brand-600 dark:text-brand-400 uppercase truncate max-w-[60px]'>@{uByStr}</span>
+                            <div class='flex flex-col gap-0.5' title='{editTitle}'>
+                                <div class='flex items-center gap-1.5 whitespace-nowrap'>
+                                    <span class='px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/60 uppercase inline-flex items-center gap-0.5 shrink-0'>
+                                        <i class='fas fa-pen text-[7px]'></i> EDIT
+                                    </span>
+                                    <span class='text-[9px] font-bold text-slate-700 dark:text-slate-300'>{uDateStr}</span>
+                                </div>
+                                <div class='text-[8px] font-bold text-brand-600 dark:text-brand-400 uppercase break-words leading-tight pl-0.5'>@{uByStr}</div>
                             </div>";
                     }
 
-                    auditHtml = $@"<div class='flex flex-col gap-0.5 py-0.5'>{createdPart}{updatedPart}</div>";
-                }
-                else
-                {
-                    auditHtml = "<span class='text-slate-300 dark:text-slate-600 text-xs font-bold'>—</span>";
+                    if (!string.IsNullOrEmpty(createdPart) || !string.IsNullOrEmpty(updatedPart))
+                    {
+                        auditHtml = $@"<div class='flex flex-col gap-1.5 py-0.5 min-w-[130px] max-w-[200px]'>{createdPart}{updatedPart}</div>";
+                    }
+                    else
+                    {
+                        auditHtml = "<span class='text-slate-300 dark:text-slate-600 text-xs font-bold'>—</span>";
+                    }
                 }
 
                 // Actions Column (Ultra-compact 2-row layout with guaranteed fit, no horizontal scroll)
@@ -3253,6 +3382,7 @@ SELECT
     R.Name AS RoleName,
     U.CreatedAt,
     U.CreatedBy,
+    U.CreationSource,
     U.UpdatedAt,
     U.UpdatedBy
 {sqlBase}
@@ -3273,10 +3403,11 @@ ORDER BY U.UserName ASC";
             worksheet.Cell(1, 8).Value = "Shift";
             worksheet.Cell(1, 9).Value = "Created At";
             worksheet.Cell(1, 10).Value = "Created By";
-            worksheet.Cell(1, 11).Value = "Last Modified At";
-            worksheet.Cell(1, 12).Value = "Last Modified By";
+            worksheet.Cell(1, 11).Value = "Creation Method";
+            worksheet.Cell(1, 12).Value = "Last Modified At";
+            worksheet.Cell(1, 13).Value = "Last Modified By";
 
-            var headerRange = worksheet.Range("A1:L1");
+            var headerRange = worksheet.Range("A1:M1");
             headerRange.Style.Font.Bold = true;
             headerRange.Style.Font.FontColor = XLColor.White;
             headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f172a");
@@ -3298,8 +3429,9 @@ ORDER BY U.UserName ASC";
                 DateTime? ua = u.UpdatedAt != null ? (DateTime?)u.UpdatedAt : null;
                 worksheet.Cell(rowIdx, 9).Value = ca.HasValue ? ca.Value.ToString("yyyy-MM-dd HH:mm:ss") : "";
                 worksheet.Cell(rowIdx, 10).Value = (string?)u.CreatedBy ?? "";
-                worksheet.Cell(rowIdx, 11).Value = ua.HasValue ? ua.Value.ToString("yyyy-MM-dd HH:mm:ss") : "";
-                worksheet.Cell(rowIdx, 12).Value = (string?)u.UpdatedBy ?? "";
+                worksheet.Cell(rowIdx, 11).Value = (string?)u.CreationSource ?? "Upload File";
+                worksheet.Cell(rowIdx, 12).Value = ua.HasValue ? ua.Value.ToString("yyyy-MM-dd HH:mm:ss") : "";
+                worksheet.Cell(rowIdx, 13).Value = (string?)u.UpdatedBy ?? "";
                 rowIdx++;
             }
 
@@ -3383,6 +3515,7 @@ ORDER BY U.UserName ASC";
             var user = new ApplicationUser
             {
                 UserName = dto.UserName,
+                FullName = dto.UserName,
                 Email = dto.Email,
                 PhoneNumber = dto.Phone,
                 BranchId = dto.BranchId,
@@ -3392,6 +3525,7 @@ ORDER BY U.UserName ASC";
                 IsActive = true,
                 CreatedAt = DateTime.Now,
                 CreatedBy = adminName,
+                CreationSource = "Manual Add",
                 UpdatedAt = DateTime.Now,
                 UpdatedBy = adminName
             };
@@ -3400,6 +3534,17 @@ ORDER BY U.UserName ASC";
 
             if (result.Succeeded)
             {
+                await conn.ExecuteAsync(@"
+                    UPDATE AspNetUsers 
+                    SET FullName = @FullName,
+                        CreatedAt = ISNULL(CreatedAt, GETDATE()),
+                        CreatedBy = @admin,
+                        CreationSource = 'Manual Add',
+                        UpdatedAt = GETDATE(),
+                        UpdatedBy = @admin
+                    WHERE Id = @UserId", 
+                    new { FullName = dto.UserName, admin = adminName, UserId = user.Id });
+
                 var role = string.IsNullOrEmpty(dto.RoleName) ? "User" : dto.RoleName;
 
                 // Enforce English Only
@@ -3689,6 +3834,7 @@ ORDER BY U.UserName ASC";
                             IsActive = true,
                             CreatedAt = DateTime.Now,
                             CreatedBy = adminName,
+                            CreationSource = "Upload File",
                             UpdatedAt = DateTime.Now,
                             UpdatedBy = adminName
                         };
@@ -3700,6 +3846,7 @@ ORDER BY U.UserName ASC";
                             SET ShiftId = CASE WHEN @sid IS NOT NULL THEN @sid ELSE ShiftId END,
                                 CreatedAt = ISNULL(CreatedAt, GETDATE()),
                                 CreatedBy = ISNULL(CreatedBy, @admin),
+                                CreationSource = ISNULL(CreationSource, 'Upload File'),
                                 UpdatedAt = GETDATE(),
                                 UpdatedBy = @admin
                             WHERE Email = @em", new { sid = sId, admin = adminName, em = email });
@@ -4849,9 +4996,11 @@ ORDER BY U.UserName ASC";
             if (user == null)
                 return Json(new { success = false, message = "User not found." });
 
-            var normalizedName = (userName ?? "").Trim().Replace(" ", "_");
-            if (string.IsNullOrWhiteSpace(normalizedName))
+            var cleanFullName = (userName ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(cleanFullName))
                 return Json(new { success = false, message = "User name is required." });
+
+            var normalizedName = cleanFullName.Replace(" ", "_");
 
             var existingEmail = await _userManager.FindByEmailAsync(email.Trim());
             if (existingEmail != null && existingEmail.Id != userId)
@@ -4861,6 +5010,7 @@ ORDER BY U.UserName ASC";
             if (existingByName != null && existingByName.Id != userId)
                 return Json(new { success = false, message = "This user name is already in use." });
 
+            user.FullName = cleanFullName;
             user.UserCode = string.IsNullOrWhiteSpace(userCode) ? null : userCode.Trim();
 
             // Only touch BranchId when the client sends branchId (changed branch or explicit clear).
@@ -4889,6 +5039,27 @@ ORDER BY U.UserName ASC";
             if (!update.Succeeded)
                 return Json(new { success = false, message = string.Join("; ", update.Errors.Select(e => e.Description)) });
 
+            // Direct SQL update to guarantee FullName and audit trail are persisted in AspNetUsers
+            using (var directConn = new SqlConnection(_connectionString))
+            {
+                await directConn.ExecuteAsync(@"
+                    UPDATE dbo.AspNetUsers 
+                    SET FullName = @FullName, 
+                        UserCode = @UserCode, 
+                        BranchId = @BranchId, 
+                        UpdatedAt = @UpdatedAt, 
+                        UpdatedBy = @UpdatedBy 
+                    WHERE Id = @UserId", 
+                    new { 
+                        FullName = cleanFullName, 
+                        UserCode = user.UserCode, 
+                        BranchId = user.BranchId, 
+                        UpdatedAt = user.UpdatedAt, 
+                        UpdatedBy = user.UpdatedBy, 
+                        UserId = user.Id 
+                    });
+            }
+
             var branchLabel = "GLOBAL";
             if (user.BranchId.HasValue)
             {
@@ -4902,7 +5073,7 @@ ORDER BY U.UserName ASC";
                 success = true,
                 message = "Profile updated.",
                 email = user.Email,
-                userName = user.UserName,
+                userName = user.FullName ?? user.UserName,
                 userCode = user.UserCode,
                 branchId = user.BranchId,
                 branchName = branchLabel
