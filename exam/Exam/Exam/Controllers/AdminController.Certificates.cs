@@ -987,8 +987,6 @@ namespace Exam.Controllers
                     }
 
                     string studentId = (string)student.Id;
-                    string studentEmail = (string)student.Email;
-                    string studentName = (string)student.StudentName;
                     string certCode = (string)student.CertificateCode;
 
                     if (string.IsNullOrWhiteSpace(certCode))
@@ -1000,49 +998,6 @@ namespace Exam.Controllers
                     using (var stream = new FileStream(targetPath, FileMode.Create))
                     {
                         await pdf.CopyToAsync(stream);
-                    }
-
-                    bool isEmailSent = false;
-                    if (!string.IsNullOrWhiteSpace(studentEmail))
-                    {
-                        try
-                        {
-                            byte[] pdfBytes;
-                            using (var ms = new MemoryStream())
-                            {
-                                await pdf.CopyToAsync(ms);
-                                pdfBytes = ms.ToArray();
-                            }
-                            if (pdfBytes == null || pdfBytes.Length == 0)
-                            {
-                                pdfBytes = await System.IO.File.ReadAllBytesAsync(targetPath);
-                            }
-
-                            string subject = $"شهادة التخرج الرسمية - أكاديمية الطرشوبي ({waveName})";
-                            string htmlBody = $@"
-                                <div dir='rtl' style='font-family: Arial, sans-serif; padding: 25px; color: #1e293b; background-color: #f8fafc; border-radius: 16px;'>
-                                    <div style='max-width: 600px; margin: 0 auto; background: #ffffff; padding: 30px; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0;'>
-                                        <h2 style='color: #059669; font-size: 22px; margin-bottom: 15px;'>تهانينا لك! 🎓</h2>
-                                        <p style='font-size: 15px; line-height: 1.6;'>عزيزي/عزيزتي <strong>{studentName}</strong>،</p>
-                                        <p style='font-size: 14px; line-height: 1.6; color: #475569;'>نحيطكم علماً بأنه قد تم رفع شهادة التخرج الرسمية الخاصة بكم لدورة <strong>{waveName}</strong> بنجاح. تجدون نسخة الشهادة بصيغة (PDF) مرفقة مع هذا البريد.</p>
-                                        
-                                        <div style='margin: 20px 0; padding: 15px; background: #ecfdf5; border: 1px border #a7f3d0; border-radius: 12px;'>
-                                            <p style='margin: 0; font-size: 12px; color: #047857; font-weight: bold;'>كود الشهادة التسلسلي (Serial Code):</p>
-                                            <p style='margin: 5px 0 0 0; font-family: monospace; font-size: 16px; font-weight: bold; color: #065f46; letter-spacing: 1px;'>{certCode}</p>
-                                        </div>
-
-                                        <p style='font-size: 13px; color: #64748b; margin-top: 25px;'>مع أطيب التمنيات لكم بدوام التوفيق والنجاح،<br/><strong>أكاديمية الطرشوبي</strong></p>
-                                    </div>
-                                </div>";
-
-                            await _emailSender.SendEmailWithAttachmentAsync(studentEmail, subject, htmlBody, pdfBytes, $"{fileName}_Certificate.pdf");
-                            isEmailSent = true;
-                            emailSentCount++;
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Error sending email to {studentEmail}: {ex.Message}");
-                        }
                     }
 
                     var userWaveExists = await conn.QueryFirstOrDefaultAsync<int?>(
@@ -1065,22 +1020,22 @@ namespace Exam.Controllers
                     {
                         await conn.ExecuteAsync(@"
                             UPDATE dbo.UserWaveCertificates 
-                            SET CertificateCode = @CertCode, EmailSent = CASE WHEN @IsSent = 1 THEN 1 ELSE EmailSent END, CreatedAt = GETDATE()
+                            SET CertificateCode = @CertCode, CreatedAt = GETDATE()
                             WHERE UserId = @UserId AND WaveId = @WaveId",
-                            new { CertCode = certCode, IsSent = isEmailSent ? 1 : 0, UserId = studentId, WaveId = waveId.Value });
+                            new { CertCode = certCode, UserId = studentId, WaveId = waveId.Value });
                     }
                     else
                     {
                         await conn.ExecuteAsync(@"
                             INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, EmailSent, Score, CreatedAt)
-                            VALUES (@UserId, @WaveId, @CertCode, @EmailSent, NULL, GETDATE())",
-                            new { UserId = studentId, WaveId = waveId.Value, CertCode = certCode, EmailSent = isEmailSent ? 1 : 0 });
+                            VALUES (@UserId, @WaveId, @CertCode, 0, NULL, GETDATE())",
+                            new { UserId = studentId, WaveId = waveId.Value, CertCode = certCode });
                     }
 
                     successCount++;
                 }
 
-                string msg = $"تم حفظ الشهادات وتوليد الأكواد بنجاح لعدد {successCount} طالب (وتم إرسال {emailSentCount} بريد إلكتروني).";
+                string msg = $"تم حفظ الشهادات وتوليد الأكواد بنجاح لعدد {successCount} طالب (متاحة الآن للتحميل من بروفايل كل متدرب).";
                 if (skippedCodes.Any())
                 {
                     msg += $" تعذر العثور على المستخدمين للأكواد التالية: {string.Join(", ", skippedCodes.Take(10))}";

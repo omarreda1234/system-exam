@@ -43,6 +43,8 @@ namespace Exam.Services
         Task UpdateUserRoleByIdAsync(string userId, string roleId);
         Task<IEnumerable<ShiftDto>> GetAllShiftsAsync();
         Task UpdateUserShiftAsync(string userId, int newShiftId);
+        Task<IEnumerable<DepartmentDto>> GetAllDepartmentsAsync();
+        Task UpdateUserDepartmentAsync(string userId, int? newDepartmentId);
         Task<UserShiftDto?> GetUserShiftAsync(string userId);
         Task UpdateAttemptStatusOnlyAsync(int attemptId, string status);
         Task<ExamDetailsDto> GetRandomExamWithChoicesAsync(int examId, string userId, int attemptId);

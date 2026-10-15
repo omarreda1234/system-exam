@@ -37,5 +37,7 @@ namespace Exam.DTOs
         public string UserCode { get; set; }
 
         public string? CertificateCode { get; set; }
+
+        public int? DepartmentId { get; set; }
     }
 }

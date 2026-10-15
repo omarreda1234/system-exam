@@ -1,0 +1,808 @@
+@{
+    ViewData["Title"] = "Smart Wave Planner - Eltarshouby Academy";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+
+    var branches = ViewBag.Branches as List<Exam.DTOs.BranchDto> ?? new List<Exam.DTOs.BranchDto>();
+    var roles = ViewBag.Roles as List<string> ?? new List<string>();
+    var recentWaves = ViewBag.RecentWaves as List<Exam.DTOs.WaveDto> ?? new List<Exam.DTOs.WaveDto>();
+    string defaultWaveName = ViewBag.DefaultWaveName as string ?? "Batch - Proposed";
+}
+
+@Html.AntiForgeryToken()
+
+<div class="space-y-8 animate-fade-in pb-16">
+    <!-- Header -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 mb-8 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+                <h2 class="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1">Batch Operations</h2>
+                <p class="text-xl font-bold">Smart Wave Planner</p>
+                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
+                    Automated candidate selection engine for training waves with uncertified resitter blending and exportable branch rosters.
+                </p>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <a href="@Url.Action("Waves", "Admin")" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-5 py-2.5 rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-2">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>Back to Batches</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Control Panel -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 md:p-8 shadow-sm">
+        <div class="flex items-center justify-between pb-6 border-b border-slate-100 dark:border-slate-800 mb-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-brand-50 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 flex items-center justify-center font-black">
+                    <i class="fas fa-sliders"></i>
+                </div>
+                <div>
+                    <h2 class="text-base font-black text-slate-900 dark:text-white">Batch Parameters & Filters</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Configure eligibility criteria for new candidates and re-sitters</p>
+                </div>
+            </div>
+        </div>
+
+        <form id="proposalForm" onsubmit="event.preventDefault(); generateProposal();" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- 1. Registration Window -->
+                <div class="space-y-2 lg:col-span-2">
+                    <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <i class="fas fa-calendar-day text-brand-600"></i>
+                        Registration Window
+                    </label>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button type="button" onclick="setRegistrationDays(30, this)" class="reg-btn px-3 py-2 rounded-xl border text-xs font-bold transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-brand-500 text-slate-700 dark:text-slate-200">
+                            Last 30 Days
+                        </button>
+                        <button type="button" onclick="setRegistrationDays(60, this)" class="reg-btn px-3 py-2 rounded-xl border text-xs font-bold transition-all bg-brand-50 border-brand-500 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300">
+                            Last 60 Days (2 Months)
+                        </button>
+                        <button type="button" onclick="setRegistrationDays(90, this)" class="reg-btn px-3 py-2 rounded-xl border text-xs font-bold transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-brand-500 text-slate-700 dark:text-slate-200">
+                            Last 90 Days
+                        </button>
+                        <button type="button" onclick="setRegistrationDays(0, this)" class="reg-btn px-3 py-2 rounded-xl border text-xs font-bold transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-brand-500 text-slate-700 dark:text-slate-200">
+                            All Time
+                        </button>
+                    </div>
+                    <input type="hidden" id="filterDays" value="60" />
+                </div>
+
+                <!-- 2. Target Roles -->
+                <div class="space-y-2 lg:col-span-2">
+                    <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <i class="fas fa-user-tag text-brand-600"></i>
+                        Target Roles (Classifications)
+                    </label>
+                    <div class="flex items-center gap-2 flex-wrap pt-1">
+                        <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-500 cursor-pointer text-xs font-bold transition-all bg-white dark:bg-slate-800">
+                            <input type="checkbox" name="roleFilter" value="Pharmacist" checked class="rounded text-brand-600 focus:ring-brand-500" />
+                            <span>Pharmacist</span>
+                        </label>
+                        <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-500 cursor-pointer text-xs font-bold transition-all bg-white dark:bg-slate-800">
+                            <input type="checkbox" name="roleFilter" value="Assistant" checked class="rounded text-brand-600 focus:ring-brand-500" />
+                            <span>Assistant</span>
+                        </label>
+                        <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-500 cursor-pointer text-xs font-bold transition-all bg-white dark:bg-slate-800">
+                            <input type="checkbox" name="roleFilter" value="Trainee" class="rounded text-brand-600 focus:ring-brand-500" />
+                            <span>Trainee</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 3. Target Branches -->
+                <div class="space-y-2 lg:col-span-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                            <i class="fas fa-code-branch text-brand-600"></i>
+                            Target Branches
+                        </label>
+                        <div class="flex items-center gap-2 text-xs">
+                            <button type="button" onclick="selectAllBranches(true)" class="text-[11px] font-bold text-brand-600 hover:underline">Select All</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllBranches(false)" class="text-[11px] font-bold text-rose-500 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-2xl p-3 bg-slate-50/50 dark:bg-slate-800/30 space-y-2">
+                        <div class="relative">
+                            <input type="text" id="branchSearchInput" placeholder="Search branch..." oninput="filterBranchList(this.value)" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                        </div>
+                        <div class="max-h-32 overflow-y-auto space-y-1 pr-1 custom-scrollbar" id="branchOptionsContainer">
+                            @foreach (var b in branches)
+                            {
+                                <label class="branch-item flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-800 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                                    <input type="checkbox" name="branchFilter" value="@b.Id" checked class="chk-branch rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="updateBranchSelectedLabel()" />
+                                    <span class="truncate">@b.BranchName.ToUpper()</span>
+                                </label>
+                            }
+                        </div>
+                        <p class="text-[10px] text-slate-400 font-bold" id="branchCountLabel">All branches selected</p>
+                    </div>
+                </div>
+
+                <!-- 4. Batch Capacity -->
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <i class="fas fa-users text-amber-500"></i>
+                        Capacity (Target Headcount)
+                    </label>
+                    <div class="relative">
+                        <input type="number" id="capacityInput" value="50" min="5" max="500" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-black focus:ring-2 focus:ring-brand-500 outline-none" />
+                        <span class="absolute right-3 top-2.5 text-xs text-slate-400 font-bold">Seats</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400">Total recommended seats for this batch</p>
+                </div>
+
+                <!-- 5. Uncertified Resitters Ratio -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                            <i class="fas fa-rotate-right text-orange-500"></i>
+                            Resitter Ratio (Uncertified Retries)
+                        </label>
+                        <span id="resitterPctLabel" class="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 font-black text-xs border border-orange-200">20% (~10 seats)</span>
+                    </div>
+                    <input type="range" id="resitterSlider" min="0" max="50" step="5" value="20" oninput="updateResitterLabel(this.value)" class="w-full accent-brand-600 cursor-pointer" />
+                    <p class="text-[10px] text-slate-400">Blend uncertified/failed candidates for second chance</p>
+                </div>
+
+                <!-- 6. Proposed Wave Metadata -->
+                <div class="space-y-2 lg:col-span-2">
+                    <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <i class="fas fa-heading text-brand-600"></i>
+                        Proposed Wave Name
+                    </label>
+                    <input type="text" id="proposedWaveName" value="@defaultWaveName" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-brand-500 outline-none" placeholder="e.g. Batch 18 - Pharmacists & Assistants" />
+                </div>
+
+                <div class="space-y-2 lg:col-span-2">
+                    <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <i class="fas fa-clock text-brand-600"></i>
+                        Proposed Start Date
+                    </label>
+                    <input type="date" id="proposedStartDate" value="@DateTime.Now.AddDays(7).ToString("yyyy-MM-dd")" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-brand-500 outline-none" />
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+                <button type="submit" id="btnGenerate" class="px-8 py-3 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs uppercase tracking-widest shadow-lg shadow-brand-600/20 active:scale-95 transition-all flex items-center gap-2">
+                    <i class="fas fa-wand-magic-sparkles"></i>
+                    <span>Generate Proposed Roster</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Results Container -->
+    <div id="resultsCard" class="hidden space-y-6">
+        <!-- Metric Summary Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-black uppercase tracking-wider text-slate-400">Total Candidates</p>
+                        <h3 id="statTotal" class="text-2xl font-black text-slate-900 dark:text-white mt-1">0</h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-xl font-bold">
+                        <i class="fas fa-user-check"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-black uppercase tracking-wider text-emerald-500">First-Time Enrollees</p>
+                        <h3 id="statFresh" class="text-2xl font-black text-emerald-600 mt-1">0</h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fas fa-sparkles"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-black uppercase tracking-wider text-amber-500">Resitters (Uncertified)</p>
+                        <h3 id="statResitter" class="text-2xl font-black text-amber-600 mt-1">0</h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fas fa-rotate-right"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-black uppercase tracking-wider text-brand-600">Covered Branches</p>
+                        <h3 id="statBranches" class="text-2xl font-black text-brand-600 mt-1">0</h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-950/50 text-brand-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fas fa-code-branch"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table Card & Actions -->
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+            <div class="p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                    <h3 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>Proposed Candidate Roster</span>
+                        <span id="selectedCountBadge" class="px-2.5 py-0.5 rounded-full text-xs font-black bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400">0 Selected</span>
+                    </h3>
+                    <p class="text-xs text-slate-400">Review, exclude, or modify candidates before exporting or enrolling</p>
+                </div>
+
+                <div class="flex items-center gap-3 flex-wrap">
+                    <!-- Export to Excel Button for Branch Managers -->
+                    <button type="button" onclick="exportToExcel()" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-emerald-600/20 active:scale-95 transition-all flex items-center gap-2">
+                        <i class="fas fa-file-excel text-sm"></i>
+                        <span>Export Branch Roster (.xlsx)</span>
+                    </button>
+
+                    <!-- Enroll in Wave -->
+                    <button type="button" onclick="openEnrollModal()" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-brand-600/20 active:scale-95 transition-all flex items-center gap-2">
+                        <i class="fas fa-user-plus text-sm"></i>
+                        <span>Enroll Into Batch Now</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="p-6 md:p-8">
+                <div class="overflow-x-auto">
+                    <table class="saas-table w-full" id="candidatesTable">
+                        <thead>
+                            <tr>
+                                <th class="w-12 text-center pl-4" data-orderable="false">
+                                    <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" checked class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer" />
+                                </th>
+                                <th class="text-left">Candidate / Personnel</th>
+                                <th class="text-left">Employee Code</th>
+                                <th class="text-left">Branch</th>
+                                <th class="text-left">Classification</th>
+                                <th class="text-center">Candidate Type</th>
+                                <th class="text-center">Registered On</th>
+                                <th class="text-center">Shift Window</th>
+                                <th class="text-right pr-4" data-orderable="false">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="candidatesTableBody" class="text-xs font-medium">
+                            <!-- Dynamic Rows Injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Enroll in Wave -->
+<div id="enrollModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm hidden animate-fade-in p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl space-y-6">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+            <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-user-plus text-brand-600"></i>
+                <span>Enroll Selected Candidates into Batch</span>
+            </h3>
+            <button onclick="closeEnrollModal()" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+        </div>
+
+        <div class="space-y-4 text-left">
+            <div>
+                <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">Enrollment Method:</label>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="border border-brand-500 bg-brand-50 dark:bg-brand-950/40 p-3 rounded-2xl cursor-pointer flex flex-col gap-1">
+                        <input type="radio" name="enrollType" value="new" checked onchange="toggleEnrollType()" class="text-brand-600" />
+                        <span class="font-bold text-xs text-brand-900 dark:text-brand-200">Create New Batch</span>
+                        <span class="text-[10px] text-slate-500">Generate new batch and assign selected candidates</span>
+                    </label>
+                    <label class="border border-slate-200 dark:border-slate-700 p-3 rounded-2xl cursor-pointer flex flex-col gap-1">
+                        <input type="radio" name="enrollType" value="existing" onchange="toggleEnrollType()" class="text-brand-600" />
+                        <span class="font-bold text-xs text-slate-700 dark:text-slate-300">Add to Existing Batch</span>
+                        <span class="text-[10px] text-slate-500">Append candidates to an active batch</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- New Wave Fields -->
+            <div id="newWaveFields" class="space-y-3">
+                <div>
+                    <label class="text-[11px] font-bold text-slate-500 block mb-1">New Batch Name</label>
+                    <input type="text" id="modalNewWaveName" class="w-full px-3 py-2 border rounded-xl text-xs font-bold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 outline-none focus:border-brand-500" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-500 block mb-1">Start Date</label>
+                        <input type="date" id="modalNewStartDate" class="w-full px-3 py-2 border rounded-xl text-xs font-bold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 outline-none focus:border-brand-500" />
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-500 block mb-1">End Date</label>
+                        <input type="date" id="modalNewEndDate" class="w-full px-3 py-2 border rounded-xl text-xs font-bold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 outline-none focus:border-brand-500" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Existing Wave Field -->
+            <div id="existingWaveField" class="hidden space-y-2">
+                <label class="text-[11px] font-bold text-slate-500 block mb-1">Select Existing Batch</label>
+                <select id="modalExistingWaveSelect" class="w-full px-3 py-2 border rounded-xl text-xs font-bold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 outline-none focus:border-brand-500">
+                    @foreach (var w in recentWaves)
+                    {
+                        <option value="@w.Id">@w.WaveName (@(w.StartDate?.ToString("yyyy-MM-dd") ?? "No Date"))</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onclick="closeEnrollModal()" class="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+            <button type="button" onclick="confirmEnrollment()" id="btnConfirmEnroll" class="px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow-md shadow-brand-600/20">Confirm Enrollment</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/sweetalert2/sweetalert2.all.min.js"></script>
+    <script>
+        let currentCandidates = [];
+
+        function setRegistrationDays(days, btn) {
+            $('#filterDays').val(days);
+            $('.reg-btn').removeClass('bg-brand-50 border-brand-500 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300')
+                          .addClass('bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200');
+            $(btn).removeClass('bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200')
+                  .addClass('bg-brand-50 border-brand-500 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300');
+        }
+
+        function filterBranchList(term) {
+            term = (term || '').toLowerCase().trim();
+            $('.branch-item').each(function () {
+                const text = $(this).text().toLowerCase();
+                if (text.includes(term)) {
+                    $(this).removeClass('hidden');
+                } else {
+                    $(this).addClass('hidden');
+                }
+            });
+        }
+
+        function selectAllBranches(select) {
+            $('.chk-branch').prop('checked', select);
+            updateBranchSelectedLabel();
+        }
+
+        function updateBranchSelectedLabel() {
+            const total = $('.chk-branch').length;
+            const checked = $('.chk-branch:checked').length;
+            if (checked === total) {
+                $('#branchCountLabel').text('All branches selected');
+            } else if (checked === 0) {
+                $('#branchCountLabel').text('No branches selected');
+            } else {
+                $('#branchCountLabel').text(`${checked} of ${total} branches selected`);
+            }
+        }
+
+        function updateResitterLabel(val) {
+            const cap = parseInt($('#capacityInput').val()) || 50;
+            const resCount = Math.round(cap * (val / 100));
+            $('#resitterPctLabel').text(`${val}% (~${resCount} seats)`);
+        }
+
+        async function generateProposal() {
+            const btn = $('#btnGenerate');
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> <span>Generating Candidates...</span>');
+
+            const selectedRoles = [];
+            $('input[name="roleFilter"]:checked').each(function () {
+                selectedRoles.push($(this).val());
+            });
+
+            const selectedBranches = [];
+            $('input[name="branchFilter"]:checked').each(function () {
+                selectedBranches.push(parseInt($(this).val()));
+            });
+
+            const daysVal = parseInt($('#filterDays').val());
+            const capacity = parseInt($('#capacityInput').val()) || 50;
+            const resitterPct = parseInt($('#resitterSlider').val()) || 20;
+
+            const payload = {
+                days: daysVal > 0 ? daysVal : null,
+                roles: selectedRoles,
+                branchIds: selectedBranches,
+                activeOnly: true,
+                capacity: capacity,
+                resitterPercentage: resitterPct,
+                proposedWaveName: $('#proposedWaveName').val(),
+                proposedStartDate: $('#proposedStartDate').val()
+            };
+
+            try {
+                const response = await fetch('/Admin/GenerateWaveCandidates', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Generation Failed',
+                        text: data.message || 'An error occurred while evaluating eligibility.'
+                    });
+                    return;
+                }
+
+                currentCandidates = data.candidates || [];
+                currentCandidates.forEach(c => {
+                    c.isSelected = true;
+                });
+
+                // Update Stats
+                $('#statTotal').text(data.totalCandidates);
+                $('#statFresh').text(data.freshCount);
+                $('#statResitter').text(data.resitterCount);
+                $('#statBranches').text(data.branchesCount);
+
+                renderTable();
+
+                $('#resultsCard').removeClass('hidden');
+                if (candidatesDataTable) {
+                    setTimeout(function() {
+                        candidatesDataTable.columns.adjust().draw(false);
+                    }, 50);
+                }
+
+                $('html, body').animate({
+                    scrollTop: $("#resultsCard").offset().top - 80
+                }, 500);
+
+            } catch (err) {
+                console.error(err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Communication Error',
+                    text: 'Unable to communicate with the server to generate candidate roster.'
+                });
+            } finally {
+                btn.prop('disabled', false).html('<i class="fas fa-wand-magic-sparkles"></i> <span>Generate Proposed Roster</span>');
+            }
+        }
+
+        let candidatesDataTable = null;
+
+        function updateRosterStats() {
+            const total = currentCandidates.length;
+            const fresh = currentCandidates.filter(c => c.candidateType === 'New').length;
+            const resitter = total - fresh;
+            const branches = new Set(currentCandidates.map(c => c.branchName).filter(Boolean)).size;
+
+            $('#statTotal').text(total);
+            $('#statFresh').text(fresh);
+            $('#statResitter').text(resitter);
+            $('#statBranches').text(branches);
+        }
+
+        function renderTable() {
+            if ($.fn.DataTable.isDataTable('#candidatesTable')) {
+                $('#candidatesTable').DataTable().destroy();
+                candidatesDataTable = null;
+            }
+
+            const tbody = $('#candidatesTableBody');
+            tbody.empty();
+
+            if (currentCandidates.length === 0) {
+                tbody.html(`
+                    <tr>
+                        <td colspan="9" class="p-8 text-center text-slate-400">
+                            <i class="fas fa-info-circle text-2xl mb-2 text-slate-300"></i>
+                            <p class="font-bold">No candidates match the specified criteria.</p>
+                            <p class="text-xs">Try expanding the registration window, branches, or increasing capacity.</p>
+                        </td>
+                    </tr>
+                `);
+                $('#selectedCountBadge').text('0 Selected');
+                $('#selectAllCheckbox').prop('checked', false);
+                return;
+            }
+
+            currentCandidates.forEach((c) => {
+                const isFresh = c.candidateType === 'New';
+                const typeBadge = isFresh
+                    ? `<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> First-Time</span>`
+                    : `<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 inline-flex items-center gap-1"><i class="fas fa-rotate-right text-[9px]"></i> Resitter (${c.previousWaveCount} prev)</span>`;
+
+                const roleName = (c.roleName || 'User').toUpperCase();
+                const roleBadge = `<span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 uppercase">${roleName}</span>`;
+
+                const regDate = c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-GB') : '--';
+                const avatarChar = (c.studentName || '?').trim().charAt(0).toUpperCase();
+
+                const rowHtml = `
+                    <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors" data-userid="${c.userId}">
+                        <td class="p-4 text-center pl-4">
+                            <input type="checkbox" class="candidate-chk rounded text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer" 
+                                   value="${c.userId}" ${c.isSelected ? 'checked' : ''} />
+                        </td>
+                        <td class="p-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-xs uppercase shrink-0">
+                                    ${avatarChar}
+                                </div>
+                                <div class="flex flex-col min-w-0">
+                                    <span class="font-bold text-slate-900 dark:text-white leading-tight truncate max-w-[180px]">${c.studentName || '--'}</span>
+                                    <span class="text-[10px] text-slate-400 font-mono truncate max-w-[180px]">${c.email || ''}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="p-4 font-mono font-bold text-slate-600 dark:text-slate-300">${c.userCode || '--'}</td>
+                        <td class="p-4 font-bold text-slate-700 dark:text-slate-300 uppercase">${c.branchName || '--'}</td>
+                        <td class="p-4">${roleBadge}</td>
+                        <td class="p-4 text-center">${typeBadge}</td>
+                        <td class="p-4 text-center text-slate-500 font-mono text-[11px]">${regDate}</td>
+                        <td class="p-4 text-center text-slate-500">${c.shiftName || '--'}</td>
+                        <td class="p-4 text-right pr-4">
+                            <button type="button" onclick="removeCandidate('${c.userId}')" class="text-slate-400 hover:text-rose-500 text-xs font-bold transition-all p-1" title="Exclude from Roster">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.append(rowHtml);
+            });
+
+            candidatesDataTable = $('#candidatesTable').DataTable({
+                deferRender: true,
+                autoWidth: false,
+                orderClasses: false,
+                pageLength: 10,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                dom: '<"flex flex-col sm:flex-row justify-between items-center mb-4 gap-4"lf>rt<"flex flex-col sm:flex-row justify-between items-center mt-4 gap-4"ip>',
+                language: {
+                    search: "",
+                    searchPlaceholder: "Search records...",
+                    lengthMenu: "Show _MENU_ entries",
+                    info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                    infoEmpty: "Showing 0 to 0 of 0 entries",
+                    infoFiltered: "(filtered from _MAX_ total entries)",
+                    paginate: {
+                        previous: '<i class="fas fa-chevron-left"></i>',
+                        next: '<i class="fas fa-chevron-right"></i>'
+                    }
+                },
+                order: [[1, 'asc']],
+                columnDefs: [
+                    { orderable: false, targets: [0, 8] }
+                ],
+                drawCallback: function () {
+                    if (!candidatesDataTable) return;
+                    candidatesDataTable.$('.candidate-chk', { page: 'current' }).each(function() {
+                        const uid = $(this).val();
+                        const item = currentCandidates.find(x => x.userId === uid);
+                        if (item) {
+                            $(this).prop('checked', !!item.isSelected);
+                        }
+                    });
+                }
+            });
+
+            updateSelectedCount();
+        }
+
+        $(document).on('change', '.candidate-chk', function () {
+            const userId = $(this).val();
+            const isChecked = $(this).is(':checked');
+            const c = currentCandidates.find(x => x.userId === userId);
+            if (c) c.isSelected = isChecked;
+            updateSelectedCount();
+        });
+
+        function toggleSelectAll(checked) {
+            currentCandidates.forEach(c => c.isSelected = checked);
+            if (candidatesDataTable) {
+                candidatesDataTable.$('.candidate-chk').prop('checked', checked);
+            } else {
+                $('.candidate-chk').prop('checked', checked);
+            }
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const selectedCount = currentCandidates.filter(c => c.isSelected).length;
+            $('#selectedCountBadge').text(`${selectedCount} Selected`);
+            const allSelected = currentCandidates.length > 0 && selectedCount === currentCandidates.length;
+            $('#selectAllCheckbox').prop('checked', allSelected);
+        }
+
+        function removeCandidate(userId) {
+            currentCandidates = currentCandidates.filter(c => c.userId !== userId);
+            if (candidatesDataTable) {
+                const row = $(`#candidatesTable tbody tr[data-userid="${userId}"]`);
+                candidatesDataTable.row(row).remove().draw(false);
+            }
+            updateRosterStats();
+            updateSelectedCount();
+        }
+
+        function getSelectedUserIds() {
+            return currentCandidates.filter(c => c.isSelected).map(c => c.userId);
+        }
+
+        async function exportToExcel() {
+            const userIds = getSelectedUserIds();
+            if (userIds.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Notice',
+                    text: 'Please select at least one candidate to export the roster.'
+                });
+                return;
+            }
+
+            const waveName = $('#proposedWaveName').val() || 'Proposed Training Batch';
+            const startDate = $('#proposedStartDate').val();
+
+            Swal.fire({
+                title: 'Generating Excel Roster...',
+                text: 'Compiling structured branch roster for branch managers...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            try {
+                const response = await fetch('/Admin/ExportWaveProposalToExcel', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify({
+                        selectedUserIds: userIds,
+                        proposedWaveName: waveName,
+                        proposedStartDate: startDate ? startDate : null
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to generate export file.');
+                }
+
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = `${waveName.replace(/[^a-zA-Z0-9_-]/g, '_')}_Branch_Roster.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(downloadUrl);
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Export Complete!',
+                    text: `Exported roster for ${userIds.length} candidates formatted for branch managers.`
+                });
+            } catch (err) {
+                console.error(err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Export Failed',
+                    text: 'An error occurred while compiling the Excel file.'
+                });
+            }
+        }
+
+        function openEnrollModal() {
+            const userIds = getSelectedUserIds();
+            if (userIds.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Notice',
+                    text: 'Please select at least one candidate to enroll.'
+                });
+                return;
+            }
+
+            $('#modalNewWaveName').val($('#proposedWaveName').val());
+            $('#modalNewStartDate').val($('#proposedStartDate').val());
+            const d = new Date($('#proposedStartDate').val() || Date.now());
+            d.setDate(d.getDate() + 5);
+            $('#modalNewEndDate').val(d.toISOString().split('T')[0]);
+
+            $('#enrollModal').removeClass('hidden');
+        }
+
+        function closeEnrollModal() {
+            $('#enrollModal').addClass('hidden');
+        }
+
+        function toggleEnrollType() {
+            const type = $('input[name="enrollType"]:checked').val();
+            if (type === 'new') {
+                $('#newWaveFields').removeClass('hidden');
+                $('#existingWaveField').addClass('hidden');
+            } else {
+                $('#newWaveFields').addClass('hidden');
+                $('#existingWaveField').removeClass('hidden');
+            }
+        }
+
+        async function confirmEnrollment() {
+            const userIds = getSelectedUserIds();
+            const enrollType = $('input[name="enrollType"]:checked').val();
+
+            let payload = {
+                userIds: userIds
+            };
+
+            if (enrollType === 'new') {
+                payload.newWaveName = $('#modalNewWaveName').val();
+                payload.newStartDate = $('#modalNewStartDate').val();
+                payload.newEndDate = $('#modalNewEndDate').val();
+                if (!payload.newWaveName) {
+                    Swal.fire({ icon: 'warning', text: 'Please enter a name for the new batch.' });
+                    return;
+                }
+            } else {
+                payload.existingWaveId = parseInt($('#modalExistingWaveSelect').val());
+            }
+
+            const btn = $('#btnConfirmEnroll');
+            btn.prop('disabled', true).text('Enrolling...');
+
+            try {
+                const response = await fetch('/Admin/ConfirmWaveProposalEnrollment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                closeEnrollModal();
+
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Enrollment Confirmed!',
+                        html: `${data.message}<br><br><a href="/Admin/WaveDetails/${data.waveId}" class="text-brand-600 font-bold underline">Click here to open Batch Details</a>`
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Enrollment Failed',
+                        text: data.message || 'An error occurred while enrolling candidates.'
+                    });
+                }
+            } catch (err) {
+                console.error(err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'An error occurred while communicating with the server.'
+                });
+            } finally {
+                btn.prop('disabled', false).text('Confirm Enrollment');
+            }
+        }
+    </script>
+}

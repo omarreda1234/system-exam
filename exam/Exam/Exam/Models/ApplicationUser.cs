@@ -10,6 +10,8 @@ namespace Exam.Models
         public decimal? CertificateScore { get; set; }
         public int? BranchId { get; set; }
         public int? ShiftId { get; set; }
+        public int? DepartmentId { get; set; }
+        public virtual Department? Department { get; set; }
         public bool IsActive { get; set; } = true;
         public DateTime? CreatedAt { get; set; }
         public string? CreatedBy { get; set; }

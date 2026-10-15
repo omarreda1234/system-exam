@@ -1384,6 +1384,36 @@ ORDER BY B.BranchName;";
                 commandType: CommandType.StoredProcedure);
         }
 
+        public async Task<IEnumerable<DepartmentDto>> GetAllDepartmentsAsync()
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var sql = @"
+                SELECT 
+                    d.Id, 
+                    d.Name, 
+                    d.Code,
+                    d.Description,
+                    d.IsActive,
+                    d.CreatedAt,
+                    d.CreatedBy,
+                    (SELECT COUNT(1) FROM AspNetUsers u WHERE u.DepartmentId = d.Id) AS AssignedPersonnelCount
+                FROM dbo.Departments d
+                WHERE d.IsActive = 1
+                ORDER BY d.Name ASC";
+            return await conn.QueryAsync<DepartmentDto>(sql);
+        }
+
+        public async Task UpdateUserDepartmentAsync(string userId, int? newDepartmentId)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            await conn.ExecuteAsync(@"
+                UPDATE AspNetUsers 
+                SET DepartmentId = @DepartmentId, 
+                    UpdatedAt = GETDATE() 
+                WHERE Id = @UserId",
+                new { UserId = userId, DepartmentId = (newDepartmentId > 0 ? newDepartmentId : null) });
+        }
+
         public async Task<UserShiftDto?> GetUserShiftAsync(string userId)
         {
             using var conn = new SqlConnection(_connectionString);

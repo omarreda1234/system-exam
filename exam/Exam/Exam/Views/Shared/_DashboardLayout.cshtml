@@ -380,11 +380,11 @@
                             : "flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white font-medium text-xs transition-all";
 
                         bool isGroup1Active = currentController == "admin" && (currentAction == "index" || currentAction == "managehome" || currentAction == "changerequests" || currentAction == "roles" || currentAction == "permissions");
-                        bool isGroup2Active = currentController == "admin" && (currentAction == "companies" || currentAction == "branches" || currentAction == "branchsupervisors" || currentAction == "shifts");
+                        bool isGroup2Active = currentController == "admin" && (currentAction == "companies" || currentAction == "branches" || currentAction == "branchsupervisors" || currentAction == "shifts" || currentAction == "departments");
                         bool isGroup3Active = currentController == "admin" && (currentAction == "allusers" || currentAction == "traineeprofile" || currentAction == "pendingrequests" || currentAction == "deactivatedusers");
                         bool isGroup4Active = (currentController == "admin" && (currentAction == "structure" || currentAction == "items")) || (currentController == "skilltracks" && currentAction == "index");
                         bool isGroup5Active = currentController == "admin" && (currentAction == "getallcategories" || currentAction == "getallexamtypes" || currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams" || currentAction == "manageinstructions");
-                        bool isGroup6Active = currentController == "admin" && (currentAction == "waves" || currentAction == "assignments" || currentAction == "livemonitor");
+                        bool isGroup6Active = currentController == "admin" && (currentAction == "waves" || currentAction == "assignments" || currentAction == "livemonitor" || currentAction == "smartwaveproposal");
                         bool isGroup7Active = (currentController == "admin" && (currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students" || currentAction == "certificates")) || (currentController == "attendance" && currentAction == "analytics");
                     }
 
@@ -452,7 +452,7 @@
                     }
 
                     <!-- 2. Organizational Structure -->
-                    @if (HasAccess("Admin", "Companies") || HasAccess("Admin", "Branches") || HasAccess("Admin", "BranchSupervisors") || User.IsInRole("Admin") || HasAccess("Admin", "Shifts"))
+                    @if (HasAccess("Admin", "Companies") || HasAccess("Admin", "Branches") || HasAccess("Admin", "BranchSupervisors") || User.IsInRole("Admin") || HasAccess("Admin", "Shifts") || HasAccess("Admin", "Departments"))
                     {
                         <div class="nav-group">
                             <button type="button" onclick="toggleNavGroup('group-org', this)"
@@ -497,6 +497,15 @@
                                         <a href="@Url.Action("Shifts", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "shifts")">
                                             <i class="fas fa-business-time w-4 text-center"></i>
                                             <span>Work Shifts</span>
+                                        </a>
+                                    </li>
+                                }
+                                @if (User.IsInRole("Admin") || HasAccess("Admin", "Departments"))
+                                {
+                                    <li>
+                                        <a href="@Url.Action("Departments", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "departments")">
+                                            <i class="fas fa-tags w-4 text-center"></i>
+                                            <span>Departments</span>
                                         </a>
                                     </li>
                                 }
@@ -691,6 +700,12 @@
                                         <a href="@Url.Action("Waves", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "waves")">
                                             <i class="fas fa-water w-4 text-center"></i>
                                             <span>Wave Cycles</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="@Url.Action("SmartWaveProposal", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "smartwaveproposal")">
+                                            <i class="fas fa-wand-magic-sparkles w-4 text-center text-amber-500"></i>
+                                            <span>Smart Wave Planner</span>
                                         </a>
                                     </li>
                                 }

@@ -4,6 +4,7 @@
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
     var roles = ViewBag.Roles as IEnumerable<Exam.DTOs.RoleDto> ?? Enumerable.Empty<Exam.DTOs.RoleDto>();
     var shifts = ViewBag.Shifts as IEnumerable<Exam.DTOs.ShiftDto> ?? Enumerable.Empty<Exam.DTOs.ShiftDto>();
+    var departments = ViewBag.Departments as IEnumerable<Exam.DTOs.DepartmentDto> ?? Enumerable.Empty<Exam.DTOs.DepartmentDto>();
     bool isAdmin = User.IsInRole("Admin");
 }
 
@@ -38,6 +39,10 @@
                 <i class="fas fa-business-time"></i>
                 Manage Shifts / إدارة الشيفتات
             </a>
+            <a href="/Admin/Departments" class="bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 px-5 py-2.5 rounded-xl transition-all text-xs font-bold uppercase shadow-sm flex items-center gap-2 hover:bg-sky-100 dark:hover:bg-sky-900/60">
+                <i class="fas fa-tags"></i>
+                Manage Departments / إدارة الأقسام
+            </a>
             @if (ViewBag.CanCreateUser == true)
             {
                 <button type="button" onclick="openManualAddModal()" class="bg-brand-600 text-white px-6 py-2.5 rounded-xl transition-all text-xs font-bold uppercase shadow-md shadow-brand-600/20 flex items-center gap-2 hover:bg-brand-700">
@@ -59,6 +64,14 @@
             <button type="button" id="tabBtnBranches" onclick="switchIngressTab('branches')" class="px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
                 <i class="fas fa-building-user text-indigo-600 dark:text-indigo-400"></i>
                 <span>Update Branches (.xlsx) / تغيير وتحديث الفرع</span>
+            </button>
+            <button type="button" id="tabBtnShifts" onclick="switchIngressTab('shifts')" class="px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                <i class="fas fa-business-time text-amber-500"></i>
+                <span>Update Shifts (.xlsx) / تغيير وتحديث الشيفتات</span>
+            </button>
+            <button type="button" id="tabBtnDepartments" onclick="switchIngressTab('departments')" class="px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                <i class="fas fa-tags text-sky-500"></i>
+                <span>Update Departments (.xlsx) / تغيير وتحديث الأقسام</span>
             </button>
         </div>
 
@@ -102,6 +115,46 @@
                 <span id="btnBranchUpdateInner" style="display:flex;align-items:center;gap:10px;">
                     <i class="fas fa-building-user"></i>
                     Update Branches / تحديث الفروع
+                </span>
+            </button>
+        </form>
+
+        <!-- Form 3: Shift Bulk Update -->
+        <form id="shiftUpdateForm" asp-action="ImportShiftUpdatesFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="ingress-tab-pane hidden flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
+            @Html.AntiForgeryToken()
+            <div class="flex-1 min-w-[300px] space-y-2">
+                <div class="flex justify-between items-center px-1">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Shift Update Payload (.xlsx) [كود الموظف + اسم أو كود الشيفت]</label>
+                    <a href="/Admin/DownloadShiftUpdateTemplate" class="text-[10px] font-extrabold text-amber-600 hover:text-amber-700 uppercase tracking-wider flex items-center gap-1">
+                        <i class="fas fa-download"></i> Download Template / تحميل النموذج
+                    </a>
+                </div>
+                <input id="shiftExcelFileInput" type="file" name="shiftExcelFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-amber-600 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-white dark:bg-slate-950 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
+            </div>
+            <button type="submit" id="btnShiftUpdate" class="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg flex items-center gap-3" style="min-width:180px;justify-content:center;">
+                <span id="btnShiftUpdateInner" style="display:flex;align-items:center;gap:10px;">
+                    <i class="fas fa-business-time"></i>
+                    Update Shifts / تحديث الشيفتات
+                </span>
+            </button>
+        </form>
+
+        <!-- Form 4: Department Bulk Update -->
+        <form id="departmentUpdateForm" asp-action="ImportDepartmentUpdatesFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="ingress-tab-pane hidden flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
+            @Html.AntiForgeryToken()
+            <div class="flex-1 min-w-[300px] space-y-2">
+                <div class="flex justify-between items-center px-1">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Department Update Payload (.xlsx) [كود الموظف + اسم أو كود القسم]</label>
+                    <a href="/Admin/DownloadDepartmentUpdateTemplate" class="text-[10px] font-extrabold text-sky-600 hover:text-sky-700 uppercase tracking-wider flex items-center gap-1">
+                        <i class="fas fa-download"></i> Download Template / تحميل النموذج
+                    </a>
+                </div>
+                <input id="departmentExcelFileInput" type="file" name="departmentExcelFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-sky-600 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-white dark:bg-slate-950 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
+            </div>
+            <button type="submit" id="btnDepartmentUpdate" class="bg-sky-600 hover:bg-sky-700 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg flex items-center gap-3" style="min-width:180px;justify-content:center;">
+                <span id="btnDepartmentUpdateInner" style="display:flex;align-items:center;gap:10px;">
+                    <i class="fas fa-tags"></i>
+                    Update Departments / تحديث الأقسام
                 </span>
             </button>
         </form>
@@ -199,6 +252,47 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Multi-Select Department Dropdown -->
+            <div class="relative inline-block text-left" id="multiSelectDepartmentWrapper">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
+                    <i class="fas fa-tags mr-1"></i> Department / القسم
+                </label>
+                <button type="button" id="btnMultiSelectDepartment" onclick="toggleDepartmentDropdown()"
+                        class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[200px] shadow-sm flex items-center justify-between gap-2">
+                    <span id="lblDepartmentSelected" class="truncate">All Departments</span>
+                    <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- Dropdown Menu -->
+                <div id="dropdownDepartmentMenu" class="hidden absolute left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                    <div class="relative">
+                        <input type="text" id="departmentSearchInput" placeholder="Search department..." oninput="filterDepartmentOptions(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                    </div>
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Departments</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="selectAllDepartments(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllDepartments(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar" id="departmentOptionsContainer">
+                        <label class="department-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" value="UNASSIGNED" class="chk-department rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onDepartmentFilterChange()" />
+                            <span class="truncate italic text-rose-500 font-semibold">بدون قسم (Unassigned)</span>
+                        </label>
+                        @if (ViewBag.Departments != null) {
+                            foreach (var d in ViewBag.Departments as IEnumerable<Exam.DTOs.DepartmentDto>) {
+                                <label class="department-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                                    <input type="checkbox" value="@d.Code" class="chk-department rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onDepartmentFilterChange()" />
+                                    <span class="truncate">@d.Name (@d.Code)</span>
+                                </label>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Export Filtered Excel Button -->
@@ -234,6 +328,7 @@
                     <th class="hidden 2xl:table-cell">Code</th>
                     <th class="text-center">Classification</th>
                     <th class="hidden xl:table-cell">Shift Window</th>
+                    <th class="text-center hidden md:table-cell">Department / القسم</th>
                     @if (isAdmin)
                     {
                         <th class="hidden lg:table-cell">Audit / السجل</th>
@@ -252,19 +347,29 @@
     <script>
         const rolesData = @Html.Raw(Json.Serialize(roles));
         const shiftsData = @Html.Raw(Json.Serialize(shifts));
+        const departmentsData = @Html.Raw(Json.Serialize(ViewBag.Departments ?? new List<Exam.DTOs.DepartmentDto>()));
         const branchesData = @Html.Raw(Json.Serialize(ViewBag.Branches ?? new List<Exam.DTOs.BranchDto>()));
         const canEditProfile = @((ViewBag.CanEditProfile ?? false).ToString().ToLower());
         const canEditShift = @((ViewBag.CanEditShift ?? false).ToString().ToLower());
+        const canEditDepartment = @((ViewBag.CanEditDepartment ?? false).ToString().ToLower());
         const canCreateUser = @((ViewBag.CanCreateUser ?? false).ToString().ToLower());
 
         function toggleClassificationDropdown() {
             $('#dropdownClassificationMenu').toggleClass('hidden');
             $('#dropdownBranchMenu').addClass('hidden');
+            $('#dropdownDepartmentMenu').addClass('hidden');
         }
 
         function toggleBranchDropdown() {
             $('#dropdownBranchMenu').toggleClass('hidden');
             $('#dropdownClassificationMenu').addClass('hidden');
+            $('#dropdownDepartmentMenu').addClass('hidden');
+        }
+
+        function toggleDepartmentDropdown() {
+            $('#dropdownDepartmentMenu').toggleClass('hidden');
+            $('#dropdownClassificationMenu').addClass('hidden');
+            $('#dropdownBranchMenu').addClass('hidden');
         }
 
         $(document).click(function(e) {
@@ -273,6 +378,9 @@
             }
             if (!$(e.target).closest('#multiSelectBranchWrapper').length) {
                 $('#dropdownBranchMenu').addClass('hidden');
+            }
+            if (!$(e.target).closest('#multiSelectDepartmentWrapper').length) {
+                $('#dropdownDepartmentMenu').addClass('hidden');
             }
         });
 
@@ -292,6 +400,14 @@
             });
         }
 
+        function filterDepartmentOptions(query) {
+            const q = (query || '').toLowerCase().trim();
+            $('.department-option-label').each(function() {
+                const text = $(this).text().toLowerCase();
+                $(this).toggle(!q || text.includes(q));
+            });
+        }
+
         function selectAllClassifications(checkAll) {
             $('.classification-option-label:visible .chk-classification').prop('checked', checkAll);
             onClassificationFilterChange();
@@ -300,6 +416,11 @@
         function selectAllBranches(checkAll) {
             $('.branch-option-label:visible .chk-branch').prop('checked', checkAll);
             onBranchFilterChange();
+        }
+
+        function selectAllDepartments(checkAll) {
+            $('.department-option-label:visible .chk-department').prop('checked', checkAll);
+            onDepartmentFilterChange();
         }
 
         function getSelectedClassifications() {
@@ -313,6 +434,14 @@
         function getSelectedBranches() {
             let checked = [];
             $('.chk-branch:checked').each(function() {
+                checked.push($(this).val());
+            });
+            return checked;
+        }
+
+        function getSelectedDepartments() {
+            let checked = [];
+            $('.chk-department:checked').each(function() {
                 checked.push($(this).val());
             });
             return checked;
@@ -344,12 +473,26 @@
             if (table) table.draw();
         }
 
+        function onDepartmentFilterChange() {
+            let selected = getSelectedDepartments();
+            let total = $('.chk-department').length;
+            if (selected.length === 0 || selected.length === total) {
+                $('#lblDepartmentSelected').html('<span class="text-slate-500">All Departments</span>');
+            } else if (selected.length === 1) {
+                $('#lblDepartmentSelected').html(`<span class="text-brand-600 font-extrabold">${selected[0]}</span>`);
+            } else {
+                $('#lblDepartmentSelected').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
+            }
+            if (table) table.draw();
+        }
+
         function exportFilteredUsersExcel() {
             let searchValue = table ? table.search() : '';
             let classification = getSelectedClassifications().join(',');
             let branchName = getSelectedBranches().join(',');
+            let department = getSelectedDepartments().join(',');
 
-            let url = `/Admin/ExportFilteredUsersToExcel?search=${encodeURIComponent(searchValue)}&classification=${encodeURIComponent(classification)}&branchName=${encodeURIComponent(branchName)}`;
+            let url = `/Admin/ExportFilteredUsersToExcel?search=${encodeURIComponent(searchValue)}&classification=${encodeURIComponent(classification)}&branchName=${encodeURIComponent(branchName)}&department=${encodeURIComponent(department)}`;
             window.location.href = url;
         }
 
@@ -364,6 +507,7 @@
                     data: function (d) {
                         d.classification = getSelectedClassifications().join(',');
                         d.branchName = getSelectedBranches().join(',');
+                        d.department = getSelectedDepartments().join(',');
                     },
                     headers: {
                         'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
@@ -390,6 +534,7 @@
                                         else if (key === 'dataUsercode' || key === 'data_usercode') normalizedKey = 'data-usercode';
                                         else if (key === 'dataBranchId' || key === 'data_branch_id') normalizedKey = 'data-branch-id';
                                         else if (key === 'dataShiftId' || key === 'data_shift_id') normalizedKey = 'data-shift-id';
+                                        else if (key === 'dataDepartmentId' || key === 'data_department_id') normalizedKey = 'data-department-id';
                                         
                                         row.DT_RowAttr[normalizedKey] = rawAttr[key];
                                     }
@@ -406,6 +551,7 @@
                     { data: 'code', className: 'hidden 2xl:table-cell', orderable: true },
                     { data: 'classification', className: 'text-center', orderable: true },
                     { data: 'shift', className: 'hidden xl:table-cell', orderable: false },
+                    { data: 'department', className: 'text-center hidden md:table-cell', orderable: true },
                     @(isAdmin ? Html.Raw("{ data: 'audit', className: 'hidden lg:table-cell', orderable: true },") : Html.Raw(""))
                     { data: 'actions', className: 'text-right pr-3', orderable: false }
                 ],
@@ -459,6 +605,13 @@
                     return `<option value="${bid}">${name.toUpperCase()}</option>`;
                 }).join('');
 
+                let deptOptions = '<option value="">-- Choose Department / اختر القسم (اختياري) --</option>' + departmentsData.map(d => {
+                    let name = getVal(d, 'Name');
+                    let code = getVal(d, 'Code');
+                    let did = getVal(d, 'Id');
+                    return `<option value="${did}">${name} (${code})</option>`;
+                }).join('');
+
                 Swal.fire({
                     title: 'Register New Personnel',
                     html: `
@@ -494,11 +647,19 @@
                                     <input name="CertificateCode" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" placeholder="CERT-XXXX" />
                                 </div>
                             </div>
-                            <div>
-                                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Classification (Role)</label>
-                                <select name="RoleName" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">
-                                    ${roleOptions}
-                                </select>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Classification (Role)</label>
+                                    <select name="RoleName" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">
+                                        ${roleOptions}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Department / القسم</label>
+                                    <select name="DepartmentId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500">
+                                        ${deptOptions}
+                                    </select>
+                                </div>
                             </div>
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
@@ -699,25 +860,33 @@
         });
 
         function switchIngressTab(tab) {
-            if (tab === 'branches') {
-                $('#importForm').addClass('hidden');
-                $('#branchUpdateForm').removeClass('hidden');
-                $('#tabBtnBranches')
-                    .removeClass('text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white')
-                    .addClass('bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm');
-                $('#tabBtnPersonnel')
-                    .removeClass('bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm')
-                    .addClass('text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white');
-            } else {
-                $('#branchUpdateForm').addClass('hidden');
-                $('#importForm').removeClass('hidden');
-                $('#tabBtnPersonnel')
-                    .removeClass('text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white')
-                    .addClass('bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm');
-                $('#tabBtnBranches')
-                    .removeClass('bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm')
-                    .addClass('text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white');
-            }
+            const tabs = ['personnel', 'branches', 'shifts', 'departments'];
+            const formMap = {
+                personnel: '#importForm',
+                branches: '#branchUpdateForm',
+                shifts: '#shiftUpdateForm',
+                departments: '#departmentUpdateForm'
+            };
+            const btnMap = {
+                personnel: '#tabBtnPersonnel',
+                branches: '#tabBtnBranches',
+                shifts: '#tabBtnShifts',
+                departments: '#tabBtnDepartments'
+            };
+
+            tabs.forEach(t => {
+                if (t === tab) {
+                    $(formMap[t]).removeClass('hidden');
+                    $(btnMap[t])
+                        .removeClass('text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white')
+                        .addClass('bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm');
+                } else {
+                    $(formMap[t]).addClass('hidden');
+                    $(btnMap[t])
+                        .removeClass('bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm')
+                        .addClass('text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white');
+                }
+            });
         }
 
         $('#branchUpdateForm').on('submit', async function (e) {
@@ -781,6 +950,140 @@
                 }
             } catch (err) {
                 console.error("Branch Update Error:", err);
+                Swal.fire('خطأ', 'فشل إرسال طلب التحديث: ' + (err.message || 'Network error'), 'error');
+            } finally {
+                $btn.prop('disabled', false).css('opacity', 1).html(originalBtnHtml);
+            }
+        });
+
+        $('#shiftUpdateForm').on('submit', async function (e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('shiftExcelFileInput');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                return Swal.fire('تنبيه', 'يرجى اختيار ملف إكسيل (.xlsx) أولاً.', 'warning');
+            }
+
+            const fd = new FormData(this);
+            const $btn = $('#btnShiftUpdate');
+            const originalBtnHtml = $btn.html();
+
+            $btn.prop('disabled', true).css('opacity', 0.6).html('<i class="fas fa-spinner fa-spin mr-2"></i> جاري تحديث الشيفتات...');
+
+            try {
+                const response = await fetch(this.action, {
+                    method: 'POST',
+                    body: fd,
+                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
+                });
+
+                const contentType = response.headers.get("content-type");
+                if (!response.ok || !contentType || !contentType.includes("application/json")) {
+                    throw new Error("استجابة الخادم غير صالحة أو حدث خطأ داخلي.");
+                }
+
+                const res = await response.json();
+
+                if (res.success) {
+                    if (res.errors && res.errors.length > 0) {
+                        let errHtml = '<ul class="text-right text-xs text-rose-500 overflow-y-auto max-h-48 mt-4 list-disc pr-4" dir="rtl">';
+                        res.errors.forEach(e => { errHtml += `<li>${String(e).replace(/</g, '&lt;')}</li>`; });
+                        errHtml += '</ul>';
+
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'اكتمل تحديث الشيفتات مع ملاحظات',
+                            width: '640px',
+                            html: `<p class="text-sm font-bold text-slate-700 dark:text-slate-200">${res.message}</p>${errHtml}`,
+                            confirmButtonText: 'حسناً'
+                        }).then(() => {
+                            if (window.table) window.table.ajax.reload(null, false);
+                            else location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'تم تحديث الشيفتات بنجاح',
+                            text: res.message,
+                            timer: 2500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            if (window.table) window.table.ajax.reload(null, false);
+                            else location.reload();
+                        });
+                    }
+                    fileInput.value = '';
+                } else {
+                    Swal.fire('خطأ', res.message || 'فشل تحديث الشيفتات', 'error');
+                }
+            } catch (err) {
+                console.error("Shift Update Error:", err);
+                Swal.fire('خطأ', 'فشل إرسال طلب التحديث: ' + (err.message || 'Network error'), 'error');
+            } finally {
+                $btn.prop('disabled', false).css('opacity', 1).html(originalBtnHtml);
+            }
+        });
+
+        $('#departmentUpdateForm').on('submit', async function (e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('departmentExcelFileInput');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                return Swal.fire('تنبيه', 'يرجى اختيار ملف إكسيل (.xlsx) أولاً.', 'warning');
+            }
+
+            const fd = new FormData(this);
+            const $btn = $('#btnDepartmentUpdate');
+            const originalBtnHtml = $btn.html();
+
+            $btn.prop('disabled', true).css('opacity', 0.6).html('<i class="fas fa-spinner fa-spin mr-2"></i> جاري تحديث الأقسام...');
+
+            try {
+                const response = await fetch(this.action, {
+                    method: 'POST',
+                    body: fd,
+                    headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
+                });
+
+                const contentType = response.headers.get("content-type");
+                if (!response.ok || !contentType || !contentType.includes("application/json")) {
+                    throw new Error("استجابة الخادم غير صالحة أو حدث خطأ داخلي.");
+                }
+
+                const res = await response.json();
+
+                if (res.success) {
+                    if (res.errors && res.errors.length > 0) {
+                        let errHtml = '<ul class="text-right text-xs text-rose-500 overflow-y-auto max-h-48 mt-4 list-disc pr-4" dir="rtl">';
+                        res.errors.forEach(e => { errHtml += `<li>${String(e).replace(/</g, '&lt;')}</li>`; });
+                        errHtml += '</ul>';
+
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'اكتمل تحديث الأقسام مع ملاحظات',
+                            width: '640px',
+                            html: `<p class="text-sm font-bold text-slate-700 dark:text-slate-200">${res.message}</p>${errHtml}`,
+                            confirmButtonText: 'حسناً'
+                        }).then(() => {
+                            if (window.table) window.table.ajax.reload(null, false);
+                            else location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'تم تحديث الأقسام بنجاح',
+                            text: res.message,
+                            timer: 2500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            if (window.table) window.table.ajax.reload(null, false);
+                            else location.reload();
+                        });
+                    }
+                    fileInput.value = '';
+                } else {
+                    Swal.fire('خطأ', res.message || 'فشل تحديث الأقسام', 'error');
+                }
+            } catch (err) {
+                console.error("Department Update Error:", err);
                 Swal.fire('خطأ', 'فشل إرسال طلب التحديث: ' + (err.message || 'Network error'), 'error');
             } finally {
                 $btn.prop('disabled', false).css('opacity', 1).html(originalBtnHtml);
@@ -878,6 +1181,7 @@
             };
             const $tr = $('tr[data-user-id="' + userId + '"]');
             const shiftId = $tr.attr('data-shift-id') || '0';
+            const deptId = $tr.attr('data-department-id') || '';
             const oldBranchKey = (branchId == null || branchId === '') ? '' : String(branchId);
             let branchOptions = '<option value="">-- NO BRANCH --</option>';
             branchesData.forEach(b => {
@@ -895,8 +1199,18 @@
                 shiftOptions += `<option value="${sid}"${sel}>${(name || '').toUpperCase()}</option>`;
             });
 
+            let deptOptions = '<option value="">-- NO DEPARTMENT / بدون قسم --</option>';
+            departmentsData.forEach(d => {
+                let name = getVal(d, 'Name');
+                let code = getVal(d, 'Code');
+                let did = getVal(d, 'Id');
+                let sel = (deptId !== '' && String(did) === String(deptId)) ? ' selected' : '';
+                deptOptions += `<option value="${did}"${sel}>${name} (${code})</option>`;
+            });
+
             const disabledProfileAttr = canEditProfile ? '' : 'disabled';
             const disabledShiftAttr = canEditShift ? '' : 'disabled';
+            const disabledDeptAttr = canEditDepartment ? '' : 'disabled';
 
             Swal.fire({
                 title: 'Edit Personnel',
@@ -922,6 +1236,10 @@
                             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Shift</label>
                             <select id="editShiftId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledShiftAttr}>${shiftOptions}</select>
                         </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Department / القسم</label>
+                            <select id="editDepartmentId" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-brand-500" ${disabledDeptAttr}>${deptOptions}</select>
+                        </div>
                     </div>`,
                 showCancelButton: true,
                 confirmButtonText: 'Save',
@@ -940,16 +1258,20 @@
                     }
                     const shiftSel = document.getElementById('editShiftId');
                     shiftSel.value = shiftId;
+                    const deptSel = document.getElementById('editDepartmentId');
+                    if (deptSel) deptSel.value = deptId;
                 },
                 preConfirm: async () => {
                     const newShiftVal = document.getElementById('editShiftId').value || '0';
-                    if (!canEditProfile && !canEditShift) {
+                    const newDeptVal = document.getElementById('editDepartmentId') ? document.getElementById('editDepartmentId').value : '';
+                    if (!canEditProfile && !canEditShift && !canEditDepartment) {
                         Swal.showValidationMessage('Permission denied for editing personnel.');
                         return false;
                     }
 
                     let profilePromise = null;
                     let shiftPromise = null;
+                    let deptPromise = null;
 
                     if (canEditProfile) {
                         const fd = new FormData();
@@ -961,9 +1283,20 @@
                         if (newBr !== oldBranchKey)
                             fd.append('branchId', newBr);
 
+                        fd.append('departmentId', newDeptVal);
+
                         profilePromise = fetch('/Admin/UpdateUserProfile', {
                             method: 'POST',
                             body: fd,
+                            headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
+                        }).then(r => r.json());
+                    } else if (canEditDepartment && newDeptVal !== deptId) {
+                        const deptFd = new FormData();
+                        deptFd.append('userId', userId);
+                        deptFd.append('departmentId', newDeptVal);
+                        deptPromise = fetch('/Admin/UpdateUserDepartment', {
+                            method: 'POST',
+                            body: deptFd,
                             headers: { 'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val() }
                         }).then(r => r.json());
                     }
@@ -979,9 +1312,10 @@
                         }).then(r => r.json());
                     }
 
-                    const [profileRes, shiftRes] = await Promise.all([
+                    const [profileRes, shiftRes, deptRes] = await Promise.all([
                         profilePromise || Promise.resolve({ success: true }),
-                        shiftPromise || Promise.resolve({ success: true })
+                        shiftPromise || Promise.resolve({ success: true }),
+                        deptPromise || Promise.resolve({ success: true })
                     ]);
 
                     if (profileRes && !profileRes.success) {
@@ -992,7 +1326,11 @@
                         Swal.showValidationMessage(shiftRes.message || 'Shift update failed');
                         return false;
                     }
-                    return { ...(profileRes || {}), newShiftId: newShiftVal };
+                    if (deptRes && !deptRes.success) {
+                        Swal.showValidationMessage(deptRes.message || 'Department update failed');
+                        return false;
+                    }
+                    return { ...(profileRes || {}), newShiftId: newShiftVal, newDeptId: newDeptVal };
                 }
             }).then((result) => {
                 if (result.isConfirmed && result.value) {
