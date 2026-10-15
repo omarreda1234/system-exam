@@ -466,47 +466,116 @@
                 formData.append('pdfFiles', files[i]);
             }
 
-            Swal.fire({
-                title: 'جاري رفع ومعالجة الشهادات...',
-                text: `جاري رفع ${files.length} ملف PDF وتوليد السيريال وإرسال البريد الإلكتروني...`,
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
+            // Calculate total size
+            let totalBytes = 0;
+            for (let i = 0; i < files.length; i++) {
+                totalBytes += files[i].size;
+            }
+            const totalMbFormatted = (totalBytes / (1024 * 1024)).toFixed(1);
 
-            fetch(`/Admin/UploadCertificatesPdfs?waveId=${selectedWaveId}`, {
-                method: 'POST',
-                body: formData
-            })
-            .then(r => r.json())
-            .then(res => {
-                $('#certPdfInput').val('');
-                if (res.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'تم التجهيز والإرسال بنجاح',
-                        text: res.message,
-                        confirmButtonText: 'إعادة تحميل الصفحة'
-                    }).then(() => {
-                        location.reload();
-                    });
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'فشل الرفع',
-                        text: res.message
-                    });
+            Swal.fire({
+                title: 'رفع ومعالجة الشهادات (Bulk Upload)',
+                html: `
+                    <div class="py-2 text-right dir-rtl space-y-4">
+                        <div class="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                            <span id="uploadProgressStatus" class="flex items-center gap-1.5">
+                                <i class="fas fa-arrow-circle-up text-indigo-600 animate-bounce"></i>
+                                <span>جاري رفع الملفات إلى السيرفر...</span>
+                            </span>
+                            <span id="uploadProgressPercent" class="text-indigo-600 dark:text-indigo-400 font-black text-sm">0%</span>
+                        </div>
+
+                        <!-- Progress Bar Container -->
+                        <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-4 overflow-hidden p-0.5 border border-slate-200 dark:border-slate-700 shadow-inner">
+                            <div id="uploadProgressBar" class="bg-gradient-to-r from-indigo-500 via-indigo-600 to-emerald-500 h-full rounded-full transition-all duration-150 ease-out" style="width: 0%"></div>
+                        </div>
+
+                        <div class="flex items-center justify-between text-[11px] font-bold text-slate-400">
+                            <span id="uploadBytesText">0.0 MB / ${totalMbFormatted} MB</span>
+                            <span class="bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-lg text-slate-600 dark:text-slate-300 font-extrabold">${files.length} ملف PDF</span>
+                        </div>
+
+                        <!-- Processing Phase Box -->
+                        <div id="uploadProcessingNotice" class="hidden p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-2xl text-xs text-amber-800 dark:text-amber-300">
+                            <div class="flex items-center gap-2 font-bold mb-1">
+                                <i class="fas fa-spinner fa-spin text-amber-600"></i>
+                                <span>اكتمل الرفع! جاري المعالجة الفورية...</span>
+                            </div>
+                            <p class="text-[11px] text-amber-700/80 dark:text-amber-400/80">
+                                يقوم السيرفر الآن بمطابقة أكواد الطلاب، وتوليد الأرقام التسلسلية (Serials)، وربط الشهادات وإرسال الإيميلات.
+                            </p>
+                        </div>
+                    </div>
+                `,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', `/Admin/UploadCertificatesPdfs?waveId=${selectedWaveId}`, true);
+
+                    xhr.upload.onprogress = function(evt) {
+                        if (evt.lengthComputable) {
+                            const percent = Math.min(100, Math.round((evt.loaded / evt.total) * 100));
+                            const loadedMb = (evt.loaded / (1024 * 1024)).toFixed(1);
+                            
+                            const bar = document.getElementById('uploadProgressBar');
+                            const txt = document.getElementById('uploadProgressPercent');
+                            const bTxt = document.getElementById('uploadBytesText');
+                            const notice = document.getElementById('uploadProcessingNotice');
+                            const status = document.getElementById('uploadProgressStatus');
+
+                            if (bar) bar.style.width = percent + '%';
+                            if (txt) txt.innerText = percent + '%';
+                            if (bTxt) bTxt.innerText = `${loadedMb} MB / ${totalMbFormatted} MB`;
+
+                            if (percent >= 100) {
+                                if (notice) notice.classList.remove('hidden');
+                                if (status) status.innerHTML = '<i class="fas fa-cog fa-spin text-amber-500"></i> <span>جاري المعالجة وإصدار الشهادات...</span>';
+                            }
+                        }
+                    };
+
+                    xhr.onload = function() {
+                        $('#certPdfInput').val('');
+                        try {
+                            const res = JSON.parse(xhr.responseText);
+                            if (xhr.status === 200 && res.success) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'تم الرفع والتجهيز بنجاح',
+                                    text: res.message,
+                                    confirmButtonText: 'تحديث الجدول'
+                                }).then(() => {
+                                    location.reload();
+                                });
+                            } else {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'فشل الرفع',
+                                    text: res.message || 'حدث خطأ أثناء معالجة الشهادات على السيرفر.'
+                                });
+                            }
+                        } catch(err) {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'خطأ',
+                                text: 'استجابة غير متوقعة من السيرفر.'
+                            });
+                        }
+                    };
+
+                    xhr.onerror = function() {
+                        $('#certPdfInput').val('');
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'فشل الاتصال',
+                            text: 'حدث خطأ في الاتصال بالسيرفر أثناء رفع الملفات.'
+                        });
+                    };
+
+                    xhr.send(formData);
                 }
-            })
-            .catch(err => {
-                $('#certPdfInput').val('');
-                console.error(err);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'خطأ',
-                    text: 'حدث خطأ أثناء رفع ومعالجة الملفات.'
-                });
             });
         }
 

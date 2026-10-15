@@ -96,10 +96,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 app.UseStaticFiles();
-if (app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
+// Https redirection disabled to allow both HTTP (8090) and HTTPS (7085) simultaneously
 app.UseRouting();
 app.UseSentryTracing();
 

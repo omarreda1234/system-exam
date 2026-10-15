@@ -888,6 +888,8 @@ namespace Exam.Controllers
         }
 
         [HttpPost]
+        [RequestSizeLimit(524288000)] // 500 MB
+        [RequestFormLimits(MultipartBodyLengthLimit = 524288000)]
         public async Task<IActionResult> UploadCertificatesPdfs(List<IFormFile> pdfFiles, int? waveId = null)
         {
             if (pdfFiles == null || !pdfFiles.Any())
@@ -1777,7 +1779,7 @@ namespace Exam.Controllers
 
             var monthlySql = @"
                 SELECT 
-                    FORMAT(W.StartDate, 'MMM yyyy') as MonthLabel,
+                    CONCAT(SUBSTRING(DATENAME(month, MIN(W.StartDate)), 1, 3), ' ', YEAR(MIN(W.StartDate))) as MonthLabel,
                     MIN(W.StartDate) as MonthDate,
                     COUNT(UW.UserId) as TotalTrainees,
                     SUM(CASE WHEN wc.Score > 75 THEN 1 ELSE 0 END) as CertifiedCount,
@@ -1787,7 +1789,7 @@ namespace Exam.Controllers
                 JOIN UserWaves UW WITH (NOLOCK) ON W.Id = UW.WaveId
                 LEFT JOIN UserWaveCertificates wc WITH (NOLOCK) ON wc.UserId = UW.UserId AND wc.WaveId = W.Id
                 WHERE W.StartDate IS NOT NULL
-                GROUP BY FORMAT(W.StartDate, 'MMM yyyy')
+                GROUP BY YEAR(W.StartDate), MONTH(W.StartDate)
                 ORDER BY MIN(W.StartDate) ASC";
 
             var monthlyRows = (await conn.QueryAsync<dynamic>(monthlySql)).ToList();
