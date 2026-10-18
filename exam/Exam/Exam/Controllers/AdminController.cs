@@ -78,7 +78,8 @@ namespace Exam.Controllers
             "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails",
             "DownloadBranchUpdateTemplate", "ImportBranchUpdatesFromExcel", "DownloadBranchesTemplate", "ImportBranchesFromExcel",
             "DownloadShiftUpdateTemplate", "ImportShiftUpdatesFromExcel", "DownloadShiftsTemplate", "ImportShiftsFromExcel",
-            "UpdateUserDepartment", "DownloadDepartmentUpdateTemplate", "ImportDepartmentUpdatesFromExcel", "Departments", "SaveDepartment", "DeleteDepartment"
+            "UpdateUserDepartment", "DownloadDepartmentUpdateTemplate", "ImportDepartmentUpdatesFromExcel", "Departments", "SaveDepartment", "DeleteDepartment",
+            "GetDepartmentPersonnel", "ExportDepartmentPersonnelToExcel"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
@@ -4843,7 +4844,7 @@ ORDER BY U.UserName ASC";
             ("Branches", "Branches Management", "Admin", "Branches", new[] { "AddBranch", "EditBranch", "DeleteBranch", "DownloadBranchesTemplate", "ImportBranchesFromExcel", "MergeBranch" }),
             ("BranchSupervisors", "Branch Supervisors Management", "Admin", "BranchSupervisors", new[] { "AddBranchSupervisor", "DeleteBranchSupervisor" }),
             ("WorkShifts", "Work Shifts Management", "Admin", "Shifts", new[] { "AddShift", "EditShift", "DeleteShift", "GetShiftDetails", "DownloadShiftsTemplate", "ImportShiftsFromExcel" }),
-            ("Departments", "Departments Management", "Admin", "Departments", new[] { "SaveDepartment", "DeleteDepartment", "DownloadDepartmentUpdateTemplate", "ImportDepartmentUpdatesFromExcel" }),
+            ("Departments", "Departments Management", "Admin", "Departments", new[] { "SaveDepartment", "DeleteDepartment", "DownloadDepartmentUpdateTemplate", "ImportDepartmentUpdatesFromExcel", "GetDepartmentPersonnel", "ExportDepartmentPersonnelToExcel" }),
             ("AttendanceTrends", "Attendance Trends", "Attendance", "Analytics", new string[] { }),
             ("SkillTracks", "Skill Tracks", "SkillTracks", "Index", new string[] { }),
             ("SystemRoles", "System Roles Configuration", "Admin", "Roles", new[] { "CreateRole", "DeleteRole" }),
@@ -6887,9 +6888,9 @@ ORDER BY U.UserName ASC";
             {
                 var worksheet = workbook.Worksheets.Add("Department Update Template");
 
-                // Headers: كود الموظف + اسم أو كود القسم
-                worksheet.Cell(1, 1).Value = "كود الموظف";
-                worksheet.Cell(1, 2).Value = "اسم أو كود القسم";
+                // Headers: UserCode + DepartmentCode
+                worksheet.Cell(1, 1).Value = "UserCode";
+                worksheet.Cell(1, 2).Value = "DepartmentCode";
 
                 var headerRange = worksheet.Range("A1:B1");
                 headerRange.Style.Font.Bold = true;
@@ -6897,13 +6898,17 @@ ORDER BY U.UserName ASC";
                 headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#0284c7"); // Sky 600
                 headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
 
-                // Sample rows
-                worksheet.Cell(2, 1).Value = "1001";
-                worksheet.Cell(2, 2).Value = "PHARMA";
-                worksheet.Cell(3, 1).Value = "1002";
-                worksheet.Cell(3, 2).Value = "COSMO";
-                worksheet.Cell(4, 1).Value = "1003";
-                worksheet.Cell(4, 2).Value = "SUPP";
+                // Sample rows with real system department codes (e.g. CC, HR, QA, MC, APP)
+                worksheet.Cell(2, 1).Value = "1348";
+                worksheet.Cell(2, 2).Value = "CC";
+                worksheet.Cell(3, 1).Value = "1457";
+                worksheet.Cell(3, 2).Value = "HR";
+                worksheet.Cell(4, 1).Value = "1001";
+                worksheet.Cell(4, 2).Value = "QA";
+                worksheet.Cell(5, 1).Value = "1002";
+                worksheet.Cell(5, 2).Value = "MC";
+                worksheet.Cell(6, 1).Value = "1003";
+                worksheet.Cell(6, 2).Value = "APP";
 
                 for (int row = 2; row <= 20; row++)
                 {
@@ -6914,8 +6919,8 @@ ORDER BY U.UserName ASC";
                     }
                 }
 
-                worksheet.Column(1).Width = 22;
-                worksheet.Column(2).Width = 30;
+                worksheet.Column(1).Width = 24;
+                worksheet.Column(2).Width = 26;
 
                 // Guide Sheet: List of active system departments
                 using var conn = new SqlConnection(_connectionString);
@@ -6927,13 +6932,12 @@ ORDER BY U.UserName ASC";
                     ORDER BY d.Name ASC")).ToList();
 
                 var guideSheet = workbook.Worksheets.Add("Active Departments Guide");
-                guideSheet.Cell(1, 1).Value = "Department ID (كود القسم)";
-                guideSheet.Cell(1, 2).Value = "Department Name (اسم القسم)";
-                guideSheet.Cell(1, 3).Value = "Department Code (رمز القسم)";
-                guideSheet.Cell(1, 4).Value = "Description (الوصف)";
-                guideSheet.Cell(1, 5).Value = "Assigned Personnel (الموظفين)";
+                guideSheet.Cell(1, 1).Value = "DepartmentCode (كود القسم - المستخدم في التحديث)";
+                guideSheet.Cell(1, 2).Value = "DepartmentName (اسم القسم)";
+                guideSheet.Cell(1, 3).Value = "Description (الوصف)";
+                guideSheet.Cell(1, 4).Value = "Assigned Personnel (الموظفين)";
 
-                var guideHeader = guideSheet.Range("A1:E1");
+                var guideHeader = guideSheet.Range("A1:D1");
                 guideHeader.Style.Font.Bold = true;
                 guideHeader.Style.Font.FontColor = XLColor.White;
                 guideHeader.Style.Fill.BackgroundColor = XLColor.FromHtml("#0369a1"); // Sky 700
@@ -6942,13 +6946,12 @@ ORDER BY U.UserName ASC";
                 int gRow = 2;
                 foreach (var d in allDepts)
                 {
-                    guideSheet.Cell(gRow, 1).Value = d.Id;
+                    guideSheet.Cell(gRow, 1).Value = d.Code ?? "";
                     guideSheet.Cell(gRow, 2).Value = d.Name;
-                    guideSheet.Cell(gRow, 3).Value = d.Code ?? "";
-                    guideSheet.Cell(gRow, 4).Value = d.Description ?? "";
-                    guideSheet.Cell(gRow, 5).Value = d.AssignedPersonnelCount;
+                    guideSheet.Cell(gRow, 3).Value = d.Description ?? "";
+                    guideSheet.Cell(gRow, 4).Value = d.AssignedPersonnelCount;
 
-                    for (int c = 1; c <= 5; c++)
+                    for (int c = 1; c <= 4; c++)
                     {
                         guideSheet.Cell(gRow, c).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                         guideSheet.Cell(gRow, c).Style.Border.OutsideBorderColor = XLColor.FromHtml("#cbd5e1");
@@ -6956,11 +6959,10 @@ ORDER BY U.UserName ASC";
                     gRow++;
                 }
 
-                guideSheet.Column(1).Width = 18;
-                guideSheet.Column(2).Width = 30;
-                guideSheet.Column(3).Width = 20;
-                guideSheet.Column(4).Width = 35;
-                guideSheet.Column(5).Width = 24;
+                guideSheet.Column(1).Width = 32;
+                guideSheet.Column(2).Width = 32;
+                guideSheet.Column(3).Width = 35;
+                guideSheet.Column(4).Width = 22;
 
                 using (var stream = new MemoryStream())
                 {
@@ -7062,12 +7064,12 @@ ORDER BY U.UserName ASC";
                     return null;
                 }
 
-                int? colUserCode = GetCol("كود الموظف", "UserCode", "Code", "كود", "EmployeeCode", "كود المستخدم", "User Code");
-                int? colDept = GetCol("اسم أو كود القسم", "Department", "DepartmentName", "DepartmentCode", "القسم", "اسم القسم", "كود القسم", "رمز القسم", "Dept", "DeptName");
+                int? colUserCode = GetCol("UserCode", "User Code", "User_Code", "كود الموظف", "Code", "كود", "EmployeeCode", "كود المستخدم");
+                int? colDept = GetCol("DepartmentCode", "Department_Code", "Department Code", "DeptCode", "كود القسم", "رمز القسم", "اسم أو كود القسم", "Department", "DepartmentName", "القسم", "اسم القسم", "Dept", "DeptName");
 
                 var missingColumns = new List<string>();
-                if (colUserCode == null) missingColumns.Add("كود الموظف (UserCode)");
-                if (colDept == null) missingColumns.Add("اسم أو كود القسم (Department Name or Code)");
+                if (colUserCode == null) missingColumns.Add("UserCode (كود الموظف)");
+                if (colDept == null) missingColumns.Add("DepartmentCode (كود القسم)");
 
                 if (missingColumns.Any())
                 {
@@ -7075,7 +7077,7 @@ ORDER BY U.UserName ASC";
                     return Json(new
                     {
                         success = false,
-                        message = $"الملف المرفوع تنقصه الأعمدة التالية أو لم يتم التعرف عليها: <br/><strong class='text-rose-600'>{missingStr}</strong>.<br/><br/>الأعمدة المطلوبة:<br/>1. <b>كود الموظف</b> (UserCode)<br/>2. <b>اسم أو كود القسم</b> (Department Name or Code)"
+                        message = $"الملف المرفوع تنقصه الأعمدة التالية أو لم يتم التعرف عليها: <br/><strong class='text-rose-600'>{missingStr}</strong>.<br/><br/>الأعمدة المطلوبة:<br/>1. <b>UserCode</b> (كود الموظف)<br/>2. <b>DepartmentCode</b> (كود القسم مثل CC أو HR أو QA)"
                     });
                 }
 
@@ -7339,6 +7341,254 @@ ORDER BY U.UserName ASC";
             await conn.ExecuteAsync("DELETE FROM dbo.Departments WHERE Id = @Id", new { Id = id });
 
             return Json(new { success = true, message = "تم حذف القسم بنجاح." });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetDepartmentPersonnel(int id)
+        {
+            if (id <= 0)
+            {
+                return Json(new { success = false, message = "معرف القسم غير صالح." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                var dept = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                    "SELECT Id, Name, Code, Description FROM dbo.Departments WHERE Id = @Id", new { Id = id });
+
+                if (dept == null)
+                {
+                    return Json(new { success = false, message = "القسم غير موجود." });
+                }
+
+                var personnel = (await conn.QueryAsync<dynamic>(@"
+                    SELECT 
+                        u.Id,
+                        u.FullName,
+                        u.UserName,
+                        u.Email,
+                        u.PhoneNumber,
+                        u.UserCode,
+                        u.IsActive,
+                        u.CreatedAt,
+                        b.BranchName,
+                        s.ShiftName,
+                        r.Name AS RoleName
+                    FROM dbo.AspNetUsers u
+                    LEFT JOIN dbo.Branches b ON u.BranchId = b.Id
+                    LEFT JOIN dbo.Shifts s ON u.ShiftId = s.Id
+                    LEFT JOIN dbo.AspNetUserRoles ur ON u.Id = ur.UserId
+                    LEFT JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id
+                    WHERE u.DepartmentId = @Id
+                    ORDER BY u.FullName ASC", new { Id = id })).ToList();
+
+                var list = personnel.Select(p => new
+                {
+                    id = (string)(p.Id?.ToString() ?? ""),
+                    fullName = (string)(p.FullName ?? p.UserName ?? "Unknown"),
+                    userName = (string)(p.UserName ?? ""),
+                    email = (string)(p.Email ?? "--"),
+                    phoneNumber = (string)(p.PhoneNumber ?? "--"),
+                    userCode = (string)(p.UserCode ?? "--"),
+                    branchName = (string)(p.BranchName ?? "Unassigned"),
+                    shiftName = (string)(p.ShiftName ?? "Unassigned"),
+                    roleName = (string)(p.RoleName ?? "Trainee"),
+                    isActive = (bool)(p.IsActive ?? true),
+                    createdAt = p.CreatedAt != null ? ((DateTime)p.CreatedAt).ToString("yyyy-MM-dd") : "--"
+                }).ToList();
+
+                return Json(new
+                {
+                    success = true,
+                    departmentId = (int)dept.Id,
+                    departmentName = (string)dept.Name,
+                    departmentCode = (string)(dept.Code ?? ""),
+                    count = list.Count,
+                    personnel = list
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ أثناء جلب الموظفين: " + ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportDepartmentPersonnelToExcel(int id)
+        {
+            if (id <= 0)
+            {
+                return BadRequest("Invalid department ID.");
+            }
+
+            using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            var dept = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT Id, Name, Code, Description FROM dbo.Departments WHERE Id = @Id", new { Id = id });
+
+            if (dept == null)
+            {
+                return NotFound("Department not found.");
+            }
+
+            string deptName = (string)dept.Name;
+            string deptCode = (string)(dept.Code ?? "");
+
+            var personnel = (await conn.QueryAsync<dynamic>(@"
+                SELECT 
+                    u.Id,
+                    u.FullName,
+                    u.UserName,
+                    u.Email,
+                    u.PhoneNumber,
+                    u.UserCode,
+                    u.IsActive,
+                    u.CreatedAt,
+                    b.BranchName,
+                    s.ShiftName,
+                    r.Name AS RoleName
+                FROM dbo.AspNetUsers u
+                LEFT JOIN dbo.Branches b ON u.BranchId = b.Id
+                LEFT JOIN dbo.Shifts s ON u.ShiftId = s.Id
+                LEFT JOIN dbo.AspNetUserRoles ur ON u.Id = ur.UserId
+                LEFT JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id
+                WHERE u.DepartmentId = @Id
+                ORDER BY u.FullName ASC", new { Id = id })).ToList();
+
+            using (var workbook = new ClosedXML.Excel.XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Assigned Personnel");
+                worksheet.RightToLeft = false;
+
+                // Title Banner
+                worksheet.Cell(1, 1).Value = $"DEPARTMENT PERSONNEL ROSTER - {deptName.ToUpper()} ({(string.IsNullOrEmpty(deptCode) ? "N/A" : deptCode)})";
+                var titleRange = worksheet.Range(1, 1, 1, 9);
+                titleRange.Merge();
+                titleRange.Style.Font.Bold = true;
+                titleRange.Style.Font.FontSize = 14;
+                titleRange.Style.Font.FontColor = XLColor.White;
+                titleRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#0284c7"); // Sky-600
+                titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                titleRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                worksheet.Row(1).Height = 28;
+
+                // Subtitle Info
+                worksheet.Cell(2, 1).Value = $"Generated on: {DateTime.Now:yyyy-MM-dd hh:mm tt} | Total Assigned Personnel: {personnel.Count}";
+                var subRange = worksheet.Range(2, 1, 2, 9);
+                subRange.Merge();
+                subRange.Style.Font.Italic = true;
+                subRange.Style.Font.FontSize = 10;
+                subRange.Style.Font.FontColor = XLColor.FromHtml("#475569");
+                subRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#f1f5f9");
+                subRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Row(2).Height = 20;
+
+                // Table Headers
+                string[] headers = new[]
+                {
+                    "#",
+                    "User Code",
+                    "Full Name",
+                    "Email Address",
+                    "Phone Number",
+                    "Branch",
+                    "Shift",
+                    "Role / Authority",
+                    "Status"
+                };
+
+                int headerRow = 4;
+                worksheet.Row(headerRow).Height = 24;
+                for (int c = 0; c < headers.Length; c++)
+                {
+                    var cell = worksheet.Cell(headerRow, c + 1);
+                    cell.Value = headers[c];
+                    cell.Style.Font.Bold = true;
+                    cell.Style.Font.FontSize = 11;
+                    cell.Style.Font.FontColor = XLColor.White;
+                    cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f172a"); // Slate-900
+                    cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    cell.Style.Border.OutsideBorderColor = XLColor.FromHtml("#334155");
+                }
+
+                // Data Rows
+                int curRow = 5;
+                int seq = 1;
+                foreach (var p in personnel)
+                {
+                    worksheet.Row(curRow).Height = 20;
+                    var rowBg = (seq % 2 == 0) ? XLColor.FromHtml("#f8fafc") : XLColor.White;
+
+                    worksheet.Cell(curRow, 1).Value = seq;
+                    worksheet.Cell(curRow, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                    worksheet.Cell(curRow, 2).Value = (string)(p.UserCode ?? "--");
+                    worksheet.Cell(curRow, 2).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(curRow, 2).Style.Font.Bold = true;
+
+                    worksheet.Cell(curRow, 3).Value = (string)(p.FullName ?? p.UserName ?? "Unknown");
+                    worksheet.Cell(curRow, 3).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+
+                    worksheet.Cell(curRow, 4).Value = (string)(p.Email ?? "--");
+                    worksheet.Cell(curRow, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+
+                    worksheet.Cell(curRow, 5).Value = (string)(p.PhoneNumber ?? "--");
+                    worksheet.Cell(curRow, 5).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                    worksheet.Cell(curRow, 6).Value = (string)(p.BranchName ?? "Unassigned");
+                    worksheet.Cell(curRow, 6).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                    worksheet.Cell(curRow, 7).Value = (string)(p.ShiftName ?? "Unassigned");
+                    worksheet.Cell(curRow, 7).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                    worksheet.Cell(curRow, 8).Value = (string)(p.RoleName ?? "Trainee");
+                    worksheet.Cell(curRow, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                    bool isActive = (bool)(p.IsActive ?? true);
+                    worksheet.Cell(curRow, 9).Value = isActive ? "Active" : "Inactive";
+                    worksheet.Cell(curRow, 9).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(curRow, 9).Style.Font.FontColor = isActive ? XLColor.FromHtml("#15803d") : XLColor.FromHtml("#991b1b");
+                    worksheet.Cell(curRow, 9).Style.Font.Bold = true;
+
+                    for (int col = 1; col <= 9; col++)
+                    {
+                        var cell = worksheet.Cell(curRow, col);
+                        cell.Style.Fill.BackgroundColor = rowBg;
+                        cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        cell.Style.Border.OutsideBorderColor = XLColor.FromHtml("#e2e8f0");
+                        cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    }
+
+                    curRow++;
+                    seq++;
+                }
+
+                // Adjust Column Widths
+                worksheet.Column(1).Width = 6;   // #
+                worksheet.Column(2).Width = 15;  // User Code
+                worksheet.Column(3).Width = 32;  // Full Name
+                worksheet.Column(4).Width = 30;  // Email
+                worksheet.Column(5).Width = 18;  // Phone
+                worksheet.Column(6).Width = 20;  // Branch
+                worksheet.Column(7).Width = 20;  // Shift
+                worksheet.Column(8).Width = 18;  // Role
+                worksheet.Column(9).Width = 14;  // Status
+
+                using (var stream = new MemoryStream())
+                {
+                    workbook.SaveAs(stream);
+                    var content = stream.ToArray();
+                    string safeCode = string.IsNullOrWhiteSpace(deptCode) ? "DEPT" : System.Text.RegularExpressions.Regex.Replace(deptCode, @"[^\w\.-]", "_");
+                    string fileName = $"{safeCode}_Personnel_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                    return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+                }
+            }
         }
 
         [HttpGet]
@@ -8108,8 +8358,8 @@ ORDER BY U.UserName ASC";
                 var worksheet = workbook.Worksheets.Add("Shifts Definition");
 
                 worksheet.Cell(1, 1).Value = "اسم الشيفت (Shift Name)";
-                worksheet.Cell(1, 2).Value = "وقت البداية (Start Time - HH:mm)";
-                worksheet.Cell(1, 3).Value = "وقت النهاية (End Time - HH:mm)";
+                worksheet.Cell(1, 2).Value = "وقت البداية (Start Time - e.g. 08:00 AM)";
+                worksheet.Cell(1, 3).Value = "وقت النهاية (End Time - e.g. 04:00 PM)";
 
                 var headerRange = worksheet.Range("A1:C1");
                 headerRange.Style.Font.Bold = true;
@@ -8117,18 +8367,18 @@ ORDER BY U.UserName ASC";
                 headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#4f46e5"); // Indigo 600
                 headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
 
-                // Sample rows
+                // Sample rows with standard 12-hour AM/PM format
                 worksheet.Cell(2, 1).Value = "Morning Shift A";
-                worksheet.Cell(2, 2).Value = "08:00";
-                worksheet.Cell(2, 3).Value = "16:00";
+                worksheet.Cell(2, 2).Value = "08:00 AM";
+                worksheet.Cell(2, 3).Value = "04:00 PM";
 
-                worksheet.Cell(3, 1).Value = "Mid Shift B";
-                worksheet.Cell(3, 2).Value = "12:00";
-                worksheet.Cell(3, 3).Value = "00:00";
+                worksheet.Cell(3, 1).Value = "Evening Shift B";
+                worksheet.Cell(3, 2).Value = "04:00 PM";
+                worksheet.Cell(3, 3).Value = "12:00 AM";
 
                 worksheet.Cell(4, 1).Value = "Night Shift C";
-                worksheet.Cell(4, 2).Value = "22:00";
-                worksheet.Cell(4, 3).Value = "08:00";
+                worksheet.Cell(4, 2).Value = "10:00 PM";
+                worksheet.Cell(4, 3).Value = "06:00 AM";
 
                 for (int row = 2; row <= 15; row++)
                 {
@@ -8140,8 +8390,8 @@ ORDER BY U.UserName ASC";
                 }
 
                 worksheet.Column(1).Width = 32;
-                worksheet.Column(2).Width = 30;
-                worksheet.Column(3).Width = 30;
+                worksheet.Column(2).Width = 35;
+                worksheet.Column(3).Width = 35;
 
                 using (var stream = new MemoryStream())
                 {
@@ -8286,13 +8536,13 @@ ORDER BY U.UserName ASC";
 
                     if (!TryParseExcelTime(cellStart, out var parsedStart))
                     {
-                        errorLines.Add($"السطر {row}: وقت بداية غير صالح للشيفت '{rawName}'. (الصيغة المتوقعة HH:mm مثل 08:00).");
+                        errorLines.Add($"السطر {row}: وقت بداية غير صالح للشيفت '{rawName}'. (الصيغة المتوقعة مثل 08:00 AM أو 04:00 PM).");
                         continue;
                     }
 
                     if (!TryParseExcelTime(cellEnd, out var parsedEnd))
                     {
-                        errorLines.Add($"السطر {row}: وقت نهاية غير صالح للشيفت '{rawName}'. (الصيغة المتوقعة HH:mm مثل 16:00).");
+                        errorLines.Add($"السطر {row}: وقت نهاية غير صالح للشيفت '{rawName}'. (الصيغة المتوقعة مثل 04:00 PM أو 12:00 AM).");
                         continue;
                     }
 
@@ -8364,14 +8614,43 @@ ORDER BY U.UserName ASC";
                     }
                 }
 
-                string str = cell.Value.ToString()?.Trim();
+                string str = cell.Value.ToString()?.Trim() ?? "";
                 if (string.IsNullOrWhiteSpace(str)) return false;
 
-                if (TimeSpan.TryParse(str, out time)) return true;
+                // Normalize Arabic AM/PM indicators to standard English AM/PM
+                string normalized = str
+                    .Replace("مساءً", "PM")
+                    .Replace("صباحاً", "AM")
+                    .Replace("مساء", "PM")
+                    .Replace("صباح", "AM")
+                    .Replace("م", "PM")
+                    .Replace("ص", "AM")
+                    .Trim();
 
-                if (DateTime.TryParse(str, out var dt))
+                if (TimeSpan.TryParse(normalized, out time)) return true;
+
+                if (DateTime.TryParse(normalized, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.NoCurrentDateDefault, out var dtInv))
+                {
+                    time = dtInv.TimeOfDay;
+                    return true;
+                }
+
+                if (DateTime.TryParse(normalized, out var dt))
                 {
                     time = dt.TimeOfDay;
+                    return true;
+                }
+
+                // Try specific 12-hour and 24-hour patterns
+                string[] formats = new[]
+                {
+                    "hh:mm tt", "h:mm tt", "hh:mmtt", "h:mmtt", "h tt", "hh tt",
+                    "HH:mm", "H:mm", "hh:mm:ss tt", "HH:mm:ss"
+                };
+
+                if (DateTime.TryParseExact(normalized, formats, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.NoCurrentDateDefault, out var dtExact))
+                {
+                    time = dtExact.TimeOfDay;
                     return true;
                 }
             }
