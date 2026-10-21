@@ -805,15 +805,21 @@ namespace Exam.Controllers
                 if (!companyId.HasValue) return BadRequest(new { success = false, message = "This session does not belong to a company." });
 
                 var assigned = (await conn.QueryAsync<dynamic>(@"
-                    SELECT CST.Id AS AssignmentId, CT.Id AS TraineeId, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone, CST.AssignedAt
+                    SELECT CST.Id AS AssignmentId, CT.Id AS TraineeId, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone, CST.AssignedAt,
+                           ISNULL(CST.ApprovalStatus, 'Approved') AS ApprovalStatus,
+                           CST.RejectionReason,
+                           CST.ReplacedWithTraineeId,
+                           CST.ActionedAt
                     FROM dbo.CompanySessionTrainees CST
                     JOIN CompanyTrainees CT ON CST.CompanyTraineeId = CT.Id
                     WHERE CST.SessionId = @SessionId
                     ORDER BY CT.FullName", new { SessionId = sessionId })).ToList();
 
                 var available = (await conn.QueryAsync<dynamic>(@"
-                    SELECT CT.Id, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone
+                    SELECT CT.Id, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone,
+                           ISNULL(b.BypassApproval, 0) AS IsBranchExempt
                     FROM CompanyTrainees CT
+                    LEFT JOIN Branches b ON b.BranchName = CT.BranchName
                     WHERE CT.CompanyId = @CompanyId
                       AND CT.Id NOT IN (SELECT CompanyTraineeId FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId AND CompanyTraineeId IS NOT NULL)
                     ORDER BY CT.FullName", new { CompanyId = companyId.Value, SessionId = sessionId })).ToList();
@@ -865,22 +871,58 @@ namespace Exam.Controllers
                 var assignedBy = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 int count = 0;
 
-                foreach (var tid in req.TraineeIds)
+                // Fetch trainee details with branch exemption info
+                var trainees = (await conn.QueryAsync<dynamic>(@"
+                    SELECT CT.Id, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone,
+                           b.Id AS BranchId, ISNULL(b.BypassApproval, 0) AS IsBranchExempt
+                    FROM CompanyTrainees CT
+                    LEFT JOIN Branches b ON b.BranchName = CT.BranchName
+                    WHERE CT.Id IN @Ids", new { Ids = req.TraineeIds })).ToList();
+
+                var pendingBranchGroups = new Dictionary<int, (string BranchName, int Count)>();
+
+                foreach (var t in trainees)
                 {
+                    int tid = (int)t.Id;
+                    bool isExempt = req.BypassApproval || ((int)t.IsBranchExempt == 1);
+                    string status = isExempt ? "Approved" : "Pending";
+
                     int affected = await conn.ExecuteAsync(@"
                         IF NOT EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId AND CompanyTraineeId = @TraineeId)
                         BEGIN
-                            INSERT INTO dbo.CompanySessionTrainees (SessionId, CompanyTraineeId, AssignedAt, AssignedBy)
-                            VALUES (@SessionId, @TraineeId, GETDATE(), @AssignedBy)
-                        END", new { SessionId = req.SessionId, TraineeId = tid, AssignedBy = assignedBy });
-                    if (affected > 0) count++;
+                            INSERT INTO dbo.CompanySessionTrainees (SessionId, CompanyTraineeId, AssignedAt, AssignedBy, ApprovalStatus)
+                            VALUES (@SessionId, @TraineeId, GETDATE(), @AssignedBy, @Status)
+                        END", new { SessionId = req.SessionId, TraineeId = tid, AssignedBy = assignedBy, Status = status });
+
+                    if (affected > 0)
+                    {
+                        count++;
+                        if (!isExempt && t.BranchId != null)
+                        {
+                            int bId = (int)t.BranchId;
+                            string bName = (string)(t.BranchName ?? "فرع");
+                            if (pendingBranchGroups.ContainsKey(bId))
+                                pendingBranchGroups[bId] = (bName, pendingBranchGroups[bId].Count + 1);
+                            else
+                                pendingBranchGroups[bId] = (bName, 1);
+                        }
+                    }
                 }
 
-                // Fetch trainee details
-                var trainees = (await conn.QueryAsync<dynamic>(@"
-                    SELECT CT.Id, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone
-                    FROM CompanyTrainees CT
-                    WHERE CT.Id IN @Ids", new { Ids = req.TraineeIds })).ToList();
+                // Notify branch managers for non-exempt pending groups
+                foreach (var kvp in pendingBranchGroups)
+                {
+                    int bId = kvp.Key;
+                    var info = kvp.Value;
+                    string title = $"ترشيح متدربين لسيشن شركة: {session.CompanyName} 🏢";
+                    string message = $"تم ترشيح {info.Count} متدرب من فرع ({info.BranchName}) لحضور سيشن ({session.SessionName}) لشركة {session.CompanyName}. يرجى مراجعة المرشحين والموافقة أو الرفض أو الاستبدال.";
+                    string linkUrl = $"/Attendance/ManageSessions?companyId={session.CompanyId}";
+
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO dbo.AppNotifications (BranchId, Title, Message, LinkUrl, Type, ReferenceId, IsRead, CreatedAt)
+                        VALUES (@BranchId, @Title, @Message, @LinkUrl, 'CompanySessionNomination', @ReferenceId, 0, GETDATE())",
+                        new { BranchId = bId, Title = title, Message = message, LinkUrl = linkUrl, ReferenceId = session.Id.ToString() });
+                }
 
                 // 1. In-App Notifications
                 foreach (var t in trainees)
@@ -968,7 +1010,7 @@ namespace Exam.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> ImportSessionTraineesFromExcel(int sessionId, Microsoft.AspNetCore.Http.IFormFile excelFile)
+        public async Task<IActionResult> ImportSessionTraineesFromExcel(int sessionId, Microsoft.AspNetCore.Http.IFormFile excelFile, bool bypassApproval = false)
         {
             if (excelFile == null || excelFile.Length == 0)
             {
@@ -1036,12 +1078,20 @@ namespace Exam.Controllers
                                     });
                             }
 
+                            // Check branch exemption
+                            var branchInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                                "SELECT Id, ISNULL(BypassApproval, 0) AS BypassApproval FROM Branches WHERE BranchName = @BranchName",
+                                new { BranchName = branchName });
+
+                            bool isExempt = bypassApproval || (branchInfo != null && (int)branchInfo.BypassApproval == 1);
+                            string status = isExempt ? "Approved" : "Pending";
+
                             int affected = await conn.ExecuteAsync(@"
                                 IF NOT EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId AND CompanyTraineeId = @TraineeId)
                                 BEGIN
-                                    INSERT INTO dbo.CompanySessionTrainees (SessionId, CompanyTraineeId, AssignedAt, AssignedBy)
-                                    VALUES (@SessionId, @TraineeId, GETDATE(), @AssignedBy)
-                                END", new { SessionId = sessionId, TraineeId = traineeId, AssignedBy = assignedBy });
+                                    INSERT INTO dbo.CompanySessionTrainees (SessionId, CompanyTraineeId, AssignedAt, AssignedBy, ApprovalStatus)
+                                    VALUES (@SessionId, @TraineeId, GETDATE(), @AssignedBy, @Status)
+                                END", new { SessionId = sessionId, TraineeId = traineeId, AssignedBy = assignedBy, Status = status });
 
                             if (affected > 0)
                             {
@@ -1089,6 +1139,7 @@ namespace Exam.Controllers
         public List<int> TraineeIds { get; set; } = new List<int>();
         public bool SendNotification { get; set; } = true;
         public bool SendEmailViaN8n { get; set; } = true;
+        public bool BypassApproval { get; set; } = false;
     }
 }
 

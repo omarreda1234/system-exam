@@ -66,28 +66,43 @@ namespace Exam.Controllers
 
                 int unreadCount = notifs.Count(n => n.IsRead == false);
 
-                // 2. Pending wave nominations count
-                int pendingCount = 0;
+                // 2. Pending wave & company nominations count
+                int pendingWaveCount = 0;
+                int pendingCompanyCount = 0;
                 if (isAdminOrHr)
                 {
-                    pendingCount = await conn.ExecuteScalarAsync<int>(
+                    pendingWaveCount = await conn.ExecuteScalarAsync<int>(
                         "SELECT COUNT(1) FROM dbo.UserWaves WHERE ApprovalStatus = 'Pending'");
+                    pendingCompanyCount = await conn.ExecuteScalarAsync<int>(
+                        "SELECT COUNT(1) FROM dbo.CompanySessionTrainees WHERE ApprovalStatus = 'Pending'");
                 }
                 else if (userBranchId.HasValue)
                 {
-                    pendingCount = await conn.ExecuteScalarAsync<int>(@"
+                    pendingWaveCount = await conn.ExecuteScalarAsync<int>(@"
                         SELECT COUNT(1) 
                         FROM dbo.UserWaves uw
                         JOIN AspNetUsers u ON uw.UserId = u.Id
                         WHERE uw.ApprovalStatus = 'Pending' AND u.BranchId = @BranchId",
                         new { BranchId = userBranchId.Value });
+
+                    pendingCompanyCount = await conn.ExecuteScalarAsync<int>(@"
+                        SELECT COUNT(1)
+                        FROM dbo.CompanySessionTrainees cst
+                        JOIN dbo.CompanyTrainees ct ON cst.CompanyTraineeId = ct.Id
+                        JOIN dbo.Branches b ON b.BranchName = ct.BranchName
+                        WHERE cst.ApprovalStatus = 'Pending' AND b.Id = @BranchId",
+                        new { BranchId = userBranchId.Value });
                 }
+
+                int totalPending = pendingWaveCount + pendingCompanyCount;
 
                 return Json(new
                 {
                     success = true,
-                    unreadCount = unreadCount + pendingCount,
-                    pendingNominationsCount = pendingCount,
+                    unreadCount = unreadCount + totalPending,
+                    pendingNominationsCount = totalPending,
+                    pendingWaveCount = pendingWaveCount,
+                    pendingCompanyCount = pendingCompanyCount,
                     userBranchId = userBranchId,
                     notifications = notifs.Select(n => new
                     {
@@ -180,7 +195,7 @@ namespace Exam.Controllers
                       AND (@IsAdmin = 1 OR u.BranchId = @BranchId)
                     ORDER BY tw.StartDate ASC, b.BranchName ASC, u.FullName ASC";
 
-                var nominations = (await conn.QueryAsync<dynamic>(sql, new
+                var waveNominations = (await conn.QueryAsync<dynamic>(sql, new
                 {
                     WaveId = waveId,
                     IsAdmin = isAdminOrHr ? 1 : 0,
@@ -202,10 +217,76 @@ namespace Exam.Controllers
                     startDate = n.StartDate != null ? ((DateTime)n.StartDate).ToString("yyyy-MM-dd") : "--",
                     endDate = n.EndDate != null ? ((DateTime)n.EndDate).ToString("yyyy-MM-dd") : "--",
                     approvalStatus = (string)n.ApprovalStatus,
-                    joinDate = ((DateTime)n.JoinDate).ToString("yyyy-MM-dd")
+                    joinDate = ((DateTime)n.JoinDate).ToString("yyyy-MM-dd"),
+                    type = "wave"
                 }).ToList();
 
-                return Json(new { success = true, nominations });
+                // 2. Pending company sessions nominations
+                string companySql = @"
+                    SELECT 
+                        cst.Id AS CompanySessionTraineeId,
+                        cst.SessionId,
+                        cst.CompanyTraineeId,
+                        ct.FullName AS TraineeName,
+                        ISNULL(ct.UserCode, '--') AS UserCode,
+                        ISNULL(ct.JobTitle, 'Trainee') AS JobTitle,
+                        ISNULL(ct.BranchName, N'بدون فرع') AS BranchName,
+                        ISNULL(ct.Email, '--') AS Email,
+                        ISNULL(ct.Phone, '--') AS PhoneNumber,
+                        b.Id AS BranchId,
+                        s.SessionName,
+                        s.SessionDate,
+                        s.StartTime,
+                        s.EndTime,
+                        c.Id AS CompanyId,
+                        ISNULL(c.Name, 'Company') AS CompanyName,
+                        cst.ApprovalStatus,
+                        cst.AssignedAt
+                    FROM dbo.CompanySessionTrainees cst
+                    JOIN dbo.CompanyTrainees ct ON cst.CompanyTraineeId = ct.Id
+                    LEFT JOIN dbo.Branches b ON b.BranchName = ct.BranchName
+                    JOIN dbo.AttendanceSessions s ON cst.SessionId = s.Id
+                    LEFT JOIN dbo.Companies c ON s.CompanyId = c.Id
+                    WHERE cst.ApprovalStatus = 'Pending'
+                      AND (@IsAdmin = 1 OR b.Id = @BranchId)
+                    ORDER BY s.SessionDate ASC, ct.FullName ASC";
+
+                var companyNominations = (await conn.QueryAsync<dynamic>(companySql, new
+                {
+                    IsAdmin = isAdminOrHr ? 1 : 0,
+                    BranchId = userBranchId
+                })).Select(c => new
+                {
+                    companySessionTraineeId = (int)c.CompanySessionTraineeId,
+                    userWaveId = (int)c.CompanySessionTraineeId, // alias for common ID
+                    sessionId = (int)c.SessionId,
+                    companyTraineeId = (int)c.CompanyTraineeId,
+                    traineeName = (string)c.TraineeName,
+                    studentName = (string)c.TraineeName,
+                    userCode = (string)c.UserCode,
+                    jobTitle = (string)c.JobTitle,
+                    branchName = (string)c.BranchName,
+                    branchId = (int?)c.BranchId,
+                    email = (string)c.Email,
+                    phoneNumber = (string)c.PhoneNumber,
+                    sessionName = (string)c.SessionName,
+                    companyId = (int?)c.CompanyId,
+                    companyName = (string)c.CompanyName,
+                    sessionDate = c.SessionDate != null ? ((DateTime)c.SessionDate).ToString("yyyy-MM-dd") : "--",
+                    sessionTime = c.StartTime != null ? $"{((TimeSpan)c.StartTime):hh\\:mm} - {((TimeSpan)c.EndTime):hh\\:mm}" : "",
+                    approvalStatus = (string)c.ApprovalStatus,
+                    assignedAt = ((DateTime)c.AssignedAt).ToString("yyyy-MM-dd"),
+                    type = "company"
+                }).ToList();
+
+                return Json(new
+                {
+                    success = true,
+                    nominations = waveNominations,
+                    waveNominations = waveNominations,
+                    companyNominations = companyNominations,
+                    totalPending = waveNominations.Count + companyNominations.Count
+                });
             }
             catch (Exception ex)
             {
@@ -245,6 +326,71 @@ namespace Exam.Controllers
             }
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetAvailableCompanyColleagues(int sessionId, int companyId, string branchName)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                string sql = @"
+                    SELECT ct.Id, ct.FullName, ct.UserCode, ct.JobTitle, ct.BranchName
+                    FROM CompanyTrainees ct
+                    WHERE ct.CompanyId = @CompanyId
+                      AND ct.BranchName = @BranchName
+                      AND NOT EXISTS (
+                          SELECT 1 FROM dbo.CompanySessionTrainees cst
+                          WHERE cst.SessionId = @SessionId 
+                            AND cst.CompanyTraineeId = ct.Id 
+                            AND cst.ApprovalStatus IN ('Approved', 'Pending')
+                      )
+                    ORDER BY ct.FullName ASC";
+
+                var colleagues = (await conn.QueryAsync<dynamic>(sql, new { SessionId = sessionId, CompanyId = companyId, BranchName = branchName })).ToList();
+                return Json(new { success = true, colleagues });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetBranchesApprovalSettings()
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+                var branches = await conn.QueryAsync<dynamic>(
+                    "SELECT Id, BranchName, ISNULL(BypassApproval, 0) as BypassApproval FROM Branches ORDER BY BranchName");
+                return Json(new { success = true, branches });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ToggleBranchBypassApproval(int branchId, bool bypass)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+                await conn.ExecuteAsync(
+                    "UPDATE Branches SET BypassApproval = @Bypass WHERE Id = @Id",
+                    new { Bypass = bypass ? 1 : 0, Id = branchId });
+                return Json(new { success = true, message = "تم تحديث إعدادات الاعتماد المباشر للفرع بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpPost]
         public async Task<IActionResult> ActionNomination([FromBody] NominationActionRequest req)
         {
@@ -261,8 +407,149 @@ namespace Exam.Controllers
                 var currentUserId = CurrentUserId;
                 var roles = CurrentUserRoles;
                 bool isAdminOrHr = roles.Contains("Admin") || roles.Contains("HR") || roles.Contains("Human Resources");
+                string action = req.Action.Trim().ToLowerInvariant();
+                string nomType = (req.Type ?? "wave").ToLowerInvariant().Trim();
 
-                // Get nomination info
+                // ----------------------------------------------------
+                // 1. Handling Company Session Trainee Nominations
+                // ----------------------------------------------------
+                if (nomType == "company")
+                {
+                    var cNomination = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                        SELECT cst.Id, cst.SessionId, cst.CompanyTraineeId, cst.ApprovalStatus, ct.FullName AS TraineeName,
+                               ct.BranchName, b.Id AS BranchId, s.SessionName, c.Name AS CompanyName, s.CompanyId
+                        FROM dbo.CompanySessionTrainees cst
+                        JOIN dbo.CompanyTrainees ct ON cst.CompanyTraineeId = ct.Id
+                        LEFT JOIN dbo.Branches b ON b.BranchName = ct.BranchName
+                        JOIN dbo.AttendanceSessions s ON cst.SessionId = s.Id
+                        LEFT JOIN dbo.Companies c ON s.CompanyId = c.Id
+                        WHERE cst.Id = @Id", new { Id = req.UserWaveId });
+
+                    if (cNomination == null)
+                    {
+                        return Json(new { success = false, message = "لم يتم العثور على سجل متدرب الشركة." });
+                    }
+
+                    if (!isAdminOrHr)
+                    {
+                        int? managerBranch = await conn.QueryFirstOrDefaultAsync<int?>(
+                            "SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = currentUserId });
+                        if (managerBranch != (int?)cNomination.BranchId)
+                        {
+                            return Json(new { success = false, message = "ليس لديك صلاحية اعتماد متدربي هذا الفرع." });
+                        }
+                    }
+
+                    if (action == "accept" || action == "approve")
+                    {
+                        await conn.ExecuteAsync(@"
+                            UPDATE dbo.CompanySessionTrainees 
+                            SET ApprovalStatus = 'Approved',
+                                ActionedByUserId = @ActionedBy,
+                                ActionedAt = GETDATE()
+                            WHERE Id = @Id",
+                            new { Id = req.UserWaveId, ActionedBy = currentUserId });
+
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.AppNotifications (RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
+                            VALUES ('Admin', N'اعتماد حضور متدرب شركة ✅', CONCAT(N'تم اعتماد حضور: ', @TraineeName, N' من فرع: ', @BranchName, N' لسيشن: ', @SessionName), CONCAT('/Attendance/ManageSessions?companyId=', @CompanyId), 'CompanySessionApproved', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                            new {
+                                TraineeName = (string)cNomination.TraineeName,
+                                BranchName = (string)(cNomination.BranchName ?? "الفرع"),
+                                SessionName = (string)cNomination.SessionName,
+                                CompanyId = (int?)cNomination.CompanyId,
+                                Id = req.UserWaveId
+                            });
+
+                        await _hubContext.Clients.All.SendAsync("ReceiveNotification", "تم تحديث ترشيحات تدريب الشركة.");
+                        return Json(new { success = true, message = $"تم اعتماد المتدرب {cNomination.TraineeName} لحضور السيشن بنجاح." });
+                    }
+                    else if (action == "reject")
+                    {
+                        if (string.IsNullOrWhiteSpace(req.Reason))
+                        {
+                            return Json(new { success = false, message = "يرجى كتابة سبب الرفض لتوضيحه للإدارة." });
+                        }
+
+                        await conn.ExecuteAsync(@"
+                            UPDATE dbo.CompanySessionTrainees 
+                            SET ApprovalStatus = 'Rejected',
+                                RejectionReason = @Reason,
+                                ActionedByUserId = @ActionedBy,
+                                ActionedAt = GETDATE()
+                            WHERE Id = @Id",
+                            new { Id = req.UserWaveId, Reason = req.Reason.Trim(), ActionedBy = currentUserId });
+
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.AppNotifications (RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
+                            VALUES ('Admin', N'اعتذار/رفض متدرب شركة ❌', CONCAT(N'قام مدير الفرع برفض حضور: ', @TraineeName, N' (', @BranchName, N') لسيشن: ', @SessionName, N'. السبب: ', @Reason), CONCAT('/Attendance/ManageSessions?companyId=', @CompanyId), 'CompanySessionRejected', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                            new {
+                                TraineeName = (string)cNomination.TraineeName,
+                                BranchName = (string)(cNomination.BranchName ?? "الفرع"),
+                                SessionName = (string)cNomination.SessionName,
+                                Reason = req.Reason.Trim(),
+                                CompanyId = (int?)cNomination.CompanyId,
+                                Id = req.UserWaveId
+                            });
+
+                        await _hubContext.Clients.All.SendAsync("ReceiveNotification", "تم تحديث ترشيحات تدريب الشركة.");
+                        return Json(new { success = true, message = $"تم تسجيل اعتذار حضور المتدرب {cNomination.TraineeName} مع توضيح السبب." });
+                    }
+                    else if (action == "replace")
+                    {
+                        if (!req.ReplacementTraineeId.HasValue || req.ReplacementTraineeId.Value <= 0)
+                        {
+                            return Json(new { success = false, message = "يرجى اختيار المتدرب البديل من الفرع." });
+                        }
+
+                        var repTrainee = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                            "SELECT Id, FullName FROM CompanyTrainees WHERE Id = @Id",
+                            new { Id = req.ReplacementTraineeId.Value });
+
+                        if (repTrainee == null)
+                        {
+                            return Json(new { success = false, message = "المتدرب البديل المحدد غير موجود." });
+                        }
+
+                        // Mark old as Replaced
+                        await conn.ExecuteAsync(@"
+                            UPDATE dbo.CompanySessionTrainees 
+                            SET ApprovalStatus = 'Replaced',
+                                ReplacedWithTraineeId = @ReplacementId,
+                                ActionedByUserId = @ActionedBy,
+                                ActionedAt = GETDATE()
+                            WHERE Id = @Id",
+                            new { Id = req.UserWaveId, ReplacementId = req.ReplacementTraineeId.Value, ActionedBy = currentUserId });
+
+                        // Insert new as Approved
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.CompanySessionTrainees (SessionId, CompanyTraineeId, AssignedAt, AssignedBy, ApprovalStatus, ActionedByUserId, ActionedAt)
+                            VALUES (@SessionId, @TraineeId, GETDATE(), @ActionedBy, 'Approved', @ActionedBy, GETDATE())",
+                            new {
+                                SessionId = (int)cNomination.SessionId,
+                                TraineeId = req.ReplacementTraineeId.Value,
+                                ActionedBy = currentUserId
+                            });
+
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.AppNotifications (RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
+                            VALUES ('Admin', N'استبدال متدرب في سيشن شركة 🔄', CONCAT(N'تم استبدال: ', @OldTrainee, N' بـ: ', @NewTrainee, N' في سيشن: ', @SessionName), CONCAT('/Attendance/ManageSessions?companyId=', @CompanyId), 'CompanySessionReplaced', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                            new {
+                                OldTrainee = (string)cNomination.TraineeName,
+                                NewTrainee = (string)repTrainee.FullName,
+                                SessionName = (string)cNomination.SessionName,
+                                CompanyId = (int?)cNomination.CompanyId,
+                                Id = req.UserWaveId
+                            });
+
+                        await _hubContext.Clients.All.SendAsync("ReceiveNotification", "تم تحديث ترشيحات تدريب الشركة.");
+                        return Json(new { success = true, message = $"تم استبدال {cNomination.TraineeName} بـ {repTrainee.FullName} واعتماده للسيشن بنجاح." });
+                    }
+                }
+
+                // ----------------------------------------------------
+                // 2. Handling Wave Candidate Nominations
+                // ----------------------------------------------------
                 var nomination = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                     SELECT uw.Id, uw.UserId, uw.WaveId, uw.ApprovalStatus, u.BranchId, ISNULL(u.FullName, u.UserName) as StudentName,
                            b.BranchName, tw.WaveName
@@ -287,8 +574,6 @@ namespace Exam.Controllers
                         return Json(new { success = false, message = "ليس لديك صلاحية اعتماد مرشحي هذا الفرع." });
                     }
                 }
-
-                string action = req.Action.Trim().ToLowerInvariant();
 
                 if (action == "accept" || action == "approve")
                 {
@@ -432,9 +717,11 @@ namespace Exam.Controllers
 
     public class NominationActionRequest
     {
-        public int UserWaveId { get; set; }
+        public string Type { get; set; } = "wave"; // "wave" or "company"
+        public int UserWaveId { get; set; } // for wave (UserWaves.Id) OR for company (CompanySessionTrainees.Id)
         public string Action { get; set; } = "";
         public string? Reason { get; set; }
         public string? ReplacementUserId { get; set; }
+        public int? ReplacementTraineeId { get; set; }
     }
 }

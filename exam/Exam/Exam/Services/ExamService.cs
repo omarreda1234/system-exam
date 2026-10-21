@@ -2542,26 +2542,28 @@ WHERE U.Id = @UserId;";
                     catch { }
                 }
 
-                // 2. Perform DB assignment in ONE BATCH with Pending approval status
+                // 2. Perform DB assignment in ONE BATCH with Pending approval status (or Approved if branch is exempt)
                 string sqlBatch = @"
                     INSERT INTO UserWaves (UserId, WaveId, JoinDate, ApprovalStatus)
-                    SELECT Id, @WaveId, @JoinDate, 'Pending'
-                    FROM AspNetUsers
-                    WHERE Id IN @UserIds
-                    AND Id NOT IN (SELECT UserId FROM UserWaves WHERE WaveId = @WaveId)";
+                    SELECT u.Id, @WaveId, @JoinDate,
+                           CASE WHEN ISNULL(b.BypassApproval, 0) = 1 THEN 'Approved' ELSE 'Pending' END
+                    FROM AspNetUsers u
+                    LEFT JOIN Branches b ON u.BranchId = b.Id
+                    WHERE u.Id IN @UserIds
+                    AND u.Id NOT IN (SELECT UserId FROM UserWaves WHERE WaveId = @WaveId)";
 
                 int count = await conn.ExecuteAsync(sqlBatch, 
                     new { WaveId = waveId, JoinDate = DateTime.Now, UserIds = userIds }, 
                     commandTimeout: 120);
 
-                // 2a. Insert notifications for Branch Managers / Supervisors & trigger n8n
+                // 2a. Insert notifications for Branch Managers / Supervisors (only for non-exempt branches) & trigger n8n
                 try
                 {
                     var branchCandidates = (await conn.QueryAsync<dynamic>(@"
                         SELECT u.BranchId, ISNULL(b.BranchName, N'بدون فرع') AS BranchName, COUNT(1) AS CandidateCount
                         FROM AspNetUsers u
                         LEFT JOIN dbo.Branches b ON u.BranchId = b.Id
-                        WHERE u.Id IN @UserIds
+                        WHERE u.Id IN @UserIds AND ISNULL(b.BypassApproval, 0) = 0
                         GROUP BY u.BranchId, b.BranchName", new { UserIds = userIds })).ToList();
 
                     string waveNameStr = (string)(waveInfo?.WaveName ?? "New Wave");

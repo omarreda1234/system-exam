@@ -49,22 +49,39 @@
     </div>
 </div>
 
-<!-- Modal: Branch Candidates Approval / Review (Accept, Reject, Replace) -->
+<!-- Modal: Branch Candidates Approval / Review (Dual Tabs: Waves & Companies) -->
 <div id="branchNominationsModal" class="hidden fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
     <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <!-- Modal Header -->
         <div class="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
             <div class="flex items-center gap-3">
-                <div class="w-11 h-11 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xl">
+                <div class="w-11 h-11 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xl shadow-sm">
                     <i class="fas fa-users-cog"></i>
                 </div>
                 <div>
-                    <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">مراجعة مرشحي الفرع للدورات التدريبية</h3>
+                    <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">مراجعة مرشحي الفرع للدورات وجلسات الشركات</h3>
                     <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">يمكنك الموافقة على المرشح أو الرفض مع ذكر السبب أو استبداله بزميل آخر من نفس الفرع.</p>
                 </div>
             </div>
-            <button type="button" onclick="closeBranchNominationsModal()" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-                <i class="fas fa-times text-base"></i>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="openBranchExemptionsModal()" class="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center gap-1.5 transition-all" title="تحديد الفروع المعفاة من موافقة المدير (اعتماد فوري)">
+                    <i class="fas fa-sliders-h"></i> استثناءات الفروع
+                </button>
+                <button type="button" onclick="closeBranchNominationsModal()" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                    <i class="fas fa-times text-base"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tabs: Waves vs Company Sessions -->
+        <div class="flex border-b border-slate-100 dark:border-slate-800 px-6 pt-3 bg-white dark:bg-slate-900 gap-2">
+            <button type="button" onclick="switchNominationTab('wave')" id="tabBtnWaveNom" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-brand-600 border-b-2 border-brand-600 flex items-center gap-2 transition-all">
+                <i class="fas fa-layer-group"></i> دورات الويف (Waves) 
+                <span id="waveCountBadge" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-400">0</span>
+            </button>
+            <button type="button" onclick="switchNominationTab('company')" id="tabBtnCompanyNom" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent flex items-center gap-2 transition-all">
+                <i class="fas fa-building"></i> جلسات الشركات (Company Sessions) 
+                <span id="companyCountBadge" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">0</span>
             </button>
         </div>
 
@@ -86,8 +103,8 @@
     </div>
 </div>
 
-<!-- Modal: Replace Candidate with Branch Colleague -->
-<div id="replaceCandidateModal" class="hidden fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
+<!-- Modal: Replace Candidate (Works for both Wave Candidates & Company Trainees) -->
+<div id="replaceCandidateModal" class="hidden fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fadeIn">
     <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-6">
         <div class="flex items-center gap-3 mb-4">
             <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg">
@@ -95,17 +112,21 @@
             </div>
             <div>
                 <h4 class="text-base font-black text-slate-900 dark:text-white">استبدال الموظف بزميل من الفرع</h4>
-                <p class="text-xs text-slate-400">اختر زميل بديل متاح من نفس الفرع للتسجيل في الدورة</p>
+                <p class="text-xs text-slate-400" id="replaceModalSubtitle">اختر زميل بديل متاح من نفس الفرع</p>
             </div>
         </div>
 
         <input type="hidden" id="replaceUserWaveId" />
         <input type="hidden" id="replaceWaveId" />
         <input type="hidden" id="replaceBranchId" />
+        <input type="hidden" id="replaceSessionId" />
+        <input type="hidden" id="replaceCompanyId" />
+        <input type="hidden" id="replaceBranchName" />
+        <input type="hidden" id="replaceType" value="wave" />
 
         <div class="space-y-4">
             <div class="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800">
-                <span class="text-[10px] text-slate-400 uppercase font-black">الموظف الحالي (المرشح):</span>
+                <span class="text-[10px] text-slate-400 uppercase font-black">المرشح الحالي:</span>
                 <p id="currentCandidateName" class="text-sm font-black text-slate-800 dark:text-white mt-0.5">--</p>
             </div>
 
@@ -128,11 +149,46 @@
     </div>
 </div>
 
+<!-- Modal: Branch Approval Exemptions (Bypass Approval / ناس استثنائيين) -->
+<div id="branchExemptionsModal" class="hidden fixed inset-0 z-[10002] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fadeIn">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden">
+        <div class="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-amber-50/50 dark:bg-amber-950/20">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-lg">
+                    <i class="fas fa-bolt"></i>
+                </div>
+                <div>
+                    <h4 class="text-base font-black text-slate-900 dark:text-white">إعدادات الفروع المعفاة من موافقة المدير</h4>
+                    <p class="text-xs text-slate-400">الفروع المفعلة يتم اعتماد ترشيحات موظفيها فوراً دون انتظار موافقة مدير الفرع</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeBranchExemptionsModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="p-5 overflow-y-auto flex-1 custom-scrollbar space-y-2" id="branchExemptionsList">
+            <div class="text-center py-8 text-slate-400 text-xs">جاري تحميل الفروع...</div>
+        </div>
+
+        <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/20 flex justify-end">
+            <button type="button" onclick="closeBranchExemptionsModal()" class="px-5 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all">
+                تم
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
     (function () {
         let notifState = {
             unreadCount: 0,
             pendingNominationsCount: 0,
+            pendingWaveCount: 0,
+            pendingCompanyCount: 0,
+            waveNominations: [],
+            companyNominations: [],
+            currentTab: 'wave',
             notifications: []
         };
 
@@ -171,6 +227,8 @@
 
                 notifState.unreadCount = data.unreadCount || 0;
                 notifState.pendingNominationsCount = data.pendingNominationsCount || 0;
+                notifState.pendingWaveCount = data.pendingWaveCount || 0;
+                notifState.pendingCompanyCount = data.pendingCompanyCount || 0;
                 notifState.notifications = data.notifications || [];
 
                 // Update badge
@@ -191,7 +249,7 @@
                 if (notifState.pendingNominationsCount > 0) {
                     banner.classList.remove('hidden');
                     banner.classList.add('flex');
-                    text.textContent = `لديك ${notifState.pendingNominationsCount} موظف من فرعك بانتظار الاعتماد`;
+                    text.textContent = `لديك ${notifState.pendingNominationsCount} موظف من فرعك بانتظار الاعتماد (${notifState.pendingWaveCount} ويف + ${notifState.pendingCompanyCount} شركات)`;
                 } else {
                     banner.classList.add('hidden');
                     banner.classList.remove('flex');
@@ -248,7 +306,6 @@
         window.openBranchNominationsModal = async function () {
             const modal = document.getElementById('branchNominationsModal');
             const wrapper = document.getElementById('nominationsListWrapper');
-            const footerCount = document.getElementById('nominationsCountFooter');
             
             modal.classList.remove('hidden');
             wrapper.innerHTML = `
@@ -261,24 +318,74 @@
                 const res = await fetch('/Notification/GetPendingBranchNominations');
                 const data = await res.json();
 
-                if (!data.success || !data.nominations || data.nominations.length === 0) {
-                    wrapper.innerHTML = `
-                        <div class="text-center py-16">
-                            <div class="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 flex items-center justify-center mx-auto mb-4 text-2xl">
-                                <i class="fas fa-check-double"></i>
-                            </div>
-                            <h4 class="text-base font-black text-slate-800 dark:text-white">لا توجد ترشيحات معلقة حالياً</h4>
-                            <p class="text-xs text-slate-400 mt-1">تمت مراجعة واعتماد جميع ترشيحات موظفي الفرع بنجاح.</p>
-                        </div>`;
-                    footerCount.textContent = '0 طلب ترشيح معلق';
+                if (!data.success) {
+                    wrapper.innerHTML = `<div class="text-center py-10 text-rose-500 font-bold">حدث خطأ: ${data.message}</div>`;
                     return;
                 }
 
-                footerCount.textContent = `${data.nominations.length} طلب ترشيح بانتظار اتخاذ القرار`;
+                notifState.waveNominations = data.waveNominations || [];
+                notifState.companyNominations = data.companyNominations || [];
 
+                document.getElementById('waveCountBadge').textContent = notifState.waveNominations.length;
+                document.getElementById('companyCountBadge').textContent = notifState.companyNominations.length;
+
+                // Auto switch tab if wave is empty but company has pending
+                if (notifState.waveNominations.length === 0 && notifState.companyNominations.length > 0) {
+                    notifState.currentTab = 'company';
+                } else if (notifState.waveNominations.length > 0 && notifState.companyNominations.length === 0) {
+                    notifState.currentTab = 'wave';
+                }
+
+                switchNominationTab(notifState.currentTab);
+            } catch (err) {
+                wrapper.innerHTML = `<div class="text-center py-10 text-rose-500 font-bold">حدث خطأ أثناء تحميل البيانات: ${err.message}</div>`;
+            }
+        };
+
+        window.switchNominationTab = function (tab) {
+            notifState.currentTab = tab;
+            const btnWave = document.getElementById('tabBtnWaveNom');
+            const btnCompany = document.getElementById('tabBtnCompanyNom');
+
+            if (tab === 'wave') {
+                btnWave.classList.add('text-brand-600', 'border-brand-600');
+                btnWave.classList.remove('text-slate-400', 'border-transparent');
+                btnCompany.classList.remove('text-indigo-600', 'border-indigo-600');
+                btnCompany.classList.add('text-slate-400', 'border-transparent');
+            } else {
+                btnCompany.classList.add('text-indigo-600', 'border-indigo-600');
+                btnCompany.classList.remove('text-slate-400', 'border-transparent');
+                btnWave.classList.remove('text-brand-600', 'border-brand-600');
+                btnWave.classList.add('text-slate-400', 'border-transparent');
+            }
+
+            renderCurrentNominationsTab();
+        };
+
+        function renderCurrentNominationsTab() {
+            const wrapper = document.getElementById('nominationsListWrapper');
+            const footerCount = document.getElementById('nominationsCountFooter');
+            const isWave = notifState.currentTab === 'wave';
+            const list = isWave ? notifState.waveNominations : notifState.companyNominations;
+
+            footerCount.textContent = `${list.length} طلب ترشيح معلق (${isWave ? 'دورات الويف' : 'جلسات الشركات'})`;
+
+            if (list.length === 0) {
+                wrapper.innerHTML = `
+                    <div class="text-center py-16">
+                        <div class="w-16 h-16 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 flex items-center justify-center mx-auto mb-4 text-2xl">
+                            <i class="fas fa-check-double"></i>
+                        </div>
+                        <h4 class="text-base font-black text-slate-800 dark:text-white">لا توجد ترشيحات معلقة في هذا القسم</h4>
+                        <p class="text-xs text-slate-400 mt-1">تمت مراجعة واعتماد جميع ترشيحات موظفي الفرع بنجاح.</p>
+                    </div>`;
+                return;
+            }
+
+            if (isWave) {
                 wrapper.innerHTML = `
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        ${data.nominations.map(n => `
+                        ${list.map(n => `
                             <div class="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-sm hover:shadow-md transition-all flex flex-col justify-between" id="nomCard_${n.userWaveId}">
                                 <div>
                                     <div class="flex items-start justify-between gap-3 mb-3">
@@ -314,12 +421,12 @@
 
                                 <!-- Action Buttons: Accept / Reject / Replace -->
                                 <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-700/60">
-                                    <button type="button" onclick="acceptNomination(${n.userWaveId}, '${n.studentName}')"
+                                    <button type="button" onclick="actionNomination(${n.userWaveId}, 'accept', 'wave', '${n.studentName}')"
                                             class="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-1.5" title="موافقة واعتماد">
                                         <i class="fas fa-check"></i> موافقة
                                     </button>
 
-                                    <button type="button" onclick="rejectNominationPrompt(${n.userWaveId}, '${n.studentName}')"
+                                    <button type="button" onclick="actionNominationPrompt(${n.userWaveId}, 'reject', 'wave', '${n.studentName}')"
                                             class="py-2 px-3 rounded-xl bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-black text-xs shadow-md shadow-rose-500/20 transition-all flex items-center justify-center gap-1.5" title="اعتذار أو رفض">
                                         <i class="fas fa-times"></i> رفض
                                     </button>
@@ -332,22 +439,78 @@
                             </div>
                         `).join('')}
                     </div>`;
-            } catch (err) {
-                wrapper.innerHTML = `<div class="text-center py-10 text-rose-500 font-bold">حدث خطأ أثناء تحميل البيانات: ${err.message}</div>`;
+            } else {
+                // Company Session Nominations
+                wrapper.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${list.map(c => `
+                            <div class="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-sm hover:shadow-md transition-all flex flex-col justify-between" id="nomCompanyCard_${c.companySessionTraineeId}">
+                                <div>
+                                    <div class="flex items-start justify-between gap-3 mb-3">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white font-black flex items-center justify-center text-sm shadow-md shadow-indigo-500/20">
+                                                ${(c.traineeName || 'T')[0]}
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-black text-slate-900 dark:text-white leading-tight">${c.traineeName}</h4>
+                                                <p class="text-[11px] text-slate-400 font-mono">الكود: ${c.userCode} | الفرع: ${c.branchName} | ${c.jobTitle}</p>
+                                            </div>
+                                        </div>
+                                        <span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                                            معلق (Pending)
+                                        </span>
+                                    </div>
+
+                                    <div class="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl text-xs space-y-1 mb-4 border border-slate-100 dark:border-slate-800">
+                                        <div class="flex justify-between text-slate-600 dark:text-slate-300">
+                                            <span class="text-slate-400">الشركة:</span>
+                                            <span class="font-bold text-slate-800 dark:text-white">${c.companyName}</span>
+                                        </div>
+                                        <div class="flex justify-between text-slate-600 dark:text-slate-300">
+                                            <span class="text-slate-400">المحاضرة / الجلسة:</span>
+                                            <span class="font-bold text-indigo-600 dark:text-indigo-400">${c.sessionName}</span>
+                                        </div>
+                                        <div class="flex justify-between text-slate-600 dark:text-slate-300">
+                                            <span class="text-slate-400">التاريخ والوقت:</span>
+                                            <span class="font-mono text-slate-700 dark:text-slate-200">${c.sessionDate} (${c.sessionTime})</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Action Buttons: Accept / Reject / Replace -->
+                                <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                                    <button type="button" onclick="actionNomination(${c.companySessionTraineeId}, 'accept', 'company', '${c.traineeName}')"
+                                            class="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-1.5" title="موافقة واعتماد">
+                                        <i class="fas fa-check"></i> موافقة
+                                    </button>
+
+                                    <button type="button" onclick="actionNominationPrompt(${c.companySessionTraineeId}, 'reject', 'company', '${c.traineeName}')"
+                                            class="py-2 px-3 rounded-xl bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-black text-xs shadow-md shadow-rose-500/20 transition-all flex items-center justify-center gap-1.5" title="اعتذار أو رفض">
+                                        <i class="fas fa-times"></i> رفض
+                                    </button>
+
+                                    <button type="button" onclick="openReplaceCompanyModal(${c.companySessionTraineeId}, ${c.sessionId}, ${c.companyId || 0}, '${c.branchName}', '${c.traineeName}')"
+                                            class="py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-1.5" title="استبدال بزميل آخر">
+                                        <i class="fas fa-exchange-alt"></i> استبدال
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>`;
             }
-        };
+        }
 
         window.closeBranchNominationsModal = function () {
             document.getElementById('branchNominationsModal').classList.add('hidden');
             loadHeaderNotifications();
         };
 
-        // 1. Accept Nomination Action
-        window.acceptNomination = async function (userWaveId, studentName) {
+        // Unified Action: Accept / Reject
+        window.actionNomination = async function (id, action, type, name) {
             if (typeof Swal !== 'undefined') {
                 const confirm = await Swal.fire({
                     title: 'تأكيد الاعتماد',
-                    text: `هل توافق على ترشيح الموظف (${studentName}) لحضور هذه الدورة؟`,
+                    text: `هل توافق على ترشيح (${name}) لحضور هذا التدريب؟`,
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: 'نعم، موافقة',
@@ -361,7 +524,7 @@
                 const res = await fetch('/Notification/ActionNomination', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userWaveId: userWaveId, action: 'accept' })
+                    body: JSON.stringify({ userWaveId: id, action: action, type: type })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -377,12 +540,11 @@
             }
         };
 
-        // 2. Reject Nomination with Mandatory Reason
-        window.rejectNominationPrompt = async function (userWaveId, studentName) {
+        window.actionNominationPrompt = async function (id, action, type, name) {
             let reason = '';
             if (typeof Swal !== 'undefined') {
                 const { value: text, isConfirmed } = await Swal.fire({
-                    title: `اعتذار عن ترشيح: ${studentName}`,
+                    title: `اعتذار عن ترشيح: ${name}`,
                     text: 'يرجى كتابة سبب الرفض أو الاعتذار لتوثيقه وإرساله للإدارة:',
                     input: 'textarea',
                     inputPlaceholder: 'مثال: الموظف في إجازة سنوية / لديه مهام طارئة بالفرع...',
@@ -399,7 +561,7 @@
                 if (!isConfirmed || !text) return;
                 reason = text.trim();
             } else {
-                reason = prompt(`يرجى كتابة سبب رفض ترشيح (${studentName}):`);
+                reason = prompt(`يرجى كتابة سبب رفض ترشيح (${name}):`);
                 if (!reason) return;
             }
 
@@ -407,7 +569,7 @@
                 const res = await fetch('/Notification/ActionNomination', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userWaveId: userWaveId, action: 'reject', reason: reason })
+                    body: JSON.stringify({ userWaveId: id, action: action, reason: reason, type: type })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -423,12 +585,14 @@
             }
         };
 
-        // 3. Replace Candidate with Colleague
+        // Open Replace for Waves
         window.openReplaceModal = async function (userWaveId, waveId, branchId, studentName) {
+            document.getElementById('replaceType').value = 'wave';
             document.getElementById('replaceUserWaveId').value = userWaveId;
             document.getElementById('replaceWaveId').value = waveId;
             document.getElementById('replaceBranchId').value = branchId;
             document.getElementById('currentCandidateName').textContent = studentName;
+            document.getElementById('replaceModalSubtitle').textContent = 'اختر زميل بديل متاح من نفس الفرع لدورة الويف';
 
             const select = document.getElementById('colleagueSelect');
             select.innerHTML = '<option value="">جاري البحث عن الزملاء بالفرع...</option>';
@@ -451,25 +615,69 @@
             }
         };
 
+        // Open Replace for Company Sessions
+        window.openReplaceCompanyModal = async function (cstId, sessionId, companyId, branchName, traineeName) {
+            document.getElementById('replaceType').value = 'company';
+            document.getElementById('replaceUserWaveId').value = cstId;
+            document.getElementById('replaceSessionId').value = sessionId;
+            document.getElementById('replaceCompanyId').value = companyId;
+            document.getElementById('replaceBranchName').value = branchName;
+            document.getElementById('currentCandidateName').textContent = traineeName;
+            document.getElementById('replaceModalSubtitle').textContent = `اختر متدرب بديل من شركة (${branchName}) للسيشن`;
+
+            const select = document.getElementById('colleagueSelect');
+            select.innerHTML = '<option value="">جاري البحث عن الزملاء المتاحين بالشركة والفرع...</option>';
+            document.getElementById('replaceCandidateModal').classList.remove('hidden');
+
+            try {
+                const res = await fetch(`/Notification/GetAvailableCompanyColleagues?sessionId=${sessionId}&companyId=${companyId}&branchName=${encodeURIComponent(branchName)}`);
+                const data = await res.json();
+
+                if (data.success && data.colleagues && data.colleagues.length > 0) {
+                    select.innerHTML = '<option value="">-- اختر الزميل البديل --</option>' +
+                        data.colleagues.map(c => `
+                            <option value="${c.id}">${c.fullName} (${c.userCode}) - ${c.jobTitle}</option>
+                        `).join('');
+                } else {
+                    select.innerHTML = '<option value="">لا يوجد متدربين بدلاء متاحين من نفس الفرع والشركة</option>';
+                }
+            } catch (err) {
+                select.innerHTML = '<option value="">فشل تحميل قائمة المتدربين</option>';
+            }
+        };
+
         window.closeReplaceModal = function () {
             document.getElementById('replaceCandidateModal').classList.add('hidden');
         };
 
         window.submitReplaceNomination = async function () {
+            const type = document.getElementById('replaceType').value;
             const userWaveId = parseInt(document.getElementById('replaceUserWaveId').value);
-            const replacementUserId = document.getElementById('colleagueSelect').value;
+            const selectedVal = document.getElementById('colleagueSelect').value;
 
-            if (!replacementUserId) {
+            if (!selectedVal) {
                 if (typeof Swal !== 'undefined') Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى اختيار زميل بديل أولاً.' });
                 else alert('يرجى اختيار زميل بديل أولاً.');
                 return;
+            }
+
+            const payload = {
+                userWaveId: userWaveId,
+                action: 'replace',
+                type: type
+            };
+
+            if (type === 'company') {
+                payload.replacementTraineeId = parseInt(selectedVal);
+            } else {
+                payload.replacementUserId = selectedVal;
             }
 
             try {
                 const res = await fetch('/Notification/ActionNomination', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userWaveId: userWaveId, action: 'replace', replacementUserId: replacementUserId })
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -484,6 +692,59 @@
             } catch (err) {
                 alert('فشل الاتصال: ' + err.message);
             }
+        };
+
+        // Branch Exemptions Modal Logic
+        window.openBranchExemptionsModal = async function () {
+            const modal = document.getElementById('branchExemptionsModal');
+            const list = document.getElementById('branchExemptionsList');
+            modal.classList.remove('hidden');
+            list.innerHTML = '<div class="text-center py-8 text-slate-400 text-xs"><i class="fas fa-spinner fa-spin text-lg mb-2 block"></i>جاري تحميل إعدادات الفروع...</div>';
+
+            try {
+                const res = await fetch('/Notification/GetBranchesApprovalSettings');
+                const data = await res.json();
+                if (data.success && data.branches) {
+                    list.innerHTML = data.branches.map(b => `
+                        <div class="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                            <div>
+                                <h5 class="text-xs font-black text-slate-800 dark:text-white">${b.branchName}</h5>
+                                <span class="text-[10px] text-slate-400 font-mono">${b.bypassApproval ? 'معفى (اعتماد مباشر)' : 'يتطلب موافقة المدير'}</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer" ${b.bypassApproval ? 'checked' : ''} onchange="toggleBranchBypass(${b.id}, this)">
+                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                            </label>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<div class="text-center py-6 text-rose-500 text-xs">تعذر تحميل بيانات الفروع</div>';
+                }
+            } catch (e) {
+                list.innerHTML = `<div class="text-center py-6 text-rose-500 text-xs">${e.message}</div>`;
+            }
+        };
+
+        window.toggleBranchBypass = async function (branchId, checkbox) {
+            try {
+                const res = await fetch(`/Notification/ToggleBranchBypassApproval?branchId=${branchId}&bypass=${checkbox.checked}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, icon: 'success', title: data.message });
+                    }
+                } else {
+                    checkbox.checked = !checkbox.checked;
+                    alert('خطأ: ' + data.message);
+                }
+            } catch (e) {
+                checkbox.checked = !checkbox.checked;
+                alert('فشل الاتصال: ' + e.message);
+            }
+        };
+
+        window.closeBranchExemptionsModal = function () {
+            document.getElementById('branchExemptionsModal').classList.add('hidden');
         };
 
         // Initial Load on Page Ready

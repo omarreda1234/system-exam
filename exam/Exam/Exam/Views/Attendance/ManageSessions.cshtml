@@ -234,8 +234,8 @@
                         </div>
                     </div>
 
-                    <!-- Options for Notification & n8n Email -->
-                    <div class="p-4 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/60 rounded-2xl space-y-2">
+                    <!-- Options for Notification, n8n Email & Branch Exemption -->
+                    <div class="p-4 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/60 rounded-2xl space-y-2.5">
                         <label class="flex items-center gap-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
                             <input type="checkbox" id="chkSendNotification" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
                             <span>🔔 إرسال إشعار فوري للمتدربين على المنصة (In-App Notification)</span>
@@ -243,6 +243,10 @@
                         <label class="flex items-center gap-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
                             <input type="checkbox" id="chkSendN8nEmail" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
                             <span>⚡ إرسال بيانات المتدربين والسيشن إلى <strong>n8n Webhook API</strong> لإرسال الإيميلات والأتمتة</span>
+                        </label>
+                        <label class="flex items-center gap-2.5 text-xs font-bold text-amber-700 dark:text-amber-300 cursor-pointer pt-2 border-t border-emerald-200/60 dark:border-emerald-800/60">
+                            <input type="checkbox" id="chkBypassApproval" class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500" />
+                            <span>⚡ <strong>اعتماد فوري واستثنائي (Bypass Approval):</strong> تأكيد ترشيح المتدربين فوراً بدون انتظار موافقة مدير الفرع</span>
                         </label>
                     </div>
 
@@ -267,6 +271,13 @@
                             سيتم ربطهم بهذه السيشن تلقائياً وإرسال بياناتهم إلى n8n API.
                         </p>
                         <input type="file" id="sessionExcelFile" accept=".xlsx, .xls" class="mt-4 text-xs font-bold text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer" />
+                        
+                        <div class="mt-4 flex items-center justify-center">
+                            <label class="flex items-center gap-2.5 text-xs font-bold text-amber-700 dark:text-amber-300 cursor-pointer bg-amber-500/10 border border-amber-500/30 px-4 py-2.5 rounded-xl">
+                                <input type="checkbox" id="chkExcelBypassApproval" class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500" />
+                                <span>⚡ اعتماد فوري لمتدربي الشيت وتخطي موافقة مدير الفرع (Direct Confirm)</span>
+                            </label>
+                        </div>
                     </div>
 
                     <div class="flex justify-end">
@@ -453,11 +464,11 @@
                 }
 
                 sessionTraineesState.assignedTrainees = data.assignedTrainees || [];
-                sessionTraineesState.poolTrainees = data.allCompanyTrainees || [];
+                sessionTraineesState.poolTrainees = data.availablePool || data.allCompanyTrainees || [];
 
                 countBadge.textContent = sessionTraineesState.assignedTrainees.length;
 
-                // 1. Render Current Assigned Trainees
+                // 1. Render Current Assigned Trainees with Approval Badges
                 if (sessionTraineesState.assignedTrainees.length === 0) {
                     listWrapper.innerHTML = `
                         <div class="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
@@ -474,7 +485,21 @@
                             </button>
                         </div>`;
                 } else {
-                    listWrapper.innerHTML = sessionTraineesState.assignedTrainees.map(t => `
+                    listWrapper.innerHTML = sessionTraineesState.assignedTrainees.map(t => {
+                        const traineeId = t.traineeId || t.id;
+                        const status = (t.approvalStatus || 'Approved').toLowerCase();
+                        let badgeHtml = '';
+                        if (status === 'approved') {
+                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1"><i class="fas fa-check-circle"></i> معتمد (Approved)</span>`;
+                        } else if (status === 'pending') {
+                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center gap-1"><i class="fas fa-clock"></i> معلق بانتظار الفرع (Pending)</span>`;
+                        } else if (status === 'rejected') {
+                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 flex items-center gap-1" title="سبب الرفض: ${t.rejectionReason || 'بدون سبب'}"><i class="fas fa-times-circle"></i> تم الاعتذار: ${t.rejectionReason || 'بدون سبب'}</span>`;
+                        } else if (status === 'replaced') {
+                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1"><i class="fas fa-exchange-alt"></i> تم الاستبدال (Replaced)</span>`;
+                        }
+
+                        return `
                         <div class="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
                             <div class="flex items-center gap-3">
                                 <div class="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center text-xs">
@@ -482,30 +507,37 @@
                                 </div>
                                 <div>
                                     <h4 class="text-xs font-black text-slate-800 dark:text-white leading-tight">${t.fullName}</h4>
-                                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">الكود: ${t.userCode} | الفرع: ${t.branchName} | ${t.jobTitle}</p>
+                                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">الكود: ${t.userCode} | الفرع: ${t.branchName || 'عام'} | ${t.jobTitle || 'Trainee'}</p>
                                 </div>
                             </div>
-                            <button type="button" onclick="removeTraineeFromSession(${sessionId}, ${t.id}, '${t.fullName}')" class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center text-xs transition-all" title="إزالة من هذه السيشن">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
+                            <div class="flex items-center gap-2">
+                                ${badgeHtml}
+                                <button type="button" onclick="removeTraineeFromSession(${sessionId}, ${traineeId}, '${t.fullName}')" class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center text-xs transition-all" title="إزالة من هذه السيشن">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
                         </div>
-                    `).join('');
+                    `}).join('');
                 }
 
-                // 2. Render Pool for Assignment
-                const assignedIds = new Set(sessionTraineesState.assignedTrainees.map(a => a.id));
+                // 2. Render Pool for Assignment with Branch Exemption Indicator
+                const assignedIds = new Set(sessionTraineesState.assignedTrainees.map(a => a.traineeId || a.id));
                 poolWrapper.innerHTML = sessionTraineesState.poolTrainees.map(t => {
                     const isChecked = assignedIds.has(t.id);
+                    const isExempt = (t.isBranchExempt == 1 || t.isBranchExempt === true);
                     return `
-                        <label class="trainee-item flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer select-none" data-search="${(t.fullName + ' ' + t.userCode + ' ' + t.branchName).toLowerCase()}">
+                        <label class="trainee-item flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer select-none" data-search="${(t.fullName + ' ' + t.userCode + ' ' + (t.branchName || '')).toLowerCase()}">
                             <div class="flex items-center gap-3">
                                 <input type="checkbox" value="${t.id}" class="pool-chk w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300" onchange="updateSelectedPoolCount()" ${isChecked ? 'checked' : ''} />
                                 <div>
-                                    <p class="text-xs font-black text-slate-800 dark:text-white leading-tight">${t.fullName}</p>
-                                    <span class="text-[10px] text-slate-400 font-mono">${t.userCode} | ${t.branchName}</span>
+                                    <div class="flex items-center gap-1.5">
+                                        <p class="text-xs font-black text-slate-800 dark:text-white leading-tight">${t.fullName}</p>
+                                        ${isExempt ? '<span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-300/50" title="هذا الفرع معفى من موافقة المدير - اعتماد فوري"><i class="fas fa-bolt text-[7px] mr-0.5"></i>معفى</span>' : ''}
+                                    </div>
+                                    <span class="text-[10px] text-slate-400 font-mono">${t.userCode} | ${t.branchName || 'بدون فرع'}</span>
                                 </div>
                             </div>
-                            <span class="text-[10px] font-bold text-slate-400">${t.jobTitle}</span>
+                            <span class="text-[10px] font-bold text-slate-400">${t.jobTitle || 'Trainee'}</span>
                         </label>
                     `;
                 }).join('');
@@ -551,6 +583,7 @@
 
             const sendNotif = document.getElementById('chkSendNotification').checked;
             const sendN8n = document.getElementById('chkSendN8nEmail').checked;
+            const bypassApproval = document.getElementById('chkBypassApproval') ? document.getElementById('chkBypassApproval').checked : false;
 
             Swal.fire({
                 title: 'جاري التعيين والإرسال...',
@@ -567,7 +600,8 @@
                         sessionId: sessionId,
                         traineeIds: traineeIds,
                         sendNotification: sendNotif,
-                        sendEmailViaN8n: sendN8n
+                        sendEmailViaN8n: sendN8n,
+                        bypassApproval: bypassApproval
                     })
                 });
                 const data = await res.json();
@@ -616,9 +650,12 @@
                 return;
             }
 
+            const bypassExcel = document.getElementById('chkExcelBypassApproval') ? document.getElementById('chkExcelBypassApproval').checked : false;
+
             const formData = new FormData();
             formData.append('sessionId', sessionTraineesState.sessionId);
             formData.append('excelFile', fileInput.files[0]);
+            formData.append('bypassApproval', bypassExcel);
 
             Swal.fire({
                 title: 'جاري استيراد الإكسيل...',
