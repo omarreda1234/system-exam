@@ -4462,7 +4462,7 @@ ORDER BY U.UserName ASC";
             using (var connection = new SqlConnection(_connectionString))
             {
                 const string sql = @"
-                    SELECT U.Id, U.UserName, U.Email, U.UserCode, B.BranchName, R.Name AS RoleName, U.CertificateCode
+                    SELECT U.Id, U.UserName, U.Email, U.UserCode, B.BranchName, B.City, U.BranchId, R.Name AS RoleName, U.CertificateCode
                     FROM AspNetUsers U WITH(NOLOCK)
                     LEFT JOIN Branches B WITH(NOLOCK) ON U.BranchId = B.Id
                     INNER JOIN AspNetUserRoles UR WITH(NOLOCK) ON U.Id = UR.UserId
@@ -7712,16 +7712,18 @@ ORDER BY U.UserName ASC";
                 // Headers
                 worksheet.Cell(1, 1).Value = "BranchId";
                 worksheet.Cell(1, 2).Value = "BranchName";
-                worksheet.Cell(1, 3).Value = "BranchCode";
+                worksheet.Cell(1, 3).Value = "City";
+                worksheet.Cell(1, 4).Value = "BranchCode";
 
-                var headerRange = worksheet.Range("A1:C1");
+                var headerRange = worksheet.Range("A1:D1");
                 headerRange.Style.Font.Bold = true;
                 headerRange.Style.Font.FontColor = XLColor.White;
                 headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f172a"); // Slate 900
                 headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
 
                 var allBranches = (await _examService.GetAllBranchesAsync())
-                    .OrderBy(b => b.BranchName)
+                    .OrderBy(b => b.City)
+                    .ThenBy(b => b.BranchName)
                     .ToList();
 
                 int row = 2;
@@ -7729,9 +7731,10 @@ ORDER BY U.UserName ASC";
                 {
                     worksheet.Cell(row, 1).Value = b.Id;
                     worksheet.Cell(row, 2).Value = b.BranchName ?? "";
-                    worksheet.Cell(row, 3).Value = b.BranchCode ?? "";
+                    worksheet.Cell(row, 3).Value = b.City ?? "";
+                    worksheet.Cell(row, 4).Value = b.BranchCode ?? "";
 
-                    for (int col = 1; col <= 3; col++)
+                    for (int col = 1; col <= 4; col++)
                     {
                         worksheet.Cell(row, col).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                         worksheet.Cell(row, col).Style.Border.OutsideBorderColor = XLColor.FromHtml("#cbd5e1");
@@ -7741,21 +7744,22 @@ ORDER BY U.UserName ASC";
 
                 worksheet.Column(1).Width = 15; // BranchId
                 worksheet.Column(2).Width = 35; // BranchName
-                worksheet.Column(3).Width = 25; // BranchCode
+                worksheet.Column(3).Width = 25; // City
+                worksheet.Column(4).Width = 20; // BranchCode
 
                 // Instructions Sheet
                 var instructionsSheet = workbook.Worksheets.Add("تعليمات الاستخدام");
-                instructionsSheet.Cell(1, 1).Value = "دليل استخدام تحديث الفروع بالإكسيل";
+                instructionsSheet.Cell(1, 1).Value = "دليل استخدام وتحديث الفروع والمدن بالإكسيل";
                 instructionsSheet.Cell(1, 1).Style.Font.Bold = true;
                 instructionsSheet.Cell(1, 1).Style.Font.FontSize = 14;
 
-                instructionsSheet.Cell(3, 1).Value = "1. يحتوي هذا الملف على جميع الفروع الحالية المسجلة بالنظام.";
-                instructionsSheet.Cell(4, 1).Value = "2. يمكنك تعديل (اسم الفرع - BranchName) أو (كود الفرع - BranchCode) أو كليهما لأي فرع.";
+                instructionsSheet.Cell(3, 1).Value = "1. يحتوي هذا الملف على جميع الفروع الحالية المسجلة بالنظام ومصنفة حسب المدينة.";
+                instructionsSheet.Cell(4, 1).Value = "2. يمكنك تعديل (اسم الفرع - BranchName) أو (المدينة/المجموعة - City) أو (كود الفرع - BranchCode).";
                 instructionsSheet.Cell(5, 1).Value = "3. العمود الأول (BranchId) هو الرقم التعريفي للفرع، لا تقم بتغييره لتحديث الفرع الحالي بدقة.";
-                instructionsSheet.Cell(6, 1).Value = "4. لإضافة فرع جديد، يمكنك كتابة سطر جديد وترك BranchId فارغاً، وكتابة الاسم والكود.";
+                instructionsSheet.Cell(6, 1).Value = "4. لإضافة فرع جديد، يمكنك كتابة سطر جديد وترك BranchId فارغاً، وكتابة الاسم والمدينة والكود.";
                 instructionsSheet.Cell(7, 1).Value = "5. بعد الانتهاء، قم بحفظ الملف ورفعه من خلال زر (Import from Excel).";
 
-                instructionsSheet.Column(1).Width = 70;
+                instructionsSheet.Column(1).Width = 75;
 
                 using (var stream = new MemoryStream())
                 {
@@ -7866,16 +7870,17 @@ ORDER BY U.UserName ASC";
 
                 var colId = GetCol("BranchId", "Id", "معرف الفرع", "رقم الفرع", "Branch_Id");
                 var colName = GetCol("BranchName", "Branch Name", "Name", "اسم الفرع", "الفرع", "اسم فرع", "Branch");
+                var colCity = GetCol("City", "المدينة", "المنطقة", "المحافظة", "المجموعة", "BranchCity");
                 var colCode = GetCol("BranchCode", "Branch Code", "Code", "كود الفرع", "كود", "رمز الفرع", "Branch_Code");
                 var colNewName = GetCol("NewBranchName", "New Branch Name", "NewName", "اسم الفرع الجديد", "الاسم الجديد");
                 var colNewCode = GetCol("NewBranchCode", "New Branch Code", "NewCode", "كود الفرع الجديد", "الكود الجديد");
 
-                if (colName == null && colCode == null && colId == null)
+                if (colName == null && colCode == null && colId == null && colCity == null)
                 {
                     return Json(new
                     {
                         success = false,
-                        message = "الملف المرفوع يجب أن يحتوي على عمود (اسم الفرع - BranchName) أو (كود الفرع - BranchCode) على الأقل."
+                        message = "الملف المرفوع يجب أن يحتوي على عمود (اسم الفرع - BranchName) أو (المدينة - City) أو (كود الفرع - BranchCode) على الأقل."
                     });
                 }
 
@@ -7883,8 +7888,8 @@ ORDER BY U.UserName ASC";
                 await conn.OpenAsync();
 
                 // Load current branches
-                var existingBranches = (await conn.QueryAsync<(int Id, string BranchName, string BranchCode)>(
-                    "SELECT Id, BranchName, BranchCode FROM Branches")).ToList();
+                var existingBranches = (await conn.QueryAsync<(int Id, string BranchName, string BranchCode, string City)>(
+                    "SELECT Id, BranchName, BranchCode, ISNULL(City, '') AS City FROM Branches")).ToList();
 
                 var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? headerRow;
 
@@ -7911,6 +7916,13 @@ ORDER BY U.UserName ASC";
                     if (colName != null)
                     {
                         rawName = worksheet.Cell(row, colName.Value).Value.ToString()?.Trim();
+                    }
+
+                    // Read City if present
+                    string rawCity = null;
+                    if (colCity != null)
+                    {
+                        rawCity = worksheet.Cell(row, colCity.Value).Value.ToString()?.Trim();
                     }
 
                     // Read Code
@@ -7942,13 +7954,13 @@ ORDER BY U.UserName ASC";
                             rawNewCode = cellNC.Value.ToString()?.Trim();
                     }
 
-                    if (string.IsNullOrWhiteSpace(rawName) && string.IsNullOrWhiteSpace(rawCode) && !rowId.HasValue)
+                    if (string.IsNullOrWhiteSpace(rawName) && string.IsNullOrWhiteSpace(rawCode) && string.IsNullOrWhiteSpace(rawCity) && !rowId.HasValue)
                     {
                         continue; // Empty row
                     }
 
                     // Determine target branch
-                    (int Id, string BranchName, string BranchCode)? targetBranch = null;
+                    (int Id, string BranchName, string BranchCode, string City)? targetBranch = null;
 
                     // 1. By ID
                     if (rowId.HasValue && rowId.Value > 0)
@@ -7980,14 +7992,17 @@ ORDER BY U.UserName ASC";
                         var t = targetBranch.Value;
                         string currentDbName = t.BranchName ?? "";
                         string currentDbCode = t.BranchCode ?? "";
+                        string currentDbCity = t.City ?? "";
 
                         if (string.IsNullOrWhiteSpace(finalName)) finalName = currentDbName;
                         if (string.IsNullOrWhiteSpace(finalCode) && colCode == null && colNewCode == null) finalCode = currentDbCode;
+                        string finalCity = colCity != null ? (rawCity ?? "") : currentDbCity;
 
                         bool nameChanged = !string.Equals(currentDbName, finalName, StringComparison.Ordinal);
                         bool codeChanged = !string.Equals(currentDbCode, finalCode, StringComparison.Ordinal);
+                        bool cityChanged = colCity != null && !string.Equals(currentDbCity, finalCity, StringComparison.Ordinal);
 
-                        if (!nameChanged && !codeChanged)
+                        if (!nameChanged && !codeChanged && !cityChanged)
                         {
                             skippedCount++;
                             continue; // Nothing to change
@@ -8003,8 +8018,8 @@ ORDER BY U.UserName ASC";
                             }
                         }
 
-                        await conn.ExecuteAsync("UPDATE Branches SET BranchName = @Name, BranchCode = @Code WHERE Id = @Id",
-                            new { Name = finalName.Trim(), Code = finalCode?.Trim(), Id = t.Id });
+                        await conn.ExecuteAsync("UPDATE Branches SET BranchName = @Name, BranchCode = @Code, City = @City WHERE Id = @Id",
+                            new { Name = finalName.Trim(), Code = finalCode?.Trim(), City = string.IsNullOrWhiteSpace(finalCity) ? null : finalCity.Trim(), Id = t.Id });
 
                         if (nameChanged)
                         {
@@ -8013,7 +8028,7 @@ ORDER BY U.UserName ASC";
                         }
 
                         existingBranches.Remove(t);
-                        existingBranches.Add((t.Id, finalName.Trim(), finalCode?.Trim() ?? ""));
+                        existingBranches.Add((t.Id, finalName.Trim(), finalCode?.Trim() ?? "", finalCity?.Trim() ?? ""));
 
                         updatedCount++;
                     }
@@ -8029,12 +8044,12 @@ ORDER BY U.UserName ASC";
                             }
 
                             var newId = await conn.QuerySingleAsync<int>(@"
-                                INSERT INTO Branches (BranchName, BranchCode, IsActive) 
-                                VALUES (@Name, @Code, 1);
+                                INSERT INTO Branches (BranchName, BranchCode, City, IsActive) 
+                                VALUES (@Name, @Code, @City, 1);
                                 SELECT CAST(SCOPE_IDENTITY() as int);",
-                                new { Name = finalName.Trim(), Code = finalCode?.Trim() });
+                                new { Name = finalName.Trim(), Code = finalCode?.Trim(), City = string.IsNullOrWhiteSpace(rawCity) ? null : rawCity.Trim() });
 
-                            existingBranches.Add((newId, finalName.Trim(), finalCode?.Trim() ?? ""));
+                            existingBranches.Add((newId, finalName.Trim(), finalCode?.Trim() ?? "", rawCity?.Trim() ?? ""));
                             createdCount++;
                         }
                         else
@@ -8076,7 +8091,7 @@ ORDER BY U.UserName ASC";
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddBranch(string name, string code)
+        public async Task<IActionResult> AddBranch(string name, string code, string? city = null)
         {
             var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
             if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Branches", "create"))
@@ -8095,8 +8110,8 @@ ORDER BY U.UserName ASC";
                 if (exists > 0)
                     return Json(new { success = false, message = "Branch with this name already exists." });
 
-                await conn.ExecuteAsync("INSERT INTO Branches (BranchName, BranchCode, IsActive) VALUES (@Name, @Code, 1)", 
-                    new { Name = name.Trim(), Code = code?.Trim() });
+                await conn.ExecuteAsync("INSERT INTO Branches (BranchName, BranchCode, City, IsActive) VALUES (@Name, @Code, @City, 1)", 
+                    new { Name = name.Trim(), Code = code?.Trim(), City = city?.Trim() });
                 return Json(new { success = true, message = "Branch created successfully." });
             }
             catch (Exception ex)
@@ -8108,7 +8123,7 @@ ORDER BY U.UserName ASC";
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditBranch(int id, string name, string code)
+        public async Task<IActionResult> EditBranch(int id, string name, string code, string? city = null)
         {
             var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
             if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Branches", "edit"))
@@ -8126,8 +8141,8 @@ ORDER BY U.UserName ASC";
                 if (exists > 0)
                     return Json(new { success = false, message = "Another branch with this name already exists." });
 
-                await conn.ExecuteAsync("UPDATE Branches SET BranchName = @Name, BranchCode = @Code WHERE Id = @Id", 
-                    new { Id = id, Name = name.Trim(), Code = code?.Trim() });
+                await conn.ExecuteAsync("UPDATE Branches SET BranchName = @Name, BranchCode = @Code, City = @City WHERE Id = @Id", 
+                    new { Id = id, Name = name.Trim(), Code = code?.Trim(), City = city?.Trim() });
                 return Json(new { success = true, message = "Branch updated successfully." });
             }
             catch (Exception ex)

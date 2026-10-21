@@ -64,6 +64,8 @@ builder.Services.AddScoped<IExamService, ExamService>();
 builder.Services.AddScoped<IHomeCmsService, HomeCmsService>();
 // SignalR
 builder.Services.AddSignalR();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<Exam.Services.IN8nService, Exam.Services.N8nService>();
 
 // configuration cookies 
 builder.Services.ConfigureApplicationCookie(options =>
@@ -105,8 +107,7 @@ app.UseAuthorization();
 
 // map SignalR hubs
 app.MapHub<Exam.Hubs.ImportHub>("/importHub");
-//app.MapHub<Exam.Hubs.NotificationHub>("/notificationHub");
-//app.MapHub<Exam.Hubs.ImportHub>("/ImportHub");
+app.MapHub<Exam.Hubs.NotificationHub>("/notificationHub");
 app.MapStaticAssets();
 
 app.MapControllerRoute(

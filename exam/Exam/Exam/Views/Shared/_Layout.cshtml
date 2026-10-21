@@ -321,6 +321,7 @@
                     </div>
 
                     <div class="flex items-center gap-3 relative">
+                        <partial name="_NotificationBellPartial" />
                         @{
                             string roleDisplay = "Trainee Node";
                             if (User.IsInRole("Admin")) roleDisplay = "Administrator";
@@ -468,6 +469,7 @@
 
     <script src="~/lib/jquery-3.6.0/jquery.min.js"></script>
     <script src="~/lib/sweetalert2-11/sweetalert2.all.min.js"></script>
+    <script src="~/lib/signalr/signalr.min.js"></script>
         <script>
             (function () {
                 var successMsg = "@(TempData["SuccessMessage"]?.ToString())";

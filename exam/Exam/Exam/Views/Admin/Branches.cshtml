@@ -15,6 +15,17 @@
         if (userRoles.Contains("Admin")) return true;
         return ExamService.HasSpecificPermissionAsync(userRoles, "Admin", "Branches", permissionType).GetAwaiter().GetResult();
     }
+
+    var defaultCities = new List<string> {
+        "المنصورة", "بورسعيد", "طلخا", "بلقاس", "دمياط", "شربين", "طنطا", 
+        "بورفؤاد", "السنبلاوين", "ميت غمر", "القاهرة", "الإسكندرية", 
+        "دكرنس", "أجا", "كفر الشيخ", "الإدارة المركزية"
+    };
+    var allSystemCities = defaultCities
+        .Union(Model.Where(b => !string.IsNullOrWhiteSpace(b.City)).Select(b => b.City!.Trim()))
+        .Distinct()
+        .OrderBy(c => c)
+        .ToList();
 }
 
 @Html.AntiForgeryToken()
@@ -54,8 +65,23 @@
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-6 mt-8">
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Active Branches</span>
+            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Active Branches (@Model.Count())</span>
+                </div>
+                
+                <!-- Quick City Filter on Branches Table -->
+                <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <i class="fas fa-map-marker-alt text-xs text-sky-500"></i>
+                    <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400">تصفية حسب المدينة:</span>
+                    <select id="branchTableCityFilter" class="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer">
+                        <option value="">جميع المدن / All Cities</option>
+                        @foreach (var city in allSystemCities)
+                        {
+                            <option value="@city">@city</option>
+                        }
+                    </select>
+                </div>
             </div>
             
             <div class="overflow-x-auto w-full">
@@ -63,6 +89,7 @@
                 <thead>
                     <tr>
                         <th>Branch Name</th>
+                        <th>City / المدينة</th>
                         <th>Branch Code</th>
                         <th>Status</th>
                         <th class="text-right">Actions</th>
@@ -81,6 +108,12 @@
                                         <p class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wide">@branch.BranchName</p>
                                     </div>
                                 </div>
+                            </td>
+                            <td>
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-200/50">
+                                    <i class="fas fa-map-marker-alt text-[10px] text-sky-500"></i>
+                                    @(string.IsNullOrEmpty(branch.City) ? "غير محدد" : branch.City)
+                                </span>
                             </td>
                             <td>
                                 <span class="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded border border-slate-200 dark:border-slate-700 text-[10px] font-mono font-bold text-slate-500">
@@ -105,7 +138,7 @@
                                 <div class="flex items-center justify-end gap-2">
                                     @if (User.IsInRole("Admin") || HasSpecificPermission("edit"))
                                     {
-                                        <button onclick="openBranchModal('@branch.Id', '@Html.Raw(HttpUtility.JavaScriptStringEncode(branch.BranchName))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(branch.BranchCode ?? ""))')" class="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0">
+                                        <button onclick="openBranchModal('@branch.Id', '@Html.Raw(HttpUtility.JavaScriptStringEncode(branch.BranchName))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(branch.BranchCode ?? ""))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(branch.City ?? ""))')" class="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0">
                                             <i class="fas fa-edit mr-1"></i> Edit
                                         </button>
                                         <button onclick="mergeBranch('@branch.Id', '@Html.Raw(HttpUtility.JavaScriptStringEncode(branch.BranchName))')" class="bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 border border-amber-100 dark:border-amber-900/30">
@@ -130,18 +163,43 @@
 
 @section Scripts {
     <script>
-        function openBranchModal(id = null, currentName = '', currentCode = '') {
+        const systemCities = @Html.Raw(Json.Serialize(allSystemCities));
+
+        window.toggleCustomCityInput = function(val) {
+            const customDiv = document.getElementById('newCityContainer');
+            if (!customDiv) return;
+            if (val === '__NEW_CITY__') {
+                customDiv.classList.remove('hidden');
+                document.getElementById('branchCityCustom')?.focus();
+            } else {
+                customDiv.classList.add('hidden');
+            }
+        };
+
+        function openBranchModal(id = null, currentName = '', currentCode = '', currentCity = '') {
             const isEdit = id != null;
             Swal.fire({
                 title: isEdit ? 'Edit Branch / تعديل الفرع' : 'Add New Branch / إضافة فرع جديد',
                 html: `
                     <div class="text-left space-y-4">
                         <div>
-                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Branch Name <span class="text-rose-500">*</span></label>
-                            <input type="text" id="branchName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" placeholder="e.g. Main Branch" value="${currentName}">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Branch Name / اسم الفرع <span class="text-rose-500">*</span></label>
+                            <input type="text" id="branchName" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" placeholder="e.g. الترعه" value="${currentName}">
                         </div>
                         <div>
-                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Branch Code (Optional)</label>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">City / المنطقة أو المدينة التابع لها الفرع</label>
+                            <select id="branchCitySelect" onchange="window.toggleCustomCityInput(this.value)" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 cursor-pointer">
+                                <option value="">-- اختر المدينة / Select City --</option>
+                                ${systemCities.map(c => `<option value="${c}" ${c === currentCity ? 'selected' : ''}>${c}</option>`).join('')}
+                                ${currentCity && !systemCities.includes(currentCity) ? `<option value="${currentCity}" selected>${currentCity}</option>` : ''}
+                                <option value="__NEW_CITY__">➕ إضافة مدينة جديدة / + Add New City...</option>
+                            </select>
+                            <div id="newCityContainer" class="hidden mt-2">
+                                <input type="text" id="branchCityCustom" class="w-full bg-white dark:bg-slate-900 border border-brand-500 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none" placeholder="اكتب اسم المدينة الجديدة هنا...">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Branch Code (Optional) / كود الفرع</label>
                             <input type="text" id="branchCode" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" placeholder="e.g. BR-01" value="${currentCode}">
                         </div>
                     </div>
@@ -156,12 +214,21 @@
                 buttonsStyling: false,
                 preConfirm: () => {
                     const name = document.getElementById('branchName').value.trim();
+                    const citySelect = document.getElementById('branchCitySelect').value.trim();
+                    let city = citySelect;
+                    if (citySelect === '__NEW_CITY__') {
+                        city = (document.getElementById('branchCityCustom')?.value || '').trim();
+                        if (!city) {
+                            Swal.showValidationMessage('يرجى كتابة اسم المدينة الجديدة أو اختيار مدينة من القائمة.');
+                            return false;
+                        }
+                    }
                     const code = document.getElementById('branchCode').value.trim();
                     if (!name) {
                         Swal.showValidationMessage('Branch name is required');
                         return false;
                     }
-                    return { id, name, code };
+                    return { id, name, city, code };
                 }
             }).then((result) => {
                 if (result.isConfirmed) {
@@ -174,6 +241,7 @@
                         data: {
                             id: data.id,
                             name: data.name,
+                            city: data.city,
                             code: data.code,
                             __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
                         },
@@ -405,5 +473,15 @@
                 }
             });
         }
+
+        $(function() {
+            $('#branchTableCityFilter').on('change', function() {
+                const val = ($(this).val() || '').trim();
+                const tbl = $('table.datatable');
+                if (tbl.length && $.fn.DataTable.isDataTable(tbl[0])) {
+                    tbl.DataTable().column(1).search(val ? val : '', false, false).draw();
+                }
+            });
+        });
     </script>
 }

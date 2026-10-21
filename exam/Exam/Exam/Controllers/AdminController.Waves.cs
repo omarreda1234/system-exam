@@ -181,7 +181,108 @@ namespace Exam.Controllers
                     new { wave.WaveName, wave.StartDate, wave.EndDate, wave.IsOnline, Mode = modeValue, IsActive = wave.IsActive }
                 );
 
+                // Auto-generate daily attendance sessions if StartDate is provided (default 2 weeks, 9:00 AM - 12:00 PM, excluding Fridays)
+                if (wave.StartDate.HasValue)
+                {
+                    try
+                    {
+                        var startDate = wave.StartDate.Value.Date;
+                        var endDate = (wave.EndDate.HasValue && wave.EndDate.Value.Date >= startDate)
+                            ? wave.EndDate.Value.Date
+                            : startDate.AddDays(13); // Default 2 weeks (14 calendar days)
+
+                        var sessionStartTime = new TimeSpan(9, 0, 0); // 09:00 AM
+                        var sessionEndTime = new TimeSpan(12, 0, 0);   // 12:00 PM (3 hours duration)
+                        int sessionIndex = 1;
+
+                        for (var d = startDate; d <= endDate; d = d.AddDays(1))
+                        {
+                            if (d.DayOfWeek == DayOfWeek.Friday) continue; // Skip Fridays (إجازة)
+
+                            await connection.ExecuteAsync(@"
+                                IF NOT EXISTS (SELECT 1 FROM dbo.AttendanceSessions WHERE WaveId = @WaveId AND SessionDate = @SessionDate)
+                                BEGIN
+                                    INSERT INTO dbo.AttendanceSessions (WaveId, SessionDate, SessionName, StartTime, EndTime, CreatedAt)
+                                    VALUES (@WaveId, @SessionDate, @SessionName, @StartTime, @EndTime, GETDATE())
+                                END",
+                                new {
+                                    WaveId = newWaveId,
+                                    SessionDate = d,
+                                    SessionName = $"Session {sessionIndex}",
+                                    StartTime = sessionStartTime,
+                                    EndTime = sessionEndTime
+                                }
+                            );
+                            sessionIndex++;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Log or handle gracefully without breaking wave creation
+                    }
+                }
+
                 return Ok(new { NewWaveId = newWaveId });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> GenerateWaveAttendanceSessions(int waveId, DateTime? startDate, DateTime? endDate)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                var start = startDate;
+                var end = endDate;
+
+                if (!start.HasValue)
+                {
+                    var wave = await connection.QueryFirstOrDefaultAsync<dynamic>("SELECT StartDate, EndDate FROM dbo.TrainingWaves WHERE Id = @Id", new { Id = waveId });
+                    if (wave != null)
+                    {
+                        DateTime? wStart = wave.StartDate;
+                        DateTime? wEnd = wave.EndDate;
+                        if (wStart.HasValue)
+                        {
+                            start = wStart.Value;
+                            end = wEnd;
+                        }
+                    }
+                }
+
+                if (!start.HasValue) return BadRequest(new { success = false, message = "Start date is required." });
+
+                var sDate = start.Value.Date;
+                var eDate = (end.HasValue && end.Value.Date >= sDate) ? end.Value.Date : sDate.AddDays(13);
+
+                var sessionStartTime = new TimeSpan(9, 0, 0);
+                var sessionEndTime = new TimeSpan(12, 0, 0);
+                int sessionIndex = 1;
+                int createdCount = 0;
+
+                for (var d = sDate; d <= eDate; d = d.AddDays(1))
+                {
+                    if (d.DayOfWeek == DayOfWeek.Friday) continue;
+
+                    int affected = await connection.ExecuteAsync(@"
+                        IF NOT EXISTS (SELECT 1 FROM dbo.AttendanceSessions WHERE WaveId = @WaveId AND SessionDate = @SessionDate)
+                        BEGIN
+                            INSERT INTO dbo.AttendanceSessions (WaveId, SessionDate, SessionName, StartTime, EndTime, CreatedAt)
+                            VALUES (@WaveId, @SessionDate, @SessionName, @StartTime, @EndTime, GETDATE())
+                        END",
+                        new {
+                            WaveId = waveId,
+                            SessionDate = d,
+                            SessionName = $"Session {sessionIndex}",
+                            StartTime = sessionStartTime,
+                            EndTime = sessionEndTime
+                        }
+                    );
+                    if (affected > 0) createdCount++;
+                    sessionIndex++;
+                }
+
+                return Ok(new { success = true, createdCount });
             }
         }
 

@@ -877,6 +877,9 @@
                         <i id="theme-toggle-light-icon" class="hidden fas fa-sun"></i>
                     </button>
 
+                    <!-- Notification Ring Bell Dropdown -->
+                    <partial name="_NotificationBellPartial" />
+
                     <div class="h-8 w-[1px] bg-slate-200 dark:bg-slate-800"></div>
 
 
@@ -1056,7 +1059,8 @@
 
                 $(document).on('click', 'a', function(e) {
                     var href = $(this).attr('href');
-                    if (href && href !== '#' && !href.startsWith('javascript:') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
+                    if ($(this).is('[download]') || $(this).attr('download') !== undefined) return;
+                    if (href && href !== '#' && !href.startsWith('javascript:') && !href.startsWith('mailto:') && !href.startsWith('tel:') && !href.startsWith('blob:')) {
                         var cleanHref = href.split('?')[0].split('#')[0].toLowerCase().trim();
                         if (cleanHref.endsWith('/') && cleanHref.length > 1) cleanHref = cleanHref.slice(0, -1);
                         var adminPath = '@Url.Action("Index", "Admin")'.toLowerCase().trim();

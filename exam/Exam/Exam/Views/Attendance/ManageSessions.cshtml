@@ -65,11 +65,36 @@
                                 <span class="text-[9px] sm:text-[10px] font-bold text-brand-600 uppercase tracking-widest bg-brand-50 dark:bg-brand-950/20 px-2 py-0.5 rounded-full">
                                     <i class="fas fa-user-check mr-1"></i> @session.PresentCount Trainees Present
                                 </span>
+                                @if (isCompany)
+                                {
+                                    var specificAssigned = session.SpecificAssignedCount != null ? (int)session.SpecificAssignedCount : 0;
+                                    var totalPool = session.TotalTraineesCount != null ? (int)session.TotalTraineesCount : 0;
+                                    if (specificAssigned > 0)
+                                    {
+                                        <span class="text-[9px] sm:text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                                            <i class="fas fa-users mr-1"></i> @specificAssigned Session Trainees
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                            <i class="fas fa-building mr-1"></i> Company Pool (@totalPool)
+                                        </span>
+                                    }
+                                }
                             </div>
                         </div>
                     </div>
                     
                     <div class="flex items-center gap-2 border-t sm:border-t-0 pt-4 sm:pt-0 border-slate-100 dark:border-slate-800">
+                        @if (isCompany)
+                        {
+                            <button onclick="openManageSessionTrainees(@session.Id, '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(session.SessionName))', @(company?.Id ?? 0))" 
+                                    class="flex-1 sm:flex-none text-center bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 sm:py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-1.5" 
+                                    title="تعيين متدربي السيشن وتفعيل إشعارات n8n">
+                                <i class="fas fa-users-cog"></i> Manage Trainees
+                            </button>
+                        }
                         <a href="@Url.Action("TakeAttendance", new { sessionId = session.Id })" class="flex-1 sm:flex-none text-center bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white px-6 py-3 sm:py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-600 transition-all">
                             Take Attendance
                         </a>
@@ -78,6 +103,9 @@
                         </a>
                         @if (!User.IsInRole("Reception"))
                         {
+                            <button onclick="editSession(@session.Id, '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(session.SessionName))', '@session.SessionDate.ToString("yyyy-MM-dd")', '@(session.StartTime != null ? ((TimeSpan)session.StartTime).ToString(@"hh\:mm") : "09:00")', '@(session.EndTime != null ? ((TimeSpan)session.EndTime).ToString(@"hh\:mm") : "12:00")')" class="w-12 h-12 sm:w-10 sm:h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center hover:bg-amber-500 hover:text-white transition-all border border-amber-100 dark:border-amber-950/30" title="تعديل وقت وتاريخ المحاضرة (Edit Session)">
+                                <i class="fas fa-pen text-xs"></i>
+                            </button>
                             <button onclick="deleteSession(@session.Id)" class="w-12 h-12 sm:w-10 sm:h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all border border-rose-100 dark:border-rose-950/30" title="Delete Session">
                                 <i class="fas fa-trash-alt"></i>
                             </button>
@@ -142,6 +170,116 @@
     </div>
 </div>
 
+@if (isCompany)
+{
+    <!-- Modal: Manage Session Trainees (Assignment per Session) -->
+    <div id="sessionTraineesModal" class="hidden fixed inset-0 z-[105] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/60 dark:bg-slate-800/40">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl shadow-sm">
+                        <i class="fas fa-users-cog"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase" id="modalSessionTitle">Manage Session Trainees</h3>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 uppercase border border-indigo-200 dark:border-indigo-800">Session Level</span>
+                        </div>
+                        <p class="text-xs text-slate-400 font-medium mt-0.5">تحديد متدربي هذه السيشن وتفعيل إشعارات المنصة وإرسال الإيميلات عبر n8n API</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeManageSessionTrainees()" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                    <i class="fas fa-times text-base"></i>
+                </button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex border-b border-slate-100 dark:border-slate-800 px-6 pt-3 bg-white dark:bg-slate-900 gap-2">
+                <button type="button" onclick="switchTraineesTab('current')" id="tabBtnCurrent" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-indigo-600 border-b-2 border-indigo-600 flex items-center gap-2 transition-all">
+                    <i class="fas fa-user-check"></i> المتدربين المعينين (<span id="assignedCountBadge">0</span>)
+                </button>
+                <button type="button" onclick="switchTraineesTab('assign')" id="tabBtnAssign" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent flex items-center gap-2 transition-all">
+                    <i class="fas fa-user-plus"></i> تعيين من متدربي الشركة
+                </button>
+                <button type="button" onclick="switchTraineesTab('excel')" id="tabBtnExcel" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent flex items-center gap-2 transition-all">
+                    <i class="fas fa-file-excel"></i> استيراد شيت إكسيل للسيشن
+                </button>
+            </div>
+
+            <!-- Modal Content Area -->
+            <div class="p-6 overflow-y-auto flex-1 custom-scrollbar">
+                <input type="hidden" id="currentSessionId" />
+
+                <!-- Tab 1: Current Assigned -->
+                <div id="tabContentCurrent" class="space-y-4">
+                    <div id="assignedTraineesList" class="space-y-2">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Tab 2: Assign from Pool -->
+                <div id="tabContentAssign" class="hidden space-y-4">
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <div class="relative w-full sm:w-72">
+                            <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" id="traineeSearchInput" onkeyup="filterTraineePool()" placeholder="بحث بالاسم أو الكود..." class="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-white" />
+                        </div>
+                        <div class="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                            <label class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                                <input type="checkbox" id="selectAllTrainees" onchange="toggleSelectAllPool(this)" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300" />
+                                <span>تحديد الكل</span>
+                            </label>
+                            <span id="selectedPoolCount" class="text-xs font-mono font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1 rounded-lg">0 محدد</span>
+                        </div>
+                    </div>
+
+                    <!-- Options for Notification & n8n Email -->
+                    <div class="p-4 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/60 rounded-2xl space-y-2">
+                        <label class="flex items-center gap-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
+                            <input type="checkbox" id="chkSendNotification" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
+                            <span>🔔 إرسال إشعار فوري للمتدربين على المنصة (In-App Notification)</span>
+                        </label>
+                        <label class="flex items-center gap-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
+                            <input type="checkbox" id="chkSendN8nEmail" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
+                            <span>⚡ إرسال بيانات المتدربين والسيشن إلى <strong>n8n Webhook API</strong> لإرسال الإيميلات والأتمتة</span>
+                        </label>
+                    </div>
+
+                    <div id="traineePoolList" class="max-h-72 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
+                        <!-- Checkboxes populated by JS -->
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <button type="button" onclick="saveTraineesAssignment()" class="px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2">
+                            <i class="fas fa-check"></i> حفظ تعيين المتدربين للسيشن
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Excel Direct Import -->
+                <div id="tabContentExcel" class="hidden space-y-5">
+                    <div class="p-6 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center bg-slate-50/50 dark:bg-slate-800/20">
+                        <i class="fas fa-file-excel text-4xl text-emerald-500 mb-3 block"></i>
+                        <h4 class="text-sm font-black text-slate-800 dark:text-white">رفع شيت إكسيل لمتدربي هذه السيشن مباشرة</h4>
+                        <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                            الأعمدة المطلوبة: FullName, UserCode, JobTitle, BranchName, Email, Phone.
+                            سيتم ربطهم بهذه السيشن تلقائياً وإرسال بياناتهم إلى n8n API.
+                        </p>
+                        <input type="file" id="sessionExcelFile" accept=".xlsx, .xls" class="mt-4 text-xs font-bold text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer" />
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button type="button" onclick="uploadSessionExcelDirect()" class="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2">
+                            <i class="fas fa-cloud-upload-alt"></i> رفع وتسكين المتدربين في السيشن
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @section Scripts {
     <!-- Flatpickr CSS & JS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -155,6 +293,83 @@
                 altInputClass: "w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-sm font-bold outline-none focus:border-brand-500 transition-all text-slate-900 dark:text-white"
             });
         });
+
+        async function editSession(id, currentName, currentDate, currentStart, currentEnd) {
+            const { value: formValues } = await Swal.fire({
+                title: '<div class="text-base font-black uppercase text-slate-800 dark:text-white">تعديل المحاضرة / الجلسة (Edit Session)</div>',
+                html: `
+                    <div class="text-right space-y-4" dir="rtl">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">مسمى المحاضرة / Label:</label>
+                            <input id="sw-edit-name" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-xs font-bold outline-none focus:border-brand-500 transition-all text-slate-900 dark:text-white" value="${currentName || ''}" placeholder="e.g. Session 1">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">تاريخ المحاضرة (Date):</label>
+                            <input id="sw-edit-date" type="date" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-xs font-bold outline-none focus:border-brand-500 transition-all text-slate-900 dark:text-white" value="${currentDate}">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">وقت البداية (Start):</label>
+                                <input id="sw-edit-start" type="time" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-xs font-bold outline-none focus:border-brand-500 transition-all text-slate-900 dark:text-white" value="${currentStart}">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">وقت النهاية (End):</label>
+                                <input id="sw-edit-end" type="time" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-xs font-bold outline-none focus:border-brand-500 transition-all text-slate-900 dark:text-white" value="${currentEnd}">
+                            </div>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'حفظ التعديلات',
+                cancelButtonText: 'إلغاء',
+                customClass: {
+                    popup: 'rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900',
+                    confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase shadow-md mr-2',
+                    cancelButton: 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500 font-bold text-xs px-6 py-2.5 rounded-xl'
+                },
+                buttonsStyling: false,
+                preConfirm: () => {
+                    const name = document.getElementById('sw-edit-name').value;
+                    const date = document.getElementById('sw-edit-date').value;
+                    const start = document.getElementById('sw-edit-start').value;
+                    const end = document.getElementById('sw-edit-end').value;
+                    if (!name || !name.trim()) {
+                        Swal.showValidationMessage('اسم المحاضرة مطلوب');
+                        return false;
+                    }
+                    if (!date) {
+                        Swal.showValidationMessage('تاريخ المحاضرة مطلوب');
+                        return false;
+                    }
+                    return { name: name.trim(), date, start, end };
+                }
+            });
+
+            if (formValues) {
+                Swal.showLoading();
+                try {
+                    const fd = new FormData();
+                    fd.append('sessionId', id);
+                    fd.append('sessionName', formValues.name);
+                    fd.append('sessionDate', formValues.date);
+                    if (formValues.start) fd.append('startTime', formValues.start);
+                    if (formValues.end) fd.append('endTime', formValues.end);
+
+                    const res = await fetch('@Url.Action("UpdateSession")', {
+                        method: 'POST',
+                        body: fd
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                        location.reload();
+                    } else {
+                        Swal.fire('خطأ', json.message || 'تعذر تعديل المحاضرة', 'error');
+                    }
+                } catch(e) {
+                    Swal.fire('خطأ', 'حدث خطأ أثناء التواصل مع السيرفر', 'error');
+                }
+            }
+        }
 
         function deleteSession(id) {
             Swal.fire({
@@ -175,5 +390,260 @@
                 }
             });
         }
+
+        // ==========================================
+        // Session Trainees Management Logic (n8n API & In-App Notifications)
+        // ==========================================
+        let sessionTraineesState = {
+            sessionId: 0,
+            assignedTrainees: [],
+            poolTrainees: []
+        };
+
+        window.openManageSessionTrainees = function (sessionId, sessionName, companyId) {
+            sessionTraineesState.sessionId = sessionId;
+            document.getElementById('currentSessionId').value = sessionId;
+            document.getElementById('modalSessionTitle').textContent = `Manage Trainees - ${sessionName}`;
+            document.getElementById('sessionTraineesModal').classList.remove('hidden');
+            switchTraineesTab('current');
+            loadSessionTraineesData(sessionId);
+        };
+
+        window.closeManageSessionTrainees = function () {
+            document.getElementById('sessionTraineesModal').classList.add('hidden');
+        };
+
+        window.switchTraineesTab = function (tab) {
+            const tabs = ['current', 'assign', 'excel'];
+            tabs.forEach(t => {
+                const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
+                const content = document.getElementById('tabContent' + t.charAt(0).toUpperCase() + t.slice(1));
+                if (btn && content) {
+                    if (t === tab) {
+                        btn.classList.add('text-indigo-600', 'border-indigo-600');
+                        btn.classList.remove('text-slate-400', 'border-transparent');
+                        content.classList.remove('hidden');
+                    } else {
+                        btn.classList.remove('text-indigo-600', 'border-indigo-600');
+                        btn.classList.add('text-slate-400', 'border-transparent');
+                        content.classList.add('hidden');
+                    }
+                }
+            });
+        };
+
+        window.loadSessionTraineesData = async function (sessionId) {
+            const listWrapper = document.getElementById('assignedTraineesList');
+            const poolWrapper = document.getElementById('traineePoolList');
+            const countBadge = document.getElementById('assignedCountBadge');
+
+            listWrapper.innerHTML = `
+                <div class="text-center py-10 text-slate-400">
+                    <i class="fas fa-spinner fa-spin text-2xl text-indigo-500 mb-2 block"></i>
+                    جاري تحميل متدربي السيشن...
+                </div>`;
+
+            try {
+                const res = await fetch(`/Attendance/GetSessionTrainees?sessionId=${sessionId}`);
+                const data = await res.json();
+
+                if (!data.success) {
+                    listWrapper.innerHTML = `<div class="text-center py-6 text-rose-500 font-bold">${data.message}</div>`;
+                    return;
+                }
+
+                sessionTraineesState.assignedTrainees = data.assignedTrainees || [];
+                sessionTraineesState.poolTrainees = data.allCompanyTrainees || [];
+
+                countBadge.textContent = sessionTraineesState.assignedTrainees.length;
+
+                // 1. Render Current Assigned Trainees
+                if (sessionTraineesState.assignedTrainees.length === 0) {
+                    listWrapper.innerHTML = `
+                        <div class="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                            <div class="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-500 flex items-center justify-center mx-auto mb-3 text-xl">
+                                <i class="fas fa-info-circle"></i>
+                            </div>
+                            <h4 class="text-xs font-black uppercase text-slate-800 dark:text-white">لم يتم تخصيص متدربين محددين لهذه السيشن بعد</h4>
+                            <p class="text-[11px] text-slate-400 mt-1 max-w-md mx-auto">
+                                هذه السيشن تعتمد حالياً على جميع متدربي الشركة (${sessionTraineesState.poolTrainees.length} متدرب). 
+                                يمكنك تعيين متدربين محددين لها من تبويب "تعيين من متدربي الشركة" أو رفع إكسيل.
+                            </p>
+                            <button type="button" onclick="switchTraineesTab('assign')" class="mt-4 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all">
+                                <i class="fas fa-user-plus mr-1"></i> تخصيص متدربين للسيشن الآن
+                            </button>
+                        </div>`;
+                } else {
+                    listWrapper.innerHTML = sessionTraineesState.assignedTrainees.map(t => `
+                        <div class="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center text-xs">
+                                    ${(t.fullName || 'T')[0]}
+                                </div>
+                                <div>
+                                    <h4 class="text-xs font-black text-slate-800 dark:text-white leading-tight">${t.fullName}</h4>
+                                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">الكود: ${t.userCode} | الفرع: ${t.branchName} | ${t.jobTitle}</p>
+                                </div>
+                            </div>
+                            <button type="button" onclick="removeTraineeFromSession(${sessionId}, ${t.id}, '${t.fullName}')" class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center text-xs transition-all" title="إزالة من هذه السيشن">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    `).join('');
+                }
+
+                // 2. Render Pool for Assignment
+                const assignedIds = new Set(sessionTraineesState.assignedTrainees.map(a => a.id));
+                poolWrapper.innerHTML = sessionTraineesState.poolTrainees.map(t => {
+                    const isChecked = assignedIds.has(t.id);
+                    return `
+                        <label class="trainee-item flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer select-none" data-search="${(t.fullName + ' ' + t.userCode + ' ' + t.branchName).toLowerCase()}">
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" value="${t.id}" class="pool-chk w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300" onchange="updateSelectedPoolCount()" ${isChecked ? 'checked' : ''} />
+                                <div>
+                                    <p class="text-xs font-black text-slate-800 dark:text-white leading-tight">${t.fullName}</p>
+                                    <span class="text-[10px] text-slate-400 font-mono">${t.userCode} | ${t.branchName}</span>
+                                </div>
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-400">${t.jobTitle}</span>
+                        </label>
+                    `;
+                }).join('');
+
+                updateSelectedPoolCount();
+            } catch (err) {
+                listWrapper.innerHTML = `<div class="text-center py-6 text-rose-500 font-bold">فشل جلب البيانات: ${err.message}</div>`;
+            }
+        };
+
+        window.filterTraineePool = function () {
+            const q = document.getElementById('traineeSearchInput').value.toLowerCase().trim();
+            document.querySelectorAll('.trainee-item').forEach(el => {
+                const searchTxt = el.getAttribute('data-search') || '';
+                if (!q || searchTxt.includes(q)) el.classList.remove('hidden');
+                else el.classList.add('hidden');
+            });
+        };
+
+        window.toggleSelectAllPool = function (master) {
+            document.querySelectorAll('.pool-chk').forEach(c => {
+                if (!c.closest('.trainee-item').classList.contains('hidden')) {
+                    c.checked = master.checked;
+                }
+            });
+            updateSelectedPoolCount();
+        };
+
+        window.updateSelectedPoolCount = function () {
+            const count = document.querySelectorAll('.pool-chk:checked').length;
+            document.getElementById('selectedPoolCount').textContent = `${count} محدد`;
+        };
+
+        window.saveTraineesAssignment = async function () {
+            const sessionId = sessionTraineesState.sessionId;
+            const checkedBoxes = document.querySelectorAll('.pool-chk:checked');
+            const traineeIds = Array.from(checkedBoxes).map(c => parseInt(c.value));
+
+            if (traineeIds.length === 0) {
+                Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى تحديد متدرب واحد على الأقل.' });
+                return;
+            }
+
+            const sendNotif = document.getElementById('chkSendNotification').checked;
+            const sendN8n = document.getElementById('chkSendN8nEmail').checked;
+
+            Swal.fire({
+                title: 'جاري التعيين والإرسال...',
+                text: 'يتم تسجيل المتدربين وإطلاق إشعارات المنصة و n8n Webhook...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            try {
+                const res = await fetch('/Attendance/AssignTraineesToSession', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        traineeIds: traineeIds,
+                        sendNotification: sendNotif,
+                        sendEmailViaN8n: sendN8n
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    await Swal.fire({ icon: 'success', title: 'تم التعيين بنجاح', text: data.message });
+                    switchTraineesTab('current');
+                    loadSessionTraineesData(sessionId);
+                } else {
+                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'فشل الاتصال', text: err.message });
+            }
+        };
+
+        window.removeTraineeFromSession = async function (sessionId, traineeId, name) {
+            const confirm = await Swal.fire({
+                title: 'إزالة المتدرب؟',
+                text: `هل تريد إزالة (${name}) من هذه السيشن المحددة؟`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'نعم، إزالة',
+                cancelButtonText: 'إلغاء',
+                confirmButtonColor: '#ef4444'
+            });
+            if (!confirm.isConfirmed) return;
+
+            try {
+                const res = await fetch(`/Attendance/RemoveTraineeFromSession?sessionId=${sessionId}&traineeId=${traineeId}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'تم الحذف', text: data.message, timer: 1500 });
+                    loadSessionTraineesData(sessionId);
+                } else {
+                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'فشل', text: err.message });
+            }
+        };
+
+        window.uploadSessionExcelDirect = async function () {
+            const fileInput = document.getElementById('sessionExcelFile');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى اختيار ملف إكسيل أولاً.' });
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('sessionId', sessionTraineesState.sessionId);
+            formData.append('excelFile', fileInput.files[0]);
+
+            Swal.fire({
+                title: 'جاري استيراد الإكسيل...',
+                text: 'يتم قراءة الملف وتسكين المتدربين وإرسالهم لـ n8n API...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            try {
+                const res = await fetch('/Attendance/ImportSessionTraineesFromExcel', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    await Swal.fire({ icon: 'success', title: 'تم الاستيراد بنجاح', text: data.message });
+                    fileInput.value = '';
+                    switchTraineesTab('current');
+                    loadSessionTraineesData(sessionTraineesState.sessionId);
+                } else {
+                    Swal.fire({ icon: 'error', title: 'خطأ في الاستيراد', text: data.message });
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'فشل الرفع', text: err.message });
+            }
+        };
     </script>
 }

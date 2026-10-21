@@ -8,6 +8,8 @@ using System.Linq;
 using System;
 using Microsoft.Extensions.Configuration;
 using Exam.Models;
+using Microsoft.AspNetCore.SignalR;
+using Exam.Hubs;
 
 namespace Exam.Services
 {
@@ -15,11 +17,19 @@ namespace Exam.Services
     {
         private readonly string _connectionString;
         private readonly IEmailSender _emailSender;
+        private readonly IN8nService? _n8nService;
+        private readonly IHubContext<NotificationHub>? _hubContext;
 
-        public ExamService(IConfiguration configuration, IEmailSender emailSender)
+        public ExamService(
+            IConfiguration configuration, 
+            IEmailSender emailSender,
+            IN8nService? n8nService = null,
+            IHubContext<NotificationHub>? hubContext = null)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection");
             _emailSender = emailSender;
+            _n8nService = n8nService;
+            _hubContext = hubContext;
         }
 
         public async Task<ExamDetailsDto> GetExamDetailsAsync(int examId)
@@ -1341,6 +1351,7 @@ SELECT
     CAST(B.Id AS NVARCHAR(32)) AS Id,
     B.BranchName,
     B.BranchCode,
+    B.City,
     B.IsActive
 FROM dbo.Branches B
 ORDER BY B.BranchName;";
@@ -2531,10 +2542,10 @@ WHERE U.Id = @UserId;";
                     catch { }
                 }
 
-                // 2. Perform DB assignment in ONE BATCH
+                // 2. Perform DB assignment in ONE BATCH with Pending approval status
                 string sqlBatch = @"
-                    INSERT INTO UserWaves (UserId, WaveId, JoinDate)
-                    SELECT Id, @WaveId, @JoinDate
+                    INSERT INTO UserWaves (UserId, WaveId, JoinDate, ApprovalStatus)
+                    SELECT Id, @WaveId, @JoinDate, 'Pending'
                     FROM AspNetUsers
                     WHERE Id IN @UserIds
                     AND Id NOT IN (SELECT UserId FROM UserWaves WHERE WaveId = @WaveId)";
@@ -2542,6 +2553,87 @@ WHERE U.Id = @UserId;";
                 int count = await conn.ExecuteAsync(sqlBatch, 
                     new { WaveId = waveId, JoinDate = DateTime.Now, UserIds = userIds }, 
                     commandTimeout: 120);
+
+                // 2a. Insert notifications for Branch Managers / Supervisors & trigger n8n
+                try
+                {
+                    var branchCandidates = (await conn.QueryAsync<dynamic>(@"
+                        SELECT u.BranchId, ISNULL(b.BranchName, N'بدون فرع') AS BranchName, COUNT(1) AS CandidateCount
+                        FROM AspNetUsers u
+                        LEFT JOIN dbo.Branches b ON u.BranchId = b.Id
+                        WHERE u.Id IN @UserIds
+                        GROUP BY u.BranchId, b.BranchName", new { UserIds = userIds })).ToList();
+
+                    string waveNameStr = (string)(waveInfo?.WaveName ?? "New Wave");
+
+                    foreach (var bc in branchCandidates)
+                    {
+                        int? bId = (int?)bc.BranchId;
+                        string bName = (string)bc.BranchName;
+                        int cCount = (int)bc.CandidateCount;
+
+                        string title = $"ترشيح موظفين للدورة: {waveNameStr} 🔔";
+                        string message = $"تم ترشيح {cCount} موظف من فرع ({bName}) لحضور دورة {waveNameStr}. يرجى مراجعة المرشحين والموافقة أو الرفض أو الاستبدال.";
+                        string linkUrl = $"/Admin/Waves?waveId={waveId}";
+
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.AppNotifications (BranchId, RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, IsRead, CreatedAt)
+                            VALUES (@BranchId, @RoleTarget, @Title, @Message, @LinkUrl, 'WaveNomination', @ReferenceId, 0, GETDATE())",
+                            new 
+                            { 
+                                BranchId = bId, 
+                                RoleTarget = bId == null ? "Admin" : null,
+                                Title = title, 
+                                Message = message, 
+                                LinkUrl = linkUrl, 
+                                ReferenceId = waveId.ToString() 
+                            });
+                    }
+
+                    // Dispatch SignalR notification
+                    if (_hubContext != null)
+                    {
+                        await _hubContext.Clients.All.SendAsync("ReceiveNotification", $"تم إرسال ترشيحات جديدة للموظفين لدورة {waveNameStr} وبانتظار موافقة مديري الفروع.");
+                    }
+
+                    // Dispatch n8n webhook for wave nominations
+                    if (_n8nService != null)
+                    {
+                        var candidateDetails = (await conn.QueryAsync<dynamic>(@"
+                            SELECT u.Id, ISNULL(u.FullName, u.UserName) AS FullName, u.UserName, u.Email, u.PhoneNumber,
+                                   u.BranchId, ISNULL(b.BranchName, N'بدون فرع') AS BranchName
+                            FROM AspNetUsers u
+                            LEFT JOIN Branches b ON u.BranchId = b.Id
+                            WHERE u.Id IN @UserIds", new { UserIds = userIds })).ToList();
+
+                        var n8nPayload = new
+                        {
+                            @event = "wave_nomination_created",
+                            waveId = waveId,
+                            waveName = waveNameStr,
+                            startDate = waveInfo?.StartDate != null ? ((DateTime)waveInfo.StartDate).ToString("yyyy-MM-dd") : null,
+                            candidates = candidateDetails.Select(c => new
+                            {
+                                id = (string)c.Id,
+                                fullName = (string)c.FullName,
+                                userName = (string)c.UserName,
+                                email = (string)(c.Email ?? ""),
+                                phone = (string)(c.PhoneNumber ?? ""),
+                                branchId = (int?)c.BranchId,
+                                branchName = (string)c.BranchName
+                            }).ToList()
+                        };
+
+                        _ = Task.Run(async () =>
+                        {
+                            try { await _n8nService.TriggerWaveNominationNotificationAsync(n8nPayload); } catch { }
+                        });
+                    }
+                }
+                catch
+                {
+                    // Suppress notification errors to avoid failing the assignment transaction
+                }
 
                  // 2b. Automatically assign all active exams of this wave to the newly assigned users
                  try

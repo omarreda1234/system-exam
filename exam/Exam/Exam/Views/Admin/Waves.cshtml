@@ -115,6 +115,10 @@
                                         <i class="fas fa-file-excel text-xs"></i>
                                         Import Excel
                                     </button>
+                                    <a href="/Attendance/ManageSessions?waveId=@wave.Id" class="bg-sky-50 dark:bg-sky-950/20 hover:bg-sky-600 text-sky-600 hover:text-white px-4 py-2.5 rounded-xl transition-all border border-sky-100 dark:border-sky-900/30 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 group" title="جلسات ومحاضرات الحضور (Attendance Sessions)">
+                                        <i class="fas fa-calendar-check text-xs"></i>
+                                        Sessions
+                                    </a>
                                 }
                                 @if (HasWavesEditPermission())
                                 {
@@ -628,8 +632,30 @@
                 return role === 'pharmacist' || role === 'assistant' || role === 'صيدلي' || role === 'مساعد صيدلي';
             }).map(u => ({
                 ...u,
+                city: (u.city || u.City || 'المنصورة').trim(),
                 isAssigned: assignedSet.has(u.id)
             }));
+
+            // Helper to escape HTML attributes safely
+            const escapeHtmlAttr = s => String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            // Build city & branch grouping stats
+            const cityCounts = {};
+            const branchCounts = {};
+            const branchCityMap = {};
+
+            users.forEach(u => {
+                const c = u.city || 'المنصورة';
+                const b = (u.branchName || u.BranchName || 'GLOBAL').trim();
+                cityCounts[c] = (cityCounts[c] || 0) + 1;
+                branchCounts[b] = (branchCounts[b] || 0) + 1;
+                branchCityMap[b] = c;
+            });
+
+            const cities = Object.keys(cityCounts).sort().map(c => ({ name: c, count: cityCounts[c] }));
+            const branches = Object.keys(branchCounts).sort().map(b => ({ name: b, count: branchCounts[b], city: branchCityMap[b] }));
+            const mansouraCount = cityCounts['المنصورة'] || 0;
+            const outsideMansouraCount = users.filter(u => u.city !== 'المنصورة').length;
 
             const initialSubject = emailData?.customSubject || `Welcome to ${wname} - Registration Confirmed`;
             const initialBody = emailData?.customBody || `Dear {Name},\n\nWelcome to {WaveName} of Pharmacy Basics Program — we’re glad to have you with us!\n\nYour registration has been successfully confirmed. Here are your session details:\n📅 Date & Time: {StartDate}\n📍 Location: {Location}\n\nA quick note before we start:\n• Please arrive 10–15 minutes early to ensure a smooth check-in.\n• Keep an eye on your email for any further updates or announcements.\n\nIf you have any questions or face any issues, feel free to reach out to us.\nLooking forward to seeing you and having a great Training Program together!\n\nBest regards,\nEltarshoubi Training Academy Team`;
@@ -659,20 +685,59 @@
                     <div class="mt-4 text-left">
                         <!-- TAB 1: CANDIDATES LIST -->
                         <div id="assignTabCandidates">
-                            <div class="mb-4 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700">
-                                <div class="flex items-center gap-3">
-                                    <div class="flex items-center gap-2 bg-amber-50 dark:bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-200/60 dark:border-amber-500/20">
-                                        <input type="checkbox" id="filterNoCert" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
-                                        <label for="filterNoCert" class="text-[10px] font-bold text-amber-700 dark:text-amber-500 uppercase tracking-widest cursor-pointer select-none">Without Cert Code</label>
+                            <!-- Advanced Filter Bar (City & Branch Grouping) -->
+                            <div class="mb-4 flex flex-col gap-3 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div class="flex flex-wrap items-center gap-2.5">
+                                        <!-- City Filter Dropdown -->
+                                        <div class="flex items-center gap-2 bg-sky-50 dark:bg-sky-950/40 px-3 py-1.5 rounded-xl border border-sky-200/70 dark:border-sky-800/50 shadow-xs">
+                                            <i class="fas fa-map-marker-alt text-xs text-sky-600 dark:text-sky-400"></i>
+                                            <select id="filterCitySelect" class="bg-transparent text-[11px] font-bold text-sky-900 dark:text-sky-200 outline-none cursor-pointer">
+                                                <option value="">جميع المدن / All Cities (${cities.length})</option>
+                                                ${mansouraCount > 0 ? `<option value="المنصورة">📍 المنصورة (${mansouraCount} مرشح - فروع الأوفلاين)</option>` : ''}
+                                                ${outsideMansouraCount > 0 ? `<option value="__outside_mansoura__">🌐 كل الفروع خارج المنصورة (${outsideMansouraCount} مرشح - فروع الأونلاين)</option>` : ''}
+                                                <option disabled>──────────</option>
+                                                ${cities.filter(c => c.name !== 'المنصورة').map(c => `<option value="${escapeHtmlAttr(c.name)}">${c.name} (${c.count} مرشح)</option>`).join('')}
+                                            </select>
+                                        </div>
+
+                                        <!-- Branch Filter Dropdown -->
+                                        <div class="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1.5 rounded-xl border border-indigo-200/70 dark:border-indigo-800/50 shadow-xs">
+                                            <i class="fas fa-store text-xs text-indigo-600 dark:text-indigo-400"></i>
+                                            <select id="filterBranchSelect" class="bg-transparent text-[11px] font-bold text-indigo-900 dark:text-indigo-200 outline-none cursor-pointer max-w-[220px]">
+                                                <option value="">جميع الفروع / All Branches (${branches.length})</option>
+                                                ${branches.map(b => `<option value="${escapeHtmlAttr(b.name)}" data-city="${escapeHtmlAttr(b.city)}">${b.name} (${b.count})</option>`).join('')}
+                                            </select>
+                                        </div>
                                     </div>
-                                    <div class="flex items-center gap-2 bg-brand-50 dark:bg-brand-500/10 px-3 py-1.5 rounded-xl border border-brand-200/60 dark:border-brand-500/20">
-                                        <input type="checkbox" id="filterNotAssigned" class="w-4 h-4 accent-brand-500 rounded cursor-pointer">
-                                        <label for="filterNotAssigned" class="text-[10px] font-bold text-brand-700 dark:text-brand-500 uppercase tracking-widest cursor-pointer select-none">Not Assigned to Wave</label>
+
+                                    <button type="button" onclick="window.switchAssignTab('email')" class="text-xs font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400 flex items-center gap-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-3 py-1.5 rounded-xl shadow-xs">
+                                        <i class="fas fa-edit text-xs"></i> Customize Email Template / تخصيص رسالة الإيميل
+                                    </button>
+                                </div>
+
+                                <!-- Secondary Filter Row & Quick Actions -->
+                                <div class="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                                    <div class="flex items-center gap-3">
+                                        <div class="flex items-center gap-2 bg-amber-50 dark:bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-200/60 dark:border-amber-500/20">
+                                            <input type="checkbox" id="filterNoCert" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+                                            <label for="filterNoCert" class="text-[10px] font-bold text-amber-700 dark:text-amber-500 uppercase tracking-widest cursor-pointer select-none">Without Cert Code</label>
+                                        </div>
+                                        <div class="flex items-center gap-2 bg-brand-50 dark:bg-brand-500/10 px-3 py-1.5 rounded-xl border border-brand-200/60 dark:border-brand-500/20">
+                                            <input type="checkbox" id="filterNotAssigned" class="w-4 h-4 accent-brand-500 rounded cursor-pointer">
+                                            <label for="filterNotAssigned" class="text-[10px] font-bold text-brand-700 dark:text-brand-500 uppercase tracking-widest cursor-pointer select-none">Not Assigned to Wave</label>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" id="btnSelectAllFiltered" class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-brand-50 hover:bg-brand-600 text-brand-700 hover:text-white dark:bg-brand-950/40 dark:text-brand-300 border border-brand-200 dark:border-brand-800 transition-all flex items-center gap-1.5 shadow-xs">
+                                            <i class="fas fa-check-double text-[10px]"></i> <span>تحديد كل نتائج الفلتر (Select Filtered)</span>
+                                        </button>
+                                        <button type="button" id="btnDeselectAll" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-slate-400 hover:text-rose-600 transition-colors">
+                                            إلغاء التحديد
+                                        </button>
                                     </div>
                                 </div>
-                                <button type="button" onclick="window.switchAssignTab('email')" class="text-xs font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400 flex items-center gap-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-3 py-1.5 rounded-xl shadow-xs">
-                                    <i class="fas fa-edit text-xs"></i> Customize Email Template / تخصيص رسالة الإيميل
-                                </button>
                             </div>
 
                             <table id="swalUserTable" class="saas-table display nowrap w-full text-xs">
@@ -681,7 +746,7 @@
                                         <th class="w-10"><input type="checkbox" id="selectAllSwal" class="w-4 h-4 accent-brand-500"></th>
                                         <th>User</th>
                                         <th>Code</th>
-                                        <th>Branch</th>
+                                        <th>Branch / المنطقة والفرع</th>
                                         <th>Role</th>
                                         <th>Cert Code</th>
                                     </tr>
@@ -690,7 +755,9 @@
                                     ${users.map(u => `
                                         <tr class="cursor-pointer border-b border-slate-50 hover:bg-slate-50 transition-colors ${u.isAssigned ? 'opacity-50 grayscale-[0.5]' : ''}" 
                                             data-has-cert="${u.certificateCode ? 'true' : 'false'}"
-                                            data-is-assigned="${u.isAssigned}">
+                                            data-is-assigned="${u.isAssigned}"
+                                            data-city="${escapeHtmlAttr((u.city || 'المنصورة').trim())}"
+                                            data-branch="${escapeHtmlAttr((u.branchName || 'GLOBAL').trim().toLowerCase())}">
                                             <td><input type="checkbox" class="user-cb w-4 h-4 accent-brand-500" value="${u.id}" ${u.isAssigned ? 'disabled' : ''}></td>
                                             <td>
                                                 <div class="flex flex-col">
@@ -702,7 +769,15 @@
                                                 </div>
                                             </td>
                                             <td class="font-bold text-slate-500">${u.userCode || u.UserCode || '--'}</td>
-                                            <td class="font-bold text-slate-500">${(u.branchName || 'GLOBAL').toUpperCase()}</td>
+                                            <td>
+                                                <div class="flex flex-col">
+                                                    <span class="font-bold text-slate-700 dark:text-slate-200">${(u.branchName || 'GLOBAL').toUpperCase()}</span>
+                                                    <span class="text-[10px] font-bold text-sky-600 dark:text-sky-400 flex items-center gap-1 mt-0.5">
+                                                        <i class="fas fa-map-marker-alt text-[8px]"></i>
+                                                        ${u.city || 'المنصورة'}
+                                                    </span>
+                                                </div>
+                                            </td>
                                             <td><span class="text-[8px] font-bold px-2 py-0.5 bg-slate-100 rounded-full text-slate-600 uppercase">${u.roleName || 'USER'}</span></td>
                                             <td class="font-mono text-[9px] text-brand-600">${u.certificateCode || '<span class="text-slate-300">--</span>'}</td>
                                         </tr>
@@ -890,6 +965,8 @@
                         
                         const certChecked = $('#filterNoCert').is(':checked');
                         const assignChecked = $('#filterNotAssigned').is(':checked');
+                        const selectedCity = ($('#filterCitySelect').val() || '').trim();
+                        const selectedBranch = ($('#filterBranchSelect').val() || '').trim().toLowerCase();
                         const row = settings.aoData[dataIndex].nTr;
                         
                         if (certChecked) {
@@ -898,6 +975,21 @@
                         
                         if (assignChecked) {
                             if ($(row).attr('data-is-assigned') !== 'false') return false;
+                        }
+
+                        // City filter logic (handles exact city or outside mansoura preset)
+                        if (selectedCity === '__outside_mansoura__') {
+                            const rowCity = ($(row).attr('data-city') || '').trim();
+                            if (rowCity === 'المنصورة') return false;
+                        } else if (selectedCity) {
+                            const rowCity = ($(row).attr('data-city') || '').trim();
+                            if (rowCity !== selectedCity) return false;
+                        }
+
+                        // Branch filter logic
+                        if (selectedBranch) {
+                            const rowBranch = ($(row).attr('data-branch') || '').trim().toLowerCase();
+                            if (rowBranch !== selectedBranch) return false;
                         }
                         
                         return true;
@@ -915,6 +1007,50 @@
                         const count = table.$('input.user-cb:checked').length;
                         $('#tabSelectedCount').text(count);
                     }
+
+                    // City filter change handler (auto synchronizes branch dropdown)
+                    $('#filterCitySelect').on('change', function() {
+                        const selCity = $(this).val();
+                        const branchSelect = $('#filterBranchSelect');
+                        
+                        let filteredBranches;
+                        if (selCity === '__outside_mansoura__') {
+                            filteredBranches = branches.filter(b => b.city !== 'المنصورة');
+                        } else if (selCity) {
+                            filteredBranches = branches.filter(b => b.city === selCity);
+                        } else {
+                            filteredBranches = branches;
+                        }
+                        
+                        let branchOptionsHtml = `<option value="">جميع الفروع / All Branches (${filteredBranches.length})</option>`;
+                        filteredBranches.forEach(b => {
+                            branchOptionsHtml += `<option value="${escapeHtmlAttr(b.name)}" data-city="${escapeHtmlAttr(b.city)}">${b.name} (${b.count})</option>`;
+                        });
+                        branchSelect.html(branchOptionsHtml);
+                        branchSelect.val('');
+
+                        table.draw();
+                    });
+
+                    // Branch filter change handler
+                    $('#filterBranchSelect').on('change', function() {
+                        table.draw();
+                    });
+
+                    // Quick buttons: Select All Filtered and Deselect All
+                    $('#btnSelectAllFiltered').on('click', function() {
+                        const rows = table.rows({ search: 'applied' }).nodes();
+                        $('input.user-cb:not(:disabled)', rows).prop('checked', true);
+                        $('#selectAllSwal').prop('checked', true);
+                        updateSelectedCount();
+                    });
+
+                    $('#btnDeselectAll').on('click', function() {
+                        const rows = table.rows().nodes();
+                        $('input.user-cb', rows).prop('checked', false);
+                        $('#selectAllSwal').prop('checked', false);
+                        updateSelectedCount();
+                    });
 
                     $('#filterNoCert, #filterNotAssigned').on('change', function() {
                         table.draw();
@@ -1106,92 +1242,1081 @@
             }
         }
 
-            $('#createWaveButton').on('click', async function () {
+            // Multi-step Setup Wizard for Wave Creation, Candidates Assignment, and Email Launch
+            $('#createWaveButton').on('click', function () {
+                openCreateWaveWizard();
+            });
+
+            async function openCreateWaveWizard() {
                 const initialMode = 'Offline (Off)';
-                const initialExtracted = 'Off';
-                const { value: formValues } = await Swal.fire({
-                    title: '<div class="text-lg font-black uppercase text-slate-800 dark:text-slate-100">إنشاء ويف جديد (Create New Batch)</div>',
-                    html:
-                        '<div class="text-right space-y-4" dir="rtl">' +
-                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">اسم الويف (Batch Name):</label><input id="sw-name" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm" placeholder="مثال: Wave 12"></div>' +
-                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">حالة الويف (Activity Status):</label>' +
-                        '<select id="sw-active" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm">' +
-                        '<option value="true" selected>Active / نشط (شغال)</option>' +
-                        '<option value="false">Done / منتهي (انتهت)</option>' +
-                        '</select></div>' +
-                        '<div class="space-y-2">' +
-                        '<div class="flex items-center justify-between mb-1">' +
-                        '<label class="block text-xs font-bold text-slate-500 uppercase text-right">حالة السيريال / نوع الويف (Mode):</label>' +
-                        '<div class="flex items-center gap-1">' +
-                        '<button type="button" onclick="promptAddNewMode(\'sw-mode\', \'sw-preview-code\', \'sw-preview-full\', \'create-mode-pills\')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800" title="إضافة نمط جديد"><i class="fas fa-plus"></i></button>' +
-                        '<button type="button" onclick="promptEditCurrentMode(\'sw-mode\', \'sw-preview-code\', \'sw-preview-full\', \'create-mode-pills\')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 rounded-lg transition-colors border border-amber-200 dark:border-amber-800" title="تعديل مسمى الحالة"><i class="fas fa-pen"></i></button>' +
-                        '<button type="button" onclick="promptDeleteCurrentMode(\'sw-mode\', \'sw-preview-code\', \'sw-preview-full\', \'create-mode-pills\')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 rounded-lg transition-colors border border-rose-200 dark:border-rose-800" title="مسح الحالة"><i class="fas fa-trash-alt"></i></button>' +
-                        '</div>' +
-                        '</div>' +
-                        '<input id="sw-mode" oninput="updateModeSerialPreview(\'sw-mode\', \'sw-preview-code\', \'sw-preview-full\')" class="w-full bg-slate-50 dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm text-left" dir="ltr" placeholder="مثال: Offline (Off) أو Online (ON)" value="Offline (Off)">' +
-                        '<div class="flex flex-wrap items-center gap-1.5 pt-1" id="create-mode-pills"></div>' +
-                        '</div>' +
-                        '<div class="bg-brand-50/80 dark:bg-brand-950/30 border border-brand-200 dark:border-brand-800/50 rounded-2xl p-3 text-right">' +
-                        '<div class="text-[11px] font-bold text-brand-800 dark:text-brand-300 flex items-center justify-between">' +
-                        '<span><i class="fas fa-certificate text-brand-500 ml-1"></i> الرمز المستخرج داخل القوسين للسيريال:</span>' +
-                        '<span id="sw-preview-code" class="font-mono bg-brand-200 dark:bg-brand-900/60 text-brand-900 dark:text-brand-100 px-2 py-0.5 rounded font-black text-xs">Off</span>' +
-                        '</div>' +
-                        '<div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 flex items-center justify-between font-mono" dir="ltr">' +
-                        '<span class="text-slate-400">Preview:</span>' +
-                        '<code id="sw-preview-full" class="font-bold text-brand-700 dark:text-brand-400">WTTA-2026-001-PB-Off-XXXX</code>' +
-                        '</div>' +
-                        '</div>' +
-                        '<div class="grid grid-cols-2 gap-3 mt-4 text-right">' +
-                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">تاريخ البدء (Start Date):</label><input id="sw-date" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm"></div>' +
-                        '<div><label class="block text-xs font-bold text-slate-500 uppercase mb-2 text-right">تاريخ الانتهاء (End Date):</label><input id="sw-enddate" type="date" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm"></div>' +
-                        '</div>' +
-                        '</div>',
-                    focusConfirm: false,
-                    showCancelButton: true,
-                    confirmButtonText: 'إنشاء الويف <i class="fas fa-plus-circle mr-1"></i>',
-                    cancelButtonText: 'إلغاء',
-                    customClass: {
-                        popup: 'rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900',
-                        confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-8 py-3.5 rounded-xl font-bold uppercase text-xs tracking-wider ml-2 shadow-md',
-                        cancelButton: 'bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-400 font-bold uppercase text-xs px-8 py-3.5 rounded-xl border border-slate-200'
-                    },
+                let wzTable = null;
+                let cachedCandidates = null;
+
+                // Pre-fetch candidates in background right away
+                const candidatesPromise = fetch('/Admin/GetUsersWithoutCertificate')
+                    .then(res => res.json())
+                    .catch(() => []);
+
+                Swal.fire({
+                    width: '1050px',
+                    showConfirmButton: false,
+                    showCancelButton: false,
                     buttonsStyling: false,
-                    didOpen: () => {
-                        renderModePillButtons('create-mode-pills', 'sw-mode', 'sw-preview-code', 'sw-preview-full', initialMode);
+                    customClass: {
+                        popup: 'rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 p-6'
                     },
-                    preConfirm: () => {
-                        const name = document.getElementById('sw-name').value;
-                        const date = document.getElementById('sw-date').value;
-                        const endDate = document.getElementById('sw-enddate').value;
-                        const isActive = document.getElementById('sw-active').value === 'true';
-                        const finalMode = document.getElementById('sw-mode').value || 'Offline (Off)';
-                        const isOnline = finalMode.toLowerCase().includes('online');
-                        if (!name || !name.trim()) {
-                            Swal.showValidationMessage('اسم الويف مطلوب');
-                            return false;
+                    html: `
+                        <div class="text-right" dir="rtl">
+                            <!-- WIZARD HEADER & STEPPER -->
+                            <div class="border-b border-slate-100 dark:border-slate-800 pb-4 mb-4">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-2.5 h-2.5 rounded-full bg-brand-500 animate-pulse"></span>
+                                            <p class="text-[10px] font-bold text-brand-600 uppercase tracking-[0.2em]">Batch Setup Wizard</p>
+                                        </div>
+                                        <h2 class="text-xl font-black text-slate-800 dark:text-white mt-0.5">معالج إنشاء الويف وتعيين المرشحين</h2>
+                                    </div>
+
+                                    <!-- 3-Step Breadcrumb Stepper -->
+                                    <div class="flex items-center gap-1.5 sm:gap-2 text-xs font-bold" dir="ltr">
+                                        <!-- Step 1 -->
+                                        <div id="wzStepIndicator1" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-600 text-white shadow-sm transition-all cursor-pointer" onclick="window.wzGoToStep(1)">
+                                            <span id="wzStep1Badge" class="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-black">1</span>
+                                            <span>Wave Info</span>
+                                        </div>
+                                        <i class="fas fa-chevron-right text-slate-300 dark:text-slate-600 text-[10px]"></i>
+                                        <!-- Step 2 -->
+                                        <div id="wzStepIndicator2" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 transition-all cursor-pointer" onclick="window.wzGoToStep(2)">
+                                            <span id="wzStep2Badge" class="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-black">2</span>
+                                            <span>Candidates</span>
+                                            <span id="wzBadgeCandidateCount" class="hidden bg-brand-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">0</span>
+                                        </div>
+                                        <i class="fas fa-chevron-right text-slate-300 dark:text-slate-600 text-[10px]"></i>
+                                        <!-- Step 3 -->
+                                        <div id="wzStepIndicator3" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 transition-all cursor-pointer" onclick="window.wzGoToStep(3)">
+                                            <span id="wzStep3Badge" class="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-black">3</span>
+                                            <span>Email & Launch</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- STEP 1: WAVE DETAILS -->
+                            <div id="wzStep1" class="space-y-4">
+                                <div class="bg-brand-50/50 dark:bg-brand-950/20 border border-brand-100 dark:border-brand-900/30 rounded-2xl p-3.5 mb-2">
+                                    <div class="flex items-center gap-2.5 text-xs text-brand-900 dark:text-brand-200 font-bold">
+                                        <i class="fas fa-info-circle text-brand-500 text-sm"></i>
+                                        <span>الخطوة 1: أدخل بيانات الويف الجديد ونمط السيريال وتاريخ البدء، ثم اضغط "التالي" لترشيح الموظفين والفروع.</span>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">اسم الويف (Batch Name): <span class="text-rose-500">*</span></label>
+                                        <input id="wz-name" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm" placeholder="مثال: Wave 12 أو ويف المنصورة">
+                                        <p id="wz-name-err" class="text-[11px] text-rose-500 mt-1 font-bold hidden"><i class="fas fa-exclamation-circle ml-1"></i>يرجى إدخال اسم الويف للمتابعة</p>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">حالة النشاط (Activity Status):</label>
+                                        <select id="wz-active" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm">
+                                            <option value="true" selected>Active / نشط (شغال)</option>
+                                            <option value="false">Done / منتهي (انتهت)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase">حالة السيريال / نوع الويف (Mode):</label>
+                                        <div class="flex items-center gap-1">
+                                            <button type="button" onclick="promptAddNewMode('wz-mode', 'wz-preview-code', 'wz-preview-full', 'wz-create-mode-pills')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800" title="إضافة نمط جديد"><i class="fas fa-plus"></i></button>
+                                            <button type="button" onclick="promptEditCurrentMode('wz-mode', 'wz-preview-code', 'wz-preview-full', 'wz-create-mode-pills')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 rounded-lg transition-colors border border-amber-200 dark:border-amber-800" title="تعديل مسمى الحالة"><i class="fas fa-pen"></i></button>
+                                            <button type="button" onclick="promptDeleteCurrentMode('wz-mode', 'wz-preview-code', 'wz-preview-full', 'wz-create-mode-pills')" class="w-7 h-7 flex items-center justify-center text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 rounded-lg transition-colors border border-rose-200 dark:border-rose-800" title="مسح الحالة"><i class="fas fa-trash-alt"></i></button>
+                                        </div>
+                                    </div>
+                                    <input id="wz-mode" oninput="updateModeSerialPreview('wz-mode', 'wz-preview-code', 'wz-preview-full')" class="w-full bg-slate-50 dark:bg-slate-800 border border-brand-300 dark:border-brand-700 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm text-left" dir="ltr" placeholder="مثال: Offline (Off) أو Online (ON)" value="Offline (Off)">
+                                    <div class="flex flex-wrap items-center gap-1.5 pt-1" id="wz-create-mode-pills"></div>
+                                </div>
+
+                                <div class="bg-brand-50/80 dark:bg-brand-950/30 border border-brand-200 dark:border-brand-800/50 rounded-2xl p-3">
+                                    <div class="text-[11px] font-bold text-brand-800 dark:text-brand-300 flex items-center justify-between">
+                                        <span><i class="fas fa-certificate text-brand-500 ml-1"></i> الرمز المستخرج داخل القوسين للسيريال:</span>
+                                        <span id="wz-preview-code" class="font-mono bg-brand-200 dark:bg-brand-900/60 text-brand-900 dark:text-brand-100 px-2 py-0.5 rounded font-black text-xs">Off</span>
+                                    </div>
+                                    <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 flex items-center justify-between font-mono" dir="ltr">
+                                        <span class="text-slate-400">Preview:</span>
+                                        <code id="wz-preview-full" class="font-bold text-brand-700 dark:text-brand-400">WTTA-2026-001-PB-Off-XXXX</code>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">تاريخ البدء (Start Date): <span class="text-rose-500">*</span></label>
+                                        <input id="wz-date" type="date" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">عدد أيام الويف (Days Count):</label>
+                                        <div class="relative">
+                                            <input id="wz-days-count" type="number" min="1" max="120" value="12" class="w-full bg-slate-50 dark:bg-slate-800 border border-brand-300 dark:border-brand-700 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-black text-sm text-left pl-24" dir="ltr">
+                                            <span class="absolute left-3 top-3.5 text-xs text-brand-600 dark:text-brand-400 font-bold pointer-events-none">يوم تدريبي</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">تاريخ الانتهاء (End Date):</label>
+                                        <input id="wz-enddate" type="date" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl outline-none focus:border-brand-500 transition-all font-bold text-sm">
+                                    </div>
+                                </div>
+
+                                <!-- Quick Duration Selector Pills -->
+                                <div class="flex flex-wrap items-center gap-1.5 mt-2">
+                                    <span class="text-[11px] font-bold text-slate-400 ml-1 flex items-center gap-1">
+                                        <i class="fas fa-bolt text-amber-500 text-[10px]"></i> خيارات سريعة للمدة:
+                                    </span>
+                                    <button type="button" onclick="window.setWzDurationDays(6, this)" class="wz-dur-btn px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 hover:border-brand-500 hover:text-brand-600 transition-all bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300">6 أيام (أسبوع)</button>
+                                    <button type="button" onclick="window.setWzDurationDays(10, this)" class="wz-dur-btn px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 hover:border-brand-500 hover:text-brand-600 transition-all bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300">10 أيام</button>
+                                    <button type="button" onclick="window.setWzDurationDays(12, this)" class="wz-dur-btn active px-2.5 py-1 rounded-lg text-[11px] font-bold border border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-300 transition-all">12 يوم (أسبوعين)</button>
+                                    <button type="button" onclick="window.setWzDurationDays(18, this)" class="wz-dur-btn px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 hover:border-brand-500 hover:text-brand-600 transition-all bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300">18 يوم (3 أسابيع)</button>
+                                    <button type="button" onclick="window.setWzDurationDays(24, this)" class="wz-dur-btn px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-700 hover:border-brand-500 hover:text-brand-600 transition-all bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300">24 يوم (شهر)</button>
+                                </div>
+
+                                <!-- Attendance Sessions Auto Generation Preview -->
+                                <div id="wz-sessions-preview-box" class="p-3.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl flex items-center gap-3 mt-3">
+                                    <div class="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center text-sm shrink-0">
+                                        <i class="fas fa-calendar-check"></i>
+                                    </div>
+                                    <div class="text-xs">
+                                        <p class="font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+                                            <span>جلسات الحضور التلقائية (Attendance Sessions):</span>
+                                            <span id="wz-sessions-badge" class="bg-emerald-600 text-white text-[10px] px-2.5 py-0.5 rounded-full font-black">12 جلسة تدريب</span>
+                                        </p>
+                                        <p id="wz-sessions-desc" class="text-emerald-700/80 dark:text-emerald-400 text-[11px] mt-0.5">
+                                            يومياً من الساعة 09:00 ص إلى 12:00 م (3 ساعات) — مستثنى يوم الجمعة (إجازة أسبوعية).
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 1 Navigation Actions -->
+                                <div class="pt-5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                                    <button type="button" onclick="Swal.close()" class="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                                        إلغاء (Cancel)
+                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" onclick="window.wzSubmitCreateOnly()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all">
+                                            إنشاء الويف فقط بدون مرشحين
+                                        </button>
+                                        <button type="button" onclick="window.wzGoToStep(2)" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                                            <span>التالي: ترشيح الموظفين والفروع</span>
+                                            <i class="fas fa-arrow-left text-[11px]"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- STEP 2: CANDIDATES & BRANCH ASSIGNMENT -->
+                            <div id="wzStep2" class="hidden space-y-4">
+                                <!-- Wave Summary Strip -->
+                                <div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-xl bg-brand-500/15 text-brand-600 flex items-center justify-center font-bold text-xs">
+                                            <i class="fas fa-layer-group"></i>
+                                        </div>
+                                        <div>
+                                            <span class="text-[10px] font-bold text-slate-400 uppercase">جاري التعيين للويف:</span>
+                                            <p id="wzStep2WaveSummary" class="text-xs font-black text-slate-900 dark:text-white">--</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-3 py-1 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs font-bold text-brand-600 shadow-xs">
+                                            تم تحديد: <strong id="wzSelectedCounter">0</strong> مرشح
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Filter Toolbar -->
+                                <div class="flex flex-col gap-3 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+                                    <div class="flex flex-wrap items-center justify-between gap-3">
+                                        <div class="flex flex-wrap items-center gap-2.5">
+                                            <!-- City Filter Dropdown -->
+                                            <div class="flex items-center gap-2 bg-sky-50 dark:bg-sky-950/40 px-3 py-1.5 rounded-xl border border-sky-200/70 dark:border-sky-800/50 shadow-xs">
+                                                <i class="fas fa-map-marker-alt text-xs text-sky-600 dark:text-sky-400"></i>
+                                                <select id="wzFilterCitySelect" class="bg-transparent text-[11px] font-bold text-sky-900 dark:text-sky-200 outline-none cursor-pointer">
+                                                    <option value="">جميع المدن / All Cities</option>
+                                                </select>
+                                            </div>
+
+                                            <!-- Branch Filter Dropdown -->
+                                            <div class="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1.5 rounded-xl border border-indigo-200/70 dark:border-indigo-800/50 shadow-xs">
+                                                <i class="fas fa-store text-xs text-indigo-600 dark:text-indigo-400"></i>
+                                                <select id="wzFilterBranchSelect" class="bg-transparent text-[11px] font-bold text-indigo-900 dark:text-indigo-200 outline-none cursor-pointer max-w-[220px]">
+                                                    <option value="">جميع الفروع / All Branches</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex items-center gap-2">
+                                            <button type="button" id="wzBtnSelectAllFiltered" class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-brand-50 hover:bg-brand-600 text-brand-700 hover:text-white dark:bg-brand-950/40 dark:text-brand-300 border border-brand-200 dark:border-brand-800 transition-all flex items-center gap-1.5 shadow-xs">
+                                                <i class="fas fa-check-double text-[10px]"></i> <span>تحديد كل نتائج الفلتر (Select Filtered)</span>
+                                            </button>
+                                            <button type="button" id="wzBtnDeselectAll" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-slate-400 hover:text-rose-600 transition-colors">
+                                                إلغاء التحديد
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                                        <div class="flex items-center gap-2 bg-amber-50 dark:bg-amber-500/10 px-3 py-1 rounded-xl border border-amber-200/60 dark:border-amber-500/20">
+                                            <input type="checkbox" id="wzFilterNoCert" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+                                            <label for="wzFilterNoCert" class="text-[10px] font-bold text-amber-700 dark:text-amber-500 uppercase tracking-widest cursor-pointer select-none">Without Cert Code</label>
+                                        </div>
+                                        <div class="flex items-center gap-2 bg-brand-50 dark:bg-brand-500/10 px-3 py-1 rounded-xl border border-brand-200/60 dark:border-brand-500/20">
+                                            <input type="checkbox" id="wzFilterNotAssigned" class="w-4 h-4 accent-brand-500 rounded cursor-pointer">
+                                            <label for="wzFilterNotAssigned" class="text-[10px] font-bold text-brand-700 dark:text-brand-500 uppercase tracking-widest cursor-pointer select-none">Not Assigned to Wave</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Candidates Table Container -->
+                                <div id="wzCandidatesTableContainer" class="min-h-[220px]">
+                                    <table id="wzUserTable" class="saas-table display nowrap w-full text-xs text-right" dir="rtl">
+                                        <thead>
+                                            <tr class="bg-slate-50 dark:bg-slate-800">
+                                                <th class="w-10 text-center"><input type="checkbox" id="wzSelectAllTable" class="w-4 h-4 accent-brand-500"></th>
+                                                <th>الموظف / المرشح</th>
+                                                <th>الكود</th>
+                                                <th>الفرع / المدينة</th>
+                                                <th>الوظيفة</th>
+                                                <th>كود الشهادة</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="wzUserTableBody">
+                                            <!-- Dynamically populated -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Step 2 Navigation Actions -->
+                                <div class="pt-5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                    <button type="button" onclick="window.wzGoToStep(1)" class="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center gap-2">
+                                        <i class="fas fa-arrow-right text-[11px]"></i>
+                                        <span>السابق: بيانات الويف</span>
+                                    </button>
+                                    <button type="button" onclick="window.wzGoToStep(3)" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                                        <span>التالي: رسالة الإيميل والتأكيد</span>
+                                        <i class="fas fa-arrow-left text-[11px]"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- STEP 3: CUSTOMIZE EMAIL & FINAL LAUNCH -->
+                            <div id="wzStep3" class="hidden space-y-4">
+                                <!-- Final Review Summary Card -->
+                                <div class="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/80 dark:border-slate-700 grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div>
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase">اسم الويف:</span>
+                                        <p id="wzRevName" class="text-xs font-black text-slate-900 dark:text-white truncate">--</p>
+                                    </div>
+                                    <div>
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase">نوع الويف (Mode):</span>
+                                        <p id="wzRevMode" class="text-xs font-black text-brand-600 truncate">--</p>
+                                    </div>
+                                    <div>
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase">تاريخ البدء:</span>
+                                        <p id="wzRevDate" class="text-xs font-black text-slate-700 dark:text-slate-300">--</p>
+                                    </div>
+                                    <div>
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase">المرشحين المحددين:</span>
+                                        <p id="wzRevCount" class="text-xs font-black text-emerald-600">0 مرشح</p>
+                                    </div>
+                                </div>
+
+                                <!-- Send Email Toggle -->
+                                <div class="flex items-center justify-between p-3.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-base">
+                                            <i class="fas fa-envelope-open-text"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs font-black text-emerald-900 dark:text-emerald-200 uppercase tracking-wide">إرسال بريد إلكتروني تأكيدي وترحيبي للمرشحين</p>
+                                            <p class="text-[11px] text-emerald-700/80 dark:text-emerald-400">سيتم إرسال إيميل التفاصيل والمكان تلقائياً لكل مرشح تم اختياره فور إنشاء الويف.</p>
+                                        </div>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="wzSendEmailToggle" class="sr-only peer" checked>
+                                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                                    </label>
+                                </div>
+
+                                <div id="wzEmailFieldsContainer" class="space-y-3.5">
+                                    <!-- Subject -->
+                                    <div>
+                                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                                            عنوان الرسالة (Email Subject):
+                                        </label>
+                                        <input type="text" id="wzCustomEmailSubject" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all">
+                                    </div>
+
+                                    <!-- Placeholders Toolbar -->
+                                    <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 p-3 rounded-xl">
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <span class="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                                                <i class="fas fa-tags text-brand-500"></i> Placeholders (اضغط لإدراج المتغير التلقائي في الرسالة):
+                                            </span>
+                                        </div>
+                                        <div class="flex flex-wrap gap-1.5" dir="ltr">
+                                            <button type="button" onclick="window.insertWzPlaceholder('{Name}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{Name} (اسم المتدرب)</button>
+                                            <button type="button" onclick="window.insertWzPlaceholder('{WaveName}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{WaveName} (اسم الويف)</button>
+                                            <button type="button" onclick="window.insertWzPlaceholder('{StartDate}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{StartDate} (تاريخ البدء)</button>
+                                            <button type="button" onclick="window.insertWzPlaceholder('{Location}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{Location} (مكان التدريب)</button>
+                                            <button type="button" onclick="window.insertWzPlaceholder('{PortalLink}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{PortalLink} (رابط المنصة)</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Body Textarea -->
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                                                نص رسالة الإيميل (Email Message Body):
+                                            </label>
+                                            <button type="button" onclick="window.toggleWzEmailPreview()" id="wzTogglePreviewBtn" class="text-xs font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400 flex items-center gap-1.5 transition-colors">
+                                                <i class="fas fa-eye text-xs"></i> <span id="wzPreviewBtnText">معاينة حية للإيميل (Live Preview)</span>
+                                            </button>
+                                        </div>
+                                        <textarea id="wzCustomEmailBody" rows="7" dir="auto" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 text-xs text-slate-800 dark:text-slate-100 font-sans focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all leading-relaxed"></textarea>
+
+                                        <!-- Live Preview Box -->
+                                        <div id="wzEmailPreviewBox" class="hidden p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl mt-2 text-xs leading-relaxed max-h-56 overflow-y-auto"></div>
+                                    </div>
+
+                                    <!-- Checkbox to Save as Default -->
+                                    <div class="flex items-center gap-2 pt-1">
+                                        <input type="checkbox" id="wzSaveEmailDefaultCheck" class="w-4 h-4 accent-brand-500 rounded cursor-pointer" checked>
+                                        <label for="wzSaveEmailDefaultCheck" class="text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                                            حفظ هذا القالب كقالب افتراضي لجميع الويفات القادمة (Save as default template)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3 Navigation Actions -->
+                                <div class="pt-5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                    <button type="button" onclick="window.wzGoToStep(2)" class="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center gap-2">
+                                        <i class="fas fa-arrow-right text-[11px]"></i>
+                                        <span>السابق: تعديل المرشحين</span>
+                                    </button>
+                                    <button type="button" id="wzBtnFinishLaunch" onclick="window.wzSubmitFullWizard()" class="px-8 py-3 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                                        <i class="fas fa-rocket text-sm"></i>
+                                        <span>إنشاء الويف وتعيين المرشحين وإرسال الإيميل (Finish & Launch)</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `,
+                    didOpen: () => {
+                        renderModePillButtons('wz-create-mode-pills', 'wz-mode', 'wz-preview-code', 'wz-preview-full', initialMode);
+
+                        // Set default email body and subject
+                        $('#wzCustomEmailSubject').val('Welcome to {WaveName} - Registration Confirmed');
+                        $('#wzCustomEmailBody').val(
+`Dear {Name},
+
+Welcome to {WaveName} of Pharmacy Basics Program — we’re glad to have you with us!
+
+Your registration has been successfully confirmed. Here are your session details:
+📅 Date & Time: {StartDate}
+📍 Location: {Location}
+
+A quick note before we start:
+• Please arrive 10–15 minutes early to ensure a smooth check-in.
+• Keep an eye on your email for any further updates or announcements.
+
+If you have any questions or face any issues, feel free to reach out to us.
+Looking forward to seeing you and having a great Training Program together!
+
+Best regards,
+Eltarshoubi Training Academy Team`
+                        );
+
+                        // Email Toggle Change Handler
+                        $('#wzSendEmailToggle').on('change', function() {
+                            if (this.checked) {
+                                $('#wzEmailFieldsContainer').slideDown(200);
+                            } else {
+                                $('#wzEmailFieldsContainer').slideUp(200);
+                            }
+                        });
+
+                        // Hide validation error on input
+                        $('#wz-name').on('input', function() {
+                            if ($(this).val().trim()) {
+                                $('#wz-name-err').addClass('hidden');
+                            }
+                        });
+
+                        // Date Helper: Calculate End Date from Start Date & target training days (excluding Friday)
+                        function calcEndDateFromTrainingDays(startDateStr, targetDays) {
+                            if (!startDateStr || !targetDays || targetDays <= 0) return null;
+                            const parts = startDateStr.split('-');
+                            const cur = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                            let counted = 0;
+                            while (counted < targetDays) {
+                                if (cur.getDay() !== 5) { // 5 is Friday
+                                    counted++;
+                                    if (counted >= targetDays) break;
+                                }
+                                cur.setDate(cur.getDate() + 1);
+                            }
+                            const y = cur.getFullYear();
+                            const m = String(cur.getMonth() + 1).padStart(2, '0');
+                            const d = String(cur.getDate()).padStart(2, '0');
+                            return `${y}-${m}-${d}`;
                         }
-                        return { name: name.trim(), date: date || null, endDate: endDate || null, isOnline: isOnline, mode: finalMode.trim(), isActive: isActive };
+
+                        // Date Helper: Count non-Friday training days between start and end
+                        function countTrainingDays(startDateStr, endDateStr) {
+                            if (!startDateStr || !endDateStr) return 0;
+                            const p1 = startDateStr.split('-');
+                            const p2 = endDateStr.split('-');
+                            const start = new Date(parseInt(p1[0], 10), parseInt(p1[1], 10) - 1, parseInt(p1[2], 10));
+                            const end = new Date(parseInt(p2[0], 10), parseInt(p2[1], 10) - 1, parseInt(p2[2], 10));
+                            if (end < start) return 0;
+                            let count = 0;
+                            const cur = new Date(start);
+                            while (cur <= end) {
+                                if (cur.getDay() !== 5) {
+                                    count++;
+                                }
+                                cur.setDate(cur.getDate() + 1);
+                            }
+                            return count;
+                        }
+
+                        // Dynamic Attendance Sessions Calculator & Preview
+                        function updateWzSessionsPreview() {
+                            const startVal = $('#wz-date').val();
+                            let daysCount = parseInt($('#wz-days-count').val(), 10) || 12;
+
+                            if (!startVal) {
+                                $('#wz-sessions-badge').text('في انتظار تحديد تاريخ البدء');
+                                $('#wz-sessions-desc').text(`حدد تاريخ البدء وسيتم جدولة ${daysCount} جلسة حضور يومياً من 09:00 ص إلى 12:00 م (عدا الجمعة).`);
+                                return daysCount;
+                            }
+
+                            let endVal = $('#wz-enddate').val();
+                            if (!endVal) {
+                                endVal = calcEndDateFromTrainingDays(startVal, daysCount);
+                                $('#wz-enddate').val(endVal);
+                            }
+
+                            const sessionCount = countTrainingDays(startVal, endVal);
+                            $('#wz-sessions-badge').text(`${sessionCount} جلسة تدريب`);
+                            $('#wz-sessions-desc').text(`يومياً من ${startVal} حتى ${endVal} من الساعة 09:00 ص إلى 12:00 م (3 ساعات) — مستثنى يوم الجمعة (إجازة أسبوعية).`);
+                            return sessionCount;
+                        }
+
+                        window.setWzDurationDays = function(days, btn) {
+                            $('#wz-days-count').val(days);
+                            $('.wz-dur-btn').removeClass('active border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-300')
+                                            .addClass('border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300');
+                            if (btn) {
+                                $(btn).addClass('active border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-300')
+                                      .removeClass('border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300');
+                            }
+                            const startVal = $('#wz-date').val();
+                            if (startVal) {
+                                const newEnd = calcEndDateFromTrainingDays(startVal, days);
+                                $('#wz-enddate').val(newEnd);
+                            }
+                            updateWzSessionsPreview();
+                        };
+
+                        // When Start Date changes:
+                        $('#wz-date').on('change', function() {
+                            const startVal = $(this).val();
+                            const days = parseInt($('#wz-days-count').val(), 10) || 12;
+                            if (startVal && days > 0) {
+                                const newEnd = calcEndDateFromTrainingDays(startVal, days);
+                                $('#wz-enddate').val(newEnd);
+                            }
+                            updateWzSessionsPreview();
+                        });
+
+                        // When Days input changes:
+                        $('#wz-days-count').on('input change', function() {
+                            const days = parseInt($(this).val(), 10) || 0;
+                            const startVal = $('#wz-date').val();
+                            if (startVal && days > 0) {
+                                const newEnd = calcEndDateFromTrainingDays(startVal, days);
+                                $('#wz-enddate').val(newEnd);
+                            }
+                            $('.wz-dur-btn').each(function() {
+                                const d = parseInt($(this).text(), 10);
+                                if (d === days) {
+                                    $(this).addClass('active border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-300')
+                                           .removeClass('border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300');
+                                } else {
+                                    $(this).removeClass('active border-brand-500 bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-300')
+                                           .addClass('border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300');
+                                }
+                            });
+                            updateWzSessionsPreview();
+                        });
+
+                        // When End Date changes manually:
+                        $('#wz-enddate').on('change', function() {
+                            const startVal = $('#wz-date').val();
+                            const endVal = $(this).val();
+                            if (startVal && endVal) {
+                                const days = countTrainingDays(startVal, endVal);
+                                $('#wz-days-count').val(days);
+                            }
+                            updateWzSessionsPreview();
+                        });
+
+                        // Auto set default start date to today if empty
+                        if (!$('#wz-date').val()) {
+                            const todayIso = new Date().toISOString().split('T')[0];
+                            $('#wz-date').val(todayIso);
+                            const initialEnd = calcEndDateFromTrainingDays(todayIso, 12);
+                            $('#wz-enddate').val(initialEnd);
+                        }
+
+                        // Initial preview setup
+                        updateWzSessionsPreview();
+
+                        // Navigation Step Handler (Free navigation between steps without blocking)
+                        window.wzCurrentStep = 1;
+                        window.wzGoToStep = async function(stepNum) {
+                            if (stepNum === window.wzCurrentStep) return;
+
+                            // 1. Instantly clear any error messages
+                            $('#wz-name-err').addClass('hidden');
+
+                            // 2. Instantly update step visibility (Immediate visual navigation)
+                            $('#wzStep1, #wzStep2, #wzStep3').addClass('hidden');
+                            $(`#wzStep${stepNum}`).removeClass('hidden');
+
+                            // 3. Instantly update stepper breadcrumb UI
+                            [1, 2, 3].forEach(n => {
+                                const ind = $(`#wzStepIndicator${n}`);
+                                const badge = $(`#wzStep${n}Badge`);
+                                if (n === stepNum) {
+                                    ind.removeClass('bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 bg-emerald-600')
+                                       .addClass('bg-brand-600 text-white shadow-sm');
+                                    badge.html(n);
+                                } else if (n < stepNum) {
+                                    ind.removeClass('bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 bg-brand-600')
+                                       .addClass('bg-emerald-600 text-white shadow-xs');
+                                    badge.html('<i class="fas fa-check text-[9px]"></i>');
+                                } else {
+                                    ind.removeClass('bg-brand-600 bg-emerald-600 text-white')
+                                       .addClass('bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400');
+                                    badge.html(n);
+                                }
+                            });
+
+                            window.wzCurrentStep = stepNum;
+
+                            // 4. Asynchronously handle Step 2 (Candidates table setup)
+                            if (stepNum === 2) {
+                                const currentName = $('#wz-name').val().trim() || 'ويف جديد (لم يُحدد الاسم بعد)';
+                                const currentMode = $('#wz-mode').val() || 'Offline (Off)';
+                                $('#wzStep2WaveSummary').text(`${currentName} • [${currentMode}]`);
+
+                                if (!cachedCandidates) {
+                                    $('#wzCandidatesTableContainer').html('<div class="py-12 text-center text-slate-400 font-bold"><i class="fas fa-spinner fa-spin text-2xl text-brand-500 mb-2"></i><br>جاري تحميل قائمة الموظفين والمرشحين...</div>');
+                                    try {
+                                        const raw = await candidatesPromise;
+                                        cachedCandidates = (raw || []).filter(u => {
+                                            const role = (u.roleName || u.RoleName || '').toLowerCase();
+                                            return role === 'pharmacist' || role === 'assistant' || role === 'صيدلي' || role === 'مساعد صيدلي';
+                                        }).map(u => ({
+                                            id: u.id ?? u.Id,
+                                            userName: u.userName ?? u.UserName,
+                                            email: u.email ?? u.Email,
+                                            userCode: u.userCode ?? u.UserCode ?? '--',
+                                            branchName: (u.branchName ?? u.BranchName ?? 'GLOBAL').trim(),
+                                            roleName: u.roleName ?? u.RoleName ?? 'User',
+                                            certificateCode: u.certificateCode ?? u.CertificateCode ?? null,
+                                            city: (u.city ?? u.City ?? 'المنصورة').trim(),
+                                            isAssigned: false
+                                        }));
+                                    } catch (err) {
+                                        cachedCandidates = [];
+                                    }
+
+                                    // Build city and branch lists
+                                    const cityCounts = {};
+                                    const branchCounts = {};
+                                    const branchCityMap = {};
+                                    cachedCandidates.forEach(u => {
+                                        const c = u.city || 'المنصورة';
+                                        const b = u.branchName || 'GLOBAL';
+                                        cityCounts[c] = (cityCounts[c] || 0) + 1;
+                                        branchCounts[b] = (branchCounts[b] || 0) + 1;
+                                        branchCityMap[b] = c;
+                                    });
+
+                                    const cities = Object.keys(cityCounts).sort().map(c => ({ name: c, count: cityCounts[c] }));
+                                    const branches = Object.keys(branchCounts).sort().map(b => ({ name: b, count: branchCounts[b], city: branchCityMap[b] }));
+                                    window._wzBranchesList = branches;
+
+                                    const mansouraCount = cityCounts['المنصورة'] || 0;
+                                    const outsideMansouraCount = cachedCandidates.filter(u => u.city !== 'المنصورة').length;
+
+                                    // Populate City dropdown
+                                    let cityOpts = `<option value="">جميع المدن / All Cities (${cities.length})</option>`;
+                                    if (mansouraCount > 0) {
+                                        cityOpts += `<option value="المنصورة">📍 المنصورة (${mansouraCount} مرشح - فروع الأوفلاين)</option>`;
+                                    }
+                                    if (outsideMansouraCount > 0) {
+                                        cityOpts += `<option value="__outside_mansoura__">🌐 كل الفروع خارج المنصورة (${outsideMansouraCount} مرشح - فروع الأونلاين)</option>`;
+                                    }
+                                    cityOpts += `<option disabled>──────────</option>`;
+                                    cities.filter(c => c.name !== 'المنصورة').forEach(c => {
+                                        cityOpts += `<option value="${escapeHtmlAttr(c.name)}">${c.name} (${c.count} مرشح)</option>`;
+                                    });
+                                    $('#wzFilterCitySelect').html(cityOpts);
+
+                                    // Populate Branch dropdown
+                                    let branchOpts = `<option value="">جميع الفروع / All Branches (${branches.length})</option>`;
+                                    branches.forEach(b => {
+                                        branchOpts += `<option value="${escapeHtmlAttr(b.name)}" data-city="${escapeHtmlAttr(b.city)}">${b.name} (${b.count})</option>`;
+                                    });
+                                    $('#wzFilterBranchSelect').html(branchOpts);
+
+                                    // Populate Table HTML
+                                    const tableHtml = `
+                                        <table id="wzUserTable" class="saas-table display nowrap w-full text-xs text-right" dir="rtl">
+                                            <thead>
+                                                <tr class="bg-slate-50 dark:bg-slate-800">
+                                                    <th class="w-10 text-center"><input type="checkbox" id="wzSelectAllTable" class="w-4 h-4 accent-brand-500"></th>
+                                                    <th>الموظف / المرشح</th>
+                                                    <th>الكود</th>
+                                                    <th>الفرع / المدينة</th>
+                                                    <th>الوظيفة</th>
+                                                    <th>كود الشهادة</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${cachedCandidates.map(u => `
+                                                    <tr class="cursor-pointer border-b border-slate-50 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                                                        data-has-cert="${u.certificateCode ? 'true' : 'false'}"
+                                                        data-is-assigned="false"
+                                                        data-city="${escapeHtmlAttr(u.city)}"
+                                                        data-branch="${escapeHtmlAttr(u.branchName.toLowerCase())}">
+                                                        <td class="text-center"><input type="checkbox" class="wz-user-cb w-4 h-4 accent-brand-500" value="${u.id}"></td>
+                                                        <td>
+                                                            <div class="flex flex-col">
+                                                                <span class="font-bold text-slate-900 dark:text-white">${u.userName}</span>
+                                                                <span class="text-[9px] text-slate-400 font-mono" dir="ltr">${u.email}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="font-bold text-slate-500 font-mono">${u.userCode}</td>
+                                                        <td>
+                                                            <div class="flex flex-col">
+                                                                <span class="font-bold text-slate-700 dark:text-slate-200">${u.branchName}</span>
+                                                                <span class="text-[10px] font-bold text-sky-600 dark:text-sky-400 flex items-center gap-1 mt-0.5">
+                                                                    <i class="fas fa-map-marker-alt text-[8px]"></i>
+                                                                    ${u.city}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td><span class="text-[8px] font-bold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300 uppercase">${u.roleName}</span></td>
+                                                        <td class="font-mono text-[9px] text-brand-600">${u.certificateCode || '<span class="text-slate-300">--</span>'}</td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    `;
+                                    $('#wzCandidatesTableContainer').html(tableHtml);
+
+                                    // Custom DataTables Filter
+                                    window._wzFilterFn = function(settings, data, dataIndex) {
+                                        if (settings.nTable.id !== 'wzUserTable') return true;
+                                        const certChecked = $('#wzFilterNoCert').is(':checked');
+                                        const assignChecked = $('#wzFilterNotAssigned').is(':checked');
+                                        const selectedCity = ($('#wzFilterCitySelect').val() || '').trim();
+                                        const selectedBranch = ($('#wzFilterBranchSelect').val() || '').trim().toLowerCase();
+                                        const row = settings.aoData[dataIndex].nTr;
+                                        
+                                        if (certChecked && $(row).attr('data-has-cert') !== 'false') return false;
+                                        if (assignChecked && $(row).attr('data-is-assigned') !== 'false') return false;
+
+                                        if (selectedCity === '__outside_mansoura__') {
+                                            const rowCity = ($(row).attr('data-city') || '').trim();
+                                            if (rowCity === 'المنصورة') return false;
+                                        } else if (selectedCity) {
+                                            const rowCity = ($(row).attr('data-city') || '').trim();
+                                            if (rowCity !== selectedCity) return false;
+                                        }
+
+                                        if (selectedBranch) {
+                                            const rowBranch = ($(row).attr('data-branch') || '').trim().toLowerCase();
+                                            if (rowBranch !== selectedBranch) return false;
+                                        }
+                                        return true;
+                                    };
+                                    $.fn.dataTable.ext.search.push(window._wzFilterFn);
+
+                                    if ($.fn.DataTable.isDataTable('#wzUserTable')) {
+                                        $('#wzUserTable').DataTable().destroy();
+                                    }
+
+                                    wzTable = $('#wzUserTable').DataTable({
+                                        pageLength: 5,
+                                        lengthMenu: [5, 10, 25, 50],
+                                        language: { search: "", searchPlaceholder: "Search User..." },
+                                        columnDefs: [{ orderable: false, targets: 0 }]
+                                    });
+
+                                    // Auto preselect based on Step 1 Mode!
+                                    const modeNormalized = currentMode.toLowerCase();
+                                    if (modeNormalized.includes('off') || modeNormalized.includes('offline') || modeNormalized.includes('onsite')) {
+                                        $('#wzFilterCitySelect').val('المنصورة').trigger('change');
+                                    } else if (modeNormalized.includes('online') || modeNormalized.includes('on')) {
+                                        $('#wzFilterCitySelect').val('__outside_mansoura__').trigger('change');
+                                    }
+                                }
+
+                                // Adjust column sizes once visible
+                                setTimeout(() => {
+                                    if (wzTable) wzTable.columns.adjust().draw();
+                                }, 50);
+                            }
+
+                            // 5. Asynchronously handle Step 3 (Summary card population)
+                            if (stepNum === 3) {
+                                const selCount = wzTable ? wzTable.$('input.wz-user-cb:checked').length : 0;
+                                const currentName = $('#wz-name').val().trim() || 'ويف جديد (لم يُحدد الاسم بعد)';
+                                const currentMode = $('#wz-mode').val() || 'Offline (Off)';
+                                const currentDate = $('#wz-date').val() || 'غير محدد';
+                                const daysCount = parseInt($('#wz-days-count').val(), 10) || 12;
+                                const endDate = $('#wz-enddate').val() || '';
+
+                                $('#wzRevName').text(currentName);
+                                $('#wzRevMode').text(currentMode);
+                                $('#wzRevDate').text(`${currentDate} (${daysCount} يوم تدريب حتى ${endDate})`);
+                                $('#wzRevCount').text(`${selCount} مرشح تم تحديدهم`);
+
+                                if (selCount === 0) {
+                                    $('#wzRevCount').removeClass('text-emerald-600').addClass('text-amber-500').text('0 مرشح (سيتم إنشاء الويف فارغة)');
+                                } else {
+                                    $('#wzRevCount').removeClass('text-amber-500').addClass('text-emerald-600').text(`${selCount} مرشح تم تحديدهم`);
+                                }
+                            }
+                        };
+
+                        // Selection Count Updater
+                        function updateWzSelectedCount() {
+                            if (!wzTable) return;
+                            const count = wzTable.$('input.wz-user-cb:checked').length;
+                            $('#wzSelectedCounter').text(count);
+                            const badge = $('#wzBadgeCandidateCount');
+                            if (count > 0) {
+                                badge.removeClass('hidden').text(count);
+                            } else {
+                                badge.addClass('hidden');
+                            }
+                        }
+
+                        // City filter change in wizard
+                        $(document).on('change', '#wzFilterCitySelect', function() {
+                            const selCity = $(this).val();
+                            const branchSelect = $('#wzFilterBranchSelect');
+                            const branches = window._wzBranchesList || [];
+                            
+                            let filteredBranches;
+                            if (selCity === '__outside_mansoura__') {
+                                filteredBranches = branches.filter(b => b.city !== 'المنصورة');
+                            } else if (selCity) {
+                                filteredBranches = branches.filter(b => b.city === selCity);
+                            } else {
+                                filteredBranches = branches;
+                            }
+                            
+                            let branchOptionsHtml = `<option value="">جميع الفروع / All Branches (${filteredBranches.length})</option>`;
+                            filteredBranches.forEach(b => {
+                                branchOptionsHtml += `<option value="${escapeHtmlAttr(b.name)}" data-city="${escapeHtmlAttr(b.city)}">${b.name} (${b.count})</option>`;
+                            });
+                            branchSelect.html(branchOptionsHtml);
+                            branchSelect.val('');
+
+                            if (wzTable) wzTable.draw();
+                        });
+
+                        $(document).on('change', '#wzFilterBranchSelect, #wzFilterNoCert, #wzFilterNotAssigned', function() {
+                            if (wzTable) wzTable.draw();
+                        });
+
+                        // Select All Filtered / Deselect All
+                        $(document).on('click', '#wzBtnSelectAllFiltered', function() {
+                            if (!wzTable) return;
+                            const rows = wzTable.rows({ search: 'applied' }).nodes();
+                            $('input.wz-user-cb', rows).prop('checked', true);
+                            $('#wzSelectAllTable').prop('checked', true);
+                            updateWzSelectedCount();
+                        });
+
+                        $(document).on('click', '#wzBtnDeselectAll', function() {
+                            if (!wzTable) return;
+                            const rows = wzTable.rows().nodes();
+                            $('input.wz-user-cb', rows).prop('checked', false);
+                            $('#wzSelectAllTable').prop('checked', false);
+                            updateWzSelectedCount();
+                        });
+
+                        $(document).on('change', '#wzSelectAllTable', function() {
+                            if (!wzTable) return;
+                            const rows = wzTable.rows({ search: 'applied' }).nodes();
+                            $('input.wz-user-cb', rows).prop('checked', this.checked);
+                            updateWzSelectedCount();
+                        });
+
+                        $(document).on('change', '#wzUserTable tbody input.wz-user-cb', function() {
+                            updateWzSelectedCount();
+                        });
+
+                        $(document).on('click', '#wzUserTable tbody tr', function(e) {
+                            if ($(e.target).is('input[type="checkbox"]')) return;
+                            const cb = $(this).find('input.wz-user-cb');
+                            if (cb.length) {
+                                cb.prop('checked', !cb.prop('checked'));
+                                updateWzSelectedCount();
+                            }
+                        });
+
+                        // Placeholders helper
+                        window.insertWzPlaceholder = function(token) {
+                            const textarea = document.getElementById('wzCustomEmailBody');
+                            if (!textarea) return;
+                            const start = textarea.selectionStart;
+                            const end = textarea.selectionEnd;
+                            const text = textarea.value;
+                            textarea.value = text.substring(0, start) + token + text.substring(end);
+                            textarea.focus();
+                            textarea.selectionStart = textarea.selectionEnd = start + token.length;
+                        };
+
+                        // Live preview toggle
+                        window.toggleWzEmailPreview = function() {
+                            const previewBox = $('#wzEmailPreviewBox');
+                            const textarea = $('#wzCustomEmailBody');
+                            const isHidden = previewBox.hasClass('hidden');
+
+                            if (isHidden) {
+                                const rawText = textarea.val() || '';
+                                const sampleName = 'أحمد محمد (Ahmed Mohamed)';
+                                const waveTitle = $('#wz-name').val() || 'Wave 12';
+                                const sampleDate = $('#wz-date').val() || 'October 25, 2026 - 10:00 AM';
+                                const modeVal = $('#wz-mode').val() || 'Offline (Off)';
+                                const sampleLocation = modeVal.toLowerCase().includes('online') ? 'Online (Zoom Meeting)' : 'Offline (فرع طنطا دويدار - المنصورة)';
+                                const sampleUrl = 'http://41.33.149.186:5208';
+
+                                let rendered = rawText
+                                    .replace(/{Name}/g, sampleName)
+                                    .replace(/{FullName}/g, sampleName)
+                                    .replace(/{UserName}/g, sampleName)
+                                    .replace(/{WaveName}/g, waveTitle)
+                                    .replace(/{StartDate}/g, sampleDate)
+                                    .replace(/{Location}/g, sampleLocation)
+                                    .replace(/{PortalLink}/g, `<a href="${sampleUrl}" class="text-brand-600 underline font-bold" target="_blank">${sampleUrl}</a>`);
+
+                                rendered = rendered.replace(/\n/g, '<br/>');
+
+                                previewBox.html(`
+                                    <div class="border-b border-slate-200 dark:border-slate-800 pb-2 mb-3">
+                                        <p class="text-[10px] uppercase font-black tracking-widest text-slate-400">Live Preview with Sample Data (معاينة حية):</p>
+                                        <p class="font-bold text-slate-800 dark:text-white mt-1">Subject: ${$('#wzCustomEmailSubject').val()}</p>
+                                    </div>
+                                    <div dir="auto" class="text-slate-700 dark:text-slate-200 font-sans leading-relaxed text-xs">${rendered}</div>
+                                `);
+                                previewBox.removeClass('hidden');
+                                $('#wzPreviewBtnText').text('إخفاء المعاينة (Hide Preview)');
+                            } else {
+                                previewBox.addClass('hidden');
+                                $('#wzPreviewBtnText').text('معاينة حية للإيميل (Live Preview)');
+                            }
+                        };
+
+                        // Action 1: Create Wave Only (Quick Exit from Step 1)
+                        window.wzSubmitCreateOnly = async function() {
+                            const name = $('#wz-name').val();
+                            if (!name || !name.trim()) {
+                                $('#wz-name-err').removeClass('hidden');
+                                $('#wz-name').focus();
+                                showToast('يرجى إدخال اسم الويف أولاً', 'warning');
+                                return;
+                            }
+                            const date = $('#wz-date').val();
+                            const endDate = $('#wz-enddate').val();
+                            const isActive = $('#wz-active').val() === 'true';
+                            const finalMode = $('#wz-mode').val() || 'Offline (Off)';
+                            const isOnline = finalMode.toLowerCase().includes('online');
+
+                            Swal.showLoading();
+                            try {
+                                const res = await fetch('/Admin/CreateWave', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        WaveName: name.trim(),
+                                        StartDate: date || null,
+                                        EndDate: endDate || null,
+                                        IsOnline: isOnline,
+                                        Mode: finalMode.trim(),
+                                        IsActive: isActive
+                                    })
+                                });
+                                if (res.ok) {
+                                    const createData = await res.json().catch(() => ({}));
+                                    const newWaveId = createData.newWaveId ?? createData.NewWaveId;
+
+                                    if (newWaveId && date) {
+                                        try {
+                                            await fetch(`/Admin/GenerateWaveAttendanceSessions?waveId=${newWaveId}&startDate=${encodeURIComponent(date)}&endDate=${encodeURIComponent(endDate || '')}`, { method: 'POST' });
+                                        } catch(e) {}
+                                    }
+
+                                    showToast('تم إنشاء الويف وجدولة جلسات الحضور بنجاح', 'success');
+                                    setTimeout(() => location.reload(), 1000);
+                                } else {
+                                    showToast('تعذر إنشاء الويف', 'error');
+                                    Swal.hideLoading();
+                                }
+                            } catch(e) {
+                                showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
+                                Swal.hideLoading();
+                            }
+                        };
+
+                        // Action 2: Finish & Launch Wizard (Create Wave + Assign + Send Email)
+                        window.wzSubmitFullWizard = async function() {
+                            const name = $('#wz-name').val();
+                            if (!name || !name.trim()) {
+                                window.wzGoToStep(1);
+                                $('#wz-name-err').removeClass('hidden');
+                                $('#wz-name').focus();
+                                showToast('يرجى إدخال اسم الويف أولاً لحفظه وإطلاقه', 'warning');
+                                return;
+                            }
+
+                            const date = $('#wz-date').val();
+                            const endDate = $('#wz-enddate').val();
+                            const isActive = $('#wz-active').val() === 'true';
+                            const finalMode = $('#wz-mode').val() || 'Offline (Off)';
+                            const isOnline = finalMode.toLowerCase().includes('online');
+
+                            const selectedIds = [];
+                            if (wzTable) {
+                                wzTable.$('input.wz-user-cb:checked').each(function() {
+                                    selectedIds.push($(this).val());
+                                });
+                            }
+
+                            const sendEmail = $('#wzSendEmailToggle').is(':checked');
+                            const customSubject = $('#wzCustomEmailSubject').val();
+                            const customBody = $('#wzCustomEmailBody').val();
+                            const saveAsDefault = $('#wzSaveEmailDefaultCheck').is(':checked');
+
+                            $('#wzBtnFinishLaunch').prop('disabled', true).html('<i class="fas fa-spinner fa-spin ml-2"></i>جاري إنشاء الويف وتعيين المرشحين...');
+
+                            try {
+                                // 1. Create Wave
+                                const createRes = await fetch('/Admin/CreateWave', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        WaveName: name.trim(),
+                                        StartDate: date || null,
+                                        EndDate: endDate || null,
+                                        IsOnline: isOnline,
+                                        Mode: finalMode.trim(),
+                                        IsActive: isActive
+                                    })
+                                });
+
+                                if (!createRes.ok) {
+                                    showToast('فشل إنشاء الويف، يرجى المحاولة مرة أخرى.', 'error');
+                                    $('#wzBtnFinishLaunch').prop('disabled', false).html('<i class="fas fa-rocket ml-2"></i>إنشاء الويف وتعيين المرشحين وإرسال الإيميل (Finish & Launch)');
+                                    return;
+                                }
+
+                                const createData = await createRes.json();
+                                const newWaveId = createData.newWaveId ?? createData.NewWaveId;
+
+                                // 2. Ensure Attendance Sessions generated
+                                if (newWaveId && date) {
+                                    try {
+                                        await fetch(`/Admin/GenerateWaveAttendanceSessions?waveId=${newWaveId}&startDate=${encodeURIComponent(date)}&endDate=${encodeURIComponent(endDate || '')}`, { method: 'POST' });
+                                    } catch(e) {}
+                                }
+
+                                // 3. Assign Candidates & Send Email (if any selected)
+                                if (newWaveId && selectedIds.length > 0) {
+                                    const assignRes = await fetch(`/Admin/AssignUsersToWave?waveId=${newWaveId}`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            userIds: selectedIds,
+                                            sendEmail: sendEmail,
+                                            customSubject: customSubject,
+                                            customBody: customBody,
+                                            saveAsDefault: saveAsDefault
+                                        })
+                                    });
+                                }
+
+                                const sessionsCount = updateWzSessionsPreview();
+
+                                await Swal.fire({
+                                    icon: 'success',
+                                    title: '<div class="text-xl font-black text-slate-800 dark:text-white">تم إطلاق الويف بنجاح! 🚀</div>',
+                                    html: `
+                                        <div class="text-right space-y-2 text-xs text-slate-600 dark:text-slate-300 py-2" dir="rtl">
+                                            <p>✅ تم إنشاء الويف: <b>${escapeHtmlAttr(name.trim())}</b></p>
+                                            ${date ? `<p>📅 تم جدولة <b>${sessionsCount || 12} جلسة حضور</b> يومياً من 09:00 ص إلى 12:00 م (عدا الجمعة).</p>` : ''}
+                                            <p>👥 تم تعيين: <b>${selectedIds.length} مرشح</b> للويف بنجاح.</p>
+                                            ${sendEmail && selectedIds.length > 0 ? '<p>📧 تم إرسال رسائل التأكيد والإيميل للمرشحين المحددين.</p>' : ''}
+                                        </div>
+                                    `,
+                                    confirmButtonText: 'ممتاز، حسناً',
+                                    customClass: {
+                                        confirmButton: 'bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2.5 rounded-xl font-bold text-xs shadow-md'
+                                    },
+                                    buttonsStyling: false
+                                });
+
+                                location.reload();
+                            } catch (err) {
+                                showToast('حدث خطأ أثناء الاتصال بالسيرفر.', 'error');
+                                $('#wzBtnFinishLaunch').prop('disabled', false).html('<i class="fas fa-rocket ml-2"></i>إنشاء الويف وتعيين المرشحين وإرسال الإيميل (Finish & Launch)');
+                            }
+                        };
+                    },
+                    didClose: () => {
+                        if (window._wzFilterFn) {
+                            const idx = $.fn.dataTable.ext.search.indexOf(window._wzFilterFn);
+                            if (idx !== -1) $.fn.dataTable.ext.search.splice(idx, 1);
+                            window._wzFilterFn = null;
+                        }
+                        delete window.wzGoToStep;
+                        delete window.wzSubmitCreateOnly;
+                        delete window.wzSubmitFullWizard;
+                        delete window.insertWzPlaceholder;
+                        delete window.toggleWzEmailPreview;
+                        delete window.setWzDurationDays;
+                        delete window._wzBranchesList;
+                        $(document).off('change', '#wzFilterCitySelect');
+                        $(document).off('change', '#wzFilterBranchSelect, #wzFilterNoCert, #wzFilterNotAssigned');
+                        $(document).off('click', '#wzBtnSelectAllFiltered');
+                        $(document).off('click', '#wzBtnDeselectAll');
+                        $(document).off('change', '#wzSelectAllTable');
+                        $(document).off('change', '#wzUserTable tbody input.wz-user-cb');
+                        $(document).off('click', '#wzUserTable tbody tr');
                     }
                 });
-
-                if (formValues && formValues.name) {
-                    try {
-                        const res = await fetch('/Admin/CreateWave', { 
-                            method: 'POST', 
-                            headers: { 'Content-Type': 'application/json' }, 
-                            body: JSON.stringify({ WaveName: formValues.name, StartDate: formValues.date || null, EndDate: formValues.endDate || null, IsOnline: formValues.isOnline, Mode: formValues.mode, IsActive: formValues.isActive }) 
-                        });
-                        if(res.ok) {
-                            showToast('تم إنشاء الويف بنجاح', 'success');
-                            setTimeout(() => location.reload(), 1000);
-                        } else {
-                            showToast('تعذر إنشاء الويف', 'error');
-                        }
-                    } catch(e) {
-                        showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
-                    }
-                }
-            });
+            }
 
             // Double-click on row navigates to Wave details
             $('#wavesTable tbody').on('dblclick', 'tr', function() {

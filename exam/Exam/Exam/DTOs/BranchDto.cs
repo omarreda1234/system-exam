@@ -5,6 +5,7 @@ namespace Exam.DTOs
         public string BranchName { get; set; }
         public string Id { get; set; }
         public string? BranchCode { get; set; }
+        public string? City { get; set; }
         public bool? IsActive { get; set; }
     }
 }

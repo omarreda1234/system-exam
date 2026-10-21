@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.SqlClient;
 using Dapper;
 using Exam.Models;
@@ -18,10 +19,17 @@ namespace Exam.Controllers
     public class AttendanceController : Controller
     {
         private readonly string _connectionString;
+        private readonly Exam.Services.IN8nService _n8nService;
+        private readonly Microsoft.AspNetCore.SignalR.IHubContext<Exam.Hubs.NotificationHub> _hubContext;
 
-        public AttendanceController(IConfiguration configuration)
+        public AttendanceController(
+            IConfiguration configuration,
+            Exam.Services.IN8nService n8nService,
+            Microsoft.AspNetCore.SignalR.IHubContext<Exam.Hubs.NotificationHub> hubContext)
         {
-            _connectionString = configuration.GetConnectionString("DefaultConnection");
+            _connectionString = configuration.GetConnectionString("DefaultConnection")!;
+            _n8nService = n8nService;
+            _hubContext = hubContext;
         }
 
         [HttpGet]
@@ -48,13 +56,27 @@ namespace Exam.Controllers
             if (session.CompanyId != null)
             {
                 users = await conn.QueryAsync<dynamic>(@"
-                    SELECT CONCAT('CT_', U.Id) as Id, U.FullName as UserName, U.Email, U.UserCode, U.BranchName as BranchName,
-                           ISNULL(UA.IsPresent, 0) as IsPresent,
-                           UA.CheckInTime, UA.CheckOutTime
-                    FROM CompanyTrainees U
-                    LEFT JOIN UserAttendance UA ON UA.SessionId = @SessionId AND UA.CompanyTraineeId = U.Id
-                    WHERE U.CompanyId = @CompanyId
-                    ORDER BY U.FullName", 
+                    IF EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId)
+                    BEGIN
+                        SELECT CONCAT('CT_', U.Id) as Id, U.FullName as UserName, U.Email, U.UserCode, U.BranchName as BranchName,
+                               ISNULL(UA.IsPresent, 0) as IsPresent,
+                               UA.CheckInTime, UA.CheckOutTime
+                        FROM dbo.CompanySessionTrainees CST
+                        JOIN CompanyTrainees U ON CST.CompanyTraineeId = U.Id
+                        LEFT JOIN UserAttendance UA ON UA.SessionId = @SessionId AND UA.CompanyTraineeId = U.Id
+                        WHERE CST.SessionId = @SessionId
+                        ORDER BY U.FullName
+                    END
+                    ELSE
+                    BEGIN
+                        SELECT CONCAT('CT_', U.Id) as Id, U.FullName as UserName, U.Email, U.UserCode, U.BranchName as BranchName,
+                               ISNULL(UA.IsPresent, 0) as IsPresent,
+                               UA.CheckInTime, UA.CheckOutTime
+                        FROM CompanyTrainees U
+                        LEFT JOIN UserAttendance UA ON UA.SessionId = @SessionId AND UA.CompanyTraineeId = U.Id
+                        WHERE U.CompanyId = @CompanyId
+                        ORDER BY U.FullName
+                    END", 
                     new { SessionId = sessionId, CompanyId = (int)session.CompanyId });
             }
             else
@@ -385,7 +407,14 @@ namespace Exam.Controllers
                 if (company == null) return NotFound();
 
                 var sessions = await conn.QueryAsync<dynamic>(@"
-                    SELECT S.*, (SELECT COUNT(*) FROM UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1) as PresentCount
+                    SELECT S.*, 
+                           (SELECT COUNT(*) FROM UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1) as PresentCount,
+                           CASE 
+                               WHEN EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees CST WHERE CST.SessionId = S.Id)
+                               THEN (SELECT COUNT(*) FROM dbo.CompanySessionTrainees CST WHERE CST.SessionId = S.Id)
+                               ELSE (SELECT COUNT(*) FROM CompanyTrainees CU WHERE CU.CompanyId = S.CompanyId)
+                           END as TotalTraineesCount,
+                           (SELECT COUNT(*) FROM dbo.CompanySessionTrainees CST WHERE CST.SessionId = S.Id) as SpecificAssignedCount
                     FROM AttendanceSessions S 
                     WHERE S.CompanyId = @CompanyId 
                     ORDER BY S.SessionDate", new { CompanyId = companyId.Value });
@@ -427,6 +456,19 @@ namespace Exam.Controllers
                     new { WaveId = waveId, Date = sessionDate, Name = sessionName, Start = startTime, End = endTime });
                 return RedirectToAction(nameof(ManageSessions), new { waveId });
             }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateSession(int sessionId, DateTime sessionDate, string sessionName, TimeSpan? startTime, TimeSpan? endTime)
+        {
+            using var conn = new SqlConnection(_connectionString);
+            await conn.ExecuteAsync(@"
+                UPDATE AttendanceSessions 
+                SET SessionDate = @Date, SessionName = @Name, StartTime = @Start, EndTime = @End 
+                WHERE Id = @Id", 
+                new { Id = sessionId, Date = sessionDate, Name = sessionName, Start = startTime, End = endTime });
+            
+            return Json(new { success = true, message = "تم تعديل المحاضرة بنجاح" });
         }
 
         [HttpPost]
@@ -626,12 +668,27 @@ namespace Exam.Controllers
             if (session.CompanyId != null)
             {
                 users = await conn.QueryAsync<dynamic>(@"
-                    SELECT CONCAT('CT_', U.Id) as Id, U.FullName as UserName, U.Email, U.UserCode, U.BranchName as BranchName,
-                           ISNULL(UA.IsPresent, 0) as IsPresent,
-                           UA.CheckInTime, UA.CheckOutTime
-                    FROM CompanyTrainees U
-                    LEFT JOIN UserAttendance UA ON UA.SessionId = @SessionId AND UA.CompanyTraineeId = U.Id
-                    WHERE U.CompanyId = @CompanyId", 
+                    IF EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId)
+                    BEGIN
+                        SELECT CONCAT('CT_', U.Id) as Id, U.FullName as UserName, U.Email, U.UserCode, U.BranchName as BranchName,
+                               ISNULL(UA.IsPresent, 0) as IsPresent,
+                               UA.CheckInTime, UA.CheckOutTime
+                        FROM dbo.CompanySessionTrainees CST
+                        JOIN CompanyTrainees U ON CST.CompanyTraineeId = U.Id
+                        LEFT JOIN UserAttendance UA ON UA.SessionId = @SessionId AND UA.CompanyTraineeId = U.Id
+                        WHERE CST.SessionId = @SessionId
+                        ORDER BY U.FullName
+                    END
+                    ELSE
+                    BEGIN
+                        SELECT CONCAT('CT_', U.Id) as Id, U.FullName as UserName, U.Email, U.UserCode, U.BranchName as BranchName,
+                               ISNULL(UA.IsPresent, 0) as IsPresent,
+                               UA.CheckInTime, UA.CheckOutTime
+                        FROM CompanyTrainees U
+                        LEFT JOIN UserAttendance UA ON UA.SessionId = @SessionId AND UA.CompanyTraineeId = U.Id
+                        WHERE U.CompanyId = @CompanyId
+                        ORDER BY U.FullName
+                    END", 
                     new { SessionId = sessionId, CompanyId = (int)session.CompanyId });
             }
             else
@@ -719,15 +776,319 @@ namespace Exam.Controllers
                     INSERT INTO UserAttendance (SessionId, UserId, CompanyTraineeId, IsPresent, CheckInTime, CheckOutTime, RecordedBy) 
                     VALUES (@Sid, @Uid, @Ctid, @IsPresent, @CheckIn, @CheckOut, @By)", 
                     new { Sid = sessionId, Uid = actualUserId, Ctid = companyTraineeId, IsPresent = isPresent, CheckIn = checkInTime, CheckOut = checkOutTime, By = recordedBy });
-            }
+                }
 
-            return Json(new { success = true });
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ: " + ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetSessionTrainees(int sessionId)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+                var session = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT S.Id, S.SessionName, S.SessionDate, S.StartTime, S.EndTime, S.CompanyId, C.Name AS CompanyName
+                    FROM AttendanceSessions S
+                    LEFT JOIN Companies C ON S.CompanyId = C.Id
+                    WHERE S.Id = @Id", new { Id = sessionId });
+
+                if (session == null) return NotFound(new { success = false, message = "Session not found." });
+
+                int? companyId = (int?)session.CompanyId;
+                if (!companyId.HasValue) return BadRequest(new { success = false, message = "This session does not belong to a company." });
+
+                var assigned = (await conn.QueryAsync<dynamic>(@"
+                    SELECT CST.Id AS AssignmentId, CT.Id AS TraineeId, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone, CST.AssignedAt
+                    FROM dbo.CompanySessionTrainees CST
+                    JOIN CompanyTrainees CT ON CST.CompanyTraineeId = CT.Id
+                    WHERE CST.SessionId = @SessionId
+                    ORDER BY CT.FullName", new { SessionId = sessionId })).ToList();
+
+                var available = (await conn.QueryAsync<dynamic>(@"
+                    SELECT CT.Id, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone
+                    FROM CompanyTrainees CT
+                    WHERE CT.CompanyId = @CompanyId
+                      AND CT.Id NOT IN (SELECT CompanyTraineeId FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId AND CompanyTraineeId IS NOT NULL)
+                    ORDER BY CT.FullName", new { CompanyId = companyId.Value, SessionId = sessionId })).ToList();
+
+                return Json(new
+                {
+                    success = true,
+                    session = new
+                    {
+                        id = (int)session.Id,
+                        name = (string)session.SessionName,
+                        date = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd"),
+                        time = session.StartTime != null ? $"{((TimeSpan)session.StartTime):hh\\:mm} - {((TimeSpan)session.EndTime):hh\\:mm}" : "",
+                        companyId = companyId.Value,
+                        companyName = (string)(session.CompanyName ?? "")
+                    },
+                    assignedCount = assigned.Count,
+                    assignedTrainees = assigned,
+                    availablePool = available
+                });
             }
             catch (Exception ex)
             {
                 return Json(new { success = false, message = ex.Message });
             }
         }
+
+        [HttpPost]
+        public async Task<IActionResult> AssignTraineesToSession([FromBody] SessionTraineesAssignRequest req)
+        {
+            if (req == null || req.SessionId <= 0 || req.TraineeIds == null || !req.TraineeIds.Any())
+            {
+                return Json(new { success = false, message = "لم يتم تحديد أي متدربين." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                var session = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT S.Id, S.SessionName, S.SessionDate, S.StartTime, S.EndTime, S.CompanyId, C.Name AS CompanyName
+                    FROM AttendanceSessions S
+                    LEFT JOIN Companies C ON S.CompanyId = C.Id
+                    WHERE S.Id = @Id", new { Id = req.SessionId });
+
+                if (session == null) return NotFound(new { success = false, message = "الجلسة غير موجودة." });
+
+                var assignedBy = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                int count = 0;
+
+                foreach (var tid in req.TraineeIds)
+                {
+                    int affected = await conn.ExecuteAsync(@"
+                        IF NOT EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId AND CompanyTraineeId = @TraineeId)
+                        BEGIN
+                            INSERT INTO dbo.CompanySessionTrainees (SessionId, CompanyTraineeId, AssignedAt, AssignedBy)
+                            VALUES (@SessionId, @TraineeId, GETDATE(), @AssignedBy)
+                        END", new { SessionId = req.SessionId, TraineeId = tid, AssignedBy = assignedBy });
+                    if (affected > 0) count++;
+                }
+
+                // Fetch trainee details
+                var trainees = (await conn.QueryAsync<dynamic>(@"
+                    SELECT CT.Id, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone
+                    FROM CompanyTrainees CT
+                    WHERE CT.Id IN @Ids", new { Ids = req.TraineeIds })).ToList();
+
+                // 1. In-App Notifications
+                foreach (var t in trainees)
+                {
+                    string email = (string)(t.Email ?? "");
+                    string code = (string)(t.UserCode ?? "");
+                    var matchedUserId = await conn.QueryFirstOrDefaultAsync<string>(
+                        "SELECT Id FROM AspNetUsers WHERE (UserCode = @Code AND UserCode <> '--') OR (Email = @Email AND Email <> '--')",
+                        new { Code = code, Email = email });
+
+                    if (!string.IsNullOrEmpty(matchedUserId))
+                    {
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.AppNotifications (UserId, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
+                            VALUES (@UserId, N'تم تسجيلك في تدريب شركة 🏢', CONCAT(N'تم تسجيلك لحضور جلسة: ', @SessionName, N' الخاصة بشركة: ', @CompanyName, N' بتاريخ: ', @SessionDate), '/Attendance/MyAttendance', 'CompanySessionAssigned', CAST(@SessionId AS NVARCHAR(50)), GETDATE())",
+                            new {
+                                UserId = matchedUserId,
+                                SessionName = (string)session.SessionName,
+                                CompanyName = (string)(session.CompanyName ?? "Company"),
+                                SessionDate = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd"),
+                                SessionId = req.SessionId
+                            });
+                    }
+                }
+
+                // 2. n8n Webhook Trigger (for email dispatch and automation workflows)
+                if (req.SendEmailViaN8n)
+                {
+                    var webhookPayload = new
+                    {
+                        @event = "company_session_assignment",
+                        sessionId = (int)session.Id,
+                        sessionName = (string)session.SessionName,
+                        sessionDate = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd"),
+                        startTime = session.StartTime != null ? $"{((TimeSpan)session.StartTime):hh\\:mm}" : "09:00",
+                        endTime = session.EndTime != null ? $"{((TimeSpan)session.EndTime):hh\\:mm}" : "12:00",
+                        companyId = (int?)session.CompanyId,
+                        companyName = (string)(session.CompanyName ?? ""),
+                        trainees = trainees.Select(t => new
+                        {
+                            id = (int)t.Id,
+                            fullName = (string)(t.FullName ?? ""),
+                            userCode = (string)(t.UserCode ?? ""),
+                            email = (string)(t.Email ?? ""),
+                            phone = (string)(t.Phone ?? ""),
+                            branchName = (string)(t.BranchName ?? "")
+                        }).ToList()
+                    };
+
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _n8nService.TriggerCompanySessionNotificationAsync(webhookPayload);
+                        }
+                        catch { }
+                    });
+                }
+
+                await _hubContext.Clients.All.SendAsync("ReceiveNotification", "تم تعيين متدربين لجلسة تدريب الشركة.");
+                return Json(new { success = true, message = $"تم تعيين {count} متدرب بنجاح وإرسال الإشعارات وبيانات الـ API." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> RemoveTraineeFromSession(int sessionId, int traineeId)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+                await conn.ExecuteAsync(
+                    "DELETE FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId AND CompanyTraineeId = @TraineeId",
+                    new { SessionId = sessionId, TraineeId = traineeId });
+                return Json(new { success = true, message = "تم حذف المتدرب من هذه السيشن بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ImportSessionTraineesFromExcel(int sessionId, Microsoft.AspNetCore.Http.IFormFile excelFile)
+        {
+            if (excelFile == null || excelFile.Length == 0)
+            {
+                return Json(new { success = false, message = "يرجى تحديد ملف إكسيل صالح." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                var session = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT S.Id, S.SessionName, S.SessionDate, S.StartTime, S.EndTime, S.CompanyId, C.Name AS CompanyName
+                    FROM AttendanceSessions S
+                    LEFT JOIN Companies C ON S.CompanyId = C.Id
+                    WHERE S.Id = @Id", new { Id = sessionId });
+
+                if (session == null || session.CompanyId == null)
+                {
+                    return Json(new { success = false, message = "الجلسة المحددة غير صالحة." });
+                }
+
+                int companyId = (int)session.CompanyId;
+                var assignedBy = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                int importedCount = 0;
+                var newTraineeIds = new List<int>();
+
+                using (var stream = new MemoryStream())
+                {
+                    await excelFile.CopyToAsync(stream);
+                    using (var workbook = new XLWorkbook(stream))
+                    {
+                        var worksheet = workbook.Worksheet(1);
+                        var rows = worksheet.RangeUsed().RowsUsed().Skip(1);
+
+                        foreach (var row in rows)
+                        {
+                            string fullName = row.Cell(1).GetString().Trim();
+                            string userCode = row.Cell(2).GetString().Trim();
+                            string jobTitle = row.Cell(3).GetString().Trim();
+                            string branchName = row.Cell(4).GetString().Trim();
+                            string email = row.Cell(5).GetString().Trim();
+                            string phone = row.Cell(6).GetString().Trim();
+
+                            if (string.IsNullOrWhiteSpace(fullName) && string.IsNullOrWhiteSpace(userCode)) continue;
+
+                            int traineeId = await conn.QueryFirstOrDefaultAsync<int>(
+                                "SELECT Id FROM CompanyTrainees WHERE CompanyId = @CompanyId AND (UserCode = @Code OR (FullName = @Name AND FullName <> ''))",
+                                new { CompanyId = companyId, Code = userCode, Name = fullName });
+
+                            if (traineeId == 0)
+                            {
+                                traineeId = await conn.QuerySingleAsync<int>(@"
+                                    INSERT INTO CompanyTrainees (CompanyId, FullName, UserCode, JobTitle, BranchName, Email, Phone, CreatedAt)
+                                    VALUES (@CompanyId, @FullName, @UserCode, @JobTitle, @BranchName, @Email, @Phone, GETDATE());
+                                    SELECT CAST(SCOPE_IDENTITY() AS INT);",
+                                    new {
+                                        CompanyId = companyId,
+                                        FullName = fullName,
+                                        UserCode = string.IsNullOrEmpty(userCode) ? "--" : userCode,
+                                        JobTitle = string.IsNullOrEmpty(jobTitle) ? "Trainee" : jobTitle,
+                                        BranchName = string.IsNullOrEmpty(branchName) ? "Global" : branchName,
+                                        Email = string.IsNullOrEmpty(email) ? "--" : email,
+                                        Phone = string.IsNullOrEmpty(phone) ? "--" : phone
+                                    });
+                            }
+
+                            int affected = await conn.ExecuteAsync(@"
+                                IF NOT EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId AND CompanyTraineeId = @TraineeId)
+                                BEGIN
+                                    INSERT INTO dbo.CompanySessionTrainees (SessionId, CompanyTraineeId, AssignedAt, AssignedBy)
+                                    VALUES (@SessionId, @TraineeId, GETDATE(), @AssignedBy)
+                                END", new { SessionId = sessionId, TraineeId = traineeId, AssignedBy = assignedBy });
+
+                            if (affected > 0)
+                            {
+                                importedCount++;
+                                newTraineeIds.Add(traineeId);
+                            }
+                        }
+                    }
+                }
+
+                if (newTraineeIds.Any())
+                {
+                    var trainees = (await conn.QueryAsync<dynamic>(
+                        "SELECT Id, FullName, UserCode, BranchName, Email, Phone FROM CompanyTrainees WHERE Id IN @Ids",
+                        new { Ids = newTraineeIds })).ToList();
+
+                    var webhookPayload = new
+                    {
+                        @event = "company_session_assignment_excel",
+                        sessionId = sessionId,
+                        sessionName = (string)session.SessionName,
+                        sessionDate = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd"),
+                        companyName = (string)(session.CompanyName ?? ""),
+                        trainees = trainees
+                    };
+
+                    _ = Task.Run(async () =>
+                    {
+                        try { await _n8nService.TriggerCompanySessionNotificationAsync(webhookPayload); } catch { }
+                    });
+                }
+
+                return Json(new { success = true, message = $"تم استيراد وتسكين {importedCount} متدرب في هذه السيشن بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "فشل استيراد الملف: " + ex.Message });
+            }
+        }
+    }
+
+    public class SessionTraineesAssignRequest
+    {
+        public int SessionId { get; set; }
+        public List<int> TraineeIds { get; set; } = new List<int>();
+        public bool SendNotification { get; set; } = true;
+        public bool SendEmailViaN8n { get; set; } = true;
     }
 }
 

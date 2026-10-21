@@ -687,12 +687,15 @@
                 const blob = await response.blob();
                 const downloadUrl = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
+                a.style.display = 'none';
                 a.href = downloadUrl;
-                a.download = `${waveName.replace(/[^a-zA-Z0-9_-]/g, '_')}_Branch_Roster.xlsx`;
+                a.setAttribute('download', `${waveName.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_')}_Branch_Roster.xlsx`);
                 document.body.appendChild(a);
                 a.click();
-                a.remove();
-                window.URL.revokeObjectURL(downloadUrl);
+                setTimeout(() => {
+                    a.remove();
+                    window.URL.revokeObjectURL(downloadUrl);
+                }, 1000);
 
                 Swal.fire({
                     icon: 'success',

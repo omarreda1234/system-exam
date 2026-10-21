@@ -9,6 +9,8 @@ namespace Exam.Models
         public string Phone { get; set; }
         public string UserCode { get; set; }
         public string BranchName { get; set; }
+        public string? City { get; set; }
+        public int? BranchId { get; set; }
         public string CertificateCode { get; set; }
         public string RoleName { get; set; }
         public bool IsActive { get; set; }
