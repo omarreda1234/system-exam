@@ -397,12 +397,14 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAvailableCompanyColleagues(int sessionId, int companyId, string branchName)
+        public async Task<IActionResult> GetAvailableCompanyColleagues(int sessionId, int companyId, string? branchName = null, int branchId = 0)
         {
             try
             {
                 using var conn = new SqlConnection(_connectionString);
                 await conn.OpenAsync();
+
+                string trimmedBranch = branchName?.Trim() ?? "";
 
                 string sql = @"
                     ;WITH BranchUsers AS (
@@ -418,8 +420,12 @@ namespace Exam.Controllers
                         LEFT JOIN AspNetUserRoles ur ON u.Id = ur.UserId
                         LEFT JOIN AspNetRoles r ON ur.RoleId = r.Id
                         LEFT JOIN CompanyTrainees ct WITH (NOLOCK) ON ct.CompanyId = @CompanyId AND (ct.UserCode = u.UserCode OR (ct.Email = u.Email AND ct.Email <> '--'))
-                        WHERE (b.BranchName = @BranchName OR u.BranchId = (SELECT TOP 1 Id FROM Branches WHERE BranchName = @BranchName))
-                          AND u.IsActive = 1
+                        WHERE (
+                            (@BranchId > 0 AND (u.BranchId = @BranchId OR b.Id = @BranchId))
+                            OR (@BranchName <> '' AND (b.BranchName = @BranchName OR LTRIM(RTRIM(b.BranchName)) = @BranchName))
+                            OR (@BranchName <> '' AND u.BranchId IN (SELECT Id FROM Branches WHERE BranchName = @BranchName OR LTRIM(RTRIM(BranchName)) = @BranchName))
+                        )
+                        AND u.IsActive = 1
 
                         UNION
 
@@ -431,13 +437,19 @@ namespace Exam.Controllers
                             ISNULL(NULLIF(ct.JobTitle, ''), N'Trainee') AS JobTitle,
                             ct.BranchName
                         FROM CompanyTrainees ct WITH (NOLOCK)
-                        WHERE ct.BranchName = @BranchName
-                          AND NOT EXISTS (
-                              SELECT 1 FROM AspNetUsers u2 WITH (NOLOCK)
-                              LEFT JOIN Branches b2 WITH (NOLOCK) ON u2.BranchId = b2.Id
-                              WHERE (u2.UserCode = ct.UserCode OR (u2.Email = ct.Email AND ct.Email <> '--'))
-                                AND (b2.BranchName = @BranchName OR u2.BranchId = (SELECT TOP 1 Id FROM Branches WHERE BranchName = @BranchName))
-                          )
+                        WHERE (
+                            (@BranchId > 0 AND ct.BranchName IN (SELECT BranchName FROM Branches WHERE Id = @BranchId))
+                            OR (@BranchName <> '' AND (ct.BranchName = @BranchName OR LTRIM(RTRIM(ct.BranchName)) = @BranchName))
+                        )
+                        AND NOT EXISTS (
+                            SELECT 1 FROM AspNetUsers u2 WITH (NOLOCK)
+                            LEFT JOIN Branches b2 WITH (NOLOCK) ON u2.BranchId = b2.Id
+                            WHERE (u2.UserCode = ct.UserCode OR (u2.Email = ct.Email AND ct.Email <> '--'))
+                              AND (
+                                  (@BranchId > 0 AND (u2.BranchId = @BranchId OR b2.Id = @BranchId))
+                                  OR (@BranchName <> '' AND (b2.BranchName = @BranchName OR LTRIM(RTRIM(b2.BranchName)) = @BranchName))
+                              )
+                        )
                     )
                     SELECT 
                         bu.UserId,
@@ -462,7 +474,12 @@ namespace Exam.Controllers
                     )
                     ORDER BY bu.FullName ASC";
 
-                var raw = await conn.QueryAsync<dynamic>(sql, new { SessionId = sessionId, CompanyId = companyId, BranchName = branchName });
+                var raw = await conn.QueryAsync<dynamic>(sql, new { 
+                    SessionId = sessionId, 
+                    CompanyId = companyId, 
+                    BranchName = trimmedBranch, 
+                    BranchId = branchId 
+                });
                 var colleagues = raw.Select(c => {
                     var d = (IDictionary<string, object>)c;
                     string uId = d.ContainsKey("UserId") && d["UserId"] != null ? d["UserId"].ToString() : null;

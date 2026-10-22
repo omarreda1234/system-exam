@@ -582,7 +582,7 @@
                                         <i class="fas fa-times"></i> رفض
                                     </button>
 
-                                    <button type="button" onclick="openReplaceCompanyModal(${c.companySessionTraineeId}, ${c.sessionId}, ${c.companyId || 0}, '${c.branchName}', '${c.traineeName}')"
+                                    <button type="button" onclick="openReplaceCompanyModal(${c.companySessionTraineeId}, ${c.sessionId}, ${c.companyId || 0}, '${c.branchName}', '${c.traineeName}', ${c.branchId || 0})"
                                             class="py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-1.5" title="استبدال بزميل آخر">
                                         <i class="fas fa-exchange-alt"></i> استبدال
                                     </button>
@@ -681,6 +681,18 @@
         let currentAvailableColleagues = [];
         let selectedColleagueKeys = new Set();
 
+        function normalizeArabic(text) {
+            if (!text) return '';
+            return String(text)
+                .toLowerCase()
+                .replace(/[\u064B-\u065F\u0670]/g, '') // remove diacritics
+                .replace(/[إأآا]/g, 'ا')
+                .replace(/ة/g, 'ه')
+                .replace(/ى/g, 'ي')
+                .replace(/_/g, ' ')
+                .trim();
+        }
+
         window.filterColleaguesList = function (text) {
             renderColleaguesChecklist(text);
         };
@@ -717,16 +729,33 @@
             const container = document.getElementById('colleaguesListContainer');
             if (!container) return;
 
-            const term = (filterText || '').trim().toLowerCase();
+            if (!currentAvailableColleagues || currentAvailableColleagues.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">لا يوجد زملاء متاحين بالفرع للترشيح</div>`;
+                updateSelectedCountBadge();
+                return;
+            }
+
+            const rawTerm = (filterText || '').trim();
+            const normTerm = normalizeArabic(rawTerm);
+
             const filtered = currentAvailableColleagues.filter(c => {
-                const name = String(c.fullName || c.FullName || '').toLowerCase();
-                const code = String(c.userCode || c.UserCode || '').toLowerCase();
-                const role = String(c.jobTitle || c.JobTitle || c.roleName || c.RoleName || '').toLowerCase();
-                return !term || name.includes(term) || code.includes(term) || role.includes(term);
+                if (!normTerm) return true;
+                const rawName = String(c.fullName || c.FullName || '');
+                const rawCode = String(c.userCode || c.UserCode || '');
+                const rawRole = String(c.jobTitle || c.JobTitle || c.roleName || c.RoleName || '');
+
+                const normName = normalizeArabic(rawName);
+                const normRole = normalizeArabic(rawRole);
+                const code = rawCode.toLowerCase();
+
+                return normName.includes(normTerm)
+                    || rawName.toLowerCase().includes(rawTerm.toLowerCase())
+                    || code.includes(rawTerm.toLowerCase())
+                    || normRole.includes(normTerm);
             });
 
             if (filtered.length === 0) {
-                container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">لا توجد نتائج مطابقة</div>`;
+                container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">لا توجد نتائج مطابقة لبحثك "${rawTerm}"</div>`;
                 updateSelectedCountBadge();
                 return;
             }
@@ -777,11 +806,13 @@
             try {
                 const res = await fetch(`/Notification/GetAvailableBranchColleagues?branchId=${branchId}&waveId=${waveId}`);
                 const data = await res.json();
+                const list = Array.isArray(data.colleagues) ? data.colleagues : (data.colleagues?.$values || []);
 
-                if (data.success && data.colleagues && data.colleagues.length > 0) {
-                    currentAvailableColleagues = data.colleagues;
-                    renderColleaguesChecklist();
+                if (data.success && list.length > 0) {
+                    currentAvailableColleagues = list;
+                    renderColleaguesChecklist('');
                 } else {
+                    currentAvailableColleagues = [];
                     container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">لا يوجد زملاء آخرين متاحين بالفرع</div>';
                     updateSelectedCountBadge();
                 }
@@ -791,7 +822,7 @@
         };
 
         // Open Replace for Company Sessions
-        window.openReplaceCompanyModal = async function (cstId, sessionId, companyId, branchName, traineeName) {
+        window.openReplaceCompanyModal = async function (cstId, sessionId, companyId, branchName, traineeName, branchId = 0) {
             document.getElementById('replaceType').value = 'company';
             document.getElementById('replaceUserWaveId').value = cstId;
             document.getElementById('replaceSessionId').value = sessionId;
@@ -809,13 +840,18 @@
             document.getElementById('replaceCandidateModal').classList.remove('hidden');
 
             try {
-                const res = await fetch(`/Notification/GetAvailableCompanyColleagues?sessionId=${sessionId}&companyId=${companyId}&branchName=${encodeURIComponent(branchName)}`);
+                const branchQuery = branchId > 0 
+                    ? `branchId=${branchId}&branchName=${encodeURIComponent(branchName || '')}` 
+                    : `branchName=${encodeURIComponent(branchName || '')}`;
+                const res = await fetch(`/Notification/GetAvailableCompanyColleagues?sessionId=${sessionId}&companyId=${companyId}&${branchQuery}`);
                 const data = await res.json();
+                const list = Array.isArray(data.colleagues) ? data.colleagues : (data.colleagues?.$values || []);
 
-                if (data.success && data.colleagues && data.colleagues.length > 0) {
-                    currentAvailableColleagues = data.colleagues;
-                    renderColleaguesChecklist();
+                if (data.success && list.length > 0) {
+                    currentAvailableColleagues = list;
+                    renderColleaguesChecklist('');
                 } else {
+                    currentAvailableColleagues = [];
                     container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">لا يوجد زملاء متاحين بالفرع للترشيح</div>';
                     updateSelectedCountBadge();
                 }
