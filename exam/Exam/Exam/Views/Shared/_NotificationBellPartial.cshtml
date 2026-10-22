@@ -693,10 +693,10 @@
             document.getElementById('replaceCompanyId').value = companyId;
             document.getElementById('replaceBranchName').value = branchName;
             document.getElementById('currentCandidateName').textContent = traineeName;
-            document.getElementById('replaceModalSubtitle').textContent = `اختر متدرب بديل من شركة (${branchName}) للسيشن`;
+            document.getElementById('replaceModalSubtitle').textContent = `اختر متدرب بديل من فرع (${branchName}) للسيشن`;
 
             const select = document.getElementById('colleagueSelect');
-            select.innerHTML = '<option value="">جاري البحث عن الزملاء المتاحين بالشركة والفرع...</option>';
+            select.innerHTML = '<option value="">جاري البحث عن الزملاء المتاحين بالفرع...</option>';
             document.getElementById('replaceCandidateModal').classList.remove('hidden');
 
             try {
@@ -704,12 +704,12 @@
                 const data = await res.json();
 
                 if (data.success && data.colleagues && data.colleagues.length > 0) {
-                    select.innerHTML = '<option value="">-- اختر الزميل البديل --</option>' +
+                    select.innerHTML = '<option value="">-- اختر الزميل البديل من الفرع --</option>' +
                         data.colleagues.map(c => `
-                            <option value="${c.id}">${c.fullName} (${c.userCode}) - ${c.jobTitle}</option>
+                            <option value="${c.value || c.id}">${c.fullName} (${c.userCode}) - ${c.jobTitle}</option>
                         `).join('');
                 } else {
-                    select.innerHTML = '<option value="">لا يوجد متدربين بدلاء متاحين من نفس الفرع والشركة</option>';
+                    select.innerHTML = '<option value="">لا يوجد زملاء متاحين بالفرع للترشيح</option>';
                 }
             } catch (err) {
                 select.innerHTML = '<option value="">فشل تحميل قائمة المتدربين</option>';
@@ -738,7 +738,11 @@
             };
 
             if (type === 'company') {
-                payload.replacementTraineeId = parseInt(selectedVal);
+                if (/^[0-9]+$/.test(selectedVal)) {
+                    payload.replacementTraineeId = parseInt(selectedVal);
+                } else {
+                    payload.replacementUserId = selectedVal;
+                }
             } else {
                 payload.replacementUserId = selectedVal;
             }
