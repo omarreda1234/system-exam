@@ -62,23 +62,52 @@
                                         </span>
                                     }
                                 </span>
-                                <span class="text-[9px] sm:text-[10px] font-bold text-brand-600 uppercase tracking-widest bg-brand-50 dark:bg-brand-950/20 px-2 py-0.5 rounded-full">
-                                    <i class="fas fa-user-check mr-1"></i> @session.PresentCount Trainees Present
-                                </span>
                                 @if (isCompany)
                                 {
                                     var specificAssigned = session.SpecificAssignedCount != null ? (int)session.SpecificAssignedCount : 0;
                                     var totalPool = session.TotalTraineesCount != null ? (int)session.TotalTraineesCount : 0;
+                                    int enrolledCount = specificAssigned > 0 ? specificAssigned : totalPool;
+                                    int present = Convert.ToInt32(session.PresentCount);
+
                                     if (specificAssigned > 0)
                                     {
-                                        <span id="session-badge-@session.Id" class="text-[9px] sm:text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                                        <span id="session-badge-@session.Id" class="text-[9px] sm:text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800" title="المتدربين المسجلين في هذه الجلسة">
                                             <i class="fas fa-users mr-1"></i> @specificAssigned Session Trainees
                                         </span>
                                     }
                                     else
                                     {
-                                        <span id="session-badge-@session.Id" class="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                        <span id="session-badge-@session.Id" class="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full" title="متدربي الشركة بالكامل">
                                             <i class="fas fa-building mr-1"></i> Company Pool (@totalPool)
+                                        </span>
+                                    }
+
+                                    if (present > 0)
+                                    {
+                                        <span class="text-[9px] sm:text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800" title="عدد الحاضرين المسجلين في شيت الغياب">
+                                            <i class="fas fa-user-check mr-1"></i> الحضور الفعلي: @present من @enrolledCount
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-100/70 dark:bg-slate-800/50 px-2.5 py-0.5 rounded-full border border-slate-200/50 dark:border-slate-700/50" title="لم يتم تسجيل حضور للسيشن بعد في شيت الغياب">
+                                            <i class="far fa-clock mr-1"></i> لم يسجل حضور بعد (0 من @enrolledCount)
+                                        </span>
+                                    }
+                                }
+                                else
+                                {
+                                    int present = Convert.ToInt32(session.PresentCount);
+                                    if (present > 0)
+                                    {
+                                        <span class="text-[9px] sm:text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-950/20 px-2.5 py-0.5 rounded-full border border-emerald-200/60">
+                                            <i class="fas fa-user-check mr-1"></i> @present Trainees Attended
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-100 dark:bg-slate-800/60 px-2.5 py-0.5 rounded-full">
+                                            <i class="far fa-clock mr-1"></i> 0 Attended (لم يسجل حضور)
                                         </span>
                                     }
                                 }
@@ -560,15 +589,19 @@
                         </div>`;
                 } else {
                     listWrapper.innerHTML = sessionTraineesState.assignedTrainees.map(t => {
-                        const traineeId = t.traineeId || t.id;
-                        const status = (t.approvalStatus || 'Approved').toLowerCase();
+                        const traineeId = t.traineeId || t.TraineeId || t.id || t.Id;
+                        const fullName = t.fullName || t.FullName || 'Trainee';
+                        const userCode = t.userCode || t.UserCode || '--';
+                        const branchName = t.branchName || t.BranchName || 'عام';
+                        const jobTitle = t.jobTitle || t.JobTitle || 'Trainee';
+                        const status = (t.approvalStatus || t.ApprovalStatus || 'Approved').toLowerCase();
                         let badgeHtml = '';
                         if (status === 'approved') {
                             badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1"><i class="fas fa-check-circle"></i> معتمد (Approved)</span>`;
                         } else if (status === 'pending') {
                             badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center gap-1"><i class="fas fa-clock"></i> معلق بانتظار الفرع (Pending)</span>`;
                         } else if (status === 'rejected') {
-                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 flex items-center gap-1" title="سبب الرفض: ${t.rejectionReason || 'بدون سبب'}"><i class="fas fa-times-circle"></i> تم الاعتذار: ${t.rejectionReason || 'بدون سبب'}</span>`;
+                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 flex items-center gap-1" title="سبب الرفض: ${t.rejectionReason || t.RejectionReason || 'بدون سبب'}"><i class="fas fa-times-circle"></i> تم الاعتذار: ${t.rejectionReason || t.RejectionReason || 'بدون سبب'}</span>`;
                         } else if (status === 'replaced') {
                             badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1"><i class="fas fa-exchange-alt"></i> تم الاستبدال (Replaced)</span>`;
                         }
@@ -577,16 +610,16 @@
                         <div class="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
                             <div class="flex items-center gap-3">
                                 <div class="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center text-xs">
-                                    ${(t.fullName || 'T')[0]}
+                                    ${(fullName || 'T')[0]}
                                 </div>
                                 <div>
-                                    <h4 class="text-xs font-black text-slate-800 dark:text-white leading-tight">${t.fullName}</h4>
-                                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">الكود: ${t.userCode} | الفرع: ${t.branchName || 'عام'} | ${t.jobTitle || 'Trainee'}</p>
+                                    <h4 class="text-xs font-black text-slate-800 dark:text-white leading-tight">${fullName}</h4>
+                                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">الكود: ${userCode} | الفرع: ${branchName} | ${jobTitle}</p>
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
                                 ${badgeHtml}
-                                <button type="button" onclick="removeTraineeFromSession(${sessionId}, ${traineeId}, '${t.fullName}')" class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center text-xs transition-all" title="إزالة من هذه السيشن">
+                                <button type="button" onclick="removeTraineeFromSession(${sessionId}, ${traineeId}, '${encodeURIComponent(fullName)}')" class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center text-xs transition-all" title="إزالة من هذه السيشن">
                                     <i class="fas fa-trash-alt"></i>
                                 </button>
                             </div>
@@ -889,7 +922,7 @@
         window.removeTraineeFromSession = async function (sessionId, traineeId, name) {
             const confirm = await Swal.fire({
                 title: 'إزالة المتدرب؟',
-                text: `هل تريد إزالة (${name}) من هذه السيشن المحددة؟`,
+                text: `هل تريد إزالة (${decodeURIComponent(name || '')}) من هذه السيشن المحددة؟`,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonText: 'نعم، إزالة',

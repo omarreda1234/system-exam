@@ -46,6 +46,13 @@
                 جاري فحص الإشعارات...
             </div>
         </div>
+
+        <!-- Admin Audit History Link -->
+        <div id="adminHistoryLink" class="hidden px-4 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 text-center">
+            <a href="/Admin/NominationHistory" class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center justify-center gap-1.5">
+                <i class="fas fa-history text-xs"></i> سجل قرارات وترشيحات الفروع (Audit History)
+            </a>
+        </div>
     </div>
 </div>
 
@@ -243,16 +250,26 @@
                     notifBadge.classList.remove('flex');
                 }
 
-                // Update pending nominations banner
+                // Update pending nominations banner (STRICT: ONLY FOR BRANCH APPROVERS)
                 const banner = document.getElementById('pendingNominationsBanner');
                 const text = document.getElementById('pendingNominationsText');
-                if (notifState.pendingNominationsCount > 0) {
+                if (data.isBranchApprover && notifState.pendingNominationsCount > 0) {
                     banner.classList.remove('hidden');
                     banner.classList.add('flex');
                     text.textContent = `لديك ${notifState.pendingNominationsCount} موظف من فرعك بانتظار الاعتماد (${notifState.pendingWaveCount} ويف + ${notifState.pendingCompanyCount} شركات)`;
                 } else {
                     banner.classList.add('hidden');
                     banner.classList.remove('flex');
+                }
+
+                // Admin Audit History link
+                const adminLink = document.getElementById('adminHistoryLink');
+                if (adminLink) {
+                    if (data.isAdmin) {
+                        adminLink.classList.remove('hidden');
+                    } else {
+                        adminLink.classList.add('hidden');
+                    }
                 }
 
                 // Render list
@@ -265,7 +282,7 @@
                         </div>`;
                 } else {
                     list.innerHTML = notifState.notifications.map(n => `
-                        <div class="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-start gap-3 cursor-pointer ${n.isRead ? 'opacity-65' : 'bg-brand-50/20'}"
+                        <div id="notif-item-${n.id}" class="p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-start gap-3 cursor-pointer group relative ${n.isRead ? 'opacity-70' : 'bg-brand-50/20'}"
                              onclick="handleNotificationClick(${n.id}, '${n.linkUrl || ''}')">
                             <div class="w-8 h-8 rounded-xl ${n.type === 'WaveNomination' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400' : 'bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-400'} flex items-center justify-center text-xs shrink-0 mt-0.5">
                                 <i class="${n.type === 'WaveNomination' ? 'fas fa-user-clock' : 'fas fa-bell'}"></i>
@@ -275,12 +292,65 @@
                                 <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">${n.message}</p>
                                 <span class="text-[9px] text-slate-400 mt-1 block">${n.createdAt}</span>
                             </div>
-                            ${!n.isRead ? '<span class="w-2 h-2 rounded-full bg-brand-500 shrink-0 mt-1"></span>' : ''}
+                            <div class="flex flex-col items-center gap-1.5 shrink-0 mt-0.5">
+                                <button type="button" 
+                                        onclick="deleteNotification(event, ${n.id})" 
+                                        class="w-6 h-6 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center justify-center transition-all opacity-80 hover:opacity-100" 
+                                        title="حذف الإشعار">
+                                    <i class="fas fa-times text-xs"></i>
+                                </button>
+                                ${!n.isRead ? '<span class="w-2 h-2 rounded-full bg-brand-500"></span>' : ''}
+                            </div>
                         </div>
                     `).join('');
                 }
             } catch (err) {
                 console.error('Failed to load notifications', err);
+            }
+        };
+
+        window.deleteNotification = async function (e, id) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            const item = document.getElementById(`notif-item-${id}`);
+            if (item) {
+                item.style.transition = 'all 0.25s ease';
+                item.style.opacity = '0';
+                item.style.transform = 'translateX(20px)';
+            }
+
+            try {
+                const res = await fetch(`/Notification/DeleteNotification?id=${id}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    if (item) item.remove();
+                    notifState.notifications = notifState.notifications.filter(x => x.id !== id);
+                    if (notifState.notifications.length === 0) {
+                        const list = document.getElementById('notifListContainer');
+                        if (list) {
+                            list.innerHTML = `
+                                <div class="p-6 text-center text-xs text-slate-400">
+                                    <i class="far fa-bell-slash text-2xl mb-2 opacity-50 block"></i>
+                                    لا توجد إشعارات جديدة حالياً
+                                </div>`;
+                        }
+                    }
+                    loadHeaderNotifications();
+                } else {
+                    if (item) {
+                        item.style.opacity = '1';
+                        item.style.transform = 'none';
+                    }
+                    alert(data.message || 'فشل حذف الإشعار');
+                }
+            } catch {
+                if (item) {
+                    item.style.opacity = '1';
+                    item.style.transform = 'none';
+                }
             }
         };
 

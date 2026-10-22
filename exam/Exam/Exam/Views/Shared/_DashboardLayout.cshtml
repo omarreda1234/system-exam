@@ -384,7 +384,7 @@
                         bool isGroup3Active = currentController == "admin" && (currentAction == "allusers" || currentAction == "traineeprofile" || currentAction == "pendingrequests" || currentAction == "deactivatedusers");
                         bool isGroup4Active = (currentController == "admin" && (currentAction == "structure" || currentAction == "items")) || (currentController == "skilltracks" && currentAction == "index");
                         bool isGroup5Active = currentController == "admin" && (currentAction == "getallcategories" || currentAction == "getallexamtypes" || currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams" || currentAction == "manageinstructions");
-                        bool isGroup6Active = currentController == "admin" && (currentAction == "waves" || currentAction == "assignments" || currentAction == "livemonitor" || currentAction == "smartwaveproposal");
+                        bool isGroup6Active = currentController == "admin" && (currentAction == "waves" || currentAction == "assignments" || currentAction == "livemonitor" || currentAction == "smartwaveproposal" || currentAction == "nominationhistory");
                         bool isGroup7Active = (currentController == "admin" && (currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students" || currentAction == "certificates")) || (currentController == "attendance" && currentAction == "analytics");
                     }
 
@@ -727,6 +727,15 @@
                                         <a href="@Url.Action("LiveMonitor", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "livemonitor")">
                                             <i class="fas fa-broadcast-tower w-4 text-center"></i>
                                             <span>Live Monitor</span>
+                                        </a>
+                                    </li>
+                                }
+                                @if (HasAccess("Admin", "Waves") || User.IsInRole("Admin"))
+                                {
+                                    <li>
+                                        <a href="@Url.Action("NominationHistory", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "nominationhistory")">
+                                            <i class="fas fa-history w-4 text-center text-indigo-500"></i>
+                                            <span>Nomination History</span>
                                         </a>
                                     </li>
                                 }

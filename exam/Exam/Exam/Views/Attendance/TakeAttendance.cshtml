@@ -80,7 +80,7 @@
 
     <!-- Attendance Sheet -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 mt-8">
-        @if (ViewBag.IsLocked == true)
+        @if (ViewBag.IsLocked == true && ViewBag.IsAdmin != true)
         {
             <div class="bg-amber-50 border-2 border-amber-500/30 text-amber-900 p-6 rounded-3xl mb-6 flex items-center gap-4 shadow-sm">
                 <div class="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl shrink-0 shadow-md shadow-amber-500/20">
@@ -90,6 +90,21 @@
                     <h4 class="font-black text-sm uppercase tracking-wide">Attendance Window Locked / تسجيل الغياب مغلق</h4>
                     <p class="text-xs font-bold text-amber-700 mt-0.5">@ViewBag.LockReason</p>
                 </div>
+            </div>
+        }
+        else if (ViewBag.IsAdmin == true && ViewBag.IsLocked == true)
+        {
+            <div class="bg-indigo-50 border border-indigo-200 text-indigo-900 p-4 rounded-2xl mb-6 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-sm shrink-0">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-black text-xs uppercase tracking-wide">وضع المشرف العام (Admin Override)</h4>
+                        <p class="text-[11px] text-indigo-700">المحاضرة خارج موعدها المجدول، ولكن بصفتك Admin يمكنك تسجيل أو تعديل الغياب بالكامل.</p>
+                    </div>
+                </div>
+                <span class="px-3 py-1 bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase">Admin Active</span>
             </div>
         }
 
@@ -230,7 +245,7 @@
         const lockReason = '@Html.Raw(ViewBag.LockReason ?? "")';
 
         function saveDetailedAttendance(userId) {
-            if (isSessionLocked) {
+            if (isSessionLocked && !isAdmin) {
                 Swal.fire({
                     icon: 'warning',
                     title: 'تسجيل الغياب مغلق',

@@ -41,19 +41,26 @@ namespace Exam.Controllers
 
                 var userId = CurrentUserId;
                 var roles = CurrentUserRoles;
-                bool isAdminOrHr = roles.Contains("Admin") || roles.Contains("HR") || roles.Contains("Human Resources");
+                bool isAdmin = roles.Any(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase));
+                bool isBranchApprover = roles.Any(r => 
+                    r.Equals("Branch Manager", StringComparison.OrdinalIgnoreCase) ||
+                    r.Equals("BranchManager", StringComparison.OrdinalIgnoreCase) ||
+                    r.Equals("Branch Supervisor", StringComparison.OrdinalIgnoreCase) ||
+                    r.Equals("BranchSupervisor", StringComparison.OrdinalIgnoreCase) ||
+                    r.Equals("Supervisor", StringComparison.OrdinalIgnoreCase));
 
                 // Get user's branch
                 int? userBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
                     "SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = userId });
 
                 // 1. Unread notifications
+                // Managerial notifications sent to BranchId are only shown to Branch Managers / Supervisors.
                 string notifSql = @"
-                    SELECT TOP 15 
+                    SELECT TOP 25 
                         Id, Title, Message, LinkUrl, Type, ReferenceId, IsRead, CreatedAt, BranchId
                     FROM dbo.AppNotifications
                     WHERE (UserId = @UserId 
-                           OR (BranchId IS NOT NULL AND BranchId = @BranchId)
+                           OR (@IsBranchApprover = 1 AND BranchId IS NOT NULL AND BranchId = @BranchId)
                            OR (RoleTarget IS NOT NULL AND RoleTarget IN @Roles))
                     ORDER BY IsRead ASC, CreatedAt DESC";
 
@@ -61,22 +68,19 @@ namespace Exam.Controllers
                 {
                     UserId = userId,
                     BranchId = userBranchId,
+                    IsBranchApprover = isBranchApprover ? 1 : 0,
                     Roles = roles.Any() ? roles : new List<string> { "__NONE__" }
                 })).ToList();
 
                 int unreadCount = notifs.Count(n => n.IsRead == false);
 
                 // 2. Pending wave & company nominations count
+                // STRICT BUSINESS RULE: Pending approval action prompt is ONLY for Branch Managers and Supervisors!
+                // Pharmacists and Admins do NOT see 'مرشحين بانتظار اعتمادك' action banner.
                 int pendingWaveCount = 0;
                 int pendingCompanyCount = 0;
-                if (isAdminOrHr)
-                {
-                    pendingWaveCount = await conn.ExecuteScalarAsync<int>(
-                        "SELECT COUNT(1) FROM dbo.UserWaves WHERE ApprovalStatus = 'Pending'");
-                    pendingCompanyCount = await conn.ExecuteScalarAsync<int>(
-                        "SELECT COUNT(1) FROM dbo.CompanySessionTrainees WHERE ApprovalStatus = 'Pending'");
-                }
-                else if (userBranchId.HasValue)
+
+                if (isBranchApprover && userBranchId.HasValue)
                 {
                     pendingWaveCount = await conn.ExecuteScalarAsync<int>(@"
                         SELECT COUNT(1) 
@@ -99,11 +103,13 @@ namespace Exam.Controllers
                 return Json(new
                 {
                     success = true,
-                    unreadCount = unreadCount + totalPending,
-                    pendingNominationsCount = totalPending,
-                    pendingWaveCount = pendingWaveCount,
-                    pendingCompanyCount = pendingCompanyCount,
+                    unreadCount = unreadCount + (isBranchApprover ? totalPending : 0),
+                    pendingNominationsCount = isBranchApprover ? totalPending : 0,
+                    pendingWaveCount = isBranchApprover ? pendingWaveCount : 0,
+                    pendingCompanyCount = isBranchApprover ? pendingCompanyCount : 0,
                     userBranchId = userBranchId,
+                    isBranchApprover = isBranchApprover,
+                    isAdmin = isAdmin,
                     notifications = notifs.Select(n => new
                     {
                         id = (int)n.Id,
@@ -148,6 +154,43 @@ namespace Exam.Controllers
             }
         }
 
+        [HttpPost]
+        public async Task<IActionResult> DeleteNotification(int id)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+                var userId = CurrentUserId;
+                var roles = CurrentUserRoles;
+                bool isAdmin = roles.Any(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase));
+
+                int? userBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
+                    "SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = userId });
+
+                await conn.ExecuteAsync(@"
+                    DELETE FROM dbo.AppNotifications 
+                    WHERE Id = @Id 
+                      AND (@IsAdmin = 1 
+                           OR UserId = @UserId 
+                           OR (BranchId IS NOT NULL AND BranchId = @BranchId)
+                           OR (RoleTarget IS NOT NULL AND RoleTarget IN @Roles))",
+                    new { 
+                        Id = id, 
+                        IsAdmin = isAdmin ? 1 : 0, 
+                        UserId = userId, 
+                        BranchId = userBranchId, 
+                        Roles = roles.Any() ? roles : new List<string> { "__NONE__" } 
+                    });
+
+                return Json(new { success = true, message = "تم حذف الإشعار بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetPendingBranchNominations(int? waveId)
         {
@@ -158,14 +201,21 @@ namespace Exam.Controllers
 
                 var userId = CurrentUserId;
                 var roles = CurrentUserRoles;
+                bool isBranchApprover = roles.Any(r => 
+                    r.Equals("Branch Manager", StringComparison.OrdinalIgnoreCase) ||
+                    r.Equals("BranchManager", StringComparison.OrdinalIgnoreCase) ||
+                    r.Equals("Branch Supervisor", StringComparison.OrdinalIgnoreCase) ||
+                    r.Equals("BranchSupervisor", StringComparison.OrdinalIgnoreCase) ||
+                    r.Equals("Supervisor", StringComparison.OrdinalIgnoreCase));
+
                 bool isAdminOrHr = roles.Contains("Admin") || roles.Contains("HR") || roles.Contains("Human Resources");
 
                 int? userBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
                     "SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = userId });
 
-                if (!isAdminOrHr && !userBranchId.HasValue)
+                if (!isBranchApprover || !userBranchId.HasValue)
                 {
-                    return Json(new { success = true, nominations = new List<object>() });
+                    return Json(new { success = true, waveNominations = new List<object>(), companyNominations = new List<object>() });
                 }
 
                 string sql = @"
@@ -410,6 +460,11 @@ namespace Exam.Controllers
                 string action = req.Action.Trim().ToLowerInvariant();
                 string nomType = (req.Type ?? "wave").ToLowerInvariant().Trim();
 
+                var actorUser = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                    "SELECT ISNULL(FullName, UserName) AS FullName FROM AspNetUsers WHERE Id = @Id", new { Id = currentUserId });
+                string actorName = (string)(actorUser?.FullName ?? User.Identity?.Name ?? "مدير الفرع");
+                string actorRole = roles.FirstOrDefault(r => r.Contains("Branch") || r.Contains("Supervisor") || r.Contains("Admin")) ?? "Branch Manager";
+
                 // ----------------------------------------------------
                 // 1. Handling Company Session Trainee Nominations
                 // ----------------------------------------------------
@@ -417,6 +472,7 @@ namespace Exam.Controllers
                 {
                     var cNomination = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                         SELECT cst.Id, cst.SessionId, cst.CompanyTraineeId, cst.ApprovalStatus, ct.FullName AS TraineeName,
+                               ISNULL(ct.UserCode, '--') AS UserCode, ISNULL(ct.JobTitle, 'Trainee') AS JobTitle,
                                ct.BranchName, b.Id AS BranchId, s.SessionName, c.Name AS CompanyName, s.CompanyId
                         FROM dbo.CompanySessionTrainees cst
                         JOIN dbo.CompanyTrainees ct ON cst.CompanyTraineeId = ct.Id
@@ -450,9 +506,32 @@ namespace Exam.Controllers
                             WHERE Id = @Id",
                             new { Id = req.UserWaveId, ActionedBy = currentUserId });
 
+                        // Log to NominationAuditLogs
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.NominationAuditLogs (
+                                EntityType, EntityId, EntityName, CompanyName, TraineeId, TraineeName, TraineeCode, TraineeRole,
+                                BranchId, BranchName, Action, ActionReason, ActionByUserId, ActionByUserName, ActionByUserRole, ActionDate
+                            ) VALUES (
+                                'CompanySession', @EntityId, @EntityName, @CompanyName, @TraineeId, @TraineeName, @TraineeCode, @TraineeRole,
+                                @BranchId, @BranchName, 'Approved', NULL, @ActionByUserId, @ActionByUserName, @ActionByUserRole, GETDATE()
+                            )", new {
+                                EntityId = (int)cNomination.SessionId,
+                                EntityName = (string)cNomination.SessionName,
+                                CompanyName = (string)(cNomination.CompanyName ?? ""),
+                                TraineeId = cNomination.CompanyTraineeId.ToString(),
+                                TraineeName = (string)cNomination.TraineeName,
+                                TraineeCode = (string)(cNomination.UserCode ?? "--"),
+                                TraineeRole = (string)(cNomination.JobTitle ?? "Trainee"),
+                                BranchId = (int?)cNomination.BranchId,
+                                BranchName = (string)(cNomination.BranchName ?? "الفرع"),
+                                ActionByUserId = currentUserId,
+                                ActionByUserName = actorName,
+                                ActionByUserRole = actorRole
+                            });
+
                         await conn.ExecuteAsync(@"
                             INSERT INTO dbo.AppNotifications (RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
-                            VALUES ('Admin', N'اعتماد حضور متدرب شركة ✅', CONCAT(N'تم اعتماد حضور: ', @TraineeName, N' من فرع: ', @BranchName, N' لسيشن: ', @SessionName), CONCAT('/Attendance/ManageSessions?companyId=', @CompanyId), 'CompanySessionApproved', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                            VALUES ('Admin', N'اعتماد حضور متدرب شركة ✅', CONCAT(N'قام مدير فرع ', @BranchName, N' باعتماد حضور: ', @TraineeName, N' لسيشن: ', @SessionName), CONCAT('/Attendance/ManageSessions?companyId=', @CompanyId), 'CompanySessionApproved', CAST(@Id AS NVARCHAR(50)), GETDATE())",
                             new {
                                 TraineeName = (string)cNomination.TraineeName,
                                 BranchName = (string)(cNomination.BranchName ?? "الفرع"),
@@ -480,9 +559,33 @@ namespace Exam.Controllers
                             WHERE Id = @Id",
                             new { Id = req.UserWaveId, Reason = req.Reason.Trim(), ActionedBy = currentUserId });
 
+                        // Log to NominationAuditLogs
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.NominationAuditLogs (
+                                EntityType, EntityId, EntityName, CompanyName, TraineeId, TraineeName, TraineeCode, TraineeRole,
+                                BranchId, BranchName, Action, ActionReason, ActionByUserId, ActionByUserName, ActionByUserRole, ActionDate
+                            ) VALUES (
+                                'CompanySession', @EntityId, @EntityName, @CompanyName, @TraineeId, @TraineeName, @TraineeCode, @TraineeRole,
+                                @BranchId, @BranchName, 'Rejected', @Reason, @ActionByUserId, @ActionByUserName, @ActionByUserRole, GETDATE()
+                            )", new {
+                                EntityId = (int)cNomination.SessionId,
+                                EntityName = (string)cNomination.SessionName,
+                                CompanyName = (string)(cNomination.CompanyName ?? ""),
+                                TraineeId = cNomination.CompanyTraineeId.ToString(),
+                                TraineeName = (string)cNomination.TraineeName,
+                                TraineeCode = (string)(cNomination.UserCode ?? "--"),
+                                TraineeRole = (string)(cNomination.JobTitle ?? "Trainee"),
+                                BranchId = (int?)cNomination.BranchId,
+                                BranchName = (string)(cNomination.BranchName ?? "الفرع"),
+                                Reason = req.Reason.Trim(),
+                                ActionByUserId = currentUserId,
+                                ActionByUserName = actorName,
+                                ActionByUserRole = actorRole
+                            });
+
                         await conn.ExecuteAsync(@"
                             INSERT INTO dbo.AppNotifications (RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
-                            VALUES ('Admin', N'اعتذار/رفض متدرب شركة ❌', CONCAT(N'قام مدير الفرع برفض حضور: ', @TraineeName, N' (', @BranchName, N') لسيشن: ', @SessionName, N'. السبب: ', @Reason), CONCAT('/Attendance/ManageSessions?companyId=', @CompanyId), 'CompanySessionRejected', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                            VALUES ('Admin', N'اعتذار/رفض متدرب شركة ❌', CONCAT(N'قام مدير فرع ', @BranchName, N' برفض حضور: ', @TraineeName, N' لسيشن: ', @SessionName, N'. السبب: ', @Reason), CONCAT('/Attendance/ManageSessions?companyId=', @CompanyId), 'CompanySessionRejected', CAST(@Id AS NVARCHAR(50)), GETDATE())",
                             new {
                                 TraineeName = (string)cNomination.TraineeName,
                                 BranchName = (string)(cNomination.BranchName ?? "الفرع"),
@@ -531,10 +634,38 @@ namespace Exam.Controllers
                                 ActionedBy = currentUserId
                             });
 
+                        // Log to NominationAuditLogs
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.NominationAuditLogs (
+                                EntityType, EntityId, EntityName, CompanyName, TraineeId, TraineeName, TraineeCode, TraineeRole,
+                                BranchId, BranchName, Action, ActionReason, ReplacementTraineeId, ReplacementTraineeName,
+                                ActionByUserId, ActionByUserName, ActionByUserRole, ActionDate
+                            ) VALUES (
+                                'CompanySession', @EntityId, @EntityName, @CompanyName, @TraineeId, @TraineeName, @TraineeCode, @TraineeRole,
+                                @BranchId, @BranchName, 'Replaced', CONCAT(N'تم استبداله بـ: ', @RepName), @RepId, @RepName,
+                                @ActionByUserId, @ActionByUserName, @ActionByUserRole, GETDATE()
+                            )", new {
+                                EntityId = (int)cNomination.SessionId,
+                                EntityName = (string)cNomination.SessionName,
+                                CompanyName = (string)(cNomination.CompanyName ?? ""),
+                                TraineeId = cNomination.CompanyTraineeId.ToString(),
+                                TraineeName = (string)cNomination.TraineeName,
+                                TraineeCode = (string)(cNomination.UserCode ?? "--"),
+                                TraineeRole = (string)(cNomination.JobTitle ?? "Trainee"),
+                                BranchId = (int?)cNomination.BranchId,
+                                BranchName = (string)(cNomination.BranchName ?? "الفرع"),
+                                RepId = req.ReplacementTraineeId.Value.ToString(),
+                                RepName = (string)repTrainee.FullName,
+                                ActionByUserId = currentUserId,
+                                ActionByUserName = actorName,
+                                ActionByUserRole = actorRole
+                            });
+
                         await conn.ExecuteAsync(@"
                             INSERT INTO dbo.AppNotifications (RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
-                            VALUES ('Admin', N'استبدال متدرب في سيشن شركة 🔄', CONCAT(N'تم استبدال: ', @OldTrainee, N' بـ: ', @NewTrainee, N' في سيشن: ', @SessionName), CONCAT('/Attendance/ManageSessions?companyId=', @CompanyId), 'CompanySessionReplaced', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                            VALUES ('Admin', N'استبدال متدرب في سيشن شركة 🔄', CONCAT(N'قام مدير فرع ', @BranchName, N' باستبدال: ', @OldTrainee, N' بـ: ', @NewTrainee, N' في سيشن: ', @SessionName), CONCAT('/Attendance/ManageSessions?companyId=', @CompanyId), 'CompanySessionReplaced', CAST(@Id AS NVARCHAR(50)), GETDATE())",
                             new {
+                                BranchName = (string)(cNomination.BranchName ?? "الفرع"),
                                 OldTrainee = (string)cNomination.TraineeName,
                                 NewTrainee = (string)repTrainee.FullName,
                                 SessionName = (string)cNomination.SessionName,
@@ -552,7 +683,7 @@ namespace Exam.Controllers
                 // ----------------------------------------------------
                 var nomination = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                     SELECT uw.Id, uw.UserId, uw.WaveId, uw.ApprovalStatus, u.BranchId, ISNULL(u.FullName, u.UserName) as StudentName,
-                           b.BranchName, tw.WaveName
+                           ISNULL(u.UserCode, '--') as UserCode, b.BranchName, tw.WaveName
                     FROM dbo.UserWaves uw
                     JOIN AspNetUsers u ON uw.UserId = u.Id
                     LEFT JOIN Branches b ON u.BranchId = b.Id
@@ -595,10 +726,31 @@ namespace Exam.Controllers
                           AND NOT EXISTS (SELECT 1 FROM dbo.UserAttendance ua WHERE ua.SessionId = s.Id AND ua.UserId = @UserId)",
                         new { UserId = (string)nomination.UserId, WaveId = (int)nomination.WaveId });
 
+                    // Log to NominationAuditLogs
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO dbo.NominationAuditLogs (
+                            EntityType, EntityId, EntityName, TraineeId, TraineeName, TraineeCode, TraineeRole,
+                            BranchId, BranchName, Action, ActionReason, ActionByUserId, ActionByUserName, ActionByUserRole, ActionDate
+                        ) VALUES (
+                            'Wave', @WaveId, @WaveName, @UserId, @StudentName, @UserCode, 'Trainee',
+                            @BranchId, @BranchName, 'Approved', NULL, @ActionByUserId, @ActionByUserName, @ActionByUserRole, GETDATE()
+                        )", new {
+                            WaveId = (int)nomination.WaveId,
+                            WaveName = (string)nomination.WaveName,
+                            UserId = (string)nomination.UserId,
+                            StudentName = (string)nomination.StudentName,
+                            UserCode = (string)(nomination.UserCode ?? "--"),
+                            BranchId = (int?)nomination.BranchId,
+                            BranchName = (string)(nomination.BranchName ?? "الفرع"),
+                            ActionByUserId = currentUserId,
+                            ActionByUserName = actorName,
+                            ActionByUserRole = actorRole
+                        });
+
                     // Notify Admins
                     await conn.ExecuteAsync(@"
                         INSERT INTO dbo.AppNotifications (RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
-                        VALUES ('Admin', N'اعتماد مرشح للويف ✅', CONCAT(N'تم اعتماد المرشح: ', @StudentName, N' من فرع: ', @BranchName, N' في الويف: ', @WaveName), CONCAT('/Admin/WaveDetails/', @WaveId), 'WaveNominationApproved', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                        VALUES ('Admin', N'اعتماد مرشح للويف ✅', CONCAT(N'قام مدير فرع ', @BranchName, N' باعتماد ترشيح: ', @StudentName, N' في ويف: ', @WaveName), CONCAT('/Admin/WaveDetails/', @WaveId), 'WaveNominationApproved', CAST(@Id AS NVARCHAR(50)), GETDATE())",
                         new {
                             StudentName = (string)nomination.StudentName,
                             BranchName = (string)(nomination.BranchName ?? "الفرع"),
@@ -627,10 +779,32 @@ namespace Exam.Controllers
                         WHERE Id = @Id",
                         new { Id = req.UserWaveId, Reason = req.Reason.Trim(), ActionedBy = currentUserId });
 
+                    // Log to NominationAuditLogs
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO dbo.NominationAuditLogs (
+                            EntityType, EntityId, EntityName, TraineeId, TraineeName, TraineeCode, TraineeRole,
+                            BranchId, BranchName, Action, ActionReason, ActionByUserId, ActionByUserName, ActionByUserRole, ActionDate
+                        ) VALUES (
+                            'Wave', @WaveId, @WaveName, @UserId, @StudentName, @UserCode, 'Trainee',
+                            @BranchId, @BranchName, 'Rejected', @Reason, @ActionByUserId, @ActionByUserName, @ActionByUserRole, GETDATE()
+                        )", new {
+                            WaveId = (int)nomination.WaveId,
+                            WaveName = (string)nomination.WaveName,
+                            UserId = (string)nomination.UserId,
+                            StudentName = (string)nomination.StudentName,
+                            UserCode = (string)(nomination.UserCode ?? "--"),
+                            BranchId = (int?)nomination.BranchId,
+                            BranchName = (string)(nomination.BranchName ?? "الفرع"),
+                            Reason = req.Reason.Trim(),
+                            ActionByUserId = currentUserId,
+                            ActionByUserName = actorName,
+                            ActionByUserRole = actorRole
+                        });
+
                     // Notify Admins
                     await conn.ExecuteAsync(@"
                         INSERT INTO dbo.AppNotifications (RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
-                        VALUES ('Admin', N'اعتذار/رفض مرشح للويف ❌', CONCAT(N'قام مدير الفرع برفض ترشيح: ', @StudentName, N' (', @BranchName, N') للويف: ', @WaveName, N'. السبب: ', @Reason), CONCAT('/Admin/WaveDetails/', @WaveId), 'WaveNominationRejected', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                        VALUES ('Admin', N'اعتذار/رفض مرشح للويف ❌', CONCAT(N'قام مدير فرع ', @BranchName, N' برفض ترشيح: ', @StudentName, N' للويف: ', @WaveName, N'. السبب: ', @Reason), CONCAT('/Admin/WaveDetails/', @WaveId), 'WaveNominationRejected', CAST(@Id AS NVARCHAR(50)), GETDATE())",
                         new {
                             StudentName = (string)nomination.StudentName,
                             BranchName = (string)(nomination.BranchName ?? "الفرع"),
@@ -690,11 +864,37 @@ namespace Exam.Controllers
                           AND NOT EXISTS (SELECT 1 FROM dbo.UserAttendance ua WHERE ua.SessionId = s.Id AND ua.UserId = @UserId)",
                         new { UserId = req.ReplacementUserId, WaveId = (int)nomination.WaveId });
 
+                    // Log to NominationAuditLogs
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO dbo.NominationAuditLogs (
+                            EntityType, EntityId, EntityName, TraineeId, TraineeName, TraineeCode, TraineeRole,
+                            BranchId, BranchName, Action, ActionReason, ReplacementTraineeId, ReplacementTraineeName,
+                            ActionByUserId, ActionByUserName, ActionByUserRole, ActionDate
+                        ) VALUES (
+                            'Wave', @WaveId, @WaveName, @UserId, @StudentName, @UserCode, 'Trainee',
+                            @BranchId, @BranchName, 'Replaced', CONCAT(N'تم استبداله بـ: ', @RepName), @RepId, @RepName,
+                            @ActionByUserId, @ActionByUserName, @ActionByUserRole, GETDATE()
+                        )", new {
+                            WaveId = (int)nomination.WaveId,
+                            WaveName = (string)nomination.WaveName,
+                            UserId = (string)nomination.UserId,
+                            StudentName = (string)nomination.StudentName,
+                            UserCode = (string)(nomination.UserCode ?? "--"),
+                            BranchId = (int?)nomination.BranchId,
+                            BranchName = (string)(nomination.BranchName ?? "الفرع"),
+                            RepId = req.ReplacementUserId,
+                            RepName = (string)replacementUser.FullName,
+                            ActionByUserId = currentUserId,
+                            ActionByUserName = actorName,
+                            ActionByUserRole = actorRole
+                        });
+
                     // Notify Admins
                     await conn.ExecuteAsync(@"
                         INSERT INTO dbo.AppNotifications (RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
-                        VALUES ('Admin', N'استبدال مرشح في الويف 🔄', CONCAT(N'تم استبدال: ', @OldStudent, N' بـ: ', @NewStudent, N' في ويف: ', @WaveName), CONCAT('/Admin/WaveDetails/', @WaveId), 'WaveNominationReplaced', CAST(@NewId AS NVARCHAR(50)), GETDATE())",
+                        VALUES ('Admin', N'استبدال مرشح في الويف 🔄', CONCAT(N'قام مدير فرع ', @BranchName, N' باستبدال: ', @OldStudent, N' بـ: ', @NewStudent, N' في ويف: ', @WaveName), CONCAT('/Admin/WaveDetails/', @WaveId), 'WaveNominationReplaced', CAST(@NewId AS NVARCHAR(50)), GETDATE())",
                         new {
+                            BranchName = (string)(nomination.BranchName ?? "الفرع"),
                             OldStudent = (string)nomination.StudentName,
                             NewStudent = (string)replacementUser.FullName,
                             WaveName = (string)nomination.WaveName,

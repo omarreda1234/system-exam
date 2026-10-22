@@ -637,9 +637,10 @@ namespace Exam.Controllers
 
             bool isLocked = false;
             string lockReason = "";
+            bool isAdmin = User.IsInRole("Admin");
             DateTime now = DateTime.Now;
 
-            if (session.StartTime != null && session.EndTime != null)
+            if (session.StartTime != null && session.EndTime != null && !isAdmin)
             {
                 TimeSpan sTime = (TimeSpan)session.StartTime;
                 TimeSpan eTime = (TimeSpan)session.EndTime;
@@ -660,6 +661,7 @@ namespace Exam.Controllers
                 }
             }
 
+            ViewBag.IsAdmin = isAdmin;
             ViewBag.IsLocked = isLocked;
             ViewBag.LockReason = lockReason;
 
@@ -717,8 +719,9 @@ namespace Exam.Controllers
                 using var conn = new SqlConnection(_connectionString);
                 var recordedBy = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
+                bool isAdmin = User.IsInRole("Admin");
                 var session = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT SessionDate, StartTime, EndTime FROM AttendanceSessions WHERE Id = @Id", new { Id = sessionId });
-                if (session != null && session.StartTime != null && session.EndTime != null)
+                if (!isAdmin && session != null && session.StartTime != null && session.EndTime != null)
                 {
                     TimeSpan sTime = (TimeSpan)session.StartTime;
                     TimeSpan eTime = (TimeSpan)session.EndTime;
@@ -804,8 +807,8 @@ namespace Exam.Controllers
                 int? companyId = (int?)session.CompanyId;
                 if (!companyId.HasValue) return BadRequest(new { success = false, message = "This session does not belong to a company." });
 
-                var assigned = (await conn.QueryAsync<dynamic>(@"
-                    SELECT CST.Id AS AssignmentId, CT.Id AS TraineeId, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone, CST.AssignedAt,
+                var assignedRaw = (await conn.QueryAsync<dynamic>(@"
+                    SELECT CST.Id AS AssignmentId, CT.Id AS TraineeId, CT.FullName, CT.UserCode, CT.JobTitle, CT.BranchName, CT.Email, CT.Phone, CST.AssignedAt,
                            ISNULL(CST.ApprovalStatus, 'Approved') AS ApprovalStatus,
                            CST.RejectionReason,
                            CST.ReplacedWithTraineeId,
@@ -814,6 +817,25 @@ namespace Exam.Controllers
                     JOIN CompanyTrainees CT ON CST.CompanyTraineeId = CT.Id
                     WHERE CST.SessionId = @SessionId
                     ORDER BY CT.FullName", new { SessionId = sessionId })).ToList();
+
+                var assigned = assignedRaw.Select(a => {
+                    var d = (IDictionary<string, object>)a;
+                    return new {
+                        assignmentId = d.ContainsKey("AssignmentId") ? d["AssignmentId"] : null,
+                        traineeId = d.ContainsKey("TraineeId") ? d["TraineeId"] : null,
+                        fullName = d.ContainsKey("FullName") && d["FullName"] != null ? d["FullName"].ToString() : "Trainee",
+                        userCode = d.ContainsKey("UserCode") && d["UserCode"] != null ? d["UserCode"].ToString() : "--",
+                        jobTitle = d.ContainsKey("JobTitle") && d["JobTitle"] != null ? d["JobTitle"].ToString() : "Trainee",
+                        branchName = d.ContainsKey("BranchName") && d["BranchName"] != null ? d["BranchName"].ToString() : "عام",
+                        email = d.ContainsKey("Email") && d["Email"] != null ? d["Email"].ToString() : "--",
+                        phone = d.ContainsKey("Phone") && d["Phone"] != null ? d["Phone"].ToString() : "--",
+                        assignedAt = d.ContainsKey("AssignedAt") ? d["AssignedAt"] : null,
+                        approvalStatus = d.ContainsKey("ApprovalStatus") && d["ApprovalStatus"] != null ? d["ApprovalStatus"].ToString() : "Approved",
+                        rejectionReason = d.ContainsKey("RejectionReason") ? d["RejectionReason"] : null,
+                        replacedWithTraineeId = d.ContainsKey("ReplacedWithTraineeId") ? d["ReplacedWithTraineeId"] : null,
+                        actionedAt = d.ContainsKey("ActionedAt") ? d["ActionedAt"] : null
+                    };
+                }).ToList();
 
                 return Json(new
                 {
@@ -1058,7 +1080,7 @@ namespace Exam.Controllers
                             phone = (string)(u.PhoneNumber ?? "");
                             branchName = (string)(u.BranchName ?? "بدون فرع");
                             branchId = (int?)u.BranchId;
-                            isBranchExempt = (int)u.IsBranchExempt == 1;
+                            isBranchExempt = u.IsBranchExempt != null && (u.IsBranchExempt is bool bVal ? bVal : u.IsBranchExempt.ToString() == "1" || u.IsBranchExempt.ToString().Equals("true", StringComparison.OrdinalIgnoreCase));
 
                             // Ensure record exists in CompanyTrainees and pull any missing details
                             var ctInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
@@ -1119,7 +1141,7 @@ namespace Exam.Controllers
                                 phone = (string)(ct.Phone ?? "");
                                 branchName = (string)(ct.BranchName ?? "بدون فرع");
                                 branchId = (int?)ct.BranchId;
-                                isBranchExempt = (int)ct.IsBranchExempt == 1;
+                                isBranchExempt = ct.IsBranchExempt != null && (ct.IsBranchExempt is bool ctVal ? ctVal : ct.IsBranchExempt.ToString() == "1" || ct.IsBranchExempt.ToString().Equals("true", StringComparison.OrdinalIgnoreCase));
 
                                 targetUserId = await conn.QueryFirstOrDefaultAsync<string>(@"
                                     SELECT Id FROM AspNetUsers 
@@ -1163,6 +1185,31 @@ namespace Exam.Controllers
                             else
                                 pendingBranchGroups[bId] = (branchName, 1);
                         }
+
+                        // Log to NominationAuditLogs
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.NominationAuditLogs (
+                                EntityType, EntityId, EntityName, CompanyName, TraineeId, TraineeName, TraineeCode, TraineeRole,
+                                BranchId, BranchName, Action, ActionReason,
+                                ActionByUserId, ActionByUserName, ActionByUserRole, ActionDate
+                            ) VALUES (
+                                'CompanySession', @EntityId, @EntityName, @CompanyName, @TraineeId, @TraineeName, @TraineeCode, 'Trainee',
+                                @BranchId, @BranchName, @Action, NULL,
+                                @ActionByUserId, @ActionByUserName, 'Admin', GETDATE()
+                            )",
+                            new {
+                                EntityId = req.SessionId,
+                                EntityName = (string)session.SessionName,
+                                CompanyName = (string)(session.CompanyName ?? ""),
+                                TraineeId = companyTraineeId.Value.ToString(),
+                                TraineeName = fullName,
+                                TraineeCode = userCode,
+                                BranchId = branchId,
+                                BranchName = branchName,
+                                Action = status,
+                                ActionByUserId = assignedBy,
+                                ActionByUserName = User.Identity?.Name ?? "الإدارة"
+                            });
 
                         // In-App Notification to trainee
                         if (req.SendNotification && !string.IsNullOrEmpty(targetUserId))
