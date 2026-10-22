@@ -367,7 +367,27 @@ namespace Exam.Controllers
                       AND NOT EXISTS (SELECT 1 FROM dbo.UserWaves uw WHERE uw.UserId = u.Id AND uw.WaveId = @WaveId AND uw.ApprovalStatus IN ('Approved', 'Pending'))
                     ORDER BY u.FullName ASC";
 
-                var colleagues = (await conn.QueryAsync<dynamic>(sql, new { BranchId = branchId, WaveId = waveId })).ToList();
+                var raw = await conn.QueryAsync<dynamic>(sql, new { BranchId = branchId, WaveId = waveId });
+                var colleagues = raw.Select(c => {
+                    var d = (IDictionary<string, object>)c;
+                    string id = d.ContainsKey("Id") && d["Id"] != null ? d["Id"].ToString()! : "";
+                    string fn = d.ContainsKey("FullName") && d["FullName"] != null ? d["FullName"].ToString()! : "User";
+                    string uc = d.ContainsKey("UserCode") && d["UserCode"] != null ? d["UserCode"].ToString()! : "--";
+                    string jt = d.ContainsKey("RoleName") && d["RoleName"] != null ? d["RoleName"].ToString()! : "User";
+                    return new
+                    {
+                        id = id,
+                        value = id,
+                        userId = id,
+                        fullName = fn,
+                        FullName = fn,
+                        userCode = uc,
+                        UserCode = uc,
+                        jobTitle = jt,
+                        JobTitle = jt
+                    };
+                }).ToList();
+
                 return Json(new { success = true, colleagues });
             }
             catch (Exception ex)
@@ -442,7 +462,33 @@ namespace Exam.Controllers
                     )
                     ORDER BY bu.FullName ASC";
 
-                var colleagues = (await conn.QueryAsync<dynamic>(sql, new { SessionId = sessionId, CompanyId = companyId, BranchName = branchName })).ToList();
+                var raw = await conn.QueryAsync<dynamic>(sql, new { SessionId = sessionId, CompanyId = companyId, BranchName = branchName });
+                var colleagues = raw.Select(c => {
+                    var d = (IDictionary<string, object>)c;
+                    string uId = d.ContainsKey("UserId") && d["UserId"] != null ? d["UserId"].ToString() : null;
+                    int? cti = d.ContainsKey("CompanyTraineeId") && d["CompanyTraineeId"] != null && int.TryParse(d["CompanyTraineeId"].ToString(), out int parsed) ? parsed : (int?)null;
+                    string val = d.ContainsKey("Value") && d["Value"] != null ? d["Value"].ToString() : (uId ?? cti?.ToString() ?? "");
+                    string fn = d.ContainsKey("FullName") && d["FullName"] != null ? d["FullName"].ToString() : "Trainee";
+                    string uc = d.ContainsKey("UserCode") && d["UserCode"] != null ? d["UserCode"].ToString() : "--";
+                    string jt = d.ContainsKey("JobTitle") && d["JobTitle"] != null ? d["JobTitle"].ToString() : "Pharmacist";
+                    string bn = d.ContainsKey("BranchName") && d["BranchName"] != null ? d["BranchName"].ToString() : branchName;
+
+                    return new
+                    {
+                        id = val,
+                        value = val,
+                        userId = uId,
+                        companyTraineeId = cti,
+                        fullName = fn,
+                        FullName = fn,
+                        userCode = uc,
+                        UserCode = uc,
+                        jobTitle = jt,
+                        JobTitle = jt,
+                        branchName = bn
+                    };
+                }).ToList();
+
                 return Json(new { success = true, colleagues });
             }
             catch (Exception ex)
@@ -645,78 +691,96 @@ namespace Exam.Controllers
                     }
                     else if (action == "replace")
                     {
-                        string repName = "";
-                        string repIdStr = "";
-                        int? repCompanyTraineeId = req.ReplacementTraineeId;
-                        string repUserId = req.ReplacementUserId;
+                        var allKeys = (req.ReplacementUserIds ?? new List<string>())
+                            .Where(s => !string.IsNullOrWhiteSpace(s))
+                            .Distinct()
+                            .ToList();
 
-                        if (string.IsNullOrWhiteSpace(repUserId) && (!repCompanyTraineeId.HasValue || repCompanyTraineeId.Value <= 0))
+                        if (!allKeys.Any() && !string.IsNullOrWhiteSpace(req.ReplacementUserId))
                         {
-                            return Json(new { success = false, message = "يرجى اختيار المتدرب البديل من الفرع." });
+                            allKeys.Add(req.ReplacementUserId);
+                        }
+                        if (!allKeys.Any() && req.ReplacementTraineeId.HasValue && req.ReplacementTraineeId.Value > 0)
+                        {
+                            allKeys.Add(req.ReplacementTraineeId.Value.ToString());
                         }
 
-                        if (!string.IsNullOrWhiteSpace(repUserId))
+                        if (!allKeys.Any())
                         {
+                            return Json(new { success = false, message = "يرجى اختيار زميل بديل واحد على الأقل من الفرع." });
+                        }
+
+                        int compId = (int)(cNomination.CompanyId ?? 0);
+                        string branchName = (string)(cNomination.BranchName ?? "الفرع");
+                        var addedNames = new List<string>();
+
+                        async Task<(int? ctId, string? uId, string name, string code)> ResolveCandidate(string key)
+                        {
+                            if (int.TryParse(key, out int ctNum))
+                            {
+                                var ct = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                                    "SELECT Id, FullName, UserCode FROM CompanyTrainees WHERE Id = @Id", new { Id = ctNum });
+                                if (ct != null)
+                                {
+                                    return (ctNum, null, (string)ct.FullName, (string)(ct.UserCode ?? ctNum.ToString()));
+                                }
+                            }
+
                             var u = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                                 SELECT u.Id, u.FullName, u.UserName, u.UserCode, u.Email, u.PhoneNumber, u.UserRoleCustom,
                                        b.BranchName, b.Id AS BranchId
                                 FROM AspNetUsers u WITH (NOLOCK)
                                 LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
-                                WHERE u.Id = @UserId", new { UserId = repUserId });
+                                WHERE u.Id = @UserId", new { UserId = key });
 
-                            if (u == null)
+                            if (u != null)
                             {
-                                return Json(new { success = false, message = "الموظف البديل المحدد غير موجود." });
+                                string uFn = !string.IsNullOrWhiteSpace((string)u.FullName) ? (string)u.FullName : (string)u.UserName;
+                                string uCode = (string)(u.UserCode ?? "--");
+                                string uEmail = (string)(u.Email ?? "--");
+                                string uBranch = (string)(u.BranchName ?? branchName);
+
+                                var existingCt = await conn.QueryFirstOrDefaultAsync<int?>(@"
+                                    SELECT TOP 1 Id FROM CompanyTrainees 
+                                    WHERE CompanyId = @CompanyId AND ((UserCode = @Code AND UserCode <> '--') OR (Email = @Email AND Email <> '--'))",
+                                    new { CompanyId = compId, Code = uCode, Email = uEmail });
+
+                                int ctIdResult;
+                                if (existingCt.HasValue)
+                                {
+                                    ctIdResult = existingCt.Value;
+                                }
+                                else
+                                {
+                                    ctIdResult = await conn.QueryFirstOrDefaultAsync<int>(@"
+                                        INSERT INTO CompanyTrainees (CompanyId, FullName, UserCode, JobTitle, BranchName, Email, Phone, CreatedAt)
+                                        VALUES (@CompanyId, @FullName, @UserCode, @JobTitle, @BranchName, @Email, @Phone, GETDATE());
+                                        SELECT CAST(SCOPE_IDENTITY() AS INT);",
+                                        new {
+                                            CompanyId = compId,
+                                            FullName = uFn,
+                                            UserCode = uCode,
+                                            JobTitle = (string)(u.UserRoleCustom ?? "Pharmacist"),
+                                            BranchName = uBranch,
+                                            Email = uEmail,
+                                            Phone = (string)(u.PhoneNumber ?? "--")
+                                        });
+                                }
+
+                                return (ctIdResult, (string)u.Id, uFn, uCode);
                             }
 
-                            repName = !string.IsNullOrWhiteSpace((string)u.FullName) ? (string)u.FullName : (string)u.UserName;
-                            repIdStr = (string)(u.UserCode ?? u.Id);
-
-                            int compId = (int)(cNomination.CompanyId ?? 0);
-                            string userCode = (string)(u.UserCode ?? "--");
-                            string email = (string)(u.Email ?? "--");
-                            string branchName = (string)(u.BranchName ?? cNomination.BranchName ?? "بدون فرع");
-
-                            var existingCt = await conn.QueryFirstOrDefaultAsync<int?>(@"
-                                SELECT TOP 1 Id FROM CompanyTrainees 
-                                WHERE CompanyId = @CompanyId AND ((UserCode = @Code AND UserCode <> '--') OR (Email = @Email AND Email <> '--'))",
-                                new { CompanyId = compId, Code = userCode, Email = email });
-
-                            if (existingCt.HasValue)
-                            {
-                                repCompanyTraineeId = existingCt.Value;
-                            }
-                            else
-                            {
-                                repCompanyTraineeId = await conn.QueryFirstOrDefaultAsync<int>(@"
-                                    INSERT INTO CompanyTrainees (CompanyId, FullName, UserCode, JobTitle, BranchName, Email, Phone, CreatedAt)
-                                    VALUES (@CompanyId, @FullName, @UserCode, @JobTitle, @BranchName, @Email, @Phone, GETDATE());
-                                    SELECT CAST(SCOPE_IDENTITY() AS INT);",
-                                    new {
-                                        CompanyId = compId,
-                                        FullName = repName,
-                                        UserCode = userCode,
-                                        JobTitle = (string)(u.UserRoleCustom ?? "Pharmacist"),
-                                        BranchName = branchName,
-                                        Email = email,
-                                        Phone = (string)(u.PhoneNumber ?? "--")
-                                    });
-                            }
+                            return (null, null, "Unknown", "--");
                         }
-                        else if (repCompanyTraineeId.HasValue && repCompanyTraineeId.Value > 0)
+
+                        // 1. First Colleague (Direct Replacement)
+                        var firstColleague = await ResolveCandidate(allKeys[0]);
+                        if (string.IsNullOrWhiteSpace(firstColleague.name) || firstColleague.name == "Unknown")
                         {
-                            var repTrainee = await conn.QueryFirstOrDefaultAsync<dynamic>(
-                                "SELECT Id, FullName, UserCode FROM CompanyTrainees WHERE Id = @Id",
-                                new { Id = repCompanyTraineeId.Value });
-
-                            if (repTrainee == null)
-                            {
-                                return Json(new { success = false, message = "المتدرب البديل المحدد غير موجود." });
-                            }
-
-                            repName = (string)repTrainee.FullName;
-                            repIdStr = (string)(repTrainee.UserCode ?? repTrainee.Id.ToString());
+                            return Json(new { success = false, message = "بيانات الزميل البديل الأول غير صالحة." });
                         }
+
+                        addedNames.Add(firstColleague.name);
 
                         // Mark old as Replaced
                         await conn.ExecuteAsync(@"
@@ -726,7 +790,7 @@ namespace Exam.Controllers
                                 ActionedByUserId = @ActionedBy,
                                 ActionedAt = GETDATE()
                             WHERE Id = @Id",
-                            new { Id = req.UserWaveId, ReplacementId = repCompanyTraineeId, ActionedBy = currentUserId });
+                            new { Id = req.UserWaveId, ReplacementId = firstColleague.ctId, ActionedBy = currentUserId });
 
                         // Insert new as Approved
                         await conn.ExecuteAsync(@"
@@ -734,8 +798,8 @@ namespace Exam.Controllers
                             VALUES (@SessionId, @TraineeId, @UserId, GETDATE(), @ActionedBy, 'Approved', @ActionedBy, GETDATE())",
                             new {
                                 SessionId = (int)cNomination.SessionId,
-                                TraineeId = repCompanyTraineeId,
-                                UserId = repUserId,
+                                TraineeId = firstColleague.ctId,
+                                UserId = firstColleague.uId,
                                 ActionedBy = currentUserId
                             });
 
@@ -758,28 +822,78 @@ namespace Exam.Controllers
                                 TraineeCode = (string)(cNomination.UserCode ?? "--"),
                                 TraineeRole = (string)(cNomination.JobTitle ?? "Trainee"),
                                 BranchId = (int?)cNomination.BranchId,
-                                BranchName = (string)(cNomination.BranchName ?? "الفرع"),
-                                RepId = repIdStr,
-                                RepName = repName,
+                                BranchName = branchName,
+                                RepId = firstColleague.code,
+                                RepName = firstColleague.name,
                                 ActionByUserId = currentUserId,
                                 ActionByUserName = actorName,
                                 ActionByUserRole = actorRole
                             });
 
+                        // 2. Extra Selected Colleagues
+                        for (int i = 1; i < allKeys.Count; i++)
+                        {
+                            var extraColleague = await ResolveCandidate(allKeys[i]);
+                            if (string.IsNullOrWhiteSpace(extraColleague.name) || extraColleague.name == "Unknown") continue;
+
+                            addedNames.Add(extraColleague.name);
+
+                            await conn.ExecuteAsync(@"
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM dbo.CompanySessionTrainees 
+                                    WHERE SessionId = @SessionId AND (CompanyTraineeId = @TraineeId OR (UserId = @UserId AND @UserId IS NOT NULL))
+                                )
+                                BEGIN
+                                    INSERT INTO dbo.CompanySessionTrainees (SessionId, CompanyTraineeId, UserId, AssignedAt, AssignedBy, ApprovalStatus, ActionedByUserId, ActionedAt)
+                                    VALUES (@SessionId, @TraineeId, @UserId, GETDATE(), @ActionedBy, 'Approved', @ActionedBy, GETDATE())
+                                END",
+                                new {
+                                    SessionId = (int)cNomination.SessionId,
+                                    TraineeId = extraColleague.ctId,
+                                    UserId = extraColleague.uId,
+                                    ActionedBy = currentUserId
+                                });
+
+                            await conn.ExecuteAsync(@"
+                                INSERT INTO dbo.NominationAuditLogs (
+                                    EntityType, EntityId, EntityName, CompanyName, TraineeId, TraineeName, TraineeCode, TraineeRole,
+                                    BranchId, BranchName, Action, ActionReason,
+                                    ActionByUserId, ActionByUserName, ActionByUserRole, ActionDate
+                                ) VALUES (
+                                    'CompanySession', @EntityId, @EntityName, @CompanyName, @TraineeId, @TraineeName, @TraineeCode, 'Trainee',
+                                    @BranchId, @BranchName, 'Approved', CONCAT(N'مرشح بديل إضافي من الفرع مع استبدال: ', @OldTrainee),
+                                    @ActionByUserId, @ActionByUserName, @ActionByUserRole, GETDATE()
+                                )", new {
+                                    EntityId = (int)cNomination.SessionId,
+                                    EntityName = (string)cNomination.SessionName,
+                                    CompanyName = (string)(cNomination.CompanyName ?? ""),
+                                    TraineeId = extraColleague.ctId != null ? extraColleague.ctId.ToString() : extraColleague.uId,
+                                    TraineeName = extraColleague.name,
+                                    TraineeCode = extraColleague.code,
+                                    BranchId = (int?)cNomination.BranchId,
+                                    BranchName = branchName,
+                                    OldTrainee = (string)cNomination.TraineeName,
+                                    ActionByUserId = currentUserId,
+                                    ActionByUserName = actorName,
+                                    ActionByUserRole = actorRole
+                                });
+                        }
+
+                        string namesSummary = string.Join("، ", addedNames);
                         await conn.ExecuteAsync(@"
                             INSERT INTO dbo.AppNotifications (RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
-                            VALUES ('Admin', N'استبدال متدرب في سيشن شركة 🔄', CONCAT(N'قام مدير فرع ', @BranchName, N' باستبدال: ', @OldTrainee, N' بـ: ', @NewTrainee, N' في سيشن: ', @SessionName), CONCAT('/Attendance/ManageSessions?companyId=', @CompanyId), 'CompanySessionReplaced', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                            VALUES ('Admin', N'استبدال متدرب في سيشن شركة 🔄', CONCAT(N'قام مدير فرع ', @BranchName, N' باستبدال: ', @OldTrainee, N' بـ: (', @NamesSummary, N') في سيشن: ', @SessionName), CONCAT('/Attendance/ManageSessions?companyId=', @CompanyId), 'CompanySessionReplaced', CAST(@Id AS NVARCHAR(50)), GETDATE())",
                             new {
-                                BranchName = (string)(cNomination.BranchName ?? "الفرع"),
+                                BranchName = branchName,
                                 OldTrainee = (string)cNomination.TraineeName,
-                                NewTrainee = repName,
+                                NamesSummary = namesSummary,
                                 SessionName = (string)cNomination.SessionName,
                                 CompanyId = (int?)cNomination.CompanyId,
                                 Id = req.UserWaveId
                             });
 
                         await _hubContext.Clients.All.SendAsync("ReceiveNotification", "تم تحديث ترشيحات تدريب الشركة.");
-                        return Json(new { success = true, message = $"تم استبدال {cNomination.TraineeName} بـ {repName} واعتماده للسيشن بنجاح." });
+                        return Json(new { success = true, message = $"تم استبدال {cNomination.TraineeName} واعتماد ({addedNames.Count}) زملاء بدلاء ({namesSummary}) للسيشن بنجاح." });
                     }
                 }
 
@@ -924,19 +1038,36 @@ namespace Exam.Controllers
                 }
                 else if (action == "replace")
                 {
-                    if (string.IsNullOrWhiteSpace(req.ReplacementUserId))
+                    var allWaveKeys = (req.ReplacementUserIds ?? new List<string>())
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .Distinct()
+                        .ToList();
+
+                    if (!allWaveKeys.Any() && !string.IsNullOrWhiteSpace(req.ReplacementUserId))
                     {
-                        return Json(new { success = false, message = "يرجى اختيار الموظف البديل من الفرع." });
+                        allWaveKeys.Add(req.ReplacementUserId);
                     }
 
+                    if (!allWaveKeys.Any())
+                    {
+                        return Json(new { success = false, message = "يرجى اختيار زميل بديل واحد على الأقل من الفرع." });
+                    }
+
+                    var addedWaveNames = new List<string>();
+
+                    // 1. First Colleague (Direct Replacement)
+                    var firstUserId = allWaveKeys[0];
                     var replacementUser = await conn.QueryFirstOrDefaultAsync<dynamic>(
-                        "SELECT Id, ISNULL(FullName, UserName) as FullName FROM AspNetUsers WHERE Id = @Id",
-                        new { Id = req.ReplacementUserId });
+                        "SELECT Id, ISNULL(FullName, UserName) as FullName, ISNULL(UserCode, '--') as UserCode FROM AspNetUsers WHERE Id = @Id",
+                        new { Id = firstUserId });
 
                     if (replacementUser == null)
                     {
                         return Json(new { success = false, message = "الموظف البديل المحدد غير موجود." });
                     }
+
+                    string firstFn = (string)replacementUser.FullName;
+                    addedWaveNames.Add(firstFn);
 
                     // Mark old as Replaced
                     await conn.ExecuteAsync(@"
@@ -947,7 +1078,7 @@ namespace Exam.Controllers
                             ActionedByUserId = @ActionedBy,
                             ActionedAt = GETDATE()
                         WHERE Id = @Id",
-                        new { Id = req.UserWaveId, ReplacementId = req.ReplacementUserId, ActionedBy = currentUserId });
+                        new { Id = req.UserWaveId, ReplacementId = firstUserId, ActionedBy = currentUserId });
 
                     // Insert new candidate as Approved
                     int newId = await conn.QuerySingleAsync<int>(@"
@@ -955,7 +1086,7 @@ namespace Exam.Controllers
                         VALUES (@UserId, @WaveId, GETDATE(), 1, 'Approved', @ActionedBy, GETDATE());
                         SELECT CAST(SCOPE_IDENTITY() AS INT);",
                         new {
-                            UserId = req.ReplacementUserId,
+                            UserId = firstUserId,
                             WaveId = (int)nomination.WaveId,
                             ActionedBy = currentUserId
                         });
@@ -967,7 +1098,7 @@ namespace Exam.Controllers
                         FROM dbo.AttendanceSessions s
                         WHERE s.WaveId = @WaveId
                           AND NOT EXISTS (SELECT 1 FROM dbo.UserAttendance ua WHERE ua.SessionId = s.Id AND ua.UserId = @UserId)",
-                        new { UserId = req.ReplacementUserId, WaveId = (int)nomination.WaveId });
+                        new { UserId = firstUserId, WaveId = (int)nomination.WaveId });
 
                     // Log to NominationAuditLogs
                     await conn.ExecuteAsync(@"
@@ -987,28 +1118,85 @@ namespace Exam.Controllers
                             UserCode = (string)(nomination.UserCode ?? "--"),
                             BranchId = (int?)nomination.BranchId,
                             BranchName = (string)(nomination.BranchName ?? "الفرع"),
-                            RepId = req.ReplacementUserId,
-                            RepName = (string)replacementUser.FullName,
+                            RepId = (string)(replacementUser.UserCode ?? firstUserId),
+                            RepName = firstFn,
                             ActionByUserId = currentUserId,
                             ActionByUserName = actorName,
                             ActionByUserRole = actorRole
                         });
 
+                    // 2. Extra Selected Colleagues for Wave
+                    for (int i = 1; i < allWaveKeys.Count; i++)
+                    {
+                        var extraUid = allWaveKeys[i];
+                        var extraU = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                            "SELECT Id, ISNULL(FullName, UserName) as FullName, ISNULL(UserCode, '--') as UserCode FROM AspNetUsers WHERE Id = @Id",
+                            new { Id = extraUid });
+                        if (extraU == null) continue;
+
+                        string extraFn = (string)extraU.FullName;
+                        addedWaveNames.Add(extraFn);
+
+                        await conn.ExecuteAsync(@"
+                            IF NOT EXISTS (SELECT 1 FROM dbo.UserWaves WHERE UserId = @UserId AND WaveId = @WaveId)
+                            BEGIN
+                                INSERT INTO dbo.UserWaves (UserId, WaveId, JoinDate, IsActive, ApprovalStatus, ActionedByUserId, ActionedAt)
+                                VALUES (@UserId, @WaveId, GETDATE(), 1, 'Approved', @ActionedBy, GETDATE())
+                            END",
+                            new {
+                                UserId = extraUid,
+                                WaveId = (int)nomination.WaveId,
+                                ActionedBy = currentUserId
+                            });
+
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.UserAttendance (SessionId, UserId, IsPresent, RecordedAt)
+                            SELECT s.Id, @UserId, 0, GETDATE()
+                            FROM dbo.AttendanceSessions s
+                            WHERE s.WaveId = @WaveId
+                              AND NOT EXISTS (SELECT 1 FROM dbo.UserAttendance ua WHERE ua.SessionId = s.Id AND ua.UserId = @UserId)",
+                            new { UserId = extraUid, WaveId = (int)nomination.WaveId });
+
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.NominationAuditLogs (
+                                EntityType, EntityId, EntityName, TraineeId, TraineeName, TraineeCode, TraineeRole,
+                                BranchId, BranchName, Action, ActionReason,
+                                ActionByUserId, ActionByUserName, ActionByUserRole, ActionDate
+                            ) VALUES (
+                                'Wave', @WaveId, @WaveName, @UserId, @StudentName, @UserCode, 'Trainee',
+                                @BranchId, @BranchName, 'Approved', CONCAT(N'مرشح بديل إضافي من الفرع مع استبدال: ', @OldStudent),
+                                @ActionByUserId, @ActionByUserName, @ActionByUserRole, GETDATE()
+                            )", new {
+                                WaveId = (int)nomination.WaveId,
+                                WaveName = (string)nomination.WaveName,
+                                UserId = extraUid,
+                                StudentName = extraFn,
+                                UserCode = (string)(extraU.UserCode ?? "--"),
+                                BranchId = (int?)nomination.BranchId,
+                                BranchName = (string)(nomination.BranchName ?? "الفرع"),
+                                OldStudent = (string)nomination.StudentName,
+                                ActionByUserId = currentUserId,
+                                ActionByUserName = actorName,
+                                ActionByUserRole = actorRole
+                            });
+                    }
+
                     // Notify Admins
+                    string waveNamesSummary = string.Join("، ", addedWaveNames);
                     await conn.ExecuteAsync(@"
                         INSERT INTO dbo.AppNotifications (RoleTarget, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
-                        VALUES ('Admin', N'استبدال مرشح في الويف 🔄', CONCAT(N'قام مدير فرع ', @BranchName, N' باستبدال: ', @OldStudent, N' بـ: ', @NewStudent, N' في ويف: ', @WaveName), CONCAT('/Admin/WaveDetails/', @WaveId), 'WaveNominationReplaced', CAST(@NewId AS NVARCHAR(50)), GETDATE())",
+                        VALUES ('Admin', N'استبدال مرشح في الويف 🔄', CONCAT(N'قام مدير فرع ', @BranchName, N' باستبدال: ', @OldStudent, N' بـ: (', @WaveNamesSummary, N') في ويف: ', @WaveName), CONCAT('/Admin/WaveDetails/', @WaveId), 'WaveNominationReplaced', CAST(@NewId AS NVARCHAR(50)), GETDATE())",
                         new {
                             BranchName = (string)(nomination.BranchName ?? "الفرع"),
                             OldStudent = (string)nomination.StudentName,
-                            NewStudent = (string)replacementUser.FullName,
+                            WaveNamesSummary = waveNamesSummary,
                             WaveName = (string)nomination.WaveName,
                             WaveId = (int)nomination.WaveId,
                             NewId = newId
                         });
 
                     await _hubContext.Clients.All.SendAsync("ReceiveNotification", "تم تحديث ترشيحات الويف.");
-                    return Json(new { success = true, message = $"تم استبدال {nomination.StudentName} بـ {replacementUser.FullName} واعتماده للويف بنجاح." });
+                    return Json(new { success = true, message = $"تم استبدال {nomination.StudentName} واعتماد ({addedWaveNames.Count}) زملاء بدلاء ({waveNamesSummary}) للويف بنجاح." });
                 }
 
                 return Json(new { success = false, message = "إجراء غير معروف." });
@@ -1028,5 +1216,7 @@ namespace Exam.Controllers
         public string? Reason { get; set; }
         public string? ReplacementUserId { get; set; }
         public int? ReplacementTraineeId { get; set; }
+        public List<string>? ReplacementUserIds { get; set; }
+        public List<int>? ReplacementTraineeIds { get; set; }
     }
 }

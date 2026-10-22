@@ -138,10 +138,33 @@
             </div>
 
             <div>
-                <label class="block text-xs font-black text-slate-700 dark:text-slate-300 mb-1.5">اختر الزميل البديل من الفرع:</label>
-                <select id="colleagueSelect" class="w-full px-4 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500/20">
-                    <option value="">جاري البحث عن الزملاء المتاحين بالفرع...</option>
-                </select>
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="block text-xs font-black text-slate-700 dark:text-slate-300">
+                        اختر الزميل البديل (أو عدة زملاء) من الفرع:
+                    </label>
+                    <span id="selectedColleaguesBadge" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400 border border-indigo-200/50">
+                        0 محدد
+                    </span>
+                </div>
+
+                <!-- Live Search Box -->
+                <div class="relative mb-2">
+                    <input type="text" id="colleagueSearchInput" oninput="filterColleaguesList(this.value)"
+                           placeholder="🔍 ابحث بالاسم أو الكود أو المسمى..." 
+                           class="w-full px-3.5 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                </div>
+
+                <!-- Colleagues Interactive Checkbox Cards -->
+                <div id="colleaguesListContainer" class="max-h-56 overflow-y-auto space-y-1.5 p-1 border border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-950/40 custom-scrollbar">
+                    <div class="text-center py-6 text-slate-400 text-xs">جاري البحث عن الزملاء المتاحين بالفرع...</div>
+                </div>
+
+                <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px]">
+                    <span class="text-slate-400 font-medium">يمكنك اختيار أكثر من زميل بديل للسيشن/الويف.</span>
+                    <button type="button" onclick="selectAllColleaguesToggle()" class="text-indigo-600 dark:text-indigo-400 font-black hover:underline">
+                        تحديد الكل / إلغاء
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -655,6 +678,85 @@
             }
         };
 
+        let currentAvailableColleagues = [];
+        let selectedColleagueKeys = new Set();
+
+        window.filterColleaguesList = function (text) {
+            renderColleaguesChecklist(text);
+        };
+
+        window.selectAllColleaguesToggle = function () {
+            const allKeys = currentAvailableColleagues.map(c => String(c.value || c.Value || c.id || c.Id));
+            const allSelected = allKeys.length > 0 && allKeys.every(k => selectedColleagueKeys.has(k));
+            if (allSelected) {
+                selectedColleagueKeys.clear();
+            } else {
+                allKeys.forEach(k => selectedColleagueKeys.add(k));
+            }
+            renderColleaguesChecklist(document.getElementById('colleagueSearchInput')?.value || '');
+        };
+
+        window.toggleColleagueSelection = function (val) {
+            val = String(val);
+            if (selectedColleagueKeys.has(val)) {
+                selectedColleagueKeys.delete(val);
+            } else {
+                selectedColleagueKeys.add(val);
+            }
+            renderColleaguesChecklist(document.getElementById('colleagueSearchInput')?.value || '');
+        };
+
+        function updateSelectedCountBadge() {
+            const badge = document.getElementById('selectedColleaguesBadge');
+            if (badge) {
+                badge.textContent = `${selectedColleagueKeys.size} محدد`;
+            }
+        }
+
+        function renderColleaguesChecklist(filterText = '') {
+            const container = document.getElementById('colleaguesListContainer');
+            if (!container) return;
+
+            const term = (filterText || '').trim().toLowerCase();
+            const filtered = currentAvailableColleagues.filter(c => {
+                const name = String(c.fullName || c.FullName || '').toLowerCase();
+                const code = String(c.userCode || c.UserCode || '').toLowerCase();
+                const role = String(c.jobTitle || c.JobTitle || c.roleName || c.RoleName || '').toLowerCase();
+                return !term || name.includes(term) || code.includes(term) || role.includes(term);
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">لا توجد نتائج مطابقة</div>`;
+                updateSelectedCountBadge();
+                return;
+            }
+
+            container.innerHTML = filtered.map(c => {
+                const val = String(c.value || c.Value || c.id || c.Id);
+                const name = c.fullName || c.FullName || 'زميل';
+                const code = c.userCode || c.UserCode || '--';
+                const role = c.jobTitle || c.JobTitle || c.roleName || c.RoleName || 'صيدلي';
+                const isChecked = selectedColleagueKeys.has(val);
+
+                return `
+                    <div onclick="toggleColleagueSelection('${val}')" 
+                         class="flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none ${isChecked ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-400 dark:border-indigo-600 shadow-sm' : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60'}">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <input type="checkbox" value="${val}" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleColleagueSelection('${val}')"
+                                   class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer" />
+                            <div class="truncate">
+                                <h6 class="text-xs font-black text-slate-900 dark:text-white truncate">${name}</h6>
+                                <p class="text-[10px] text-slate-400 font-mono mt-0.5">كود: ${code} | ${role}</p>
+                            </div>
+                        </div>
+                        ${isChecked ? '<span class="text-[11px] font-black text-indigo-600 dark:text-indigo-400 shrink-0"><i class="fas fa-check-circle"></i></span>' : ''}
+                    </div>
+                `;
+            }).join('');
+
+            updateSelectedCountBadge();
+        }
+
         // Open Replace for Waves
         window.openReplaceModal = async function (userWaveId, waveId, branchId, studentName) {
             document.getElementById('replaceType').value = 'wave';
@@ -662,10 +764,14 @@
             document.getElementById('replaceWaveId').value = waveId;
             document.getElementById('replaceBranchId').value = branchId;
             document.getElementById('currentCandidateName').textContent = studentName;
-            document.getElementById('replaceModalSubtitle').textContent = 'اختر زميل بديل متاح من نفس الفرع لدورة الويف';
+            document.getElementById('replaceModalSubtitle').textContent = 'اختر زميل بديل (أو أكثر) متاح من نفس الفرع لدورة الويف';
 
-            const select = document.getElementById('colleagueSelect');
-            select.innerHTML = '<option value="">جاري البحث عن الزملاء بالفرع...</option>';
+            currentAvailableColleagues = [];
+            selectedColleagueKeys.clear();
+            if (document.getElementById('colleagueSearchInput')) document.getElementById('colleagueSearchInput').value = '';
+
+            const container = document.getElementById('colleaguesListContainer');
+            container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs"><i class="fas fa-spinner fa-spin mr-1"></i> جاري البحث عن الزملاء بالفرع...</div>';
             document.getElementById('replaceCandidateModal').classList.remove('hidden');
 
             try {
@@ -673,15 +779,14 @@
                 const data = await res.json();
 
                 if (data.success && data.colleagues && data.colleagues.length > 0) {
-                    select.innerHTML = '<option value="">-- اختر الزميل البديل --</option>' +
-                        data.colleagues.map(c => `
-                            <option value="${c.id}">${c.fullName} (${c.userCode}) - ${c.roleName}</option>
-                        `).join('');
+                    currentAvailableColleagues = data.colleagues;
+                    renderColleaguesChecklist();
                 } else {
-                    select.innerHTML = '<option value="">لا يوجد زملاء آخرين متاحين بالفرع</option>';
+                    container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">لا يوجد زملاء آخرين متاحين بالفرع</div>';
+                    updateSelectedCountBadge();
                 }
             } catch (err) {
-                select.innerHTML = '<option value="">فشل تحميل قائمة الزملاء</option>';
+                container.innerHTML = '<div class="text-center py-6 text-rose-500 text-xs">فشل تحميل قائمة الزملاء</div>';
             }
         };
 
@@ -693,10 +798,14 @@
             document.getElementById('replaceCompanyId').value = companyId;
             document.getElementById('replaceBranchName').value = branchName;
             document.getElementById('currentCandidateName').textContent = traineeName;
-            document.getElementById('replaceModalSubtitle').textContent = `اختر متدرب بديل من فرع (${branchName}) للسيشن`;
+            document.getElementById('replaceModalSubtitle').textContent = `اختر متدرب بديل (أو أكثر) من فرع (${branchName}) للسيشن`;
 
-            const select = document.getElementById('colleagueSelect');
-            select.innerHTML = '<option value="">جاري البحث عن الزملاء المتاحين بالفرع...</option>';
+            currentAvailableColleagues = [];
+            selectedColleagueKeys.clear();
+            if (document.getElementById('colleagueSearchInput')) document.getElementById('colleagueSearchInput').value = '';
+
+            const container = document.getElementById('colleaguesListContainer');
+            container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs"><i class="fas fa-spinner fa-spin mr-1"></i> جاري البحث عن الزملاء المتاحين بالفرع...</div>';
             document.getElementById('replaceCandidateModal').classList.remove('hidden');
 
             try {
@@ -704,15 +813,14 @@
                 const data = await res.json();
 
                 if (data.success && data.colleagues && data.colleagues.length > 0) {
-                    select.innerHTML = '<option value="">-- اختر الزميل البديل من الفرع --</option>' +
-                        data.colleagues.map(c => `
-                            <option value="${c.value || c.id}">${c.fullName} (${c.userCode}) - ${c.jobTitle}</option>
-                        `).join('');
+                    currentAvailableColleagues = data.colleagues;
+                    renderColleaguesChecklist();
                 } else {
-                    select.innerHTML = '<option value="">لا يوجد زملاء متاحين بالفرع للترشيح</option>';
+                    container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">لا يوجد زملاء متاحين بالفرع للترشيح</div>';
+                    updateSelectedCountBadge();
                 }
             } catch (err) {
-                select.innerHTML = '<option value="">فشل تحميل قائمة المتدربين</option>';
+                container.innerHTML = '<div class="text-center py-6 text-rose-500 text-xs">فشل تحميل قائمة المتدربين</div>';
             }
         };
 
@@ -723,28 +831,28 @@
         window.submitReplaceNomination = async function () {
             const type = document.getElementById('replaceType').value;
             const userWaveId = parseInt(document.getElementById('replaceUserWaveId').value);
-            const selectedVal = document.getElementById('colleagueSelect').value;
+            const selectedValues = Array.from(selectedColleagueKeys);
 
-            if (!selectedVal) {
-                if (typeof Swal !== 'undefined') Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى اختيار زميل بديل أولاً.' });
-                else alert('يرجى اختيار زميل بديل أولاً.');
+            if (selectedValues.length === 0) {
+                if (typeof Swal !== 'undefined') Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى اختيار زميل بديل واحد على الأقل.' });
+                else alert('يرجى اختيار زميل بديل واحد على الأقل.');
                 return;
             }
 
             const payload = {
                 userWaveId: userWaveId,
                 action: 'replace',
-                type: type
+                type: type,
+                replacementUserIds: selectedValues,
+                replacementUserId: selectedValues[0]
             };
 
             if (type === 'company') {
-                if (/^[0-9]+$/.test(selectedVal)) {
-                    payload.replacementTraineeId = parseInt(selectedVal);
-                } else {
-                    payload.replacementUserId = selectedVal;
+                const numericIds = selectedValues.filter(v => /^[0-9]+$/.test(v)).map(v => parseInt(v));
+                if (numericIds.length > 0) {
+                    payload.replacementTraineeIds = numericIds;
+                    payload.replacementTraineeId = numericIds[0];
                 }
-            } else {
-                payload.replacementUserId = selectedVal;
             }
 
             try {
@@ -757,7 +865,7 @@
                 if (data.success) {
                     closeReplaceModal();
                     if (typeof Swal !== 'undefined') {
-                        Swal.fire({ icon: 'success', title: 'تم الاستبدال بنجاح', text: data.message, timer: 2000 });
+                        Swal.fire({ icon: 'success', title: 'تم الاستبدال والاعتماد بنجاح', text: data.message, timer: 2500 });
                     }
                     openBranchNominationsModal();
                 } else {
