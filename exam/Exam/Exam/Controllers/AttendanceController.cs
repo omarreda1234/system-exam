@@ -891,12 +891,12 @@ namespace Exam.Controllers
                         SELECT 
                             u.Id AS UserId,
                             ct.Id AS CompanyTraineeId,
-                            COALESCE(u.FullName, ct.FullName, u.UserName) AS FullName,
-                            COALESCE(u.UserCode, ct.UserCode, '--') AS UserCode,
-                            COALESCE(b.BranchName, ct.BranchName, N'بدون فرع') AS BranchName,
-                            COALESCE(u.Email, ct.Email, '--') AS Email,
-                            COALESCE(u.PhoneNumber, ct.Phone, '--') AS Phone,
-                            COALESCE(u.UserRoleCustom, ct.JobTitle, N'Trainee') AS JobTitle,
+                            COALESCE(NULLIF(ct.FullName, ''), NULLIF(u.FullName, ''), NULLIF(u.UserName, ''), N'Trainee') AS FullName,
+                            COALESCE(NULLIF(ct.UserCode, ''), NULLIF(u.UserCode, ''), N'--') AS UserCode,
+                            COALESCE(NULLIF(ct.BranchName, ''), NULLIF(b.BranchName, ''), N'بدون فرع') AS BranchName,
+                            COALESCE(NULLIF(ct.Email, ''), NULLIF(u.Email, ''), N'--') AS Email,
+                            COALESCE(NULLIF(ct.Phone, ''), NULLIF(u.PhoneNumber, ''), N'--') AS Phone,
+                            COALESCE(NULLIF(ct.JobTitle, ''), NULLIF(u.UserRoleCustom, ''), N'Trainee') AS JobTitle,
                             ISNULL(b.BypassApproval, 0) AS IsBranchExempt
                         FROM AspNetUsers u WITH (NOLOCK)
                         LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
@@ -908,12 +908,12 @@ namespace Exam.Controllers
                         SELECT 
                             CAST(NULL AS NVARCHAR(450)) AS UserId,
                             ct.Id AS CompanyTraineeId,
-                            ct.FullName,
-                            ISNULL(ct.UserCode, '--') AS UserCode,
-                            ISNULL(ct.BranchName, N'بدون فرع') AS BranchName,
-                            ISNULL(ct.Email, '--') AS Email,
-                            ISNULL(ct.Phone, '--') AS Phone,
-                            ISNULL(ct.JobTitle, N'Trainee') AS JobTitle,
+                            ISNULL(NULLIF(ct.FullName, ''), N'Trainee') AS FullName,
+                            ISNULL(NULLIF(ct.UserCode, ''), N'--') AS UserCode,
+                            ISNULL(NULLIF(ct.BranchName, ''), N'بدون فرع') AS BranchName,
+                            ISNULL(NULLIF(ct.Email, ''), N'--') AS Email,
+                            ISNULL(NULLIF(ct.Phone, ''), N'--') AS Phone,
+                            ISNULL(NULLIF(ct.JobTitle, ''), N'Trainee') AS JobTitle,
                             ISNULL(b.BypassApproval, 0) AS IsBranchExempt
                         FROM CompanyTrainees ct WITH (NOLOCK)
                         LEFT JOIN Branches b WITH (NOLOCK) ON b.BranchName = ct.BranchName
@@ -949,7 +949,34 @@ namespace Exam.Controllers
                       )
                     ORDER BY c.FullName";
 
-                var candidates = (await conn.QueryAsync<dynamic>(sql, queryParams)).ToList();
+                var candidatesRaw = (await conn.QueryAsync<dynamic>(sql, queryParams)).ToList();
+
+                var candidates = candidatesRaw.Select(c => {
+                    var d = (IDictionary<string, object>)c;
+                    string userId = d.ContainsKey("UserId") && d["UserId"] != null ? d["UserId"].ToString() : null;
+                    int? companyTraineeId = d.ContainsKey("CompanyTraineeId") && d["CompanyTraineeId"] != null && int.TryParse(d["CompanyTraineeId"].ToString(), out int cti) ? cti : (int?)null;
+                    string fullName = d.ContainsKey("FullName") && d["FullName"] != null && !string.IsNullOrWhiteSpace(d["FullName"].ToString()) ? d["FullName"].ToString() : "Trainee";
+                    string userCode = d.ContainsKey("UserCode") && d["UserCode"] != null && !string.IsNullOrWhiteSpace(d["UserCode"].ToString()) ? d["UserCode"].ToString() : "--";
+                    string branchName = d.ContainsKey("BranchName") && d["BranchName"] != null && !string.IsNullOrWhiteSpace(d["BranchName"].ToString()) ? d["BranchName"].ToString() : "بدون فرع";
+                    string email = d.ContainsKey("Email") && d["Email"] != null ? d["Email"].ToString() : "--";
+                    string phone = d.ContainsKey("Phone") && d["Phone"] != null ? d["Phone"].ToString() : "--";
+                    string jobTitle = d.ContainsKey("JobTitle") && d["JobTitle"] != null && !string.IsNullOrWhiteSpace(d["JobTitle"].ToString()) ? d["JobTitle"].ToString() : "Trainee";
+                    bool isBranchExempt = d.ContainsKey("IsBranchExempt") && d["IsBranchExempt"] != null && (d["IsBranchExempt"].ToString() == "1" || d["IsBranchExempt"].ToString().Equals("true", StringComparison.OrdinalIgnoreCase));
+                    string candidateKey = d.ContainsKey("CandidateKey") && d["CandidateKey"] != null ? d["CandidateKey"].ToString() : (companyTraineeId.HasValue ? $"CT_{companyTraineeId.Value}" : $"U_{userId}");
+
+                    return new {
+                        userId = userId,
+                        companyTraineeId = companyTraineeId,
+                        fullName = fullName,
+                        userCode = userCode,
+                        branchName = branchName,
+                        email = email,
+                        phone = phone,
+                        jobTitle = jobTitle,
+                        isBranchExempt = isBranchExempt,
+                        candidateKey = candidateKey
+                    };
+                }).ToList();
 
                 return Json(new { success = true, isMultiCode = isMultiCode, count = candidates.Count, candidates = candidates });
             }
@@ -1024,7 +1051,8 @@ namespace Exam.Controllers
 
                         if (u != null)
                         {
-                            fullName = (string)(u.FullName ?? u.UserName ?? "Trainee");
+                            string rawFn = (string)(u.FullName ?? "");
+                            fullName = !string.IsNullOrWhiteSpace(rawFn) ? rawFn : (string)(u.UserName ?? "Trainee");
                             userCode = (string)(u.UserCode ?? "--");
                             email = (string)(u.Email ?? "");
                             phone = (string)(u.PhoneNumber ?? "");
@@ -1032,14 +1060,28 @@ namespace Exam.Controllers
                             branchId = (int?)u.BranchId;
                             isBranchExempt = (int)u.IsBranchExempt == 1;
 
-                            // Ensure record exists in CompanyTrainees
-                            companyTraineeId = await conn.QueryFirstOrDefaultAsync<int?>(@"
-                                SELECT TOP 1 Id FROM CompanyTrainees 
+                            // Ensure record exists in CompanyTrainees and pull any missing details
+                            var ctInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                                SELECT TOP 1 Id, FullName, BranchName, Phone, JobTitle FROM CompanyTrainees 
                                 WHERE CompanyId = @CompanyId 
                                   AND ((UserCode = @Code AND UserCode <> '--') OR (Email = @Email AND Email <> '--'))",
                                 new { CompanyId = (int)session.CompanyId, Code = userCode, Email = email });
 
-                            if (!companyTraineeId.HasValue)
+                            if (ctInfo != null)
+                            {
+                                companyTraineeId = (int)ctInfo.Id;
+                                string ctFn = (string)(ctInfo.FullName ?? "");
+                                if ((string.IsNullOrWhiteSpace(fullName) || fullName == "Trainee") && !string.IsNullOrWhiteSpace(ctFn))
+                                {
+                                    fullName = ctFn;
+                                }
+                                string ctBr = (string)(ctInfo.BranchName ?? "");
+                                if ((string.IsNullOrWhiteSpace(branchName) || branchName == "بدون فرع") && !string.IsNullOrWhiteSpace(ctBr))
+                                {
+                                    branchName = ctBr;
+                                }
+                            }
+                            else
                             {
                                 companyTraineeId = await conn.QueryFirstOrDefaultAsync<int>(@"
                                     INSERT INTO CompanyTrainees (CompanyId, FullName, UserCode, JobTitle, BranchName, Email, Phone, CreatedAt)
@@ -1180,8 +1222,13 @@ namespace Exam.Controllers
                     });
                 }
 
+                if (count == 0)
+                {
+                    return Json(new { success = false, message = "لم يتم تعيين أي متدرب (قد يكون المتدربون مسجلين بالفعل في هذه الجلسة أو المفاتيح غير صالحة)." });
+                }
+
                 await _hubContext.Clients.All.SendAsync("ReceiveNotification", "تم تعيين متدربين لجلسة تدريب الشركة.");
-                return Json(new { success = true, message = $"تم تعيين {count} متدرب بنجاح وإرسال الإشعارات وبيانات الـ API." });
+                return Json(new { success = true, count = count, message = $"تم تعيين {count} متدرب بنجاح وإرسال الإشعارات وبيانات الـ API." });
             }
             catch (Exception ex)
             {

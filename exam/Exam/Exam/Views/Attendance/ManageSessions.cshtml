@@ -71,13 +71,13 @@
                                     var totalPool = session.TotalTraineesCount != null ? (int)session.TotalTraineesCount : 0;
                                     if (specificAssigned > 0)
                                     {
-                                        <span class="text-[9px] sm:text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                                        <span id="session-badge-@session.Id" class="text-[9px] sm:text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
                                             <i class="fas fa-users mr-1"></i> @specificAssigned Session Trainees
                                         </span>
                                     }
                                     else
                                     {
-                                        <span class="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                        <span id="session-badge-@session.Id" class="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
                                             <i class="fas fa-building mr-1"></i> Company Pool (@totalPool)
                                         </span>
                                     }
@@ -439,13 +439,41 @@
         // ==========================================
         let sessionTraineesState = {
             sessionId: 0,
+            hasModified: false,
             assignedTrainees: [],
             selectedCandidates: new Map(),
             currentResults: []
         };
 
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3500,
+            timerProgressBar: true,
+            showCloseButton: true,
+            background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
+            color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#0f172a',
+            customClass: {
+                popup: 'rounded-2xl shadow-2xl border border-indigo-500/20 text-xs font-bold'
+            },
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        });
+
+        function showToast(icon, title, message) {
+            Toast.fire({
+                icon: icon,
+                title: title,
+                text: message || ''
+            });
+        }
+
         window.openManageSessionTrainees = function (sessionId, sessionName, companyId) {
             sessionTraineesState.sessionId = sessionId;
+            sessionTraineesState.hasModified = false;
             sessionTraineesState.selectedCandidates.clear();
             sessionTraineesState.currentResults = [];
             document.getElementById('currentSessionId').value = sessionId;
@@ -459,6 +487,9 @@
 
         window.closeManageSessionTrainees = function () {
             document.getElementById('sessionTraineesModal').classList.add('hidden');
+            if (sessionTraineesState.hasModified) {
+                location.reload();
+            }
         };
 
         window.switchTraineesTab = function (tab) {
@@ -501,6 +532,16 @@
 
                 sessionTraineesState.assignedTrainees = data.assignedTrainees || [];
                 countBadge.textContent = sessionTraineesState.assignedTrainees.length;
+
+                // Sync badge on outer session card in real-time
+                const sessionBadge = document.getElementById(`session-badge-${sessionId}`);
+                if (sessionBadge) {
+                    const assignedCount = sessionTraineesState.assignedTrainees.length;
+                    if (assignedCount > 0) {
+                        sessionBadge.className = 'text-[9px] sm:text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800';
+                        sessionBadge.innerHTML = `<i class="fas fa-users mr-1"></i> ${assignedCount} Session Trainees`;
+                    }
+                }
 
                 // 1. Render Current Assigned Trainees with Approval Badges
                 if (sessionTraineesState.assignedTrainees.length === 0) {
@@ -632,27 +673,31 @@
             // If multi-code search, auto-select them all for convenience!
             if (isMultiCode) {
                 candidates.forEach(c => {
-                    const key = c.candidateKey || (c.companyTraineeId ? `CT_${c.companyTraineeId}` : `U_${c.userId}`);
+                    const key = c.candidateKey || c.CandidateKey || (c.companyTraineeId || c.CompanyTraineeId ? `CT_${c.companyTraineeId || c.CompanyTraineeId}` : `U_${c.userId || c.UserId}`);
+                    const fn = c.fullName || c.FullName || c.userName || c.UserName || 'Trainee';
+                    const cd = c.userCode || c.UserCode || '--';
+                    const br = c.branchName || c.BranchName || 'بدون فرع';
                     sessionTraineesState.selectedCandidates.set(key, {
                         key: key,
-                        fullName: c.fullName || 'Trainee',
-                        userCode: c.userCode || '--',
-                        branchName: c.branchName || 'بدون فرع'
+                        fullName: fn,
+                        userCode: cd,
+                        branchName: br
                     });
                 });
                 updateSelectedUi();
             }
 
             poolWrapper.innerHTML = candidates.map(t => {
-                const key = t.candidateKey || (t.companyTraineeId ? `CT_${t.companyTraineeId}` : `U_${t.userId}`);
+                const key = t.candidateKey || t.CandidateKey || (t.companyTraineeId || t.CompanyTraineeId ? `CT_${t.companyTraineeId || t.CompanyTraineeId}` : `U_${t.userId || t.UserId}`);
                 const isSelected = sessionTraineesState.selectedCandidates.has(key);
-                const isExempt = (t.isBranchExempt == 1 || t.isBranchExempt === true);
-                const role = t.jobTitle || 'Trainee';
-                const branch = t.branchName || 'بدون فرع';
-                const code = t.userCode || '--';
+                const isExempt = (t.isBranchExempt == 1 || t.IsBranchExempt == 1 || t.isBranchExempt === true || t.IsBranchExempt === true);
+                const fullName = t.fullName || t.FullName || t.userName || t.UserName || 'Trainee';
+                const role = t.jobTitle || t.JobTitle || 'Trainee';
+                const branch = t.branchName || t.BranchName || 'بدون فرع';
+                const code = t.userCode || t.UserCode || '--';
 
                 return `
-                    <div onclick="toggleCandidateSelection('${key}', '${encodeURIComponent(t.fullName || 'Trainee')}', '${code}', '${encodeURIComponent(branch)}')" 
+                    <div onclick="toggleCandidateSelection('${key}', '${encodeURIComponent(fullName)}', '${code}', '${encodeURIComponent(branch)}')" 
                          id="candidate-row-${key}"
                          class="p-3 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer flex items-center justify-between rounded-xl border ${isSelected ? 'border-indigo-500 bg-indigo-50/20 dark:bg-indigo-950/30' : 'border-slate-100 dark:border-slate-800'} transition-all select-none">
                         <div class="flex items-center gap-3">
@@ -661,7 +706,7 @@
                             </div>
                             <div>
                                 <div class="flex items-center gap-1.5">
-                                    <span class="text-xs font-black text-slate-900 dark:text-white leading-tight">${t.fullName || 'Trainee'}</span>
+                                    <span class="text-xs font-black text-slate-900 dark:text-white leading-tight">${fullName}</span>
                                     ${isExempt ? '<span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-300/50">معفى</span>' : ''}
                                 </div>
                                 <div class="text-[10px] text-slate-500 dark:text-slate-400 font-bold">${role} - Branch: ${branch}</div>
@@ -732,20 +777,23 @@
             if (results.length === 0) return;
 
             const allSelected = results.every(c => {
-                const key = c.candidateKey || (c.companyTraineeId ? `CT_${c.companyTraineeId}` : `U_${c.userId}`);
+                const key = c.candidateKey || c.CandidateKey || (c.companyTraineeId || c.CompanyTraineeId ? `CT_${c.companyTraineeId || c.CompanyTraineeId}` : `U_${c.userId || c.UserId}`);
                 return sessionTraineesState.selectedCandidates.has(key);
             });
 
             results.forEach(c => {
-                const key = c.candidateKey || (c.companyTraineeId ? `CT_${c.companyTraineeId}` : `U_${c.userId}`);
+                const key = c.candidateKey || c.CandidateKey || (c.companyTraineeId || c.CompanyTraineeId ? `CT_${c.companyTraineeId || c.CompanyTraineeId}` : `U_${c.userId || c.UserId}`);
                 if (allSelected) {
                     sessionTraineesState.selectedCandidates.delete(key);
                 } else {
+                    const fn = c.fullName || c.FullName || c.userName || c.UserName || 'Trainee';
+                    const cd = c.userCode || c.UserCode || '--';
+                    const br = c.branchName || c.BranchName || 'بدون فرع';
                     sessionTraineesState.selectedCandidates.set(key, {
                         key: key,
-                        fullName: c.fullName || 'Trainee',
-                        userCode: c.userCode || '--',
-                        branchName: c.branchName || 'بدون فرع'
+                        fullName: fn,
+                        userCode: cd,
+                        branchName: br
                     });
                 }
             });
@@ -793,7 +841,7 @@
             const candidateKeys = Array.from(sessionTraineesState.selectedCandidates.keys());
 
             if (candidateKeys.length === 0) {
-                Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى تحديد متدرب واحد على الأقل.' });
+                showToast('warning', 'تنبيه', 'يرجى تحديد متدرب واحد على الأقل.');
                 return;
             }
 
@@ -821,17 +869,20 @@
                     })
                 });
                 const data = await res.json();
+                Swal.close();
                 if (data.success) {
+                    sessionTraineesState.hasModified = true;
                     sessionTraineesState.selectedCandidates.clear();
                     updateSelectedUi();
-                    await Swal.fire({ icon: 'success', title: 'تم التعيين بنجاح', text: data.message });
+                    showToast('success', 'تم التعيين بنجاح', data.message);
                     switchTraineesTab('current');
                     loadSessionTraineesData(sessionId);
                 } else {
-                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                    showToast('error', 'تعذر التعيين', data.message);
                 }
             } catch (err) {
-                Swal.fire({ icon: 'error', title: 'فشل الاتصال', text: err.message });
+                Swal.close();
+                showToast('error', 'فشل الاتصال', err.message);
             }
         };
 
@@ -851,20 +902,21 @@
                 const res = await fetch(`/Attendance/RemoveTraineeFromSession?sessionId=${sessionId}&traineeId=${traineeId}`, { method: 'POST' });
                 const data = await res.json();
                 if (data.success) {
-                    Swal.fire({ icon: 'success', title: 'تم الحذف', text: data.message, timer: 1500 });
+                    sessionTraineesState.hasModified = true;
+                    showToast('success', 'تم الحذف', data.message);
                     loadSessionTraineesData(sessionId);
                 } else {
-                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                    showToast('error', 'خطأ', data.message);
                 }
             } catch (err) {
-                Swal.fire({ icon: 'error', title: 'فشل', text: err.message });
+                showToast('error', 'فشل', err.message);
             }
         };
 
         window.uploadSessionExcelDirect = async function () {
             const fileInput = document.getElementById('sessionExcelFile');
             if (!fileInput.files || fileInput.files.length === 0) {
-                Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى اختيار ملف إكسيل أولاً.' });
+                showToast('warning', 'تنبيه', 'يرجى اختيار ملف إكسيل أولاً.');
                 return;
             }
 
@@ -888,16 +940,19 @@
                     body: formData
                 });
                 const data = await res.json();
+                Swal.close();
                 if (data.success) {
-                    await Swal.fire({ icon: 'success', title: 'تم الاستيراد بنجاح', text: data.message });
+                    sessionTraineesState.hasModified = true;
+                    showToast('success', 'تم الاستيراد بنجاح', data.message);
                     fileInput.value = '';
                     switchTraineesTab('current');
                     loadSessionTraineesData(sessionTraineesState.sessionId);
                 } else {
-                    Swal.fire({ icon: 'error', title: 'خطأ في الاستيراد', text: data.message });
+                    showToast('error', 'خطأ في الاستيراد', data.message);
                 }
             } catch (err) {
-                Swal.fire({ icon: 'error', title: 'فشل الرفع', text: err.message });
+                Swal.close();
+                showToast('error', 'فشل الرفع', err.message);
             }
         };
     </script>
