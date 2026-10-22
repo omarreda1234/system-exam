@@ -816,13 +816,66 @@ namespace Exam.Controllers
                     ORDER BY CT.FullName", new { SessionId = sessionId })).ToList();
 
                 var available = (await conn.QueryAsync<dynamic>(@"
-                    SELECT CT.Id, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone,
-                           ISNULL(b.BypassApproval, 0) AS IsBranchExempt
-                    FROM CompanyTrainees CT
-                    LEFT JOIN Branches b ON b.BranchName = CT.BranchName
-                    WHERE CT.CompanyId = @CompanyId
-                      AND CT.Id NOT IN (SELECT CompanyTraineeId FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId AND CompanyTraineeId IS NOT NULL)
-                    ORDER BY CT.FullName", new { CompanyId = companyId.Value, SessionId = sessionId })).ToList();
+                    ;WITH Combined AS (
+                        SELECT 
+                            u.Id AS UserId,
+                            ct.Id AS CompanyTraineeId,
+                            COALESCE(u.FullName, ct.FullName, u.UserName) AS FullName,
+                            COALESCE(u.UserCode, ct.UserCode, '--') AS UserCode,
+                            COALESCE(b.BranchName, ct.BranchName, N'بدون فرع') AS BranchName,
+                            COALESCE(u.Email, ct.Email, '--') AS Email,
+                            COALESCE(u.PhoneNumber, ct.Phone, '--') AS Phone,
+                            COALESCE(u.UserRoleCustom, ct.JobTitle, N'Trainee') AS JobTitle,
+                            ISNULL(b.BypassApproval, 0) AS IsBranchExempt
+                        FROM AspNetUsers u WITH (NOLOCK)
+                        LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                        LEFT JOIN CompanyTrainees ct WITH (NOLOCK) ON ct.CompanyId = @CompanyId AND (ct.UserCode = u.UserCode OR (ct.Email = u.Email AND ct.Email <> '--'))
+                        WHERE (u.IsActive = 1 OR ct.Id IS NOT NULL)
+
+                        UNION
+
+                        SELECT 
+                            CAST(NULL AS NVARCHAR(450)) AS UserId,
+                            ct.Id AS CompanyTraineeId,
+                            ct.FullName,
+                            ISNULL(ct.UserCode, '--') AS UserCode,
+                            ISNULL(ct.BranchName, N'بدون فرع') AS BranchName,
+                            ISNULL(ct.Email, '--') AS Email,
+                            ISNULL(ct.Phone, '--') AS Phone,
+                            ISNULL(ct.JobTitle, N'Trainee') AS JobTitle,
+                            ISNULL(b.BypassApproval, 0) AS IsBranchExempt
+                        FROM CompanyTrainees ct WITH (NOLOCK)
+                        LEFT JOIN Branches b WITH (NOLOCK) ON b.BranchName = ct.BranchName
+                        WHERE ct.CompanyId = @CompanyId
+                          AND NOT EXISTS (
+                              SELECT 1 FROM AspNetUsers u2 WITH (NOLOCK) 
+                              WHERE u2.UserCode = ct.UserCode OR (u2.Email = ct.Email AND u2.Email <> '--')
+                          )
+                    )
+                    SELECT TOP 100 
+                        c.UserId,
+                        c.CompanyTraineeId,
+                        c.FullName,
+                        c.UserCode,
+                        c.BranchName,
+                        c.Email,
+                        c.Phone,
+                        c.JobTitle,
+                        c.IsBranchExempt,
+                        CASE 
+                            WHEN c.CompanyTraineeId IS NOT NULL THEN CONCAT('CT_', c.CompanyTraineeId)
+                            ELSE CONCAT('U_', c.UserId)
+                        END AS CandidateKey
+                    FROM Combined c
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM dbo.CompanySessionTrainees cst WITH (NOLOCK)
+                        WHERE cst.SessionId = @SessionId
+                          AND (
+                              (c.CompanyTraineeId IS NOT NULL AND cst.CompanyTraineeId = c.CompanyTraineeId)
+                              OR (c.UserId IS NOT NULL AND cst.UserId = c.UserId)
+                          )
+                    )
+                    ORDER BY c.FullName", new { CompanyId = companyId.Value, SessionId = sessionId })).ToList();
 
                 return Json(new
                 {
@@ -847,10 +900,114 @@ namespace Exam.Controllers
             }
         }
 
+        [HttpGet]
+        public async Task<IActionResult> SearchSessionCandidates(int sessionId, string query)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                var session = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT S.Id, S.CompanyId
+                    FROM AttendanceSessions S
+                    WHERE S.Id = @Id", new { Id = sessionId });
+
+                if (session == null || session.CompanyId == null)
+                    return Json(new { success = false, message = "الجلسة غير موجودة أو غير مرتبطة بشركة." });
+
+                int compId = (int)session.CompanyId;
+                string q = (query ?? "").Trim();
+
+                var candidates = (await conn.QueryAsync<dynamic>(@"
+                    ;WITH Combined AS (
+                        SELECT 
+                            u.Id AS UserId,
+                            ct.Id AS CompanyTraineeId,
+                            COALESCE(u.FullName, ct.FullName, u.UserName) AS FullName,
+                            COALESCE(u.UserCode, ct.UserCode, '--') AS UserCode,
+                            COALESCE(b.BranchName, ct.BranchName, N'بدون فرع') AS BranchName,
+                            COALESCE(u.Email, ct.Email, '--') AS Email,
+                            COALESCE(u.PhoneNumber, ct.Phone, '--') AS Phone,
+                            COALESCE(u.UserRoleCustom, ct.JobTitle, N'Trainee') AS JobTitle,
+                            ISNULL(b.BypassApproval, 0) AS IsBranchExempt
+                        FROM AspNetUsers u WITH (NOLOCK)
+                        LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                        LEFT JOIN CompanyTrainees ct WITH (NOLOCK) ON ct.CompanyId = @CompanyId AND (ct.UserCode = u.UserCode OR (ct.Email = u.Email AND ct.Email <> '--'))
+                        WHERE (u.IsActive = 1 OR ct.Id IS NOT NULL)
+
+                        UNION
+
+                        SELECT 
+                            CAST(NULL AS NVARCHAR(450)) AS UserId,
+                            ct.Id AS CompanyTraineeId,
+                            ct.FullName,
+                            ISNULL(ct.UserCode, '--') AS UserCode,
+                            ISNULL(ct.BranchName, N'بدون فرع') AS BranchName,
+                            ISNULL(ct.Email, '--') AS Email,
+                            ISNULL(ct.Phone, '--') AS Phone,
+                            ISNULL(ct.JobTitle, N'Trainee') AS JobTitle,
+                            ISNULL(b.BypassApproval, 0) AS IsBranchExempt
+                        FROM CompanyTrainees ct WITH (NOLOCK)
+                        LEFT JOIN Branches b WITH (NOLOCK) ON b.BranchName = ct.BranchName
+                        WHERE ct.CompanyId = @CompanyId
+                          AND NOT EXISTS (
+                              SELECT 1 FROM AspNetUsers u2 WITH (NOLOCK) 
+                              WHERE u2.UserCode = ct.UserCode OR (u2.Email = ct.Email AND u2.Email <> '--')
+                          )
+                    )
+                    SELECT TOP 50 
+                        c.UserId,
+                        c.CompanyTraineeId,
+                        c.FullName,
+                        c.UserCode,
+                        c.BranchName,
+                        c.Email,
+                        c.Phone,
+                        c.JobTitle,
+                        c.IsBranchExempt,
+                        CASE 
+                            WHEN c.CompanyTraineeId IS NOT NULL THEN CONCAT('CT_', c.CompanyTraineeId)
+                            ELSE CONCAT('U_', c.UserId)
+                        END AS CandidateKey
+                    FROM Combined c
+                    WHERE (@Q = '' OR (c.FullName LIKE '%' + @Q + '%' OR c.UserCode LIKE '%' + @Q + '%' OR c.BranchName LIKE '%' + @Q + '%' OR c.Email LIKE '%' + @Q + '%'))
+                      AND NOT EXISTS (
+                          SELECT 1 FROM dbo.CompanySessionTrainees cst WITH (NOLOCK)
+                          WHERE cst.SessionId = @SessionId
+                            AND (
+                                (c.CompanyTraineeId IS NOT NULL AND cst.CompanyTraineeId = c.CompanyTraineeId)
+                                OR (c.UserId IS NOT NULL AND cst.UserId = c.UserId)
+                            )
+                      )
+                    ORDER BY c.FullName", new { CompanyId = compId, SessionId = sessionId, Q = q })).ToList();
+
+                return Json(new { success = true, candidates = candidates });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpPost]
         public async Task<IActionResult> AssignTraineesToSession([FromBody] SessionTraineesAssignRequest req)
         {
-            if (req == null || req.SessionId <= 0 || req.TraineeIds == null || !req.TraineeIds.Any())
+            if (req == null || req.SessionId <= 0)
+            {
+                return Json(new { success = false, message = "بيانات الطلب غير صالحة." });
+            }
+
+            var keys = new HashSet<string>(req.CandidateKeys ?? new List<string>());
+            if (req.TraineeIds != null)
+            {
+                foreach (var tid in req.TraineeIds)
+                {
+                    if (tid > 0) keys.Add($"CT_{tid}");
+                }
+            }
+
+            if (!keys.Any())
             {
                 return Json(new { success = false, message = "لم يتم تحديد أي متدربين." });
             }
@@ -870,41 +1027,145 @@ namespace Exam.Controllers
 
                 var assignedBy = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 int count = 0;
-
-                // Fetch trainee details with branch exemption info
-                var trainees = (await conn.QueryAsync<dynamic>(@"
-                    SELECT CT.Id, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone,
-                           b.Id AS BranchId, ISNULL(b.BypassApproval, 0) AS IsBranchExempt
-                    FROM CompanyTrainees CT
-                    LEFT JOIN Branches b ON b.BranchName = CT.BranchName
-                    WHERE CT.Id IN @Ids", new { Ids = req.TraineeIds })).ToList();
-
+                var assignedTraineePayloads = new List<dynamic>();
                 var pendingBranchGroups = new Dictionary<int, (string BranchName, int Count)>();
 
-                foreach (var t in trainees)
+                foreach (var rawKey in keys)
                 {
-                    int tid = (int)t.Id;
-                    bool isExempt = req.BypassApproval || ((int)t.IsBranchExempt == 1);
+                    string key = rawKey.Trim();
+                    int? companyTraineeId = null;
+                    string? targetUserId = null;
+                    string fullName = "";
+                    string userCode = "";
+                    string email = "";
+                    string phone = "";
+                    string branchName = "بدون فرع";
+                    int? branchId = null;
+                    bool isBranchExempt = false;
+
+                    if (key.StartsWith("U_"))
+                    {
+                        targetUserId = key.Substring(2);
+                        var u = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                            SELECT u.Id, u.FullName, u.UserName, u.UserCode, u.Email, u.PhoneNumber, u.UserRoleCustom,
+                                   u.BranchId, b.BranchName, ISNULL(b.BypassApproval, 0) AS IsBranchExempt
+                            FROM AspNetUsers u
+                            LEFT JOIN Branches b ON u.BranchId = b.Id
+                            WHERE u.Id = @UserId", new { UserId = targetUserId });
+
+                        if (u != null)
+                        {
+                            fullName = (string)(u.FullName ?? u.UserName ?? "Trainee");
+                            userCode = (string)(u.UserCode ?? "--");
+                            email = (string)(u.Email ?? "");
+                            phone = (string)(u.PhoneNumber ?? "");
+                            branchName = (string)(u.BranchName ?? "بدون فرع");
+                            branchId = (int?)u.BranchId;
+                            isBranchExempt = (int)u.IsBranchExempt == 1;
+
+                            // Ensure record exists in CompanyTrainees
+                            companyTraineeId = await conn.QueryFirstOrDefaultAsync<int?>(@"
+                                SELECT TOP 1 Id FROM CompanyTrainees 
+                                WHERE CompanyId = @CompanyId 
+                                  AND ((UserCode = @Code AND UserCode <> '--') OR (Email = @Email AND Email <> '--'))",
+                                new { CompanyId = (int)session.CompanyId, Code = userCode, Email = email });
+
+                            if (!companyTraineeId.HasValue)
+                            {
+                                companyTraineeId = await conn.QueryFirstOrDefaultAsync<int>(@"
+                                    INSERT INTO CompanyTrainees (CompanyId, FullName, UserCode, JobTitle, BranchName, Email, Phone, CreatedAt)
+                                    VALUES (@CompanyId, @FullName, @UserCode, @JobTitle, @BranchName, @Email, @Phone, GETDATE());
+                                    SELECT CAST(SCOPE_IDENTITY() AS INT);",
+                                    new {
+                                        CompanyId = (int)session.CompanyId,
+                                        FullName = fullName,
+                                        UserCode = userCode,
+                                        JobTitle = (string)(u.UserRoleCustom ?? "Trainee"),
+                                        BranchName = branchName,
+                                        Email = email,
+                                        Phone = phone
+                                    });
+                            }
+                        }
+                    }
+                    else if (key.StartsWith("CT_"))
+                    {
+                        if (int.TryParse(key.Substring(3), out int ctId))
+                        {
+                            companyTraineeId = ctId;
+                            var ct = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                                SELECT CT.Id, CT.FullName, CT.UserCode, CT.BranchName, CT.Email, CT.Phone,
+                                       b.Id AS BranchId, ISNULL(b.BypassApproval, 0) AS IsBranchExempt
+                                FROM CompanyTrainees CT
+                                LEFT JOIN Branches b ON b.BranchName = CT.BranchName
+                                WHERE CT.Id = @Id", new { Id = ctId });
+
+                            if (ct != null)
+                            {
+                                fullName = (string)(ct.FullName ?? "");
+                                userCode = (string)(ct.UserCode ?? "--");
+                                email = (string)(ct.Email ?? "");
+                                phone = (string)(ct.Phone ?? "");
+                                branchName = (string)(ct.BranchName ?? "بدون فرع");
+                                branchId = (int?)ct.BranchId;
+                                isBranchExempt = (int)ct.IsBranchExempt == 1;
+
+                                targetUserId = await conn.QueryFirstOrDefaultAsync<string>(@"
+                                    SELECT Id FROM AspNetUsers 
+                                    WHERE (UserCode = @Code AND UserCode <> '--') OR (Email = @Email AND Email <> '--')",
+                                    new { Code = userCode, Email = email });
+                            }
+                        }
+                    }
+
+                    if (!companyTraineeId.HasValue) continue;
+
+                    bool isExempt = req.BypassApproval || isBranchExempt;
                     string status = isExempt ? "Approved" : "Pending";
 
                     int affected = await conn.ExecuteAsync(@"
-                        IF NOT EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId AND CompanyTraineeId = @TraineeId)
+                        IF NOT EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId AND (CompanyTraineeId = @TraineeId OR (UserId = @UserId AND @UserId IS NOT NULL)))
                         BEGIN
-                            INSERT INTO dbo.CompanySessionTrainees (SessionId, CompanyTraineeId, AssignedAt, AssignedBy, ApprovalStatus)
-                            VALUES (@SessionId, @TraineeId, GETDATE(), @AssignedBy, @Status)
-                        END", new { SessionId = req.SessionId, TraineeId = tid, AssignedBy = assignedBy, Status = status });
+                            INSERT INTO dbo.CompanySessionTrainees (SessionId, CompanyTraineeId, UserId, AssignedAt, AssignedBy, ApprovalStatus)
+                            VALUES (@SessionId, @TraineeId, @UserId, GETDATE(), @AssignedBy, @Status)
+                        END", new { SessionId = req.SessionId, TraineeId = companyTraineeId.Value, UserId = targetUserId, AssignedBy = assignedBy, Status = status });
 
                     if (affected > 0)
                     {
                         count++;
-                        if (!isExempt && t.BranchId != null)
+                        assignedTraineePayloads.Add(new
                         {
-                            int bId = (int)t.BranchId;
-                            string bName = (string)(t.BranchName ?? "فرع");
+                            id = companyTraineeId.Value,
+                            userId = targetUserId,
+                            fullName = fullName,
+                            userCode = userCode,
+                            email = email,
+                            phone = phone,
+                            branchName = branchName
+                        });
+
+                        if (!isExempt && branchId.HasValue)
+                        {
+                            int bId = branchId.Value;
                             if (pendingBranchGroups.ContainsKey(bId))
-                                pendingBranchGroups[bId] = (bName, pendingBranchGroups[bId].Count + 1);
+                                pendingBranchGroups[bId] = (branchName, pendingBranchGroups[bId].Count + 1);
                             else
-                                pendingBranchGroups[bId] = (bName, 1);
+                                pendingBranchGroups[bId] = (branchName, 1);
+                        }
+
+                        // In-App Notification to trainee
+                        if (req.SendNotification && !string.IsNullOrEmpty(targetUserId))
+                        {
+                            await conn.ExecuteAsync(@"
+                                INSERT INTO dbo.AppNotifications (UserId, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
+                                VALUES (@UserId, N'تم تسجيلك في تدريب شركة 🏢', CONCAT(N'تم تسجيلك لحضور جلسة: ', @SessionName, N' الخاصة بشركة: ', @CompanyName, N' بتاريخ: ', @SessionDate), '/Attendance/MyAttendance', 'CompanySessionAssigned', CAST(@SessionId AS NVARCHAR(50)), GETDATE())",
+                                new {
+                                    UserId = targetUserId,
+                                    SessionName = (string)session.SessionName,
+                                    CompanyName = (string)(session.CompanyName ?? "Company"),
+                                    SessionDate = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd"),
+                                    SessionId = req.SessionId
+                                });
                         }
                     }
                 }
@@ -924,32 +1185,8 @@ namespace Exam.Controllers
                         new { BranchId = bId, Title = title, Message = message, LinkUrl = linkUrl, ReferenceId = session.Id.ToString() });
                 }
 
-                // 1. In-App Notifications
-                foreach (var t in trainees)
-                {
-                    string email = (string)(t.Email ?? "");
-                    string code = (string)(t.UserCode ?? "");
-                    var matchedUserId = await conn.QueryFirstOrDefaultAsync<string>(
-                        "SELECT Id FROM AspNetUsers WHERE (UserCode = @Code AND UserCode <> '--') OR (Email = @Email AND Email <> '--')",
-                        new { Code = code, Email = email });
-
-                    if (!string.IsNullOrEmpty(matchedUserId))
-                    {
-                        await conn.ExecuteAsync(@"
-                            INSERT INTO dbo.AppNotifications (UserId, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
-                            VALUES (@UserId, N'تم تسجيلك في تدريب شركة 🏢', CONCAT(N'تم تسجيلك لحضور جلسة: ', @SessionName, N' الخاصة بشركة: ', @CompanyName, N' بتاريخ: ', @SessionDate), '/Attendance/MyAttendance', 'CompanySessionAssigned', CAST(@SessionId AS NVARCHAR(50)), GETDATE())",
-                            new {
-                                UserId = matchedUserId,
-                                SessionName = (string)session.SessionName,
-                                CompanyName = (string)(session.CompanyName ?? "Company"),
-                                SessionDate = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd"),
-                                SessionId = req.SessionId
-                            });
-                    }
-                }
-
                 // 2. n8n Webhook Trigger (for email dispatch and automation workflows)
-                if (req.SendEmailViaN8n)
+                if (req.SendEmailViaN8n && assignedTraineePayloads.Any())
                 {
                     var webhookPayload = new
                     {
@@ -961,15 +1198,7 @@ namespace Exam.Controllers
                         endTime = session.EndTime != null ? $"{((TimeSpan)session.EndTime):hh\\:mm}" : "12:00",
                         companyId = (int?)session.CompanyId,
                         companyName = (string)(session.CompanyName ?? ""),
-                        trainees = trainees.Select(t => new
-                        {
-                            id = (int)t.Id,
-                            fullName = (string)(t.FullName ?? ""),
-                            userCode = (string)(t.UserCode ?? ""),
-                            email = (string)(t.Email ?? ""),
-                            phone = (string)(t.Phone ?? ""),
-                            branchName = (string)(t.BranchName ?? "")
-                        }).ToList()
+                        trainees = assignedTraineePayloads
                     };
 
                     _ = Task.Run(async () =>
@@ -1137,6 +1366,7 @@ namespace Exam.Controllers
     {
         public int SessionId { get; set; }
         public List<int> TraineeIds { get; set; } = new List<int>();
+        public List<string> CandidateKeys { get; set; } = new List<string>();
         public bool SendNotification { get; set; } = true;
         public bool SendEmailViaN8n { get; set; } = true;
         public bool BypassApproval { get; set; } = false;
