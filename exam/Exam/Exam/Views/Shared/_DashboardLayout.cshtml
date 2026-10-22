@@ -682,7 +682,7 @@
                     }
 
                     <!-- 6. Wave Operations -->
-                    @if (HasAccess("Admin", "Waves") || HasAccess("Admin", "Assignments") || HasAccess("Admin", "LiveMonitor"))
+                    @if (HasAccess("Admin", "Waves") || HasAccess("Admin", "SmartWaveProposal") || HasAccess("Admin", "Assignments") || HasAccess("Admin", "LiveMonitor"))
                     {
                         <div class="nav-group">
                             <button type="button" onclick="toggleNavGroup('group-waves', this)"
@@ -702,6 +702,9 @@
                                             <span>Wave Cycles</span>
                                         </a>
                                     </li>
+                                }
+                                @if (HasAccess("Admin", "SmartWaveProposal") || HasAccess("Admin", "Waves"))
+                                {
                                     <li>
                                         <a href="@Url.Action("SmartWaveProposal", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "smartwaveproposal")">
                                             <i class="fas fa-wand-magic-sparkles w-4 text-center text-amber-500"></i>

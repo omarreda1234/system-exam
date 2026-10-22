@@ -3849,6 +3849,8 @@ DELETE FROM AspNetUsers WHERE Id = @UserId;",
                         ('HR', 'Admin', 'GetEligibleUsersForExam', 1, 0, 0, 0),
                         ('HR', 'Admin', 'ResendAssignmentEmail', 1, 1, 0, 0),
                         ('HR', 'Admin', 'MoveUserToWave', 1, 0, 1, 0),
+                        ('HR', 'Admin', 'SmartWaveProposal', 1, 1, 1, 1),
+                        ('HR', 'Admin', 'LiveMonitor', 1, 1, 1, 0),
                         ('HR', 'Attendance', 'Analytics', 1, 0, 0, 0);
 
                         -- Seeding Human Resources permissions
@@ -3906,6 +3908,30 @@ DELETE FROM AspNetUsers WHERE Id = @UserId;",
                     FROM RolePermissions rp
                     CROSS JOIN (VALUES ('GetChangeRequestsList'), ('CreateChangeRequest'), ('GetChangeRequestDetails'), ('UpdateChangeRequestStatus'), ('UpdateChangeRequestPriority')) AS childAction(ActionName)
                     WHERE LOWER(rp.ControllerName) = 'admin' AND LOWER(rp.ActionName) = 'changerequests'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM RolePermissions sub 
+                          WHERE sub.RoleName = rp.RoleName 
+                            AND LOWER(sub.ControllerName) = 'admin' 
+                            AND LOWER(sub.ActionName) = LOWER(childAction.ActionName)
+                      );
+
+                    -- Sync SmartWaveProposal permission and sub-actions
+                    INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
+                    SELECT rp.RoleName, 'Admin', 'SmartWaveProposal', rp.CanAccess, rp.CanCreate, rp.CanEdit, rp.CanDelete
+                    FROM RolePermissions rp
+                    WHERE LOWER(rp.ControllerName) = 'admin' AND LOWER(rp.ActionName) = 'waves'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM RolePermissions sub 
+                          WHERE sub.RoleName = rp.RoleName 
+                            AND LOWER(sub.ControllerName) = 'admin' 
+                            AND LOWER(sub.ActionName) = 'smartwaveproposal'
+                      );
+
+                    INSERT INTO RolePermissions (RoleName, ControllerName, ActionName, CanAccess, CanCreate, CanEdit, CanDelete)
+                    SELECT rp.RoleName, 'Admin', childAction.ActionName, rp.CanAccess, rp.CanCreate, rp.CanEdit, rp.CanDelete
+                    FROM RolePermissions rp
+                    CROSS JOIN (VALUES ('GenerateWaveCandidates'), ('ExportProposedCandidatesToExcel'), ('ConfirmWaveProposalEnrollment')) AS childAction(ActionName)
+                    WHERE LOWER(rp.ControllerName) = 'admin' AND LOWER(rp.ActionName) = 'smartwaveproposal'
                       AND NOT EXISTS (
                           SELECT 1 FROM RolePermissions sub 
                           WHERE sub.RoleName = rp.RoleName 

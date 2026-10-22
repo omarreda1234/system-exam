@@ -806,7 +806,9 @@ Eltarshoubi Training Academy Team";
         public async Task<IActionResult> SmartWaveProposal()
         {
             var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role").Select(c => c.Value).ToList();
-            bool hasAccess = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources") || userRoles.Contains("Admin") || await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Waves", "view");
+            bool hasAccess = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources") || userRoles.Contains("Admin") 
+                || await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "SmartWaveProposal", "view")
+                || await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Waves", "view");
             if (!hasAccess)
                 return Forbid();
 
