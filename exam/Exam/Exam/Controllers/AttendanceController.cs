@@ -815,68 +815,6 @@ namespace Exam.Controllers
                     WHERE CST.SessionId = @SessionId
                     ORDER BY CT.FullName", new { SessionId = sessionId })).ToList();
 
-                var available = (await conn.QueryAsync<dynamic>(@"
-                    ;WITH Combined AS (
-                        SELECT 
-                            u.Id AS UserId,
-                            ct.Id AS CompanyTraineeId,
-                            COALESCE(u.FullName, ct.FullName, u.UserName) AS FullName,
-                            COALESCE(u.UserCode, ct.UserCode, '--') AS UserCode,
-                            COALESCE(b.BranchName, ct.BranchName, N'بدون فرع') AS BranchName,
-                            COALESCE(u.Email, ct.Email, '--') AS Email,
-                            COALESCE(u.PhoneNumber, ct.Phone, '--') AS Phone,
-                            COALESCE(u.UserRoleCustom, ct.JobTitle, N'Trainee') AS JobTitle,
-                            ISNULL(b.BypassApproval, 0) AS IsBranchExempt
-                        FROM AspNetUsers u WITH (NOLOCK)
-                        LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
-                        LEFT JOIN CompanyTrainees ct WITH (NOLOCK) ON ct.CompanyId = @CompanyId AND (ct.UserCode = u.UserCode OR (ct.Email = u.Email AND ct.Email <> '--'))
-                        WHERE (u.IsActive = 1 OR ct.Id IS NOT NULL)
-
-                        UNION
-
-                        SELECT 
-                            CAST(NULL AS NVARCHAR(450)) AS UserId,
-                            ct.Id AS CompanyTraineeId,
-                            ct.FullName,
-                            ISNULL(ct.UserCode, '--') AS UserCode,
-                            ISNULL(ct.BranchName, N'بدون فرع') AS BranchName,
-                            ISNULL(ct.Email, '--') AS Email,
-                            ISNULL(ct.Phone, '--') AS Phone,
-                            ISNULL(ct.JobTitle, N'Trainee') AS JobTitle,
-                            ISNULL(b.BypassApproval, 0) AS IsBranchExempt
-                        FROM CompanyTrainees ct WITH (NOLOCK)
-                        LEFT JOIN Branches b WITH (NOLOCK) ON b.BranchName = ct.BranchName
-                        WHERE ct.CompanyId = @CompanyId
-                          AND NOT EXISTS (
-                              SELECT 1 FROM AspNetUsers u2 WITH (NOLOCK) 
-                              WHERE u2.UserCode = ct.UserCode OR (u2.Email = ct.Email AND u2.Email <> '--')
-                          )
-                    )
-                    SELECT TOP 100 
-                        c.UserId,
-                        c.CompanyTraineeId,
-                        c.FullName,
-                        c.UserCode,
-                        c.BranchName,
-                        c.Email,
-                        c.Phone,
-                        c.JobTitle,
-                        c.IsBranchExempt,
-                        CASE 
-                            WHEN c.CompanyTraineeId IS NOT NULL THEN CONCAT('CT_', c.CompanyTraineeId)
-                            ELSE CONCAT('U_', c.UserId)
-                        END AS CandidateKey
-                    FROM Combined c
-                    WHERE NOT EXISTS (
-                        SELECT 1 FROM dbo.CompanySessionTrainees cst WITH (NOLOCK)
-                        WHERE cst.SessionId = @SessionId
-                          AND (
-                              (c.CompanyTraineeId IS NOT NULL AND cst.CompanyTraineeId = c.CompanyTraineeId)
-                              OR (c.UserId IS NOT NULL AND cst.UserId = c.UserId)
-                          )
-                    )
-                    ORDER BY c.FullName", new { CompanyId = companyId.Value, SessionId = sessionId })).ToList();
-
                 return Json(new
                 {
                     success = true,
@@ -891,7 +829,7 @@ namespace Exam.Controllers
                     },
                     assignedCount = assigned.Count,
                     assignedTrainees = assigned,
-                    availablePool = available
+                    availablePool = new List<dynamic>()
                 });
             }
             catch (Exception ex)
@@ -917,9 +855,38 @@ namespace Exam.Controllers
                     return Json(new { success = false, message = "الجلسة غير موجودة أو غير مرتبطة بشركة." });
 
                 int compId = (int)session.CompanyId;
-                string q = (query ?? "").Trim();
+                string raw = (query ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    return Json(new { success = true, candidates = new List<dynamic>() });
+                }
 
-                var candidates = (await conn.QueryAsync<dynamic>(@"
+                // Parse multi-code delimiters: comma, pipe, semicolon, newline
+                var delimiters = new[] { ',', '|', '،', ';', '\n', '\r' };
+                var tokens = raw.Split(delimiters, StringSplitOptions.RemoveEmptyEntries)
+                                .Select(t => t.Trim())
+                                .Where(t => !string.IsNullOrEmpty(t))
+                                .Distinct()
+                                .ToList();
+
+                bool isMultiCode = tokens.Count > 1 || raw.Contains(",") || raw.Contains("|") || raw.Contains("،");
+
+                string whereClause;
+                object queryParams;
+
+                if (isMultiCode)
+                {
+                    whereClause = "WHERE (c.UserCode IN @Codes OR c.FullName IN @Codes)";
+                    queryParams = new { CompanyId = compId, SessionId = sessionId, Codes = tokens };
+                }
+                else
+                {
+                    whereClause = @"WHERE (c.FullName LIKE @Q OR c.UserCode LIKE @Q OR c.BranchName LIKE @Q OR c.Email LIKE @Q)
+                                      AND ( (c.FullName IS NOT NULL AND c.FullName <> '' AND c.FullName <> 'Trainee') OR (c.UserCode IS NOT NULL AND c.UserCode <> '--') )";
+                    queryParams = new { CompanyId = compId, SessionId = sessionId, Q = $"%{tokens[0]}%" };
+                }
+
+                string sql = $@"
                     ;WITH Combined AS (
                         SELECT 
                             u.Id AS UserId,
@@ -956,7 +923,7 @@ namespace Exam.Controllers
                               WHERE u2.UserCode = ct.UserCode OR (u2.Email = ct.Email AND u2.Email <> '--')
                           )
                     )
-                    SELECT TOP 50 
+                    SELECT TOP 60 
                         c.UserId,
                         c.CompanyTraineeId,
                         c.FullName,
@@ -971,7 +938,7 @@ namespace Exam.Controllers
                             ELSE CONCAT('U_', c.UserId)
                         END AS CandidateKey
                     FROM Combined c
-                    WHERE (@Q = '' OR (c.FullName LIKE '%' + @Q + '%' OR c.UserCode LIKE '%' + @Q + '%' OR c.BranchName LIKE '%' + @Q + '%' OR c.Email LIKE '%' + @Q + '%'))
+                    {whereClause}
                       AND NOT EXISTS (
                           SELECT 1 FROM dbo.CompanySessionTrainees cst WITH (NOLOCK)
                           WHERE cst.SessionId = @SessionId
@@ -980,9 +947,11 @@ namespace Exam.Controllers
                                 OR (c.UserId IS NOT NULL AND cst.UserId = c.UserId)
                             )
                       )
-                    ORDER BY c.FullName", new { CompanyId = compId, SessionId = sessionId, Q = q })).ToList();
+                    ORDER BY c.FullName";
 
-                return Json(new { success = true, candidates = candidates });
+                var candidates = (await conn.QueryAsync<dynamic>(sql, queryParams)).ToList();
+
+                return Json(new { success = true, isMultiCode = isMultiCode, count = candidates.Count, candidates = candidates });
             }
             catch (Exception ex)
             {

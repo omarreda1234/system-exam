@@ -218,19 +218,43 @@
                     </div>
                 </div>
 
-                <!-- Tab 2: Assign from Pool -->
+                <!-- Tab 2: Assign from Pool / Search -->
                 <div id="tabContentAssign" class="hidden space-y-4">
-                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                        <div class="relative w-full sm:w-80">
-                            <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                            <input type="text" id="traineeSearchInput" onkeyup="filterTraineePool()" placeholder="بحث بكود الموظف (مثال: 506) أو بالاسم أو الفرع..." class="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-white" />
+                    <div class="space-y-2.5 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+                            <div class="relative w-full flex-1">
+                                <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="text" id="traineeSearchInput" onkeyup="filterTraineePool()" placeholder="ابحث بالاسم أو كود الموظف، أو الصق عدة أكواد مفصولة بـ ( , ) أو ( | ) مثل: 5061, 5063, 5065..." class="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-white transition-all shadow-inner" autocomplete="off" />
+                                <div id="searchSpinner" class="hidden absolute right-3.5 top-1/2 -translate-y-1/2 text-indigo-500">
+                                    <i class="fas fa-spinner fa-spin text-sm"></i>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2.5 shrink-0">
+                                <button type="button" onclick="clearSearchInput()" class="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white text-xs font-bold transition-all flex items-center gap-1.5">
+                                    <i class="fas fa-times text-[10px]"></i> مسح
+                                </button>
+                                <span id="selectedPoolCount" class="text-xs font-mono font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-3.5 py-2 rounded-xl border border-indigo-200/50 dark:border-indigo-900/50">0 محدد</span>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-                            <label class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer select-none">
-                                <input type="checkbox" id="selectAllTrainees" onchange="toggleSelectAllPool(this)" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300" />
-                                <span>تحديد الكل</span>
-                            </label>
-                            <span id="selectedPoolCount" class="text-xs font-mono font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1 rounded-lg">0 محدد</span>
+                        <p class="text-[11px] text-slate-400 font-bold flex items-center gap-1.5 pt-0.5">
+                            <i class="fas fa-lightbulb text-amber-500 text-xs"></i>
+                            <span>بحث فردي أو جماعي: اكتب الاسم أو الكود، أو الصق عدة أكواد مفصولة بـ <strong>( , )</strong> أو <strong>( | )</strong> للتعيين الجماعي المباشر.</span>
+                        </p>
+                    </div>
+
+                    <!-- Selected Candidates Queue Tray -->
+                    <div id="selectedTrayContainer" class="hidden p-3.5 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-black text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                                <i class="fas fa-user-check text-indigo-600"></i>
+                                المتدربين المحددين للتعيين (<span id="trayCount" class="font-mono">0</span>)
+                            </span>
+                            <button type="button" onclick="clearAllSelected()" class="text-[11px] font-bold text-rose-500 hover:underline">
+                                مسح الكل
+                            </button>
+                        </div>
+                        <div id="selectedChipsList" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar p-0.5">
+                            <!-- Populated via JS -->
                         </div>
                     </div>
 
@@ -250,8 +274,16 @@
                         </label>
                     </div>
 
-                    <div id="traineePoolList" class="max-h-72 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
-                        <!-- Checkboxes populated by JS -->
+                    <!-- Search Results Header & Quick Selection -->
+                    <div id="searchResultsHeader" class="hidden flex items-center justify-between px-2 pt-1">
+                        <span id="searchResultCountText" class="text-xs font-black text-slate-600 dark:text-slate-300"></span>
+                        <button type="button" id="btnSelectAllSearchResults" onclick="toggleSelectAllSearchResults()" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1">
+                            <i class="fas fa-check-double text-[11px]"></i> <span>تحديد كل نتائج البحث</span>
+                        </button>
+                    </div>
+
+                    <div id="traineePoolList" class="max-h-80 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
+                        <!-- Rendered by JS like Trainee 360 -->
                     </div>
 
                     <div class="flex justify-end pt-2">
@@ -408,18 +440,19 @@
         let sessionTraineesState = {
             sessionId: 0,
             assignedTrainees: [],
-            poolTrainees: [],
-            selectedKeys: new Set()
+            selectedCandidates: new Map(),
+            currentResults: []
         };
 
         window.openManageSessionTrainees = function (sessionId, sessionName, companyId) {
             sessionTraineesState.sessionId = sessionId;
-            sessionTraineesState.selectedKeys.clear();
+            sessionTraineesState.selectedCandidates.clear();
+            sessionTraineesState.currentResults = [];
             document.getElementById('currentSessionId').value = sessionId;
             document.getElementById('modalSessionTitle').textContent = `Manage Trainees - ${sessionName}`;
             document.getElementById('sessionTraineesModal').classList.remove('hidden');
-            const searchInput = document.getElementById('traineeSearchInput');
-            if (searchInput) searchInput.value = '';
+            clearSearchInput();
+            updateSelectedUi();
             switchTraineesTab('current');
             loadSessionTraineesData(sessionId);
         };
@@ -467,8 +500,6 @@
                 }
 
                 sessionTraineesState.assignedTrainees = data.assignedTrainees || [];
-                sessionTraineesState.poolTrainees = data.availablePool || [];
-
                 countBadge.textContent = sessionTraineesState.assignedTrainees.length;
 
                 // 1. Render Current Assigned Trainees with Approval Badges
@@ -522,117 +553,244 @@
                     `}).join('');
                 }
 
-                // 2. Render Initial Available Candidates
-                renderCandidatePool(sessionTraineesState.poolTrainees);
+                renderEmptySearchState();
             } catch (err) {
                 listWrapper.innerHTML = `<div class="text-center py-6 text-rose-500 font-bold">فشل جلب البيانات: ${err.message}</div>`;
             }
         };
 
-        window.renderCandidatePool = function (candidates) {
+        window.renderEmptySearchState = function () {
             const poolWrapper = document.getElementById('traineePoolList');
+            const header = document.getElementById('searchResultsHeader');
+            if (header) header.classList.add('hidden');
             if (!poolWrapper) return;
 
-            if (!candidates || candidates.length === 0) {
-                poolWrapper.innerHTML = `
-                    <div class="p-6 text-center text-slate-400 text-xs">
-                        <i class="fas fa-search text-2xl text-slate-300 dark:text-slate-600 mb-2 block"></i>
-                        لا توجد نتائج مطابقة. اكتب في خانة البحث أعلاه بالكود (مثال: 506) أو الاسم أو الفرع.
-                    </div>`;
-                return;
-            }
-
-            poolWrapper.innerHTML = candidates.map(t => {
-                const key = t.candidateKey || (t.companyTraineeId ? `CT_${t.companyTraineeId}` : (t.userId ? `U_${t.userId}` : `CT_${t.id}`));
-                const isChecked = sessionTraineesState.selectedKeys.has(key);
-                const isExempt = (t.isBranchExempt == 1 || t.isBranchExempt === true);
-                const searchData = `${t.fullName || ''} ${t.userCode || ''} ${t.branchName || ''}`.toLowerCase();
-
-                return `
-                    <label class="trainee-item flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer select-none" data-key="${key}" data-search="${searchData}">
-                        <div class="flex items-center gap-3">
-                            <input type="checkbox" value="${key}" class="pool-chk w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300" onchange="handlePoolCheckChange(this)" ${isChecked ? 'checked' : ''} />
-                            <div>
-                                <div class="flex items-center gap-1.5">
-                                    <p class="text-xs font-black text-slate-800 dark:text-white leading-tight">${t.fullName || 'Trainee'}</p>
-                                    ${isExempt ? '<span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-300/50" title="هذا الفرع معفى من موافقة المدير - اعتماد فوري"><i class="fas fa-bolt text-[7px] mr-0.5"></i>معفى</span>' : ''}
-                                </div>
-                                <span class="text-[10px] text-slate-400 font-mono">الكود: <strong class="text-slate-700 dark:text-slate-300">${t.userCode || '--'}</strong> | الفرع: ${t.branchName || 'بدون فرع'}</span>
-                            </div>
-                        </div>
-                        <span class="text-[10px] font-bold text-slate-400">${t.jobTitle || 'Trainee'}</span>
-                    </label>
-                `;
-            }).join('');
-
-            updateSelectedPoolCount();
-        };
-
-        window.handlePoolCheckChange = function (chk) {
-            if (chk.checked) {
-                sessionTraineesState.selectedKeys.add(chk.value);
-            } else {
-                sessionTraineesState.selectedKeys.delete(chk.value);
-            }
-            updateSelectedPoolCount();
-        };
-
-        window.updateSelectedPoolCount = function () {
-            const count = sessionTraineesState.selectedKeys.size;
-            const badge = document.getElementById('selectedPoolCount');
-            if (badge) badge.textContent = `${count} محدد`;
-        };
-
-        window.toggleSelectAllPool = function (master) {
-            document.querySelectorAll('.pool-chk').forEach(c => {
-                const item = c.closest('.trainee-item');
-                if (!item || !item.classList.contains('hidden')) {
-                    c.checked = master.checked;
-                    if (master.checked) {
-                        sessionTraineesState.selectedKeys.add(c.value);
-                    } else {
-                        sessionTraineesState.selectedKeys.delete(c.value);
-                    }
-                }
-            });
-            updateSelectedPoolCount();
+            poolWrapper.innerHTML = `
+                <div class="p-8 text-center bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                    <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 flex items-center justify-center mx-auto mb-2 text-xl">
+                        <i class="fas fa-id-card-clip"></i>
+                    </div>
+                    <h4 class="text-xs font-black text-slate-800 dark:text-white">ابحث عن المتدربين لإضافتهم للسيشن</h4>
+                    <p class="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
+                        اكتب كود أو اسم المتدرب، أو الصق عدة أكواد مفصولة بفاصلة <strong>( , )</strong> أو <strong>( | )</strong> للبحث الجماعي الفوري.
+                    </p>
+                </div>`;
         };
 
         let searchDebounceTimeout = null;
         window.filterTraineePool = function () {
-            const q = document.getElementById('traineeSearchInput').value.trim();
+            const input = document.getElementById('traineeSearchInput');
+            const q = input.value.trim();
             clearTimeout(searchDebounceTimeout);
 
-            // Fast local filter first
-            const qLower = q.toLowerCase();
-            document.querySelectorAll('.trainee-item').forEach(el => {
-                const searchTxt = el.getAttribute('data-search') || '';
-                if (!qLower || searchTxt.includes(qLower)) el.classList.remove('hidden');
-                else el.classList.add('hidden');
-            });
+            if (!q) {
+                document.getElementById('searchSpinner').classList.add('hidden');
+                renderEmptySearchState();
+                return;
+            }
 
-            // Debounced remote search across all AspNetUsers & CompanyTrainees
+            document.getElementById('searchSpinner').classList.remove('hidden');
+
             searchDebounceTimeout = setTimeout(async () => {
-                if (!q) {
-                    renderCandidatePool(sessionTraineesState.poolTrainees);
-                    return;
-                }
-
                 try {
                     const res = await fetch(`/Attendance/SearchSessionCandidates?sessionId=${sessionTraineesState.sessionId}&query=${encodeURIComponent(q)}`);
                     const data = await res.json();
+                    document.getElementById('searchSpinner').classList.add('hidden');
+
                     if (data.success && data.candidates) {
-                        renderCandidatePool(data.candidates);
+                        sessionTraineesState.currentResults = data.candidates;
+                        renderSearchResults(data.candidates, data.isMultiCode);
+                    } else {
+                        document.getElementById('traineePoolList').innerHTML = `<div class="p-6 text-center text-xs text-rose-500 font-bold">${data.message || 'حدث خطأ في البحث'}</div>`;
                     }
                 } catch(err) {
+                    document.getElementById('searchSpinner').classList.add('hidden');
                     console.error('Search error:', err);
                 }
-            }, 300);
+            }, 250);
+        };
+
+        window.renderSearchResults = function (candidates, isMultiCode) {
+            const poolWrapper = document.getElementById('traineePoolList');
+            const header = document.getElementById('searchResultsHeader');
+            const countText = document.getElementById('searchResultCountText');
+
+            if (!candidates || candidates.length === 0) {
+                header.classList.add('hidden');
+                poolWrapper.innerHTML = `
+                    <div class="p-8 text-center bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <i class="fas fa-user-slash text-2xl text-slate-400 mb-2 block"></i>
+                        <h4 class="text-xs font-black text-slate-700 dark:text-slate-300">لم يتم العثور على أي متدرب مطابق</h4>
+                        <p class="text-[10px] text-slate-400 mt-1">تأكد من كتابة الأكواد بشكل صحيح أو جرب البحث بالاسم أو الفرع.</p>
+                    </div>`;
+                return;
+            }
+
+            header.classList.remove('hidden');
+            countText.textContent = `تم العثور على (${candidates.length}) ${isMultiCode ? 'متدرب مطابق للأكواد' : 'نتيجة مطابقة'}`;
+
+            // If multi-code search, auto-select them all for convenience!
+            if (isMultiCode) {
+                candidates.forEach(c => {
+                    const key = c.candidateKey || (c.companyTraineeId ? `CT_${c.companyTraineeId}` : `U_${c.userId}`);
+                    sessionTraineesState.selectedCandidates.set(key, {
+                        key: key,
+                        fullName: c.fullName || 'Trainee',
+                        userCode: c.userCode || '--',
+                        branchName: c.branchName || 'بدون فرع'
+                    });
+                });
+                updateSelectedUi();
+            }
+
+            poolWrapper.innerHTML = candidates.map(t => {
+                const key = t.candidateKey || (t.companyTraineeId ? `CT_${t.companyTraineeId}` : `U_${t.userId}`);
+                const isSelected = sessionTraineesState.selectedCandidates.has(key);
+                const isExempt = (t.isBranchExempt == 1 || t.isBranchExempt === true);
+                const role = t.jobTitle || 'Trainee';
+                const branch = t.branchName || 'بدون فرع';
+                const code = t.userCode || '--';
+
+                return `
+                    <div onclick="toggleCandidateSelection('${key}', '${encodeURIComponent(t.fullName || 'Trainee')}', '${code}', '${encodeURIComponent(branch)}')" 
+                         id="candidate-row-${key}"
+                         class="p-3 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer flex items-center justify-between rounded-xl border ${isSelected ? 'border-indigo-500 bg-indigo-50/20 dark:bg-indigo-950/30' : 'border-slate-100 dark:border-slate-800'} transition-all select-none">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs font-black text-slate-900 dark:text-white leading-tight">${t.fullName || 'Trainee'}</span>
+                                    ${isExempt ? '<span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-300/50">معفى</span>' : ''}
+                                </div>
+                                <div class="text-[10px] text-slate-500 dark:text-slate-400 font-bold">${role} - Branch: ${branch}</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[10px] font-black text-indigo-600 dark:text-indigo-400 border border-slate-200/50 dark:border-slate-700/50">Code: ${code}</span>
+                            <input type="checkbox" id="chk-${key}" ${isSelected ? 'checked' : ''} class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 pointer-events-none" />
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        window.toggleCandidateSelection = function (key, encodedName, code, encodedBranch) {
+            if (sessionTraineesState.selectedCandidates.has(key)) {
+                sessionTraineesState.selectedCandidates.delete(key);
+            } else {
+                sessionTraineesState.selectedCandidates.set(key, {
+                    key: key,
+                    fullName: decodeURIComponent(encodedName || ''),
+                    userCode: code || '--',
+                    branchName: decodeURIComponent(encodedBranch || '')
+                });
+            }
+
+            const row = document.getElementById(`candidate-row-${key}`);
+            const chk = document.getElementById(`chk-${key}`);
+            const isSelected = sessionTraineesState.selectedCandidates.has(key);
+            if (row) {
+                if (isSelected) {
+                    row.classList.add('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/30');
+                    row.classList.remove('border-slate-100', 'dark:border-slate-800');
+                } else {
+                    row.classList.remove('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/30');
+                    row.classList.add('border-slate-100', 'dark:border-slate-800');
+                }
+            }
+            if (chk) chk.checked = isSelected;
+
+            updateSelectedUi();
+        };
+
+        window.removeSelectedKey = function (key) {
+            sessionTraineesState.selectedCandidates.delete(key);
+            const row = document.getElementById(`candidate-row-${key}`);
+            const chk = document.getElementById(`chk-${key}`);
+            if (row) {
+                row.classList.remove('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/30');
+                row.classList.add('border-slate-100', 'dark:border-slate-800');
+            }
+            if (chk) chk.checked = false;
+            updateSelectedUi();
+        };
+
+        window.clearAllSelected = function () {
+            sessionTraineesState.selectedCandidates.clear();
+            document.querySelectorAll('#traineePoolList input[type="checkbox"]').forEach(c => c.checked = false);
+            document.querySelectorAll('#traineePoolList > div').forEach(row => {
+                row.classList.remove('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/30');
+                row.classList.add('border-slate-100', 'dark:border-slate-800');
+            });
+            updateSelectedUi();
+        };
+
+        window.toggleSelectAllSearchResults = function () {
+            const results = sessionTraineesState.currentResults || [];
+            if (results.length === 0) return;
+
+            const allSelected = results.every(c => {
+                const key = c.candidateKey || (c.companyTraineeId ? `CT_${c.companyTraineeId}` : `U_${c.userId}`);
+                return sessionTraineesState.selectedCandidates.has(key);
+            });
+
+            results.forEach(c => {
+                const key = c.candidateKey || (c.companyTraineeId ? `CT_${c.companyTraineeId}` : `U_${c.userId}`);
+                if (allSelected) {
+                    sessionTraineesState.selectedCandidates.delete(key);
+                } else {
+                    sessionTraineesState.selectedCandidates.set(key, {
+                        key: key,
+                        fullName: c.fullName || 'Trainee',
+                        userCode: c.userCode || '--',
+                        branchName: c.branchName || 'بدون فرع'
+                    });
+                }
+            });
+
+            renderSearchResults(results, false);
+            updateSelectedUi();
+        };
+
+        window.updateSelectedUi = function () {
+            const count = sessionTraineesState.selectedCandidates.size;
+            const badge = document.getElementById('selectedPoolCount');
+            const tray = document.getElementById('selectedTrayContainer');
+            const trayCount = document.getElementById('trayCount');
+            const chipsList = document.getElementById('selectedChipsList');
+
+            if (badge) badge.textContent = `${count} محدد`;
+            if (trayCount) trayCount.textContent = count;
+
+            if (count > 0) {
+                tray.classList.remove('hidden');
+                chipsList.innerHTML = Array.from(sessionTraineesState.selectedCandidates.values()).map(item => `
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 rounded-lg text-[11px] font-bold border border-indigo-200 dark:border-indigo-800 shadow-sm">
+                        <i class="fas fa-user-check text-[9px] text-indigo-500"></i>
+                        <span>${item.fullName}</span>
+                        <span class="font-mono text-[9px] text-slate-400">(${item.userCode})</span>
+                        <button type="button" onclick="removeSelectedKey('${item.key}')" class="hover:text-rose-500 ml-1 text-xs font-bold leading-none" title="إزالة">×</button>
+                    </span>
+                `).join('');
+            } else {
+                tray.classList.add('hidden');
+                chipsList.innerHTML = '';
+            }
+        };
+
+        window.clearSearchInput = function () {
+            const input = document.getElementById('traineeSearchInput');
+            if (input) input.value = '';
+            document.getElementById('searchSpinner').classList.add('hidden');
+            sessionTraineesState.currentResults = [];
+            renderEmptySearchState();
         };
 
         window.saveTraineesAssignment = async function () {
             const sessionId = sessionTraineesState.sessionId;
-            const candidateKeys = Array.from(sessionTraineesState.selectedKeys);
+            const candidateKeys = Array.from(sessionTraineesState.selectedCandidates.keys());
 
             if (candidateKeys.length === 0) {
                 Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى تحديد متدرب واحد على الأقل.' });
@@ -664,7 +822,8 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    sessionTraineesState.selectedKeys.clear();
+                    sessionTraineesState.selectedCandidates.clear();
+                    updateSelectedUi();
                     await Swal.fire({ icon: 'success', title: 'تم التعيين بنجاح', text: data.message });
                     switchTraineesTab('current');
                     loadSessionTraineesData(sessionId);
