@@ -2657,49 +2657,89 @@ WHERE U.Id = @UserId;";
                             siteUrl = siteUrl,
                             subjectTemplate = subjectTemplate,
                             bodyTemplate = bodyTemplate,
-                            candidates = candidateDetails.Select(c => 
+                        var candidatesList = candidateDetails.Select(c => 
+                        {
+                            string cFullName = (string)c.FullName;
+                            string cFirstName = cFullName.Split(' ')[0];
+                            string cEmail = (string)(c.Email ?? "");
+
+                            string resSubject = subjectTemplate
+                                .Replace("{Name}", cFirstName)
+                                .Replace("{FullName}", cFullName)
+                                .Replace("{UserName}", cFullName)
+                                .Replace("{WaveName}", waveName)
+                                .Replace("{StartDate}", formattedDate)
+                                .Replace("{Location}", location)
+                                .Replace("{PortalLink}", siteUrl);
+
+                            string rawBody = bodyTemplate ?? "Dear {Name},\r\n\r\nWelcome to {WaveName} of Pharmacy Basics Program — we’re glad to have you with us!\r\n\r\nYour registration has been successfully confirmed.\r\nDate & Time: {StartDate}\r\nLocation: {Location}\r\nPortal: {PortalLink}";
+                            string resBody = rawBody
+                                .Replace("{Name}", cFirstName)
+                                .Replace("{FullName}", cFullName)
+                                .Replace("{UserName}", cFullName)
+                                .Replace("{WaveName}", waveName)
+                                .Replace("{StartDate}", formattedDate)
+                                .Replace("{Location}", location)
+                                .Replace("{PortalLink}", siteUrl);
+
+                            return new
                             {
-                                string cFullName = (string)c.FullName;
-                                string cFirstName = cFullName.Split(' ')[0];
-                                string cEmail = (string)(c.Email ?? "");
+                                id = (string)c.Id,
+                                fullName = cFullName,
+                                userName = (string)c.UserName,
+                                email = cEmail,
+                                phone = (string)(c.PhoneNumber ?? ""),
+                                branchId = (int?)c.BranchId,
+                                branchName = (string)c.BranchName,
+                                subject = resSubject,
+                                body = resBody
+                            };
+                        }).ToList();
 
-                                string resSubject = subjectTemplate
-                                    .Replace("{Name}", cFirstName)
-                                    .Replace("{FullName}", cFullName)
-                                    .Replace("{UserName}", cFullName)
-                                    .Replace("{WaveName}", waveName)
-                                    .Replace("{StartDate}", formattedDate)
-                                    .Replace("{Location}", location)
-                                    .Replace("{PortalLink}", siteUrl);
-
-                                string rawBody = bodyTemplate ?? "Dear {Name},\r\n\r\nWelcome to {WaveName} of Pharmacy Basics Program — we’re glad to have you with us!\r\n\r\nYour registration has been successfully confirmed.\r\nDate & Time: {StartDate}\r\nLocation: {Location}\r\nPortal: {PortalLink}";
-                                string resBody = rawBody
-                                    .Replace("{Name}", cFirstName)
-                                    .Replace("{FullName}", cFullName)
-                                    .Replace("{UserName}", cFullName)
-                                    .Replace("{WaveName}", waveName)
-                                    .Replace("{StartDate}", formattedDate)
-                                    .Replace("{Location}", location)
-                                    .Replace("{PortalLink}", siteUrl);
-
-                                return new
-                                {
-                                    id = (string)c.Id,
-                                    fullName = cFullName,
-                                    userName = (string)c.UserName,
-                                    email = cEmail,
-                                    phone = (string)(c.PhoneNumber ?? ""),
-                                    branchId = (int?)c.BranchId,
-                                    branchName = (string)c.BranchName,
-                                    subject = resSubject,
-                                    body = resBody
-                                };
-                            }).ToList()
+                        var n8nPayload = new
+                        {
+                            @event = "wave_nomination_created",
+                            waveId = waveId,
+                            waveName = waveNameStr,
+                            startDate = startDateVal != null ? ((DateTime)startDateVal).ToString("yyyy-MM-dd") : null,
+                            formattedStartDate = formattedDate,
+                            location = location,
+                            siteUrl = siteUrl,
+                            subjectTemplate = subjectTemplate,
+                            bodyTemplate = bodyTemplate,
+                            candidates = candidatesList
                         };
 
                         _ = Task.Run(async () =>
                         {
-                            try { await _n8nService.TriggerWaveNominationNotificationAsync(n8nPayload); } catch { }
+                            bool n8nSent = false;
+                            if (_n8nService != null)
+                            {
+                                try { n8nSent = await _n8nService.TriggerWaveNominationNotificationAsync(n8nPayload); } catch { }
+                            }
+
+                            // Fallback: If n8n is not running, send directly via SMTP
+                            if (!n8nSent)
+                            {
+                                foreach (var cand in candidatesList)
+                                {
+                                    if (!string.IsNullOrWhiteSpace(cand.email) && cand.email.Contains("@"))
+                                    {
+                                        try
+                                        {
+                                            string formattedHtml = $"<div style='font-family: Arial, sans-serif; direction: rtl; text-align: right; line-height: 1.8; color: #1e293b; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;'>" +
+                                                $"<h2 style='color: #0f766e;'>تهانينا! تأكيد التسجيل في الدورة التدريبية</h2>" +
+                                                $"<p>{cand.body.Replace("\r\n", "<br/>").Replace("\n", "<br/>")}</p>" +
+                                                $"<hr style='border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;'/>" +
+                                                $"<p style='font-size: 12px; color: #64748b;'>أكاديمية الطرشوبي - التدريب والتطوير المستمر</p>" +
+                                                $"</div>";
+
+                                            await _emailSender.SendEmailAsync(cand.email, cand.subject, formattedHtml);
+                                        }
+                                        catch { }
+                                    }
+                                }
+                            }
                         });
                     }
                 }
