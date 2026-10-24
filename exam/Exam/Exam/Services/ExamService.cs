@@ -2608,21 +2608,92 @@ WHERE U.Id = @UserId;";
                             LEFT JOIN Branches b ON u.BranchId = b.Id
                             WHERE u.Id IN @UserIds", new { UserIds = userIds })).ToList();
 
+                        // Insert personal in-app notification for each candidate
+                        foreach (var c in candidateDetails)
+                        {
+                            try
+                            {
+                                string cId = (string)c.Id;
+                                await conn.ExecuteAsync(@"
+                                    INSERT INTO dbo.AppNotifications (UserId, Title, Message, LinkUrl, Type, ReferenceId, IsRead, CreatedAt)
+                                    VALUES (@UserId, @Title, @Message, '/Home', 'WaveNomination', @ReferenceId, 0, GETDATE())",
+                                    new
+                                    {
+                                        UserId = cId,
+                                        Title = $"Wave Nomination: {waveNameStr} 🔔",
+                                        Message = $"You have been nominated for wave \"{waveNameStr}\". Status: Pending branch manager review.",
+                                        ReferenceId = waveId.ToString()
+                                    });
+                            }
+                            catch { }
+                        }
+
+                        string waveName = waveNameStr;
+                        DateTime? startDateVal = waveInfo?.StartDate;
+                        string formattedDate = startDateVal.HasValue ? ((DateTime)startDateVal.Value).ToString("MMMM dd, yyyy - hh:mm tt") : "To be announced";
+                        bool isOnline = (waveInfo?.IsOnline == true) || (waveInfo?.Mode != null && waveInfo.Mode.ToString().ToLower().Contains("online"));
+                        string location = isOnline ? "Online" : (!string.IsNullOrWhiteSpace(waveInfo?.Mode?.ToString()) ? waveInfo.Mode.ToString() : "Offline in Main Branch");
+
+                        string subjectTemplate = !string.IsNullOrWhiteSpace(customSubject) 
+                            ? customSubject.Trim() 
+                            : (!string.IsNullOrWhiteSpace((string?)waveInfo?.CustomEmailSubject) 
+                                ? (string)waveInfo.CustomEmailSubject 
+                                : $"Welcome to {waveName} - Registration Confirmed");
+
+                        string? bodyTemplate = !string.IsNullOrWhiteSpace(customBody) 
+                            ? customBody.Trim() 
+                            : (!string.IsNullOrWhiteSpace((string?)waveInfo?.CustomEmailBody) 
+                                ? (string)waveInfo.CustomEmailBody 
+                                : null);
+
                         var n8nPayload = new
                         {
                             @event = "wave_nomination_created",
                             waveId = waveId,
                             waveName = waveNameStr,
-                            startDate = waveInfo?.StartDate != null ? ((DateTime)waveInfo.StartDate).ToString("yyyy-MM-dd") : null,
-                            candidates = candidateDetails.Select(c => new
+                            startDate = startDateVal != null ? ((DateTime)startDateVal).ToString("yyyy-MM-dd") : null,
+                            formattedStartDate = formattedDate,
+                            location = location,
+                            siteUrl = siteUrl,
+                            subjectTemplate = subjectTemplate,
+                            bodyTemplate = bodyTemplate,
+                            candidates = candidateDetails.Select(c => 
                             {
-                                id = (string)c.Id,
-                                fullName = (string)c.FullName,
-                                userName = (string)c.UserName,
-                                email = (string)(c.Email ?? ""),
-                                phone = (string)(c.PhoneNumber ?? ""),
-                                branchId = (int?)c.BranchId,
-                                branchName = (string)c.BranchName
+                                string cFullName = (string)c.FullName;
+                                string cFirstName = cFullName.Split(' ')[0];
+                                string cEmail = (string)(c.Email ?? "");
+
+                                string resSubject = subjectTemplate
+                                    .Replace("{Name}", cFirstName)
+                                    .Replace("{FullName}", cFullName)
+                                    .Replace("{UserName}", cFullName)
+                                    .Replace("{WaveName}", waveName)
+                                    .Replace("{StartDate}", formattedDate)
+                                    .Replace("{Location}", location)
+                                    .Replace("{PortalLink}", siteUrl);
+
+                                string rawBody = bodyTemplate ?? "Dear {Name},\r\n\r\nWelcome to {WaveName} of Pharmacy Basics Program — we’re glad to have you with us!\r\n\r\nYour registration has been successfully confirmed.\r\nDate & Time: {StartDate}\r\nLocation: {Location}\r\nPortal: {PortalLink}";
+                                string resBody = rawBody
+                                    .Replace("{Name}", cFirstName)
+                                    .Replace("{FullName}", cFullName)
+                                    .Replace("{UserName}", cFullName)
+                                    .Replace("{WaveName}", waveName)
+                                    .Replace("{StartDate}", formattedDate)
+                                    .Replace("{Location}", location)
+                                    .Replace("{PortalLink}", siteUrl);
+
+                                return new
+                                {
+                                    id = (string)c.Id,
+                                    fullName = cFullName,
+                                    userName = (string)c.UserName,
+                                    email = cEmail,
+                                    phone = (string)(c.PhoneNumber ?? ""),
+                                    branchId = (int?)c.BranchId,
+                                    branchName = (string)c.BranchName,
+                                    subject = resSubject,
+                                    body = resBody
+                                };
                             }).ToList()
                         };
 
@@ -2829,10 +2900,13 @@ WHERE U.Id = @UserId;";
 
             const string sql = @"
                 SELECT 
-                    u.Id, u.UserName, u.Email, u.PhoneNumber as Phone, u.UserCode, 
-                    b.BranchName, u.CertificateCode, r.Name as RoleName, u.IsActive, tw.WaveName,
+                    u.Id, u.UserName, ISNULL(u.FullName, u.UserName) AS FullName, u.Email, u.PhoneNumber as Phone, u.UserCode, 
+                    b.BranchName, u.BranchId, u.CertificateCode, r.Name as RoleName, u.IsActive, tw.WaveName,
                     '' as LastExamStatus, -- Removed for performance
                     uw.JoinDate,
+                    uw.Id as UserWaveId,
+                    ISNULL(uw.ApprovalStatus, 'Pending') as ApprovalStatus,
+                    uw.RejectionReason,
                     0 as IsAlreadyAssigned
                 FROM dbo.AspNetUsers u WITH(NOLOCK)
                 INNER JOIN dbo.UserWaves uw WITH(NOLOCK) ON u.Id = uw.UserId 

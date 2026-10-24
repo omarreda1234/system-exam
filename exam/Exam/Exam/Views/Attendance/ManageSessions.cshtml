@@ -68,11 +68,13 @@
                                     var totalPool = session.TotalTraineesCount != null ? (int)session.TotalTraineesCount : 0;
                                     int enrolledCount = specificAssigned > 0 ? specificAssigned : totalPool;
                                     int present = Convert.ToInt32(session.PresentCount);
+                                    int pendingCount = 0;
+                                    try { pendingCount = session.PendingAssignedCount != null ? Convert.ToInt32(session.PendingAssignedCount) : 0; } catch {}
 
-                                    if (specificAssigned > 0)
+                                    if (specificAssigned > 0 || pendingCount > 0)
                                     {
                                         <span id="session-badge-@session.Id" class="text-[9px] sm:text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800" title="المتدربين المسجلين في هذه الجلسة">
-                                            <i class="fas fa-users mr-1"></i> @specificAssigned Session Trainees
+                                            <i class="fas fa-users mr-1"></i> @specificAssigned Session Trainees @(pendingCount > 0 ? $"({pendingCount} معلق)" : "")
                                         </span>
                                     }
                                     else
@@ -218,9 +220,15 @@
                         <p class="text-xs text-slate-400 font-medium mt-0.5">تحديد متدربي هذه السيشن وتفعيل إشعارات المنصة وإرسال الإيميلات عبر n8n API</p>
                     </div>
                 </div>
-                <button type="button" onclick="closeManageSessionTrainees()" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-                    <i class="fas fa-times text-base"></i>
-                </button>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="btnRefreshSessionTrainees" onclick="refreshCurrentSessionTrainees()" class="px-3.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95" title="تحديث قائمة المتدربين فورياً">
+                        <i class="fas fa-sync-alt" id="iconRefreshSessionTrainees"></i>
+                        <span>تحديث</span>
+                    </button>
+                    <button type="button" onclick="closeManageSessionTrainees()" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                        <i class="fas fa-times text-base"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Tabs -->
@@ -474,31 +482,89 @@
             currentResults: []
         };
 
-        const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 3500,
-            timerProgressBar: true,
-            showCloseButton: true,
-            background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#ffffff',
-            color: document.documentElement.classList.contains('dark') ? '#f8fafc' : '#0f172a',
-            customClass: {
-                popup: 'rounded-2xl shadow-2xl border border-indigo-500/20 text-xs font-bold'
-            },
-            didOpen: (toast) => {
-                toast.addEventListener('mouseenter', Swal.stopTimer);
-                toast.addEventListener('mouseleave', Swal.resumeTimer);
+        window.showAppToast = function (type, title, message) {
+            let container = document.getElementById('appGlobalToastContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'appGlobalToastContainer';
+                container.className = 'fixed top-5 left-1/2 -translate-x-1/2 sm:left-auto sm:right-6 sm:translate-x-0 z-[999999] flex flex-col gap-2.5 pointer-events-none max-w-sm w-full px-4 sm:px-0';
+                document.body.appendChild(container);
             }
-        });
+
+            const toast = document.createElement('div');
+            toast.className = 'pointer-events-auto transform translate-y-[-16px] opacity-0 transition-all duration-300 ease-out flex items-start gap-3 p-4 rounded-2xl shadow-2xl backdrop-blur-xl border text-xs select-none';
+
+            let iconHtml = '';
+            let bgBorder = '';
+            let progressBg = '';
+
+            const t = (type || 'info').toLowerCase();
+            if (t === 'success') {
+                bgBorder = 'bg-slate-900/95 text-emerald-100 border-emerald-500/40 shadow-emerald-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-check-circle"></i></div>';
+                progressBg = 'bg-emerald-400';
+            } else if (t === 'error' || t === 'danger') {
+                bgBorder = 'bg-slate-900/95 text-rose-100 border-rose-500/40 shadow-rose-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-exclamation-circle"></i></div>';
+                progressBg = 'bg-rose-400';
+            } else if (t === 'warning') {
+                bgBorder = 'bg-slate-900/95 text-amber-100 border-amber-500/40 shadow-amber-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-exclamation-triangle"></i></div>';
+                progressBg = 'bg-amber-400';
+            } else {
+                bgBorder = 'bg-slate-900/95 text-indigo-100 border-indigo-500/40 shadow-indigo-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-info-circle"></i></div>';
+                progressBg = 'bg-indigo-400';
+            }
+
+            toast.className += ' ' + bgBorder;
+            toast.innerHTML = `
+                ${iconHtml}
+                <div class="flex-1 min-w-0 pr-1">
+                    <h5 class="font-black text-xs text-white leading-snug">${title || ''}</h5>
+                    ${message ? `<p class="text-[11px] opacity-80 mt-0.5 leading-normal break-words">${message}</p>` : ''}
+                </div>
+                <button type="button" class="text-white/40 hover:text-white transition-colors text-xs p-1 shrink-0" onclick="this.parentElement.remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="absolute bottom-0 left-0 right-0 h-1 rounded-b-2xl overflow-hidden bg-white/10">
+                    <div class="h-full ${progressBg} transition-all ease-linear" style="width: 100%; transition-duration: 3500ms;"></div>
+                </div>
+            `;
+
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-[-16px]', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+                const progressBar = toast.querySelector(`.${progressBg}`);
+                if (progressBar) {
+                    requestAnimationFrame(() => {
+                        progressBar.style.width = '0%';
+                    });
+                }
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-[-8px]', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        };
 
         function showToast(icon, title, message) {
-            Toast.fire({
-                icon: icon,
-                title: title,
-                text: message || ''
-            });
+            showAppToast(icon, title, message);
         }
+
+        window.refreshCurrentSessionTrainees = async function () {
+            const icon = document.getElementById('iconRefreshSessionTrainees');
+            if (icon) icon.classList.add('fa-spin');
+            if (sessionTraineesState.sessionId) {
+                await loadSessionTraineesData(sessionTraineesState.sessionId);
+            }
+            if (icon) icon.classList.remove('fa-spin');
+            showAppToast('info', 'Updated', 'Session trainees and their statuses have been refreshed.');
+        };
 
         window.openManageSessionTrainees = function (sessionId, sessionName, companyId) {
             sessionTraineesState.sessionId = sessionId;
@@ -516,8 +582,16 @@
 
         window.closeManageSessionTrainees = function () {
             document.getElementById('sessionTraineesModal').classList.add('hidden');
-            if (sessionTraineesState.hasModified) {
-                location.reload();
+            if (sessionTraineesState.sessionId && sessionTraineesState.assignedTrainees) {
+                const sessionBadge = document.getElementById(`session-badge-${sessionTraineesState.sessionId}`);
+                if (sessionBadge) {
+                    const approvedCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'approved').length;
+                    const pendingCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'pending').length;
+                    let badgeText = `${approvedCount} Session Trainees`;
+                    if (pendingCount > 0) badgeText += ` (${pendingCount} معلق)`;
+                    sessionBadge.className = 'text-[9px] sm:text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800';
+                    sessionBadge.innerHTML = `<i class="fas fa-users mr-1"></i> ${badgeText}`;
+                }
             }
         };
 
@@ -565,10 +639,13 @@
                 // Sync badge on outer session card in real-time
                 const sessionBadge = document.getElementById(`session-badge-${sessionId}`);
                 if (sessionBadge) {
-                    const assignedCount = sessionTraineesState.assignedTrainees.length;
-                    if (assignedCount > 0) {
+                    const approvedCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'approved').length;
+                    const pendingCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'pending').length;
+                    if (approvedCount > 0 || pendingCount > 0) {
+                        let badgeText = `${approvedCount} Session Trainees`;
+                        if (pendingCount > 0) badgeText += ` (${pendingCount} معلق)`;
                         sessionBadge.className = 'text-[9px] sm:text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800';
-                        sessionBadge.innerHTML = `<i class="fas fa-users mr-1"></i> ${assignedCount} Session Trainees`;
+                        sessionBadge.innerHTML = `<i class="fas fa-users mr-1"></i> ${badgeText}`;
                     }
                 }
 
@@ -874,7 +951,7 @@
             const candidateKeys = Array.from(sessionTraineesState.selectedCandidates.keys());
 
             if (candidateKeys.length === 0) {
-                showToast('warning', 'تنبيه', 'يرجى تحديد متدرب واحد على الأقل.');
+                showAppToast('warning', 'Notice', 'Please select at least one trainee.');
                 return;
             }
 
@@ -882,12 +959,7 @@
             const sendN8n = document.getElementById('chkSendN8nEmail').checked;
             const bypassApproval = document.getElementById('chkBypassApproval') ? document.getElementById('chkBypassApproval').checked : false;
 
-            Swal.fire({
-                title: 'جاري التعيين والإرسال...',
-                text: 'يتم تسجيل المتدربين وإطلاق إشعارات المنصة و n8n Webhook...',
-                allowOutsideClick: false,
-                didOpen: () => Swal.showLoading()
-            });
+            showAppToast('info', 'Assigning...', 'Registering trainees and triggering platform & n8n webhook notifications...');
 
             try {
                 const res = await fetch('/Attendance/AssignTraineesToSession', {
@@ -902,54 +974,41 @@
                     })
                 });
                 const data = await res.json();
-                Swal.close();
                 if (data.success) {
                     sessionTraineesState.hasModified = true;
                     sessionTraineesState.selectedCandidates.clear();
                     updateSelectedUi();
-                    showToast('success', 'تم التعيين بنجاح', data.message);
+                    showAppToast('success', 'Assigned Successfully', data.message || 'Trainees enrolled successfully.');
                     switchTraineesTab('current');
                     loadSessionTraineesData(sessionId);
                 } else {
-                    showToast('error', 'تعذر التعيين', data.message);
+                    showAppToast('error', 'Assignment Failed', data.message || 'Could not assign trainees.');
                 }
             } catch (err) {
-                Swal.close();
-                showToast('error', 'فشل الاتصال', err.message);
+                showAppToast('error', 'Connection Error', err.message);
             }
         };
 
         window.removeTraineeFromSession = async function (sessionId, traineeId, name) {
-            const confirm = await Swal.fire({
-                title: 'إزالة المتدرب؟',
-                text: `هل تريد إزالة (${decodeURIComponent(name || '')}) من هذه السيشن المحددة؟`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'نعم، إزالة',
-                cancelButtonText: 'إلغاء',
-                confirmButtonColor: '#ef4444'
-            });
-            if (!confirm.isConfirmed) return;
-
             try {
                 const res = await fetch(`/Attendance/RemoveTraineeFromSession?sessionId=${sessionId}&traineeId=${traineeId}`, { method: 'POST' });
                 const data = await res.json();
                 if (data.success) {
                     sessionTraineesState.hasModified = true;
-                    showToast('success', 'تم الحذف', data.message);
+                    showAppToast('success', 'Removed Successfully', data.message || `Removed ${decodeURIComponent(name || '')} successfully.`);
                     loadSessionTraineesData(sessionId);
                 } else {
-                    showToast('error', 'خطأ', data.message);
+                    showAppToast('error', 'Error', data.message || 'Could not remove trainee.');
                 }
             } catch (err) {
-                showToast('error', 'فشل', err.message);
+                showAppToast('error', 'Connection Error', err.message);
             }
         };
 
         window.uploadSessionExcelDirect = async function () {
             const fileInput = document.getElementById('sessionExcelFile');
             if (!fileInput.files || fileInput.files.length === 0) {
-                showToast('warning', 'تنبيه', 'يرجى اختيار ملف إكسيل أولاً.');
+                showAppToast('warning', 'Notice', 'Please select an Excel file first.');
                 return;
             }
 
@@ -960,12 +1019,7 @@
             formData.append('excelFile', fileInput.files[0]);
             formData.append('bypassApproval', bypassExcel);
 
-            Swal.fire({
-                title: 'جاري استيراد الإكسيل...',
-                text: 'يتم قراءة الملف وتسكين المتدربين وإرسالهم لـ n8n API...',
-                allowOutsideClick: false,
-                didOpen: () => Swal.showLoading()
-            });
+            showAppToast('info', 'Importing...', 'Reading Excel file and assigning trainees...');
 
             try {
                 const res = await fetch('/Attendance/ImportSessionTraineesFromExcel', {
@@ -973,19 +1027,17 @@
                     body: formData
                 });
                 const data = await res.json();
-                Swal.close();
                 if (data.success) {
                     sessionTraineesState.hasModified = true;
-                    showToast('success', 'تم الاستيراد بنجاح', data.message);
+                    showAppToast('success', 'Imported Successfully', data.message || 'Excel trainees imported successfully.');
                     fileInput.value = '';
                     switchTraineesTab('current');
                     loadSessionTraineesData(sessionTraineesState.sessionId);
                 } else {
-                    showToast('error', 'خطأ في الاستيراد', data.message);
+                    showAppToast('error', 'Import Error', data.message || 'Failed to import Excel.');
                 }
             } catch (err) {
-                Swal.close();
-                showToast('error', 'فشل الرفع', err.message);
+                showAppToast('error', 'Upload Failed', err.message);
             }
         };
     </script>

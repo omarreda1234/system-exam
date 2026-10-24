@@ -222,16 +222,16 @@ namespace Exam.Controllers
             var rows = (await conn.QueryAsync<dynamic>(sql, p)).ToList();
 
             using var workbook = new XLWorkbook();
-            var ws = workbook.Worksheets.Add("سجل الترشيحات والاعتمادات");
-            ws.RightToLeft = true;
+            var ws = workbook.Worksheets.Add("Nominations Audit Trail");
+            ws.RightToLeft = false;
 
             // Headers
             string[] headers = new[]
             {
-                "#", "نوع التدريب", "الدورة / الجلسة", "الشركة",
-                "اسم المتدرب", "الكود", "الوظيفة", "الفرع",
-                "القرار / الإجراء", "السبب / ملاحظات", "المتدرب البديل",
-                "متخذ الإجراء", "الصفة / الدور", "تاريخ وتوقيت العملية"
+                "#", "Training Type", "Course / Session", "Company",
+                "Trainee Name", "Code", "Role / Title", "Branch",
+                "Decision / Action", "Reason / Notes", "Replacement Trainee",
+                "Actioned By", "Actor Role", "Date & Time"
             };
 
             for (int i = 0; i < headers.Length; i++)
@@ -247,14 +247,14 @@ namespace Exam.Controllers
             int rowIdx = 2;
             foreach (var r in rows)
             {
-                string entityDisplay = (string)r.EntityType == "Wave" ? "دورة ويف (Wave)" : "جلسة شركة (Company Session)";
+                string entityDisplay = (string)r.EntityType == "Wave" ? "Wave Session" : "Company Session";
                 string actionDisplay = (string)r.Action switch
                 {
-                    "Approved" => "تم الاعتماد ✅",
-                    "Rejected" => "تم الرفض / اعتذار ❌",
-                    "Replaced" => "تم الاستبدال 🔄",
-                    "Pending" => "بانتظار الاعتماد ⏳",
-                    "Nominated" => "تم الترشيح 📋",
+                    "Approved" => "Approved ✅",
+                    "Rejected" => "Rejected / Declined ❌",
+                    "Replaced" => "Replaced 🔄",
+                    "Pending" => "Pending Approval ⏳",
+                    "Nominated" => "Nominated 📋",
                     _ => (string)r.Action
                 };
 
@@ -269,7 +269,7 @@ namespace Exam.Controllers
                 ws.Cell(rowIdx, 9).SetValue(actionDisplay);
                 ws.Cell(rowIdx, 10).SetValue((string)(r.ActionReason ?? "--"));
                 ws.Cell(rowIdx, 11).SetValue((string)(r.ReplacementTraineeName ?? "--"));
-                ws.Cell(rowIdx, 12).SetValue((string)(r.ActionByUserName ?? "النظام"));
+                ws.Cell(rowIdx, 12).SetValue((string)(r.ActionByUserName ?? "System"));
                 ws.Cell(rowIdx, 13).SetValue((string)(r.ActionByUserRole ?? "Branch Manager"));
                 ws.Cell(rowIdx, 14).SetValue(((DateTime)r.ActionDate).ToString("yyyy-MM-dd HH:mm:ss"));
 

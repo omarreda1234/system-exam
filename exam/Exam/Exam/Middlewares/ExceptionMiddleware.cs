@@ -27,7 +27,10 @@ namespace Exam.Middlewares
                 SentrySdk.CaptureException(ex);
                 _logger.LogError(ex, "An unhandled exception has occurred.");
                 
-                if (context.Request.Headers["X-Requested-With"] == "XMLHttpRequest" || context.Request.Path.StartsWithSegments("/api"))
+                if (context.Request.Headers["X-Requested-With"] == "XMLHttpRequest" || 
+                    context.Request.Headers["Accept"].ToString().Contains("application/json") ||
+                    context.Request.Path.StartsWithSegments("/api") ||
+                    context.Request.Path.StartsWithSegments("/Notification"))
                 {
                     context.Response.ContentType = "application/json";
                     context.Response.StatusCode = 500;

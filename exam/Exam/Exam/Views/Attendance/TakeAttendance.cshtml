@@ -108,6 +108,38 @@
             </div>
         }
 
+        @if (ViewBag.PendingCount != null && (int)ViewBag.PendingCount > 0)
+        {
+            <div class="bg-amber-50/90 border border-amber-200 text-amber-900 p-4 rounded-2xl mb-5 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center text-base shrink-0">
+                        <i class="fas fa-user-clock"></i>
+                    </div>
+                    <div>
+                        <h5 class="font-black text-xs leading-snug">تنبيه: يوجد (@ViewBag.PendingCount) متدرب معلق بانتظار موافقة مدير الفرع (Pending)</h5>
+                        <p class="text-[11px] text-amber-700/80 mt-0.5">المتدربون المعلقون لا يظهرون في كشف الغياب ولا يُحسبون في إجمالي الحضور حتى يتم اعتماد ترشيحهم رسمياً.</p>
+                    </div>
+                </div>
+                <span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300/60 shrink-0">
+                    @ViewBag.PendingCount معلق
+                </span>
+            </div>
+        }
+
+        @if (!Model.Any())
+        {
+            <div class="bg-white border border-slate-200 rounded-3xl p-12 text-center shadow-sm">
+                <div class="w-16 h-16 rounded-3xl bg-indigo-50 text-indigo-500 flex items-center justify-center mx-auto mb-4 text-2xl">
+                    <i class="fas fa-users-slash"></i>
+                </div>
+                <h4 class="text-base font-black text-slate-800">لا يوجد متدربين معتمدين لتسجيل الغياب في هذه السيشن</h4>
+                <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                    @(ViewBag.PendingCount != null && (int)ViewBag.PendingCount > 0 ? "يوجد مرشحون مخصصون لهذه السيشن ولكنهم ما زالوا معلقين بانتظار موافقة مدير الفرع (Pending)." : "يمكنك تخصيص متدربين للسيشن عبر زر Manage Trainees.")
+                </p>
+            </div>
+        }
+        else
+        {
         <div class="hidden md:block bg-white border border-slate-200 rounded-t-[32px] overflow-hidden shadow-sm">
              <div class="grid grid-cols-12 bg-slate-50/50 border-b border-slate-100 px-8 py-4">
                  <div class="col-span-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Trainee / المتدرب</div>
@@ -188,6 +220,7 @@
                 </div>
             }
         </div>
+        }
     </div>
 </div>
 

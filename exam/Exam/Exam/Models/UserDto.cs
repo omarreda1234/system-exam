@@ -19,5 +19,8 @@ namespace Exam.Models
         public int IsAlreadyAssigned { get; set; }
         public DateTime? JoinDate { get; set; }
         public int AbsenceCount { get; set; }
+        public string ApprovalStatus { get; set; } = "Pending";
+        public string? RejectionReason { get; set; }
+        public int? UserWaveId { get; set; }
     }
 }

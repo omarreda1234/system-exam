@@ -64,7 +64,7 @@ namespace Exam.Controllers
                         FROM dbo.CompanySessionTrainees CST
                         JOIN CompanyTrainees U ON CST.CompanyTraineeId = U.Id
                         LEFT JOIN UserAttendance UA ON UA.SessionId = @SessionId AND UA.CompanyTraineeId = U.Id
-                        WHERE CST.SessionId = @SessionId
+                        WHERE CST.SessionId = @SessionId AND (CST.ApprovalStatus = 'Approved' OR CST.ApprovalStatus IS NULL)
                         ORDER BY U.FullName
                     END
                     ELSE
@@ -90,6 +90,7 @@ namespace Exam.Controllers
                     LEFT JOIN Branches B ON U.BranchId = B.Id
                     LEFT JOIN UserAttendance UA ON UA.SessionId = @SessionId AND UA.UserId = U.Id
                     WHERE UW.WaveId = @WaveId AND U.IsActive = 1
+                      AND (UW.ApprovalStatus = 'Approved' OR UW.ApprovalStatus IS NULL)
                     ORDER BY U.UserName", 
                     new { SessionId = sessionId, WaveId = (int)session.WaveId });
             }
@@ -411,10 +412,11 @@ namespace Exam.Controllers
                            (SELECT COUNT(*) FROM UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1) as PresentCount,
                            CASE 
                                WHEN EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees CST WHERE CST.SessionId = S.Id)
-                               THEN (SELECT COUNT(*) FROM dbo.CompanySessionTrainees CST WHERE CST.SessionId = S.Id)
+                               THEN (SELECT COUNT(*) FROM dbo.CompanySessionTrainees CST WHERE CST.SessionId = S.Id AND (CST.ApprovalStatus = 'Approved' OR CST.ApprovalStatus IS NULL))
                                ELSE (SELECT COUNT(*) FROM CompanyTrainees CU WHERE CU.CompanyId = S.CompanyId)
                            END as TotalTraineesCount,
-                           (SELECT COUNT(*) FROM dbo.CompanySessionTrainees CST WHERE CST.SessionId = S.Id) as SpecificAssignedCount
+                           (SELECT COUNT(*) FROM dbo.CompanySessionTrainees CST WHERE CST.SessionId = S.Id AND (CST.ApprovalStatus = 'Approved' OR CST.ApprovalStatus IS NULL)) as SpecificAssignedCount,
+                           (SELECT COUNT(*) FROM dbo.CompanySessionTrainees CST WHERE CST.SessionId = S.Id AND CST.ApprovalStatus = 'Pending') as PendingAssignedCount
                     FROM AttendanceSessions S 
                     WHERE S.CompanyId = @CompanyId 
                     ORDER BY S.SessionDate", new { CompanyId = companyId.Value });
@@ -429,7 +431,10 @@ namespace Exam.Controllers
                 if (wave == null) return RedirectToAction(nameof(Index));
 
                 var sessions = await conn.QueryAsync<dynamic>(@"
-                    SELECT S.*, (SELECT COUNT(*) FROM UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1) as PresentCount
+                    SELECT S.*, 
+                           (SELECT COUNT(*) FROM UserAttendance UA WHERE UA.SessionId = S.Id AND UA.IsPresent = 1) as PresentCount,
+                           (SELECT COUNT(*) FROM UserWaves UW WHERE UW.WaveId = S.WaveId AND UW.IsActive = 1 AND (UW.ApprovalStatus = 'Approved' OR UW.ApprovalStatus IS NULL)) as TotalTraineesCount,
+                           (SELECT COUNT(*) FROM UserWaves UW WHERE UW.WaveId = S.WaveId AND UW.IsActive = 1 AND UW.ApprovalStatus = 'Pending') as PendingAssignedCount
                     FROM AttendanceSessions S 
                     WHERE S.WaveId = @WaveId 
                     ORDER BY S.SessionDate", new { WaveId = waveId });
@@ -665,10 +670,17 @@ namespace Exam.Controllers
             ViewBag.IsLocked = isLocked;
             ViewBag.LockReason = lockReason;
 
+            int pendingCount = 0;
             IEnumerable<dynamic> users;
 
             if (session.CompanyId != null)
             {
+                pendingCount = await conn.ExecuteScalarAsync<int>(@"
+                    SELECT COUNT(*) 
+                    FROM dbo.CompanySessionTrainees CST
+                    WHERE CST.SessionId = @SessionId AND CST.ApprovalStatus = 'Pending'",
+                    new { SessionId = sessionId });
+
                 users = await conn.QueryAsync<dynamic>(@"
                     IF EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId)
                     BEGIN
@@ -678,7 +690,7 @@ namespace Exam.Controllers
                         FROM dbo.CompanySessionTrainees CST
                         JOIN CompanyTrainees U ON CST.CompanyTraineeId = U.Id
                         LEFT JOIN UserAttendance UA ON UA.SessionId = @SessionId AND UA.CompanyTraineeId = U.Id
-                        WHERE CST.SessionId = @SessionId
+                        WHERE CST.SessionId = @SessionId AND (CST.ApprovalStatus = 'Approved' OR CST.ApprovalStatus IS NULL)
                         ORDER BY U.FullName
                     END
                     ELSE
@@ -695,6 +707,12 @@ namespace Exam.Controllers
             }
             else
             {
+                pendingCount = await conn.ExecuteScalarAsync<int>(@"
+                    SELECT COUNT(*) 
+                    FROM UserWaves UW
+                    WHERE UW.WaveId = @WaveId AND UW.IsActive = 1 AND UW.ApprovalStatus = 'Pending'",
+                    new { WaveId = (int)session.WaveId });
+
                 users = await conn.QueryAsync<dynamic>(@"
                     SELECT U.Id, U.UserName, U.Email, U.UserCode, B.BranchName,
                            ISNULL(UA.IsPresent, 0) as IsPresent,
@@ -703,10 +721,13 @@ namespace Exam.Controllers
                     JOIN UserWaves UW ON U.Id = UW.UserId
                     LEFT JOIN Branches B ON U.BranchId = B.Id
                     LEFT JOIN UserAttendance UA ON UA.SessionId = @SessionId AND UA.UserId = U.Id
-                    WHERE UW.WaveId = @WaveId AND UW.IsActive = 1", 
+                    WHERE UW.WaveId = @WaveId AND UW.IsActive = 1
+                      AND (UW.ApprovalStatus = 'Approved' OR UW.ApprovalStatus IS NULL)
+                    ORDER BY U.UserName", 
                     new { SessionId = sessionId, WaveId = (int)session.WaveId });
             }
 
+            ViewBag.PendingCount = pendingCount;
             ViewBag.Session = session;
             return View(users);
         }
@@ -750,6 +771,40 @@ namespace Exam.Controllers
             bool isCompanyTrainee = userId != null && userId.StartsWith("CT_");
             int? companyTraineeId = isCompanyTrainee ? int.Parse(userId.Substring(3)) : (int?)null;
             string actualUserId = isCompanyTrainee ? null : userId;
+
+            // Security check: Never allow taking attendance for a pending or rejected candidate!
+            if (isCompanyTrainee)
+            {
+                var cstStatus = await conn.QueryFirstOrDefaultAsync<string>(@"
+                    SELECT ApprovalStatus FROM dbo.CompanySessionTrainees 
+                    WHERE SessionId = @SessionId AND CompanyTraineeId = @CompanyTraineeId",
+                    new { SessionId = sessionId, CompanyTraineeId = companyTraineeId });
+                if (cstStatus != null && cstStatus.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Json(new { success = false, message = "عفواً، لا يمكن تسجيل حضور هذا المتدرب لأنه معلق بانتظار موافقة مدير الفرع!" });
+                }
+                if (cstStatus != null && (cstStatus.Equals("Rejected", StringComparison.OrdinalIgnoreCase) || cstStatus.Equals("Replaced", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return Json(new { success = false, message = "عفواً، لا يمكن تسجيل حضور هذا المتدرب لأن ترشيحه مرفوض أو تم استبداله!" });
+                }
+            }
+            else if (!string.IsNullOrEmpty(actualUserId))
+            {
+                var uwStatus = await conn.QueryFirstOrDefaultAsync<string>(@"
+                    SELECT UW.ApprovalStatus 
+                    FROM UserWaves UW
+                    JOIN AttendanceSessions S ON S.WaveId = UW.WaveId
+                    WHERE S.Id = @SessionId AND UW.UserId = @UserId",
+                    new { SessionId = sessionId, UserId = actualUserId });
+                if (uwStatus != null && uwStatus.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Json(new { success = false, message = "عفواً، لا يمكن تسجيل حضور هذا المتدرب لأنه معلق بانتظار موافقة مدير الفرع!" });
+                }
+                if (uwStatus != null && (uwStatus.Equals("Rejected", StringComparison.OrdinalIgnoreCase) || uwStatus.Equals("Replaced", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return Json(new { success = false, message = "عفواً، لا يمكن تسجيل حضور هذا المتدرب لأن ترشيحه مرفوض أو تم استبداله!" });
+                }
+            }
 
             int? existing = null;
             if (isCompanyTrainee)

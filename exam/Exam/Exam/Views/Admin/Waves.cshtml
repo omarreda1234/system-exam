@@ -155,6 +155,11 @@
         const canDeleteWaveAssign = @(HasRemoveUserFromWavePermission().ToString().ToLower());
 
         function showToast(message, type = 'success', duration = 3500) {
+            if (window.showAppToast) {
+                const title = type === 'success' ? 'Success' : (type === 'error' ? 'Error' : (type === 'warning' ? 'Notice' : 'Information'));
+                window.showAppToast(type, title, message);
+                return;
+            }
             let container = document.getElementById('toast-notification-container');
             if (!container) {
                 container = document.createElement('div');
@@ -302,7 +307,7 @@
                 const trimmed = newMode.trim();
                 saveCustomMode(trimmed);
                 setSwMode(inputId, trimmed, codeSpanId, fullCodeId, containerId);
-                showToast(`تمت إضافة نمط (${trimmed}) وتطبيقه بنجاح`, 'success');
+                showToast(`Pattern (${trimmed}) added and applied successfully`, 'success');
             }
         }
 
@@ -310,7 +315,7 @@
             const input = document.getElementById(inputId);
             const currentVal = input ? input.value.trim() : '';
             if (!currentVal) {
-                showToast('يرجى اختيار أو كتابة حالة أولاً لتعديلها', 'warning');
+                showToast('Please select or type a status to edit first', 'warning');
                 return;
             }
 
@@ -348,12 +353,12 @@
                     });
                     const data = await apiRes.json();
                     if (data.success) {
-                        showToast(`تم تعديل مسمى الحالة من (${currentVal}) إلى (${trimmed}) وتحديث السيريال بنجاح`, 'success');
+                        showToast(`Status title changed from (${currentVal}) to (${trimmed}) successfully`, 'success');
                     } else {
-                        showToast(data.message || 'تم تحديث المسمى محلياً', 'info');
+                        showToast(data.message || 'Status title updated locally', 'info');
                     }
                 } catch(e) {
-                    showToast(`تم تعديل مسمى الحالة محلياً إلى (${trimmed})`, 'success');
+                    showToast(`Status title updated locally to (${trimmed})`, 'success');
                 }
             }
         }
@@ -362,7 +367,7 @@
             const input = document.getElementById(inputId);
             const currentVal = input ? input.value.trim() : '';
             if (!currentVal) {
-                showToast('لا توجد حالة محددة لمسحها', 'warning');
+                showToast('No status selected to delete', 'warning');
                 return;
             }
 
@@ -391,7 +396,7 @@
                         body: `mode=${encodeURIComponent(currentVal)}`
                     });
                 } catch(e) {}
-                showToast(`تم مسح نمط (${currentVal}) وتفريغ الحقل بنجاح`, 'success');
+                showToast(`Pattern (${currentVal}) deleted successfully`, 'success');
             }
         }
 
@@ -504,13 +509,13 @@
                             }
                         }
 
-                        showToast(json.message || 'تم تحديث بيانات الويف بنجاح', 'success');
+                        showToast(json.message || 'Wave details updated successfully', 'success');
                     } else {
-                        showToast(json.message || 'تعذر تحديث بيانات الويف', 'error');
+                        showToast(json.message || 'Failed to update wave details', 'error');
                     }
                 } catch (e) {
                     console.error(e);
-                    showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
+                    showToast('An error occurred while communicating with the server', 'error');
                 }
             }
         }
@@ -552,13 +557,13 @@
                     });
                     const data = await res.json();
                     if (data.success) {
-                        showToast('تم استنساخ الويف بنجاح', 'success');
+                        showToast('Wave duplicated successfully', 'success');
                         setTimeout(() => location.reload(), 1000);
                     } else {
-                        showToast(data.message || 'تعذر استنساخ الويف', 'error');
+                        showToast(data.message || 'Failed to duplicate wave', 'error');
                     }
                 } catch(e) {
-                    showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
+                    showToast('An error occurred while communicating with the server', 'error');
                 }
             }
         }
@@ -598,12 +603,12 @@
                         } else {
                             tr.fadeOut(300, function() { $(this).remove(); });
                         }
-                        showToast(data.message || 'تم حذف الويف بنجاح', 'success');
+                        showToast(data.message || 'Wave deleted successfully', 'success');
                     } else {
-                        showToast(data.message || 'فشل حذف الويف', 'error');
+                        showToast(data.message || 'Failed to delete wave', 'error');
                     }
                 } catch (error) {
-                    showToast('فشل الاتصال بالسيرفر', 'error');
+                    showToast('Connection to server failed', 'error');
                 }
             }
         }
@@ -1232,12 +1237,12 @@
                     const result = await response.json();
 
                     if (result.success) {
-                        showToast(result.message || 'تم استيراد وتسجيل الطلاب بنجاح', 'success');
+                        showToast(result.message || 'Candidates imported and enrolled successfully', 'success');
                     } else {
-                        showToast(result.message || 'فشل استيراد الطلاب من الملف', 'error');
+                        showToast(result.message || 'Failed to import candidates from file', 'error');
                     }
                 } catch (error) {
-                    showToast('فشل الاتصال بسيرفر التسجيل والاستيراد', 'error');
+                    showToast('Connection to server failed', 'error');
                 }
             }
         }
@@ -2178,14 +2183,14 @@ Eltarshoubi Training Academy Team`
                                         } catch(e) {}
                                     }
 
-                                    showToast('تم إنشاء الويف وجدولة جلسات الحضور بنجاح', 'success');
+                                    showToast('Wave created and attendance sessions scheduled successfully', 'success');
                                     setTimeout(() => location.reload(), 1000);
                                 } else {
-                                    showToast('تعذر إنشاء الويف', 'error');
+                                    showToast('Failed to create wave', 'error');
                                     Swal.hideLoading();
                                 }
                             } catch(e) {
-                                showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
+                                showToast('An error occurred while communicating with the server', 'error');
                                 Swal.hideLoading();
                             }
                         };
@@ -2237,8 +2242,8 @@ Eltarshoubi Training Academy Team`
                                 });
 
                                 if (!createRes.ok) {
-                                    showToast('فشل إنشاء الويف، يرجى المحاولة مرة أخرى.', 'error');
-                                    $('#wzBtnFinishLaunch').prop('disabled', false).html('<i class="fas fa-rocket ml-2"></i>إنشاء الويف وتعيين المرشحين وإرسال الإيميل (Finish & Launch)');
+                                    showToast('Failed to create wave. Please try again.', 'error');
+                                    $('#wzBtnFinishLaunch').prop('disabled', false).html('<i class="fas fa-rocket mr-2"></i>Create Wave & Assign Candidates (Finish & Launch)');
                                     return;
                                 }
 
@@ -2269,28 +2274,12 @@ Eltarshoubi Training Academy Team`
 
                                 const sessionsCount = updateWzSessionsPreview();
 
-                                await Swal.fire({
-                                    icon: 'success',
-                                    title: '<div class="text-xl font-black text-slate-800 dark:text-white">تم إطلاق الويف بنجاح! 🚀</div>',
-                                    html: `
-                                        <div class="text-right space-y-2 text-xs text-slate-600 dark:text-slate-300 py-2" dir="rtl">
-                                            <p>✅ تم إنشاء الويف: <b>${escapeHtmlAttr(name.trim())}</b></p>
-                                            ${date ? `<p>📅 تم جدولة <b>${sessionsCount || 12} جلسة حضور</b> يومياً من 09:00 ص إلى 12:00 م (عدا الجمعة).</p>` : ''}
-                                            <p>👥 تم تعيين: <b>${selectedIds.length} مرشح</b> للويف بنجاح.</p>
-                                            ${sendEmail && selectedIds.length > 0 ? '<p>📧 تم إرسال رسائل التأكيد والإيميل للمرشحين المحددين.</p>' : ''}
-                                        </div>
-                                    `,
-                                    confirmButtonText: 'ممتاز، حسناً',
-                                    customClass: {
-                                        confirmButton: 'bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2.5 rounded-xl font-bold text-xs shadow-md'
-                                    },
-                                    buttonsStyling: false
-                                });
-
-                                location.reload();
+                                Swal.close();
+                                showToast(`Wave "${escapeHtmlAttr(name.trim())}" created with ${selectedIds.length} candidate(s) and attendance sessions scheduled.`, 'success');
+                                setTimeout(() => location.reload(), 1200);
                             } catch (err) {
-                                showToast('حدث خطأ أثناء الاتصال بالسيرفر.', 'error');
-                                $('#wzBtnFinishLaunch').prop('disabled', false).html('<i class="fas fa-rocket ml-2"></i>إنشاء الويف وتعيين المرشحين وإرسال الإيميل (Finish & Launch)');
+                                showToast('An error occurred while connecting to the server.', 'error');
+                                $('#wzBtnFinishLaunch').prop('disabled', false).html('<i class="fas fa-rocket mr-2"></i>Create Wave & Assign Candidates (Finish & Launch)');
                             }
                         };
                     },
@@ -2385,11 +2374,15 @@ Eltarshoubi Training Academy Team`
                                                 <th>Code</th>
                                                 <th>Role</th>
                                                 <th>Branch</th>
+                                                <th>Status</th>
                                                 <th class="text-right">Action</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            ${users.map(u => `
+                                            ${users.map(u => {
+                                                const st = (u.approvalStatus || u.ApprovalStatus || 'Pending');
+                                                const userWaveId = u.userWaveId || u.UserWaveId;
+                                                return `
                                                 <tr class="border-b border-slate-50 cursor-pointer">
                                                     <td><input type="checkbox" class="enrolled-user-cb w-4 h-4 accent-brand-500" value="${u.id ?? u.Id}"></td>
                                                     <td>
@@ -2405,18 +2398,53 @@ Eltarshoubi Training Academy Team`
                                                         </span>
                                                     </td>
                                                     <td class="font-bold text-slate-400 text-[10px] uppercase">${u.branchName ?? u.BranchName ?? 'N/A'}</td>
+                                                    <td>
+                                                        ${st === 'Approved' ? `
+                                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200">
+                                                                <i class="fas fa-check-circle text-[8px]"></i> Approved
+                                                            </span>
+                                                        ` : st === 'Rejected' ? `
+                                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200" title="${escapeHtmlAttr(u.rejectionReason || u.RejectionReason || 'Rejected')}">
+                                                                <i class="fas fa-times-circle text-[8px]"></i> Rejected
+                                                            </span>
+                                                        ` : st === 'Replaced' ? `
+                                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400 border border-purple-200">
+                                                                <i class="fas fa-sync text-[8px]"></i> Replaced
+                                                            </span>
+                                                        ` : `
+                                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200">
+                                                                <i class="fas fa-clock text-[8px]"></i> Pending
+                                                            </span>
+                                                        `}
+                                                    </td>
                                                     <td class="text-right">
-                                                        ${canDeleteWaveAssign ? `
-                                                            <button class="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg remove-user-btn" 
-                                                                    data-waveid="${wid}" 
-                                                                    data-userid="${u.id ?? u.Id}"
-                                                                    data-username="${u.userName ?? u.UserName}">
-                                                                <i class="fas fa-user-minus"></i>
-                                                            </button>
-                                                        ` : '--'}
+                                                        <div class="flex items-center justify-end gap-1">
+                                                            ${(st === 'Pending' && userWaveId) ? `
+                                                                <button type="button" onclick="window.waveQuickAction(${userWaveId}, 'accept', '${escapeHtmlAttr(u.userName || u.UserName)}')" 
+                                                                        class="p-1.5 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-lg transition-all" title="Confirm / Approve Nomination">
+                                                                    <i class="fas fa-check"></i>
+                                                                </button>
+                                                                <button type="button" onclick="window.waveQuickAction(${userWaveId}, 'reject', '${escapeHtmlAttr(u.userName || u.UserName)}')" 
+                                                                        class="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 rounded-lg transition-all" title="Reject Nomination with Reason">
+                                                                    <i class="fas fa-times"></i>
+                                                                </button>
+                                                                <button type="button" onclick="window.waveQuickReplace(${userWaveId}, '${escapeHtmlAttr(u.userName || u.UserName)}', ${u.branchId || u.BranchId || 0}, '${escapeHtmlAttr(u.branchName || u.BranchName || '')}', ${wid})" 
+                                                                        class="p-1.5 text-indigo-600 hover:text-white hover:bg-indigo-600 rounded-lg transition-all" title="Replace with Colleague from Branch">
+                                                                    <i class="fas fa-sync-alt"></i>
+                                                                </button>
+                                                            ` : ''}
+                                                            ${canDeleteWaveAssign ? `
+                                                                <button class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg remove-user-btn" 
+                                                                        data-waveid="${wid}" 
+                                                                        data-userid="${u.id ?? u.Id}"
+                                                                        data-username="${u.userName ?? u.UserName}" title="Remove from batch">
+                                                                    <i class="fas fa-trash-alt"></i>
+                                                                </button>
+                                                            ` : ''}
+                                                        </div>
                                                     </td>
                                                 </tr>
-                                            `).join('')}
+                                            `; }).join('')}
                                         </tbody>
                                     </table>
                                     ${users.length === 0 ? '<div class="p-12 text-center text-slate-400 font-bold uppercase tracking-widest">No personnel enrolled in this batch</div>' : ''}
@@ -2663,14 +2691,14 @@ Eltarshoubi Training Academy Team`
 
                                     const resData = await response.json();
                                     if (resData.success) {
-                                        showToast(resData.message || 'تم إرسال الإيميلات بنجاح.', 'success');
+                                        showToast(resData.message || 'Emails sent successfully.', 'success');
                                         Swal.close();
                                     } else {
-                                        showToast(resData.message || 'تعذر إرسال الإيميلات.', 'error');
+                                        showToast(resData.message || 'Failed to send emails.', 'error');
                                         Swal.hideLoading();
                                     }
                                 } catch(err) {
-                                    showToast('حدث خطأ أثناء التواصل مع السيرفر.', 'error');
+                                    showToast('An error occurred while communicating with the server.', 'error');
                                     Swal.hideLoading();
                                 }
                             };
@@ -2704,13 +2732,13 @@ Eltarshoubi Training Academy Team`
                                             const data = await res.json();
                                             if(data.success) {
                                                 table.row($(`button[data-userid="${uid}"]`).parents('tr')).remove().draw();
-                                                showToast('تمت إزالة المستخدم بنجاح', 'success');
+                                                showToast('Candidate removed successfully', 'success');
                                                 updateEnrolledSelectedCount();
                                             } else {
-                                                showToast(data.message || 'تعذر إزالة المستخدم', 'error');
+                                                showToast(data.message || 'Failed to remove candidate', 'error');
                                             }
                                         } catch(e) {
-                                            showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
+                                            showToast('An error occurred while communicating with the server', 'error');
                                         }
                                     }
                                 });
@@ -2724,9 +2752,69 @@ Eltarshoubi Training Academy Team`
                         }
                     });
                 } catch (err) {
-                    showToast('فشل تحميل قائمة الطلاب', 'error');
+                    showToast('Failed to load candidate list.', 'error');
                 }
             }
+
+        window.waveQuickAction = async function(userWaveId, action, name) {
+            if (!userWaveId) {
+                showToast('Candidate record not found.', 'warning');
+                return;
+            }
+
+            let reason = null;
+            if (action === 'reject') {
+                const { value: inputReason } = await Swal.fire({
+                    title: `<div class="text-sm font-black text-slate-800 dark:text-white">Reject Nomination: ${name}</div>`,
+                    input: 'textarea',
+                    inputLabel: 'Reason for rejection (Required):',
+                    inputPlaceholder: 'Type reason here...',
+                    showCancelButton: true,
+                    confirmButtonText: 'Confirm Rejection',
+                    cancelButtonText: 'Cancel',
+                    inputValidator: (v) => !v || !v.trim() ? 'Please provide a reason for rejection.' : null,
+                    customClass: {
+                        confirmButton: 'bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 rounded-xl text-xs font-bold mr-2',
+                        cancelButton: 'bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold'
+                    },
+                    buttonsStyling: false
+                });
+                if (!inputReason) return;
+                reason = inputReason.trim();
+            }
+
+            try {
+                const res = await fetch('/Notification/ActionNomination', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userWaveId: userWaveId,
+                        action: action,
+                        reason: reason,
+                        type: 'wave'
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(action === 'accept' ? `Nomination for ${name} approved successfully ✅` : `Nomination for ${name} rejected ❌`, 'success');
+                    Swal.close();
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast(data.message || 'Operation could not be completed.', 'error');
+                }
+            } catch (e) {
+                showToast(e.message || 'Network error occurred.', 'error');
+            }
+        };
+
+        window.waveQuickReplace = function(userWaveId, name, branchId, branchName, waveId, userCode = '', userId = '') {
+            Swal.close();
+            if (window.openReplaceModal) {
+                window.openReplaceModal(userWaveId, waveId, branchId, name, branchName, userCode, userId);
+            } else {
+                showToast('Replacement modal is initializing, please try again.', 'warning');
+            }
+        };
         async function toggleWaveStatus(evt, waveId, targetIsActive) {
             if (evt) evt.stopPropagation();
             const btn = evt ? evt.currentTarget : null;
@@ -2757,10 +2845,10 @@ Eltarshoubi Training Academy Team`
                         }
                     }
                 } else {
-                    showToast(json.message || 'تعذر تغيير حالة الويف', 'error');
+                    showToast(json.message || 'Failed to update wave status', 'error');
                 }
             } catch (e) {
-                showToast('حدث خطأ أثناء التواصل مع السيرفر', 'error');
+                showToast('An error occurred while communicating with the server', 'error');
             }
         }
     </script>

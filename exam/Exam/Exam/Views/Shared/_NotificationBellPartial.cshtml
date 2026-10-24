@@ -57,10 +57,10 @@
 </div>
 
 <!-- Modal: Branch Candidates Approval / Review (Dual Tabs: Waves & Companies) -->
-<div id="branchNominationsModal" class="hidden fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+<div id="branchNominationsModal" class="hidden fixed inset-0 z-[10000] overflow-y-auto bg-slate-900/60 backdrop-blur-sm p-4 flex items-center justify-center animate-fadeIn">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[88vh] my-auto flex flex-col overflow-hidden">
         <!-- Modal Header -->
-        <div class="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
+        <div class="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30 shrink-0">
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xl shadow-sm">
                     <i class="fas fa-users-cog"></i>
@@ -71,8 +71,9 @@
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                <button type="button" onclick="openBranchExemptionsModal()" class="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center gap-1.5 transition-all" title="تحديد الفروع المعفاة من موافقة المدير (اعتماد فوري)">
-                    <i class="fas fa-sliders-h"></i> استثناءات الفروع
+                <button type="button" onclick="refreshBranchNominationsModal()" id="btnRefreshBranchNominations" class="px-3.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95" title="تحديث القائمة فورياً">
+                    <i class="fas fa-sync-alt" id="iconRefreshBranchNominations"></i>
+                    <span>تحديث</span>
                 </button>
                 <button type="button" onclick="closeBranchNominationsModal()" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
                     <i class="fas fa-times text-base"></i>
@@ -81,7 +82,7 @@
         </div>
 
         <!-- Tabs: Waves vs Company Sessions -->
-        <div class="flex border-b border-slate-100 dark:border-slate-800 px-6 pt-3 bg-white dark:bg-slate-900 gap-2">
+        <div class="flex border-b border-slate-100 dark:border-slate-800 px-6 pt-3 bg-white dark:bg-slate-900 gap-2 shrink-0">
             <button type="button" onclick="switchNominationTab('wave')" id="tabBtnWaveNom" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-brand-600 border-b-2 border-brand-600 flex items-center gap-2 transition-all">
                 <i class="fas fa-layer-group"></i> دورات الويف (Waves) 
                 <span id="waveCountBadge" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-400">0</span>
@@ -93,7 +94,7 @@
         </div>
 
         <!-- Modal Body (Nominations List) -->
-        <div class="p-5 sm:p-6 overflow-y-auto flex-1 custom-scrollbar" id="nominationsListWrapper">
+        <div class="p-5 sm:p-6 overflow-y-auto flex-1 custom-scrollbar min-h-0" id="nominationsListWrapper">
             <div class="text-center py-10 text-slate-400">
                 <i class="fas fa-spinner fa-spin text-2xl text-brand-500 mb-3 block"></i>
                 جاري استدعاء قائمة المرشحين...
@@ -101,7 +102,7 @@
         </div>
 
         <!-- Modal Footer -->
-        <div class="p-4 px-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/20 flex justify-between items-center text-xs text-slate-400">
+        <div class="p-4 px-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/20 flex justify-between items-center text-xs text-slate-400 shrink-0">
             <span id="nominationsCountFooter">0 طلب ترشيح معلق</span>
             <button type="button" onclick="closeBranchNominationsModal()" class="px-5 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold transition-all">
                 إغلاق
@@ -111,8 +112,8 @@
 </div>
 
 <!-- Modal: Replace Candidate (Works for both Wave Candidates & Company Trainees) -->
-<div id="replaceCandidateModal" class="hidden fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fadeIn">
-    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-6">
+<div id="replaceCandidateModal" class="hidden fixed inset-0 z-[10001] overflow-y-auto bg-slate-900/70 backdrop-blur-sm p-4 flex items-center justify-center animate-fadeIn">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg my-auto p-6">
         <div class="flex items-center gap-3 mb-4">
             <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg">
                 <i class="fas fa-exchange-alt"></i>
@@ -150,8 +151,18 @@
                 <!-- Live Search Box -->
                 <div class="relative mb-2">
                     <input type="text" id="colleagueSearchInput" oninput="filterColleaguesList(this.value)"
-                           placeholder="🔍 ابحث بالاسم أو الكود أو المسمى..." 
+                           placeholder="🔍 ابحث بالاسم أو الكود أو المسمى أو الفرع..." 
                            class="w-full px-3.5 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                </div>
+
+                <!-- Select All / Deselect All (Strictly Same Branch) -->
+                <div class="flex items-center justify-between mb-2 px-1 text-[11px]">
+                    <span class="text-slate-500 dark:text-slate-400 font-bold text-[11px] flex items-center gap-1.5">
+                        <i class="fas fa-building text-indigo-500"></i> زملاء نفس الفرع فقط
+                    </span>
+                    <button type="button" onclick="selectAllColleaguesToggle()" class="text-indigo-600 dark:text-indigo-400 font-black hover:underline">
+                        تحديد الكل / إلغاء
+                    </button>
                 </div>
 
                 <!-- Colleagues Interactive Checkbox Cards -->
@@ -159,11 +170,8 @@
                     <div class="text-center py-6 text-slate-400 text-xs">جاري البحث عن الزملاء المتاحين بالفرع...</div>
                 </div>
 
-                <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px]">
-                    <span class="text-slate-400 font-medium">يمكنك اختيار أكثر من زميل بديل للسيشن/الويف.</span>
-                    <button type="button" onclick="selectAllColleaguesToggle()" class="text-indigo-600 dark:text-indigo-400 font-black hover:underline">
-                        تحديد الكل / إلغاء
-                    </button>
+                <div class="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-400 font-medium">
+                    يمكنك اختيار أكثر من زميل بديل للسيشن/الويف.
                 </div>
             </div>
         </div>
@@ -211,6 +219,78 @@
 
 <script>
     (function () {
+        if (!window.showAppToast) {
+            window.showAppToast = function (type, title, message) {
+                let container = document.getElementById('appGlobalToastContainer');
+                if (!container) {
+                    container = document.createElement('div');
+                    container.id = 'appGlobalToastContainer';
+                    container.className = 'fixed top-5 left-1/2 -translate-x-1/2 sm:left-auto sm:right-6 sm:translate-x-0 z-[999999] flex flex-col gap-2.5 pointer-events-none max-w-sm w-full px-4 sm:px-0';
+                    document.body.appendChild(container);
+                }
+
+                const toast = document.createElement('div');
+                toast.className = 'pointer-events-auto transform translate-y-[-16px] opacity-0 transition-all duration-300 ease-out flex items-start gap-3 p-4 rounded-2xl shadow-2xl backdrop-blur-xl border text-xs select-none';
+
+                let iconHtml = '';
+                let bgBorder = '';
+                let progressBg = '';
+
+                const t = (type || 'info').toLowerCase();
+                if (t === 'success') {
+                    bgBorder = 'bg-slate-900/95 text-emerald-100 border-emerald-500/40 shadow-emerald-950/40';
+                    iconHtml = '<div class="w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-check-circle"></i></div>';
+                    progressBg = 'bg-emerald-400';
+                } else if (t === 'error' || t === 'danger') {
+                    bgBorder = 'bg-slate-900/95 text-rose-100 border-rose-500/40 shadow-rose-950/40';
+                    iconHtml = '<div class="w-7 h-7 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-exclamation-circle"></i></div>';
+                    progressBg = 'bg-rose-400';
+                } else if (t === 'warning') {
+                    bgBorder = 'bg-slate-900/95 text-amber-100 border-amber-500/40 shadow-amber-950/40';
+                    iconHtml = '<div class="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-exclamation-triangle"></i></div>';
+                    progressBg = 'bg-amber-400';
+                } else {
+                    bgBorder = 'bg-slate-900/95 text-indigo-100 border-indigo-500/40 shadow-indigo-950/40';
+                    iconHtml = '<div class="w-7 h-7 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-info-circle"></i></div>';
+                    progressBg = 'bg-indigo-400';
+                }
+
+                toast.className += ' ' + bgBorder;
+                toast.innerHTML = `
+                    ${iconHtml}
+                    <div class="flex-1 min-w-0 pr-1">
+                        <h5 class="font-black text-xs text-white leading-snug">${title || ''}</h5>
+                        ${message ? `<p class="text-[11px] opacity-80 mt-0.5 leading-normal break-words">${message}</p>` : ''}
+                    </div>
+                    <button type="button" class="text-white/40 hover:text-white transition-colors text-xs p-1 shrink-0" onclick="this.parentElement.remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <div class="absolute bottom-0 left-0 right-0 h-1 rounded-b-2xl overflow-hidden bg-white/10">
+                        <div class="h-full ${progressBg} transition-all ease-linear" style="width: 100%; transition-duration: 3500ms;"></div>
+                    </div>
+                `;
+
+                container.appendChild(toast);
+
+                requestAnimationFrame(() => {
+                    toast.classList.remove('translate-y-[-16px]', 'opacity-0');
+                    toast.classList.add('translate-y-0', 'opacity-100');
+                    const progressBar = toast.querySelector(`.${progressBg}`);
+                    if (progressBar) {
+                        requestAnimationFrame(() => {
+                            progressBar.style.width = '0%';
+                        });
+                    }
+                });
+
+                setTimeout(() => {
+                    toast.classList.remove('translate-y-0', 'opacity-100');
+                    toast.classList.add('translate-y-[-8px]', 'opacity-0');
+                    setTimeout(() => toast.remove(), 300);
+                }, 3500);
+            };
+        }
+
         let notifState = {
             unreadCount: 0,
             pendingNominationsCount: 0,
@@ -395,12 +475,20 @@
             } catch { }
         };
 
+        function ensureModalInBody(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal && modal.parentElement !== document.body) {
+                document.body.appendChild(modal);
+            }
+            return modal;
+        }
+
         // Open Branch Nominations Modal & Render
         window.openBranchNominationsModal = async function () {
-            const modal = document.getElementById('branchNominationsModal');
+            const modal = ensureModalInBody('branchNominationsModal');
             const wrapper = document.getElementById('nominationsListWrapper');
             
-            modal.classList.remove('hidden');
+            if (modal) modal.classList.remove('hidden');
             wrapper.innerHTML = `
                 <div class="text-center py-10 text-slate-400">
                     <i class="fas fa-spinner fa-spin text-2xl text-brand-500 mb-3 block"></i>
@@ -519,15 +607,35 @@
                                         <i class="fas fa-check"></i> موافقة
                                     </button>
 
-                                    <button type="button" onclick="actionNominationPrompt(${n.userWaveId}, 'reject', 'wave', '${n.studentName}')"
+                                    <button type="button" onclick="toggleRejectBox('wave', ${n.userWaveId}, true)"
                                             class="py-2 px-3 rounded-xl bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-black text-xs shadow-md shadow-rose-500/20 transition-all flex items-center justify-center gap-1.5" title="اعتذار أو رفض">
                                         <i class="fas fa-times"></i> رفض
                                     </button>
 
-                                    <button type="button" onclick="openReplaceModal(${n.userWaveId}, ${n.waveId}, ${n.branchId || 0}, '${n.studentName}')"
+                                    <button type="button" onclick="openReplaceModal(${n.userWaveId}, ${n.waveId}, ${n.branchId || 0}, '${n.studentName}', '${n.branchName || ''}', '${n.userCode || ''}', '${n.userId || ''}')"
                                             class="py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-1.5" title="استبدال بزميل آخر">
                                         <i class="fas fa-exchange-alt"></i> استبدال
                                     </button>
+                                </div>
+
+                                <!-- Inline Rejection Form Drawer (No SweetAlert, Direct Toast) -->
+                                <div id="rejectBox_wave_${n.userWaveId}" class="hidden mt-3 p-3 rounded-xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 transition-all">
+                                    <label class="block text-[11px] font-bold text-rose-800 dark:text-rose-300 mb-1.5">
+                                        سبب الاعتذار أو الرفض (إلزامي):
+                                    </label>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="rejectInput_wave_${n.userWaveId}" placeholder="مثال: الموظف في إجازة / ضغط عمل بالفرع..." 
+                                               class="flex-1 px-3 py-1.5 text-xs rounded-lg border border-rose-300 dark:border-rose-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-500/20" 
+                                               onkeydown="if(event.key==='Enter') confirmInlineReject(${n.userWaveId}, 'wave', '${n.studentName}')" />
+                                        <button type="button" onclick="confirmInlineReject(${n.userWaveId}, 'wave', '${n.studentName}')" 
+                                                class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs shadow-sm transition-all flex items-center gap-1">
+                                            <i class="fas fa-check"></i> تأكيد
+                                        </button>
+                                        <button type="button" onclick="toggleRejectBox('wave', ${n.userWaveId}, false)" 
+                                                class="px-2.5 py-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-xs font-bold transition-all">
+                                            إلغاء
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         `).join('')}
@@ -577,15 +685,35 @@
                                         <i class="fas fa-check"></i> موافقة
                                     </button>
 
-                                    <button type="button" onclick="actionNominationPrompt(${c.companySessionTraineeId}, 'reject', 'company', '${c.traineeName}')"
+                                    <button type="button" onclick="toggleRejectBox('company', ${c.companySessionTraineeId}, true)"
                                             class="py-2 px-3 rounded-xl bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-black text-xs shadow-md shadow-rose-500/20 transition-all flex items-center justify-center gap-1.5" title="اعتذار أو رفض">
                                         <i class="fas fa-times"></i> رفض
                                     </button>
 
-                                    <button type="button" onclick="openReplaceCompanyModal(${c.companySessionTraineeId}, ${c.sessionId}, ${c.companyId || 0}, '${c.branchName}', '${c.traineeName}', ${c.branchId || 0})"
+                                    <button type="button" onclick="openReplaceCompanyModal(${c.companySessionTraineeId}, ${c.sessionId}, ${c.companyId || 0}, '${c.branchName}', '${c.traineeName}', ${c.branchId || 0}, '${c.userCode || ''}', '${c.userId || ''}')"
                                             class="py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-1.5" title="استبدال بزميل آخر">
                                         <i class="fas fa-exchange-alt"></i> استبدال
                                     </button>
+                                </div>
+
+                                <!-- Inline Rejection Form Drawer (No SweetAlert, Direct Toast) -->
+                                <div id="rejectBox_company_${c.companySessionTraineeId}" class="hidden mt-3 p-3 rounded-xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 transition-all">
+                                    <label class="block text-[11px] font-bold text-rose-800 dark:text-rose-300 mb-1.5">
+                                        سبب الاعتذار أو الرفض (إلزامي):
+                                    </label>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="rejectInput_company_${c.companySessionTraineeId}" placeholder="مثال: الموظف في إجازة / ضغط عمل بالفرع..." 
+                                               class="flex-1 px-3 py-1.5 text-xs rounded-lg border border-rose-300 dark:border-rose-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-500/20" 
+                                               onkeydown="if(event.key==='Enter') confirmInlineReject(${c.companySessionTraineeId}, 'company', '${c.traineeName}')" />
+                                        <button type="button" onclick="confirmInlineReject(${c.companySessionTraineeId}, 'company', '${c.traineeName}')" 
+                                                class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs shadow-sm transition-all flex items-center gap-1">
+                                            <i class="fas fa-check"></i> تأكيد
+                                        </button>
+                                        <button type="button" onclick="toggleRejectBox('company', ${c.companySessionTraineeId}, false)" 
+                                                class="px-2.5 py-1.5 rounded-lg text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-xs font-bold transition-all">
+                                            إلغاء
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         `).join('')}
@@ -598,21 +726,56 @@
             loadHeaderNotifications();
         };
 
-        // Unified Action: Accept / Reject
-        window.actionNomination = async function (id, action, type, name) {
-            if (typeof Swal !== 'undefined') {
-                const confirm = await Swal.fire({
-                    title: 'تأكيد الاعتماد',
-                    text: `هل توافق على ترشيح (${name}) لحضور هذا التدريب؟`,
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'نعم، موافقة',
-                    cancelButtonText: 'إلغاء',
-                    confirmButtonColor: '#10b981'
-                });
-                if (!confirm.isConfirmed) return;
+        window.refreshBranchNominationsModal = async function () {
+            const icon = document.getElementById('iconRefreshBranchNominations');
+            if (icon) icon.classList.add('fa-spin');
+            await openBranchNominationsModal();
+            if (icon) icon.classList.remove('fa-spin');
+            showAppToast('info', 'Updated 🔄', 'Pending candidates list refreshed successfully.');
+        };
+
+        window.toggleRejectBox = function (type, id, show) {
+            const box = document.getElementById(`rejectBox_${type}_${id}`);
+            if (box) {
+                if (show) {
+                    box.classList.remove('hidden');
+                    const input = document.getElementById(`rejectInput_${type}_${id}`);
+                    if (input) input.focus();
+                } else {
+                    box.classList.add('hidden');
+                }
+            }
+        };
+
+        window.confirmInlineReject = async function (id, type, name) {
+            const input = document.getElementById(`rejectInput_${type}_${id}`);
+            const reason = input ? input.value.trim() : '';
+            if (!reason) {
+                showAppToast('warning', 'Reason Required', 'Please enter a rejection reason before confirming.');
+                if (input) input.focus();
+                return;
             }
 
+            try {
+                const res = await fetch('/Notification/ActionNomination', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userWaveId: id, action: 'reject', reason: reason, type: type })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAppToast('success', 'Nomination Rejected ❌', data.message || `Nomination for ${name} has been rejected.`);
+                    removeNominationCardFromDOM(type, id);
+                } else {
+                    showAppToast('error', 'Rejection Failed', data.message || 'Could not reject nomination.');
+                }
+            } catch (err) {
+                showAppToast('error', 'Connection Error', err.message);
+            }
+        };
+
+        // Unified Action: Accept
+        window.actionNomination = async function (id, action, type, name) {
             try {
                 const res = await fetch('/Notification/ActionNomination', {
                     method: 'POST',
@@ -621,65 +784,59 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({ icon: 'success', title: 'تم الاعتماد بنجاح', text: data.message, timer: 2000 });
-                    }
-                    openBranchNominationsModal();
+                    showAppToast('success', 'Approved Successfully ✅', data.message || `Nomination for ${name} approved successfully.`);
+                    removeNominationCardFromDOM(type, id);
                 } else {
-                    if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                    showAppToast('error', 'Approval Failed', data.message || 'Could not approve nomination.');
                 }
             } catch (err) {
-                alert('فشل الاتصال: ' + err.message);
+                showAppToast('error', 'Connection Error', err.message);
             }
         };
 
-        window.actionNominationPrompt = async function (id, action, type, name) {
-            let reason = '';
-            if (typeof Swal !== 'undefined') {
-                const { value: text, isConfirmed } = await Swal.fire({
-                    title: `اعتذار عن ترشيح: ${name}`,
-                    text: 'يرجى كتابة سبب الرفض أو الاعتذار لتوثيقه وإرساله للإدارة:',
-                    input: 'textarea',
-                    inputPlaceholder: 'مثال: الموظف في إجازة سنوية / لديه مهام طارئة بالفرع...',
-                    inputValidator: (val) => {
-                        if (!val || !val.trim()) {
-                            return 'سبب الرفض إلزامي!';
-                        }
-                    },
-                    showCancelButton: true,
-                    confirmButtonText: 'تأكيد الرفض',
-                    cancelButtonText: 'إلغاء',
-                    confirmButtonColor: '#ef4444'
-                });
-                if (!isConfirmed || !text) return;
-                reason = text.trim();
+        function removeNominationCardFromDOM(type, id) {
+            const cardId = type === 'company' ? `nomCompanyCard_${id}` : `nomCard_${id}`;
+            const card = document.getElementById(cardId);
+            if (card) {
+                card.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(-12px) scale(0.97)';
+                setTimeout(() => {
+                    if (card) card.remove();
+                    if (type === 'wave') {
+                        notifState.waveNominations = notifState.waveNominations.filter(x => x.userWaveId !== id);
+                        document.getElementById('waveCountBadge').textContent = notifState.waveNominations.length;
+                    } else {
+                        notifState.companyNominations = notifState.companyNominations.filter(x => x.companySessionTraineeId !== id);
+                        document.getElementById('companyCountBadge').textContent = notifState.companyNominations.length;
+                    }
+                    const currentList = notifState.currentTab === 'wave' ? notifState.waveNominations : notifState.companyNominations;
+                    const footerCount = document.getElementById('nominationsCountFooter');
+                    if (footerCount) {
+                        footerCount.textContent = `${currentList.length} طلب ترشيح معلق (${notifState.currentTab === 'wave' ? 'دورات الويف' : 'جلسات الشركات'})`;
+                    }
+                    if (currentList.length === 0) {
+                        renderCurrentNominationsTab();
+                    }
+                }, 300);
             } else {
-                reason = prompt(`يرجى كتابة سبب رفض ترشيح (${name}):`);
-                if (!reason) return;
+                openBranchNominationsModal();
             }
-
-            try {
-                const res = await fetch('/Notification/ActionNomination', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userWaveId: id, action: action, reason: reason, type: type })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({ icon: 'success', title: 'تم تسجيل الاعتذار', text: data.message, timer: 2000 });
-                    }
-                    openBranchNominationsModal();
-                } else {
-                    if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
-                }
-            } catch (err) {
-                alert('فشل الاتصال: ' + err.message);
-            }
-        };
+            loadHeaderNotifications();
+        }
 
         let currentAvailableColleagues = [];
         let selectedColleagueKeys = new Set();
+        let currentReplaceContext = {
+            type: 'wave',
+            userWaveId: 0,
+            waveId: 0,
+            branchId: 0,
+            sessionId: 0,
+            companyId: 0,
+            branchName: '',
+            allBranches: false
+        };
 
         function normalizeArabic(text) {
             if (!text) return '';
@@ -695,6 +852,11 @@
 
         window.filterColleaguesList = function (text) {
             renderColleaguesChecklist(text);
+        };
+
+        window.onToggleAllBranches = function (isChecked) {
+            currentReplaceContext.allBranches = isChecked;
+            loadAvailableColleaguesForCurrentReplace();
         };
 
         window.selectAllColleaguesToggle = function () {
@@ -730,7 +892,8 @@
             if (!container) return;
 
             if (!currentAvailableColleagues || currentAvailableColleagues.length === 0) {
-                container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">لا يوجد زملاء متاحين بالفرع للترشيح</div>`;
+                const branchTitle = currentReplaceContext.branchName ? `بفرع (${currentReplaceContext.branchName})` : 'بالفرع';
+                container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs font-medium">لا يوجد زملاء آخرين متاحين ${branchTitle}</div>`;
                 updateSelectedCountBadge();
                 return;
             }
@@ -743,15 +906,18 @@
                 const rawName = String(c.fullName || c.FullName || '');
                 const rawCode = String(c.userCode || c.UserCode || '');
                 const rawRole = String(c.jobTitle || c.JobTitle || c.roleName || c.RoleName || '');
+                const rawBranch = String(c.branchName || c.BranchName || '');
 
                 const normName = normalizeArabic(rawName);
                 const normRole = normalizeArabic(rawRole);
+                const normBranch = normalizeArabic(rawBranch);
                 const code = rawCode.toLowerCase();
 
                 return normName.includes(normTerm)
                     || rawName.toLowerCase().includes(rawTerm.toLowerCase())
                     || code.includes(rawTerm.toLowerCase())
-                    || normRole.includes(normTerm);
+                    || normRole.includes(normTerm)
+                    || normBranch.includes(normTerm);
             });
 
             if (filtered.length === 0) {
@@ -765,6 +931,8 @@
                 const name = c.fullName || c.FullName || 'زميل';
                 const code = c.userCode || c.UserCode || '--';
                 const role = c.jobTitle || c.JobTitle || c.roleName || c.RoleName || 'صيدلي';
+                const branch = c.branchName || c.BranchName || '';
+                const isActive = c.isActive !== false && c.IsActive !== false;
                 const isChecked = selectedColleagueKeys.has(val);
 
                 return `
@@ -774,8 +942,13 @@
                             <input type="checkbox" value="${val}" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleColleagueSelection('${val}')"
                                    class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer" />
                             <div class="truncate">
-                                <h6 class="text-xs font-black text-slate-900 dark:text-white truncate">${name}</h6>
-                                <p class="text-[10px] text-slate-400 font-mono mt-0.5">كود: ${code} | ${role}</p>
+                                <div class="flex items-center gap-2 truncate">
+                                    <h6 class="text-xs font-black text-slate-900 dark:text-white truncate">${name}</h6>
+                                    ${!isActive ? '<span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200/60">غير مفعّل (سيتم تفعيله)</span>' : ''}
+                                </div>
+                                <p class="text-[10px] text-slate-400 font-mono mt-0.5">
+                                    كود: ${code} | ${role} ${branch ? `| فرع: ${branch}` : ''}
+                                </p>
                             </div>
                         </div>
                         ${isChecked ? '<span class="text-[11px] font-black text-indigo-600 dark:text-indigo-400 shrink-0"><i class="fas fa-check-circle"></i></span>' : ''}
@@ -786,82 +959,135 @@
             updateSelectedCountBadge();
         }
 
-        // Open Replace for Waves
-        window.openReplaceModal = async function (userWaveId, waveId, branchId, studentName) {
-            document.getElementById('replaceType').value = 'wave';
-            document.getElementById('replaceUserWaveId').value = userWaveId;
-            document.getElementById('replaceWaveId').value = waveId;
-            document.getElementById('replaceBranchId').value = branchId;
-            document.getElementById('currentCandidateName').textContent = studentName;
-            document.getElementById('replaceModalSubtitle').textContent = 'اختر زميل بديل (أو أكثر) متاح من نفس الفرع لدورة الويف';
-
-            currentAvailableColleagues = [];
-            selectedColleagueKeys.clear();
-            if (document.getElementById('colleagueSearchInput')) document.getElementById('colleagueSearchInput').value = '';
-
+        async function loadAvailableColleaguesForCurrentReplace() {
             const container = document.getElementById('colleaguesListContainer');
-            container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs"><i class="fas fa-spinner fa-spin mr-1"></i> جاري البحث عن الزملاء بالفرع...</div>';
-            document.getElementById('replaceCandidateModal').classList.remove('hidden');
+            container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs font-medium"><i class="fas fa-spinner fa-spin mr-1"></i> جاري البحث عن زملاء الفرع المتاحين...</div>';
 
             try {
-                const res = await fetch(`/Notification/GetAvailableBranchColleagues?branchId=${branchId}&waveId=${waveId}`);
+                let url = '';
+                const params = new URLSearchParams();
+
+                if (currentReplaceContext.type === 'company') {
+                    if (currentReplaceContext.sessionId) params.append('sessionId', currentReplaceContext.sessionId);
+                    if (currentReplaceContext.companyId) params.append('companyId', currentReplaceContext.companyId);
+                    if (currentReplaceContext.branchId > 0) params.append('branchId', currentReplaceContext.branchId);
+                    if (currentReplaceContext.branchName) params.append('branchName', currentReplaceContext.branchName);
+                    if (currentReplaceContext.excludeUserId) params.append('excludeUserId', currentReplaceContext.excludeUserId);
+                    if (currentReplaceContext.excludeUserCode) params.append('excludeUserCode', currentReplaceContext.excludeUserCode);
+                    url = `/Notification/GetAvailableCompanyColleagues?${params.toString()}`;
+                } else {
+                    if (currentReplaceContext.waveId) params.append('waveId', currentReplaceContext.waveId);
+                    if (currentReplaceContext.branchId > 0) params.append('branchId', currentReplaceContext.branchId);
+                    if (currentReplaceContext.branchName) params.append('branchName', currentReplaceContext.branchName);
+                    if (currentReplaceContext.excludeUserId) params.append('excludeUserId', currentReplaceContext.excludeUserId);
+                    if (currentReplaceContext.excludeUserCode) params.append('excludeUserCode', currentReplaceContext.excludeUserCode);
+                    url = `/Notification/GetAvailableBranchColleagues?${params.toString()}`;
+                }
+
+                const res = await fetch(url, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (!res.ok) {
+                    throw new Error(`تعذر الاتصال بالخادم (${res.status})`);
+                }
+
+                const contentType = res.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error('الخادم لم يُرجع بيانات JSON صالحة.');
+                }
+
                 const data = await res.json();
                 const list = Array.isArray(data.colleagues) ? data.colleagues : (data.colleagues?.$values || []);
 
                 if (data.success && list.length > 0) {
                     currentAvailableColleagues = list;
-                    renderColleaguesChecklist('');
+                    const searchVal = document.getElementById('colleagueSearchInput')?.value || '';
+                    renderColleaguesChecklist(searchVal);
                 } else {
                     currentAvailableColleagues = [];
-                    container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">لا يوجد زملاء آخرين متاحين بالفرع</div>';
+                    const branchTitle = currentReplaceContext.branchName ? `بفرع (${currentReplaceContext.branchName})` : 'بالفرع';
+                    container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs font-medium">لا يوجد زملاء آخرين متاحين ${branchTitle}</div>`;
                     updateSelectedCountBadge();
                 }
             } catch (err) {
-                container.innerHTML = '<div class="text-center py-6 text-rose-500 text-xs">فشل تحميل قائمة الزملاء</div>';
+                container.innerHTML = `<div class="text-center py-6 text-rose-500 text-xs font-bold">فشل تحميل قائمة الزملاء: ${err.message}</div>`;
             }
+        }
+
+        // Open Replace for Waves
+        window.openReplaceModal = async function (userWaveId, waveId, branchId, studentName, branchName = '', userCode = '', userId = '') {
+            currentReplaceContext = {
+                type: 'wave',
+                userWaveId: userWaveId,
+                waveId: waveId,
+                branchId: branchId,
+                sessionId: 0,
+                companyId: 0,
+                branchName: branchName,
+                excludeUserCode: userCode,
+                excludeUserId: userId
+            };
+
+            document.getElementById('replaceType').value = 'wave';
+            document.getElementById('replaceUserWaveId').value = userWaveId;
+            document.getElementById('replaceWaveId').value = waveId;
+            document.getElementById('replaceBranchId').value = branchId;
+            document.getElementById('replaceBranchName').value = branchName || '';
+            document.getElementById('currentCandidateName').textContent = studentName;
+            document.getElementById('replaceModalSubtitle').textContent = branchName 
+                ? `اختر زميل بديل (أو أكثر) متاح من فرع (${branchName}) لدورة الويف`
+                : 'اختر زميل بديل (أو أكثر) متاح من نفس الفرع لدورة الويف';
+
+            currentAvailableColleagues = [];
+            selectedColleagueKeys.clear();
+            if (document.getElementById('colleagueSearchInput')) document.getElementById('colleagueSearchInput').value = '';
+
+            const replaceModal = ensureModalInBody('replaceCandidateModal');
+            if (replaceModal) replaceModal.classList.remove('hidden');
+            await loadAvailableColleaguesForCurrentReplace();
         };
 
         // Open Replace for Company Sessions
-        window.openReplaceCompanyModal = async function (cstId, sessionId, companyId, branchName, traineeName, branchId = 0) {
+        window.openReplaceCompanyModal = async function (cstId, sessionId, companyId, branchName, traineeName, branchId = 0, userCode = '', userId = '') {
+            currentReplaceContext = {
+                type: 'company',
+                userWaveId: cstId,
+                waveId: 0,
+                branchId: branchId,
+                sessionId: sessionId,
+                companyId: companyId,
+                branchName: branchName,
+                excludeUserCode: userCode,
+                excludeUserId: userId
+            };
+
             document.getElementById('replaceType').value = 'company';
             document.getElementById('replaceUserWaveId').value = cstId;
             document.getElementById('replaceSessionId').value = sessionId;
             document.getElementById('replaceCompanyId').value = companyId;
             document.getElementById('replaceBranchName').value = branchName;
+            document.getElementById('replaceBranchId').value = branchId;
             document.getElementById('currentCandidateName').textContent = traineeName;
-            document.getElementById('replaceModalSubtitle').textContent = `اختر متدرب بديل (أو أكثر) من فرع (${branchName}) للسيشن`;
+            document.getElementById('replaceModalSubtitle').textContent = branchName
+                ? `اختر متدرب بديل (أو أكثر) من فرع (${branchName}) للسيشن`
+                : 'اختر متدرب بديل (أو أكثر) من نفس الفرع للسيشن';
 
             currentAvailableColleagues = [];
             selectedColleagueKeys.clear();
             if (document.getElementById('colleagueSearchInput')) document.getElementById('colleagueSearchInput').value = '';
 
-            const container = document.getElementById('colleaguesListContainer');
-            container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs"><i class="fas fa-spinner fa-spin mr-1"></i> جاري البحث عن الزملاء المتاحين بالفرع...</div>';
-            document.getElementById('replaceCandidateModal').classList.remove('hidden');
-
-            try {
-                const branchQuery = branchId > 0 
-                    ? `branchId=${branchId}&branchName=${encodeURIComponent(branchName || '')}` 
-                    : `branchName=${encodeURIComponent(branchName || '')}`;
-                const res = await fetch(`/Notification/GetAvailableCompanyColleagues?sessionId=${sessionId}&companyId=${companyId}&${branchQuery}`);
-                const data = await res.json();
-                const list = Array.isArray(data.colleagues) ? data.colleagues : (data.colleagues?.$values || []);
-
-                if (data.success && list.length > 0) {
-                    currentAvailableColleagues = list;
-                    renderColleaguesChecklist('');
-                } else {
-                    currentAvailableColleagues = [];
-                    container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">لا يوجد زملاء متاحين بالفرع للترشيح</div>';
-                    updateSelectedCountBadge();
-                }
-            } catch (err) {
-                container.innerHTML = '<div class="text-center py-6 text-rose-500 text-xs">فشل تحميل قائمة المتدربين</div>';
-            }
+            const replaceCompanyModal = ensureModalInBody('replaceCandidateModal');
+            if (replaceCompanyModal) replaceCompanyModal.classList.remove('hidden');
+            await loadAvailableColleaguesForCurrentReplace();
         };
 
         window.closeReplaceModal = function () {
-            document.getElementById('replaceCandidateModal').classList.add('hidden');
+            const m = document.getElementById('replaceCandidateModal');
+            if (m) m.classList.add('hidden');
         };
 
         window.submitReplaceNomination = async function () {
@@ -870,8 +1096,7 @@
             const selectedValues = Array.from(selectedColleagueKeys);
 
             if (selectedValues.length === 0) {
-                if (typeof Swal !== 'undefined') Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى اختيار زميل بديل واحد على الأقل.' });
-                else alert('يرجى اختيار زميل بديل واحد على الأقل.');
+                showAppToast('warning', 'Notice', 'Please select at least one replacement colleague from the list.');
                 return;
             }
 
@@ -894,29 +1119,31 @@
             try {
                 const res = await fetch('/Notification/ActionNomination', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
                 if (data.success) {
                     closeReplaceModal();
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({ icon: 'success', title: 'تم الاستبدال والاعتماد بنجاح', text: data.message, timer: 2500 });
-                    }
-                    openBranchNominationsModal();
+                    showAppToast('success', 'Replaced & Approved 🔄', data.message || 'Replacement colleague approved successfully.');
+                    removeNominationCardFromDOM(type, userWaveId);
                 } else {
-                    if (typeof Swal !== 'undefined') Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                    showAppToast('error', 'Replacement Failed', data.message || 'Could not replace candidate.');
                 }
             } catch (err) {
-                alert('فشل الاتصال: ' + err.message);
+                showAppToast('error', 'Connection Error', err.message);
             }
         };
 
         // Branch Exemptions Modal Logic
         window.openBranchExemptionsModal = async function () {
-            const modal = document.getElementById('branchExemptionsModal');
+            const modal = ensureModalInBody('branchExemptionsModal');
             const list = document.getElementById('branchExemptionsList');
-            modal.classList.remove('hidden');
+            if (modal) modal.classList.remove('hidden');
             list.innerHTML = '<div class="text-center py-8 text-slate-400 text-xs"><i class="fas fa-spinner fa-spin text-lg mb-2 block"></i>جاري تحميل إعدادات الفروع...</div>';
 
             try {
@@ -948,16 +1175,14 @@
                 const res = await fetch(`/Notification/ToggleBranchBypassApproval?branchId=${branchId}&bypass=${checkbox.checked}`, { method: 'POST' });
                 const data = await res.json();
                 if (data.success) {
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, icon: 'success', title: data.message });
-                    }
+                    showAppToast('success', 'Branch Settings', data.message || 'Branch exemption status updated successfully.');
                 } else {
                     checkbox.checked = !checkbox.checked;
-                    alert('خطأ: ' + data.message);
+                    showAppToast('error', 'Save Failed', data.message || 'Could not save branch settings.');
                 }
             } catch (e) {
                 checkbox.checked = !checkbox.checked;
-                alert('فشل الاتصال: ' + e.message);
+                showAppToast('error', 'Connection Error', e.message);
             }
         };
 

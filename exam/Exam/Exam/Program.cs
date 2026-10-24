@@ -74,7 +74,21 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.ExpireTimeSpan = TimeSpan.FromDays(20); 
     options.SlidingExpiration = true; 
     options.LoginPath = "/Auth/Login";
-    options.AccessDeniedPath = "/Auth/AccessDenied";    
+    options.AccessDeniedPath = "/Auth/AccessDenied";
+    options.Events.OnRedirectToLogin = ctx =>
+    {
+        if (ctx.Request.Path.StartsWithSegments("/api") || 
+            ctx.Request.Path.StartsWithSegments("/Notification") ||
+            ctx.Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+            ctx.Request.Headers["Accept"].ToString().Contains("application/json"))
+        {
+            ctx.Response.StatusCode = Microsoft.AspNetCore.Http.StatusCodes.Status401Unauthorized;
+            ctx.Response.ContentType = "application/json";
+            return ctx.Response.WriteAsJsonAsync(new { success = false, message = "انتهت الجلسة أو غير مصرح، يرجى تسجيل الدخول مجدداً." });
+        }
+        ctx.Response.Redirect(ctx.RedirectUri);
+        return Task.CompletedTask;
+    };
 });
 
 var app = builder.Build();
