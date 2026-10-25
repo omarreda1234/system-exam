@@ -2646,17 +2646,6 @@ WHERE U.Id = @UserId;";
                                 ? (string)waveInfo.CustomEmailBody 
                                 : null);
 
-                        var n8nPayload = new
-                        {
-                            @event = "wave_nomination_created",
-                            waveId = waveId,
-                            waveName = waveNameStr,
-                            startDate = startDateVal != null ? ((DateTime)startDateVal).ToString("yyyy-MM-dd") : null,
-                            formattedStartDate = formattedDate,
-                            location = location,
-                            siteUrl = siteUrl,
-                            subjectTemplate = subjectTemplate,
-                            bodyTemplate = bodyTemplate,
                         var candidatesList = candidateDetails.Select(c => 
                         {
                             string cFullName = (string)c.FullName;

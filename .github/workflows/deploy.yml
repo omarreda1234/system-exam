@@ -68,6 +68,13 @@ jobs:
             New-Service -Name $serviceName -BinaryPathName $exePath -DisplayName "Exam Application Service" -StartupType Automatic
         }
         
+        # Ensure Windows Firewall rule allows inbound port 7085 for HTTPS
+        $fwRule = Get-NetFirewallRule -DisplayName "Exam HTTPS 7085" -ErrorAction SilentlyContinue
+        if ($null -eq $fwRule) {
+            Write-Host "Creating Windows Firewall rule for port 7085..."
+            New-NetFirewallRule -DisplayName "Exam HTTPS 7085" -Direction Inbound -LocalPort 7085 -Protocol TCP -Action Allow
+        }
+        
         Write-Host "Starting Windows Service '$serviceName'..."
         Start-Service -Name $serviceName
 

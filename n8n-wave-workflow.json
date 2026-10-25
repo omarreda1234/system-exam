@@ -1,0 +1,83 @@
+{
+  "name": "Wave Nomination Email Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wave-nomination-notification",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "e45f9175-68a1-432d-94bb-12a87514ef1a",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        260,
+        300
+      ],
+      "webhookId": "wave-nomination-notification"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "body.candidates",
+        "options": {}
+      },
+      "id": "772f9bda-8e12-4c6e-82e7-a95e0c52bb1b",
+      "name": "Split Candidates",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "omarreda24689@gmail.com",
+        "toEmail": "={{ $json.email }}",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.body.replace(/\\r\\n/g, '<br/>').replace(/\\n/g, '<br/>') }}",
+        "options": {}
+      },
+      "id": "a9012e83-7b3f-4e02-959c-85942f20387b",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        700,
+        300
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Split Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Candidates": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2"
+}

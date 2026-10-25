@@ -17,3 +17,5 @@ build_output.txt
 
 ## Ignore user secrets/credentials if any
 **/google-credentials.json
+scratch/
+

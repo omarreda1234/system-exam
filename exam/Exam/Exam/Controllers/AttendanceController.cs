@@ -21,15 +21,18 @@ namespace Exam.Controllers
         private readonly string _connectionString;
         private readonly Exam.Services.IN8nService _n8nService;
         private readonly Microsoft.AspNetCore.SignalR.IHubContext<Exam.Hubs.NotificationHub> _hubContext;
+        private readonly Exam.Services.IEmailSender? _emailSender;
 
         public AttendanceController(
             IConfiguration configuration,
             Exam.Services.IN8nService n8nService,
-            Microsoft.AspNetCore.SignalR.IHubContext<Exam.Hubs.NotificationHub> hubContext)
+            Microsoft.AspNetCore.SignalR.IHubContext<Exam.Hubs.NotificationHub> hubContext,
+            Exam.Services.IEmailSender? emailSender = null)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")!;
             _n8nService = n8nService;
             _hubContext = hubContext;
+            _emailSender = emailSender;
         }
 
         [HttpGet]
@@ -1316,11 +1319,46 @@ namespace Exam.Controllers
 
                     _ = Task.Run(async () =>
                     {
+                        bool n8nSent = false;
                         try
                         {
-                            await _n8nService.TriggerCompanySessionNotificationAsync(webhookPayload);
+                            n8nSent = await _n8nService.TriggerCompanySessionNotificationAsync(webhookPayload);
                         }
                         catch { }
+
+                        // Fallback: If n8n is not running, send directly via SMTP
+                        if (!n8nSent && _emailSender != null)
+                        {
+                            foreach (var trainee in assignedTraineePayloads)
+                            {
+                                string tEmail = (string)(trainee.email ?? "");
+                                string tName = (string)(trainee.fullName ?? "");
+                                if (!string.IsNullOrWhiteSpace(tEmail) && tEmail.Contains("@"))
+                                {
+                                    try
+                                    {
+                                        string sName = (string)session.SessionName;
+                                        string cName = (string)(session.CompanyName ?? "");
+                                        string sDate = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd");
+                                        string subject = $"دعوة لحضور تدريب: {sName} - {cName}";
+                                        string html = $"<div dir='rtl' style='font-family: Arial, sans-serif; padding: 20px; line-height: 1.8; color: #1e293b; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;'>" +
+                                            $"<h2 style='color: #0f766e;'>مرحباً {tName}،</h2>" +
+                                            $"<p>تم تسجيلك لحضور جلسة تدريب خاصة بشركة: <strong>{cName}</strong></p>" +
+                                            $"<div style='background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0;'>" +
+                                            $"<p style='margin: 5px 0;'><strong>اسم الجلسة:</strong> {sName}</p>" +
+                                            $"<p style='margin: 5px 0;'><strong>التاريخ:</strong> {sDate}</p>" +
+                                            $"</div>" +
+                                            $"<p>نتمنى لك دوام التوفيق والنجاح.</p>" +
+                                            $"<hr style='border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;'/>" +
+                                            $"<p style='font-size: 12px; color: #64748b;'>أكاديمية الطرشوبي - التدريب والتطوير المستمر</p>" +
+                                            $"</div>";
+
+                                        await _emailSender.SendEmailAsync(tEmail, subject, html);
+                                    }
+                                    catch { }
+                                }
+                            }
+                        }
                     });
                 }
 
@@ -1467,7 +1505,41 @@ namespace Exam.Controllers
 
                     _ = Task.Run(async () =>
                     {
-                        try { await _n8nService.TriggerCompanySessionNotificationAsync(webhookPayload); } catch { }
+                        bool n8nSent = false;
+                        try { n8nSent = await _n8nService.TriggerCompanySessionNotificationAsync(webhookPayload); } catch { }
+
+                        if (!n8nSent && _emailSender != null)
+                        {
+                            foreach (var tr in trainees)
+                            {
+                                string trEmail = (string)(tr.Email ?? "");
+                                string trName = (string)(tr.FullName ?? "");
+                                if (!string.IsNullOrWhiteSpace(trEmail) && trEmail.Contains("@"))
+                                {
+                                    try
+                                    {
+                                        string sName = (string)session.SessionName;
+                                        string cName = (string)(session.CompanyName ?? "");
+                                        string sDate = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd");
+                                        string subject = $"دعوة لحضور تدريب: {sName} - {cName}";
+                                        string html = $"<div dir='rtl' style='font-family: Arial, sans-serif; padding: 20px; line-height: 1.8; color: #1e293b; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;'>" +
+                                            $"<h2 style='color: #0f766e;'>مرحباً {trName}،</h2>" +
+                                            $"<p>تم تسجيلك لحضور جلسة تدريب خاصة بشركة: <strong>{cName}</strong></p>" +
+                                            $"<div style='background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0;'>" +
+                                            $"<p style='margin: 5px 0;'><strong>اسم الجلسة:</strong> {sName}</p>" +
+                                            $"<p style='margin: 5px 0;'><strong>التاريخ:</strong> {sDate}</p>" +
+                                            $"</div>" +
+                                            $"<p>نتمنى لك دوام التوفيق والنجاح.</p>" +
+                                            $"<hr style='border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;'/>" +
+                                            $"<p style='font-size: 12px; color: #64748b;'>أكاديمية الطرشوبي - التدريب والتطوير المستمر</p>" +
+                                            $"</div>";
+
+                                        await _emailSender.SendEmailAsync(trEmail, subject, html);
+                                    }
+                                    catch { }
+                                }
+                            }
+                        }
                     });
                 }
 
