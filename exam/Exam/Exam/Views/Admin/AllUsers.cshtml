@@ -582,9 +582,21 @@
                 };
                 
                 const formatTime = (t) => {
-                    if (typeof t === 'string') return t.substring(0, 5);
-                    if (t && typeof t === 'object' && t.hours !== undefined) return `${String(t.hours).padStart(2,'0')}:${String(t.minutes).padStart(2,'0')}`;
-                    return "00:00";
+                    if (!t) return "";
+                    if (typeof t === 'string') {
+                        const parts = t.split(':');
+                        if (parts.length >= 2) return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+                        return t.substring(0, 5);
+                    }
+                    if (typeof t === 'object' && t.hours !== undefined) return `${String(t.hours).padStart(2,'0')}:${String(t.minutes).padStart(2,'0')}`;
+                    return "";
+                };
+                const formatShiftRange = (start, end) => {
+                    const s = formatTime(start);
+                    const e = formatTime(end);
+                    if (s && e) return ` (${s} - ${e})`;
+                    if (s) return ` (${s})`;
+                    return "";
                 };
 
                 let roleOptions = rolesData.map(r => {
@@ -595,8 +607,8 @@
                 let shiftOptions = shiftsData.map(s => {
                     let name = getVal(s, 'ShiftName');
                     let sid = getVal(s, 'Id');
-                    let time = formatTime(getVal(s, 'StartTime'));
-                    return `<option value="${sid}">${name.toUpperCase()} (${time})</option>`;
+                    let timeRange = formatShiftRange(getVal(s, 'StartTime'), getVal(s, 'EndTime'));
+                    return `<option value="${sid}">${name.toUpperCase()}${timeRange}</option>`;
                 }).join('');
 
                 let branchOptions = '<option value="">-- Choose Branch / اختر الفرع --</option>' + branchesData.map(b => {
@@ -1191,12 +1203,31 @@
                 branchOptions += `<option value="${bid}"${sel}>${(name || '').toUpperCase()}</option>`;
             });
 
+            const formatTime = (t) => {
+                if (!t) return "";
+                if (typeof t === 'string') {
+                    const parts = t.split(':');
+                    if (parts.length >= 2) return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+                    return t.substring(0, 5);
+                }
+                if (typeof t === 'object' && t.hours !== undefined) return `${String(t.hours).padStart(2,'0')}:${String(t.minutes).padStart(2,'0')}`;
+                return "";
+            };
+            const formatShiftRange = (start, end) => {
+                const s = formatTime(start);
+                const e = formatTime(end);
+                if (s && e) return ` (${s} - ${e})`;
+                if (s) return ` (${s})`;
+                return "";
+            };
+
             let shiftOptions = '<option value="0">-- NO SHIFT --</option>';
             shiftsData.forEach(s => {
-                let name = s.shiftName || s.ShiftName || '';
-                let sid = s.id || s.Id;
+                let name = getVal(s, 'ShiftName');
+                let sid = getVal(s, 'Id');
+                let timeRange = formatShiftRange(getVal(s, 'StartTime'), getVal(s, 'EndTime'));
                 let sel = (shiftId !== '0' && String(sid) === String(shiftId)) ? ' selected' : '';
-                shiftOptions += `<option value="${sid}"${sel}>${(name || '').toUpperCase()}</option>`;
+                shiftOptions += `<option value="${sid}"${sel}>${(name || '').toUpperCase()}${timeRange}</option>`;
             });
 
             let deptOptions = '<option value="">-- NO DEPARTMENT / بدون قسم --</option>';

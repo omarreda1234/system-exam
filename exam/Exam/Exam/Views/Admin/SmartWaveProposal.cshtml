@@ -523,9 +523,11 @@
 
             currentCandidates.forEach((c) => {
                 const isFresh = c.candidateType === 'New';
+                const waveInfo = c.joinedWaveNames ? `<span class="text-[10px] font-bold text-amber-700 dark:text-amber-400 font-mono mt-0.5"><i class="fas fa-layer-group text-[9px] mr-0.5"></i>${c.joinedWaveNames}</span>` : `<span class="text-[10px] text-amber-600/70 font-mono">(${c.previousWaveCount} prev)</span>`;
                 const typeBadge = isFresh
                     ? `<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> First-Time</span>`
-                    : `<span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 inline-flex items-center gap-1"><i class="fas fa-rotate-right text-[9px]"></i> Resitter (${c.previousWaveCount} prev)</span>`;
+                    : `<div class="inline-flex flex-col items-center"><span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 inline-flex items-center gap-1"><i class="fas fa-rotate-right text-[9px]"></i> Resitter</span>${waveInfo}</div>`;
+
 
                 const roleName = (c.roleName || 'User').toUpperCase();
                 const roleBadge = `<span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 uppercase">${roleName}</span>`;

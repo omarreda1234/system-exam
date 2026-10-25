@@ -882,7 +882,8 @@ Eltarshoubi Training Academy Team";
                         COALESCE(ur.RoleName, N'User') AS RoleName,
                         'New' AS CandidateType,
                         0 AS PreviousWaveCount,
-                        CAST(NULL AS DECIMAL(18,2)) AS LastExamScore
+                        CAST(NULL AS DECIMAL(18,2)) AS LastExamScore,
+                        '' AS JoinedWaveNames
                     FROM AspNetUsers u WITH (NOLOCK)
                     LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
                     LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
@@ -923,7 +924,17 @@ Eltarshoubi Training Academy Team";
                         COALESCE(ur.RoleName, N'User') AS RoleName,
                         'Resitter' AS CandidateType,
                         (SELECT COUNT(1) FROM dbo.UserWaves uw2 WITH (NOLOCK) WHERE uw2.UserId = u.Id) AS PreviousWaveCount,
-                        (SELECT MAX(wc.Score) FROM dbo.UserWaveCertificates wc WITH (NOLOCK) WHERE wc.UserId = u.Id) AS LastExamScore
+                        (SELECT MAX(wc.Score) FROM dbo.UserWaveCertificates wc WITH (NOLOCK) WHERE wc.UserId = u.Id) AS LastExamScore,
+                        (
+                            SELECT STRING_AGG(tw.WaveName, N', ') WITHIN GROUP (ORDER BY tw.MinWaveId ASC)
+                            FROM (
+                                SELECT tw_inner.WaveName, MIN(tw_inner.Id) AS MinWaveId
+                                FROM dbo.UserWaves uw_prev WITH (NOLOCK)
+                                INNER JOIN dbo.TrainingWaves tw_inner WITH (NOLOCK) ON uw_prev.WaveId = tw_inner.Id
+                                WHERE uw_prev.UserId = u.Id
+                                GROUP BY tw_inner.WaveName
+                            ) tw
+                        ) AS JoinedWaveNames
                     FROM AspNetUsers u WITH (NOLOCK)
                     LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
                     LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
@@ -1044,7 +1055,17 @@ Eltarshoubi Training Academy Team";
                             WHEN EXISTS (SELECT 1 FROM dbo.UserWaves uw WHERE uw.UserId = u.Id) THEN N'إعادة فرصة (لم يحصل على شهادة)'
                             ELSE N'جديد لأول مرة'
                         END AS CandidateType,
-                        (SELECT COUNT(1) FROM dbo.UserWaves uw2 WHERE uw2.UserId = u.Id) AS PreviousWaveCount
+                        (SELECT COUNT(1) FROM dbo.UserWaves uw2 WHERE uw2.UserId = u.Id) AS PreviousWaveCount,
+                        (
+                            SELECT STRING_AGG(tw.WaveName, N', ') WITHIN GROUP (ORDER BY tw.MinWaveId ASC)
+                            FROM (
+                                SELECT tw_inner.WaveName, MIN(tw_inner.Id) AS MinWaveId
+                                FROM dbo.UserWaves uw_prev WITH (NOLOCK)
+                                INNER JOIN dbo.TrainingWaves tw_inner WITH (NOLOCK) ON uw_prev.WaveId = tw_inner.Id
+                                WHERE uw_prev.UserId = u.Id
+                                GROUP BY tw_inner.WaveName
+                            ) tw
+                        ) AS JoinedWaveNames
                     FROM AspNetUsers u WITH (NOLOCK)
                     LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
                     LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
@@ -1121,7 +1142,7 @@ Eltarshoubi Training Academy Team";
                         "الوردية",
                         "رقم الهاتف",
                         "البريد الإلكتروني",
-                        "توقيع وملاحظات مدير الفرع"
+                        "الدفعة السابقة / ملاحظات مدير الفرع"
                     };
 
                     for (int i = 0; i < headers.Length; i++)
@@ -1165,7 +1186,19 @@ Eltarshoubi Training Academy Team";
                         ws.Cell(row, 8).Value = Convert.ToString(c.ShiftName);
                         ws.Cell(row, 9).Value = Convert.ToString(c.PhoneNumber);
                         ws.Cell(row, 10).Value = Convert.ToString(c.Email);
-                        ws.Cell(row, 11).Value = ""; // Manager note space
+
+                        string joinedWaves = Convert.ToString(c.JoinedWaveNames);
+                        var cellNote = ws.Cell(row, 11);
+                        if (!string.IsNullOrWhiteSpace(joinedWaves))
+                        {
+                            cellNote.Value = joinedWaves;
+                            cellNote.Style.Font.Bold = true;
+                            cellNote.Style.Font.FontColor = XLColor.FromHtml("#B45309"); // Amber 700
+                        }
+                        else
+                        {
+                            cellNote.Value = ""; // Manager note space
+                        }
 
                         // Style data row
                         var dataRange = ws.Range(row, 1, row, headers.Length);

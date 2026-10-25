@@ -287,19 +287,32 @@ namespace Exam.Controllers
             catch { }
 
             // 4. Fetch Student Active Wave & Continuous Assignments
+            // 4. Fetch Student Waves, Continuous Assignments & Companies
             try
             {
-                var activeWave = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                    SELECT uw.WaveId, w.WaveName 
+                var myWaves = (await conn.QueryAsync<UserWaveItemViewModel>(@"
+                    SELECT 
+                        uw.WaveId, 
+                        w.WaveName, 
+                        w.StartDate, 
+                        w.EndDate, 
+                        w.Mode, 
+                        w.IsOnline, 
+                        ISNULL(uw.ApprovalStatus, 'Approved') AS ApprovalStatus, 
+                        uw.JoinDate
                     FROM dbo.UserWaves uw WITH (NOLOCK)
                     INNER JOIN dbo.TrainingWaves w WITH (NOLOCK) ON uw.WaveId = w.Id
-                    WHERE uw.UserId = @UserId AND uw.IsActive = 1", 
-                    new { UserId = userId });
+                    WHERE uw.UserId = @UserId
+                    ORDER BY w.StartDate DESC, uw.Id DESC", 
+                    new { UserId = userId })).ToList();
 
+                profile.MyWaves = myWaves;
+
+                var activeWave = myWaves.FirstOrDefault(w => w.ApprovalStatus == "Approved") ?? myWaves.FirstOrDefault();
                 if (activeWave != null)
                 {
                     profile.ActiveWaveName = activeWave.WaveName;
-                    int waveId = Convert.ToInt32(activeWave.WaveId);
+                    int waveId = activeWave.WaveId;
                     var assignments = await conn.QueryAsync<dynamic>(@"
                         SELECT a.*, 
                                (SELECT COUNT(*) FROM dbo.AssignmentSubmissions s WITH (NOLOCK) WHERE s.AssignmentId = a.Id AND s.UserId = @UserId) as SubmissionsCount
@@ -309,6 +322,29 @@ namespace Exam.Controllers
                         new { WaveId = waveId, UserId = userId });
                     profile.Assignments = assignments;
                 }
+
+                // Fetch Student Company Sessions / Companies
+                var myCompanies = (await conn.QueryAsync<UserCompanySessionItemViewModel>(@"
+                    SELECT DISTINCT
+                        s.Id AS SessionId,
+                        s.SessionName,
+                        s.CompanyId,
+                        ISNULL(c.Name, N'شركة غير محددة') AS CompanyName,
+                        s.SessionDate,
+                        s.StartTime,
+                        s.EndTime,
+                        ISNULL(cst.ApprovalStatus, 'Approved') AS ApprovalStatus
+                    FROM dbo.CompanySessionTrainees cst WITH (NOLOCK)
+                    LEFT JOIN dbo.CompanyTrainees ct WITH (NOLOCK) ON cst.CompanyTraineeId = ct.Id
+                    INNER JOIN dbo.AttendanceSessions s WITH (NOLOCK) ON cst.SessionId = s.Id
+                    LEFT JOIN dbo.Companies c WITH (NOLOCK) ON s.CompanyId = c.Id
+                    WHERE cst.UserId = @UserId 
+                       OR (@UserCode <> '' AND ct.UserCode = @UserCode)
+                       OR (@Email <> '' AND ct.Email = @Email)
+                    ORDER BY s.SessionDate DESC, s.Id DESC",
+                    new { UserId = userId, UserCode = userCode ?? "", Email = profile.Email ?? "" })).ToList();
+
+                profile.MyCompanies = myCompanies;
             }
             catch { }
 

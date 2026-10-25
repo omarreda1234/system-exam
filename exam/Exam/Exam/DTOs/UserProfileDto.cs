@@ -32,6 +32,32 @@ namespace Exam.DTOs
         public IEnumerable<dynamic> Assignments { get; set; } = new List<dynamic>();
         public string? ActiveWaveName { get; set; }
         public bool HasProgramDashAccess { get; set; }
+        public List<UserWaveItemViewModel> MyWaves { get; set; } = new();
+        public List<UserCompanySessionItemViewModel> MyCompanies { get; set; } = new();
+    }
+
+    public class UserWaveItemViewModel
+    {
+        public int WaveId { get; set; }
+        public string WaveName { get; set; } = string.Empty;
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public string? Mode { get; set; }
+        public bool IsOnline { get; set; }
+        public string ApprovalStatus { get; set; } = "Approved";
+        public DateTime? JoinDate { get; set; }
+    }
+
+    public class UserCompanySessionItemViewModel
+    {
+        public int SessionId { get; set; }
+        public string SessionName { get; set; } = string.Empty;
+        public int? CompanyId { get; set; }
+        public string CompanyName { get; set; } = string.Empty;
+        public DateTime? SessionDate { get; set; }
+        public TimeSpan? StartTime { get; set; }
+        public TimeSpan? EndTime { get; set; }
+        public string ApprovalStatus { get; set; } = "Approved";
     }
 
     public class UserCertificateItemViewModel
@@ -49,3 +75,4 @@ namespace Exam.DTOs
         public string SourceFolder { get; set; } = string.Empty;
     }
 }
+

@@ -2,13 +2,23 @@
 @{
     ViewData["Title"] = "My Profile - الملف الشخصي";
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    string shiftTimeRange = "";
+    if (Model.UserShift != null && Model.UserShift.ShiftId > 0)
+    {
+        shiftTimeRange = $"{Model.UserShift.StartTime.ToString(@"hh\:mm")} - {Model.UserShift.EndTime.ToString(@"hh\:mm")}";
+    }
+    else if (Model.ShiftStartTime.HasValue && Model.ShiftEndTime.HasValue)
+    {
+        shiftTimeRange = $"{Model.ShiftStartTime.Value.ToString(@"hh\:mm")} - {Model.ShiftEndTime.Value.ToString(@"hh\:mm")}";
+    }
 }
 
 <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
 
     <!-- 1. USER PROFILE CARD (SIMPLE & CLEAN) -->
     <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             
             <!-- User Basic Info -->
             <div class="flex items-center gap-4">
@@ -48,14 +58,22 @@
 
             <!-- Branch & Shift details -->
             <div class="flex flex-wrap items-center gap-3 sm:border-l sm:border-slate-100 sm:pl-6">
+                <!-- Branch -->
                 <div class="bg-slate-50 rounded-xl px-4 py-2.5 border border-slate-100 text-left min-w-[130px]">
                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Branch</span>
-                    <span class="text-xs font-bold text-slate-800 block truncate">@Model.BranchName</span>
+                    <span class="text-xs font-bold text-slate-800 block truncate" title="@Model.BranchName">@Model.BranchName</span>
                 </div>
 
-                <div class="bg-slate-50 rounded-xl px-4 py-2.5 border border-slate-100 text-left min-w-[130px]">
+                <!-- Shift (Time range from - to) -->
+                <div class="bg-slate-50 rounded-xl px-4 py-2.5 border border-slate-100 text-left min-w-[140px]">
                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Shift</span>
-                    <span class="text-xs font-bold text-brand-600 block truncate">@Model.ShiftName</span>
+                    <span class="text-xs font-bold text-brand-600 block truncate" title="@Model.ShiftName">@Model.ShiftName</span>
+                    @if (!string.IsNullOrEmpty(shiftTimeRange))
+                    {
+                        <span class="text-[11px] font-bold text-slate-500 font-mono block mt-0.5" dir="ltr">
+                            <i class="far fa-clock text-[10px] text-brand-500 mr-0.5"></i>(@shiftTimeRange)
+                        </span>
+                    }
                 </div>
             </div>
 
@@ -102,7 +120,9 @@
                     </span>
                 </button>
 
-                <!-- Tab 4: Wave Registration Form -->
+
+
+                <!-- Tab 6: Wave Registration Form -->
                 <button type="button" 
                         onclick="switchProfileTab('waveform')" 
                         id="tabBtn-waveform"
@@ -113,7 +133,7 @@
 
                 @if (Model.HasProgramDashAccess)
                 {
-                    <!-- Tab 5: Program Dash -->
+                    <!-- Tab 7: Program Dash -->
                     <button type="button" 
                             onclick="switchProfileTab('program')" 
                             id="tabBtn-program"
@@ -508,6 +528,8 @@
             }
         </div>
     </div>
+
+
 
     @if (Model.HasProgramDashAccess)
     {

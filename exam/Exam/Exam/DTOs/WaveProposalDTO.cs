@@ -20,7 +20,9 @@ namespace Exam.DTOs
         public int PreviousWaveCount { get; set; } = 0;
         public decimal? LastExamScore { get; set; }
         public bool IsSelected { get; set; } = true;
+        public string JoinedWaveNames { get; set; } = "";
     }
+
 
     public class WaveProposalFilterRequest
     {

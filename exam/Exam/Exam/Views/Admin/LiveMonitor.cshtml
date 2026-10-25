@@ -100,7 +100,7 @@
                     <option value="">All Shifts</option>
                     @foreach (var s in shifts)
                     {
-                        <option value="@s.Id" selected="@(selShift == s.Id.ToString() ? "selected" : null)">@s.ShiftName</option>
+                        <option value="@s.Id" selected="@(selShift == s.Id.ToString() ? "selected" : null)">@s.ShiftName (@s.StartTime.ToString(@"hh\:mm") - @s.EndTime.ToString(@"hh\:mm"))</option>
                     }
                 </select>
             </div>
