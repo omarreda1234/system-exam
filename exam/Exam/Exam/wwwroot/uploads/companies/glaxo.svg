@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60" width="240" height="60">
+  <rect x="15" y="12" width="60" height="36" rx="10" fill="#F36633" />
+  <text x="45" y="37" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="900" text-anchor="middle" fill="#FFFFFF">gsk</text>
+  <text x="88" y="38" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="800" fill="#F36633">GlaxoSmithKline</text>
+</svg>

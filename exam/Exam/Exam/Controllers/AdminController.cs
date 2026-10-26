@@ -5719,8 +5719,21 @@ ORDER BY U.UserName ASC";
         {
             using var conn = new SqlConnection(_connectionString);
             var list = await conn.QueryAsync<dynamic>(@"
-                SELECT C.*, 
-                       (SELECT COUNT(*) FROM CompanyTrainees CT WHERE CT.CompanyId = C.Id) as TraineeCount
+                SELECT C.Id, C.Name, C.Description, C.Tagline, C.Email, C.CreatedAt, 
+                       ISNULL(C.CompanyType, 'Medical') AS CompanyType,
+                       ISNULL(C.IsVisibleOnHome, 1) AS IsVisibleOnHome,
+                       C.LogoUrl, C.CoverImageUrl, C.Website, C.Phone, C.ContactPerson,
+                       CASE 
+                           WHEN EXISTS (SELECT 1 FROM dbo.AttendanceSessions S WHERE S.CompanyId = C.Id) THEN
+                               (SELECT COUNT(DISTINCT CST.CompanyTraineeId) 
+                                FROM dbo.CompanySessionTrainees CST 
+                                JOIN dbo.AttendanceSessions S ON CST.SessionId = S.Id 
+                                WHERE S.CompanyId = C.Id AND CST.ApprovalStatus = 'Approved')
+                           ELSE
+                               (SELECT COUNT(*) FROM CompanyTrainees CT WHERE CT.CompanyId = C.Id)
+                       END as TraineeCount,
+                       (SELECT COUNT(*) FROM CompanyProducts CP WHERE CP.CompanyId = C.Id) as ProductCount,
+                       (SELECT COUNT(*) FROM AttendanceSessions S WHERE S.CompanyId = C.Id) as SessionCount
                 FROM Companies C
                 ORDER BY C.CreatedAt DESC");
             return View(list);
@@ -5728,21 +5741,13 @@ ORDER BY U.UserName ASC";
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddCompany(string name, string description)
+        public async Task<IActionResult> ToggleCompanyHomeVisibility(int id, bool isVisible)
         {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                return Json(new { success = false, message = "Company Name is required." });
-            }
-
             try
             {
                 using var conn = new SqlConnection(_connectionString);
-                await conn.ExecuteAsync(
-                    "INSERT INTO Companies (Name, Description, CreatedAt) VALUES (@Name, @Description, @CreatedAt)",
-                    new { Name = name.Trim(), Description = description?.Trim(), CreatedAt = DateTime.Now });
-
-                return Json(new { success = true, message = "Company training portfolio registered successfully." });
+                await conn.ExecuteAsync("UPDATE Companies SET IsVisibleOnHome = @IsVisible WHERE Id = @Id", new { Id = id, IsVisible = isVisible ? 1 : 0 });
+                return Json(new { success = true, message = isVisible ? "Company will now appear on homepage ticker." : "Company is now hidden from homepage ticker." });
             }
             catch (Exception ex)
             {
@@ -5752,7 +5757,72 @@ ORDER BY U.UserName ASC";
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditCompany(int id, string name, string description)
+        public async Task<IActionResult> AddCompany(string name, string description, string? tagline, string? companyType, string? website, string? phone, string? email, string? contactPerson, bool? isVisibleOnHome, IFormFile? logoFile, IFormFile? coverFile)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return Json(new { success = false, message = "Company Name is required." });
+            }
+
+            try
+            {
+                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "companies");
+                Directory.CreateDirectory(uploadsDir);
+
+                string? logoUrl = null;
+                if (logoFile != null && logoFile.Length > 0)
+                {
+                    var ext = Path.GetExtension(logoFile.FileName).ToLower();
+                    var fileName = $"logo_{Guid.NewGuid():N}{ext}";
+                    var filePath = Path.Combine(uploadsDir, fileName);
+                    using var stream = new FileStream(filePath, FileMode.Create);
+                    await logoFile.CopyToAsync(stream);
+                    logoUrl = $"/uploads/companies/{fileName}";
+                }
+
+                string? coverUrl = null;
+                if (coverFile != null && coverFile.Length > 0)
+                {
+                    var ext = Path.GetExtension(coverFile.FileName).ToLower();
+                    var fileName = $"cover_{Guid.NewGuid():N}{ext}";
+                    var filePath = Path.Combine(uploadsDir, fileName);
+                    using var stream = new FileStream(filePath, FileMode.Create);
+                    await coverFile.CopyToAsync(stream);
+                    coverUrl = $"/uploads/companies/{fileName}";
+                }
+
+                string compType = string.IsNullOrWhiteSpace(companyType) ? "Medical" : companyType.Trim();
+
+                using var conn = new SqlConnection(_connectionString);
+                await conn.ExecuteAsync(@"
+                    INSERT INTO Companies (Name, Description, Tagline, CompanyType, LogoUrl, CoverImageUrl, Website, Phone, Email, ContactPerson, IsVisibleOnHome, CreatedAt) 
+                    VALUES (@Name, @Description, @Tagline, @CompanyType, @LogoUrl, @CoverImageUrl, @Website, @Phone, @Email, @ContactPerson, @IsVisibleOnHome, @CreatedAt)",
+                    new { 
+                        Name = name.Trim(), 
+                        Description = description?.Trim(), 
+                        Tagline = tagline?.Trim(),
+                        CompanyType = compType,
+                        LogoUrl = logoUrl,
+                        CoverImageUrl = coverUrl,
+                        Website = website?.Trim(),
+                        Phone = phone?.Trim(),
+                        Email = email?.Trim(),
+                        ContactPerson = contactPerson?.Trim(),
+                        IsVisibleOnHome = isVisibleOnHome ?? true,
+                        CreatedAt = DateTime.Now 
+                    });
+
+                return Json(new { success = true, message = "Company profile registered successfully." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditCompany(int id, string name, string description, string? tagline, string? companyType, string? website, string? phone, string? email, string? contactPerson, bool? isVisibleOnHome, IFormFile? logoFile, IFormFile? coverFile)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -5762,11 +5832,191 @@ ORDER BY U.UserName ASC";
             try
             {
                 using var conn = new SqlConnection(_connectionString);
-                var rows = await conn.ExecuteAsync(
-                    "UPDATE Companies SET Name = @Name, Description = @Description WHERE Id = @Id",
-                    new { Id = id, Name = name.Trim(), Description = description?.Trim() });
+                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "companies");
+                Directory.CreateDirectory(uploadsDir);
+
+                string? logoUrl = null;
+                if (logoFile != null && logoFile.Length > 0)
+                {
+                    var ext = Path.GetExtension(logoFile.FileName).ToLower();
+                    var fileName = $"logo_{Guid.NewGuid():N}{ext}";
+                    var filePath = Path.Combine(uploadsDir, fileName);
+                    using var stream = new FileStream(filePath, FileMode.Create);
+                    await logoFile.CopyToAsync(stream);
+                    logoUrl = $"/uploads/companies/{fileName}";
+                }
+
+                string? coverUrl = null;
+                if (coverFile != null && coverFile.Length > 0)
+                {
+                    var ext = Path.GetExtension(coverFile.FileName).ToLower();
+                    var fileName = $"cover_{Guid.NewGuid():N}{ext}";
+                    var filePath = Path.Combine(uploadsDir, fileName);
+                    using var stream = new FileStream(filePath, FileMode.Create);
+                    await coverFile.CopyToAsync(stream);
+                    coverUrl = $"/uploads/companies/{fileName}";
+                }
+
+                string compType = string.IsNullOrWhiteSpace(companyType) ? "Medical" : companyType.Trim();
+
+                var sql = @"
+                    UPDATE Companies 
+                    SET Name = @Name, 
+                        Description = @Description, 
+                        Tagline = @Tagline, 
+                        CompanyType = @CompanyType, 
+                        Website = @Website, 
+                        Phone = @Phone, 
+                        Email = @Email, 
+                        ContactPerson = @ContactPerson,
+                        IsVisibleOnHome = @IsVisibleOnHome" +
+                        (logoUrl != null ? ", LogoUrl = @LogoUrl" : "") +
+                        (coverUrl != null ? ", CoverImageUrl = @CoverImageUrl" : "") +
+                    " WHERE Id = @Id";
+
+                var rows = await conn.ExecuteAsync(sql, new {
+                    Id = id,
+                    Name = name.Trim(),
+                    Description = description?.Trim(),
+                    Tagline = tagline?.Trim(),
+                    CompanyType = compType,
+                    LogoUrl = logoUrl,
+                    CoverImageUrl = coverUrl,
+                    Website = website?.Trim(),
+                    Phone = phone?.Trim(),
+                    Email = email?.Trim(),
+                    ContactPerson = contactPerson?.Trim(),
+                    IsVisibleOnHome = isVisibleOnHome ?? true
+                });
 
                 return Json(new { success = rows > 0, message = rows > 0 ? "Company updated successfully." : "Company not found." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        // ==========================================
+        // COMPANY PRODUCTS & DRUGS MODULE (موديول الأدوية والمنتجات)
+        // ==========================================
+
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetCompanyProducts(int companyId)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var products = await conn.QueryAsync<CompanyProductDto>(@"
+                    SELECT Id, CompanyId, ProductName, GenericName, Category, DosageForm, Price, Description, ImageUrl, IsActive, CreatedAt
+                    FROM CompanyProducts
+                    WHERE CompanyId = @CompanyId
+                    ORDER BY CreatedAt DESC", new { CompanyId = companyId });
+                return Json(new { success = true, data = products });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveCompanyProduct([FromForm] CompanyProductDto dto, IFormFile? productImage)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.ProductName) || dto.CompanyId <= 0)
+            {
+                return Json(new { success = false, message = "Product Name and Company are required." });
+            }
+
+            try
+            {
+                string? imgUrl = dto.ImageUrl;
+                if (productImage != null && productImage.Length > 0)
+                {
+                    var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "products");
+                    Directory.CreateDirectory(uploadsDir);
+                    var ext = Path.GetExtension(productImage.FileName).ToLower();
+                    var fileName = $"{Guid.NewGuid():N}{ext}";
+                    var filePath = Path.Combine(uploadsDir, fileName);
+                    using var stream = new FileStream(filePath, FileMode.Create);
+                    await productImage.CopyToAsync(stream);
+                    imgUrl = $"/uploads/products/{fileName}";
+                }
+
+                using var conn = new SqlConnection(_connectionString);
+                if (dto.Id <= 0)
+                {
+                    // Insert
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO CompanyProducts (CompanyId, ProductName, GenericName, Category, DosageForm, Price, Description, ImageUrl, IsActive, CreatedAt)
+                        VALUES (@CompanyId, @ProductName, @GenericName, @Category, @DosageForm, @Price, @Description, @ImageUrl, 1, GETDATE())",
+                        new {
+                            CompanyId = dto.CompanyId,
+                            ProductName = dto.ProductName.Trim(),
+                            GenericName = dto.GenericName?.Trim(),
+                            Category = dto.Category?.Trim(),
+                            DosageForm = dto.DosageForm?.Trim(),
+                            Price = dto.Price,
+                            Description = dto.Description?.Trim(),
+                            ImageUrl = imgUrl
+                        });
+                    return Json(new { success = true, message = "Product / Drug added successfully." });
+                }
+                else
+                {
+                    // Update
+                    await conn.ExecuteAsync(@"
+                        UPDATE CompanyProducts 
+                        SET ProductName = @ProductName, GenericName = @GenericName, Category = @Category,
+                            DosageForm = @DosageForm, Price = @Price, Description = @Description,
+                            ImageUrl = COALESCE(@ImageUrl, ImageUrl)
+                        WHERE Id = @Id",
+                        new {
+                            Id = dto.Id,
+                            ProductName = dto.ProductName.Trim(),
+                            GenericName = dto.GenericName?.Trim(),
+                            Category = dto.Category?.Trim(),
+                            DosageForm = dto.DosageForm?.Trim(),
+                            Price = dto.Price,
+                            Description = dto.Description?.Trim(),
+                            ImageUrl = imgUrl
+                        });
+                    return Json(new { success = true, message = "Product updated successfully." });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteCompanyProduct(int id)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var rows = await conn.ExecuteAsync("DELETE FROM CompanyProducts WHERE Id = @Id", new { Id = id });
+                return Json(new { success = rows > 0, message = rows > 0 ? "Product removed successfully." : "Product not found." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ToggleCompanyProductStatus(int id)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var rows = await conn.ExecuteAsync("UPDATE CompanyProducts SET IsActive = CASE WHEN IsActive = 1 THEN 0 ELSE 1 END WHERE Id = @Id", new { Id = id });
+                return Json(new { success = rows > 0 });
             }
             catch (Exception ex)
             {

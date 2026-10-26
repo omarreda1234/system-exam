@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60" width="240" height="60">
+  <polygon points="20,15 45,15 35,45 10,45" fill="#005B94"/>
+  <polygon points="38,15 63,15 53,45 28,45" fill="#E4002B" fill-opacity="0.85"/>
+  <text x="72" y="39" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="900" letter-spacing="1" fill="#005B94">NERHADO</text>
+</svg>

@@ -1405,28 +1405,124 @@ namespace Exam.Controllers
             }
         }
 
+        [HttpPost]
+        public async Task<IActionResult> ResendNominationApprovalEmail(int userWaveId, string type = "wave")
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                string nomType = (type ?? "wave").ToLowerInvariant().Trim();
+
+                if (nomType == "company")
+                {
+                    var cNom = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                        SELECT cst.Id, cst.SessionId, cst.CompanyTraineeId, cst.ApprovalStatus, ct.FullName AS TraineeName,
+                               ct.Email, ct.Phone, ISNULL(ct.UserCode, '--') AS UserCode, ISNULL(ct.JobTitle, 'Trainee') AS JobTitle,
+                               ct.BranchName, b.Id AS BranchId, s.SessionName, s.SessionDate, s.StartTime, s.EndTime,
+                               c.Name AS CompanyName, s.CompanyId
+                        FROM dbo.CompanySessionTrainees cst
+                        JOIN dbo.CompanyTrainees ct ON cst.CompanyTraineeId = ct.Id
+                        LEFT JOIN dbo.Branches b ON b.BranchName = ct.BranchName
+                        JOIN dbo.AttendanceSessions s ON cst.SessionId = s.Id
+                        LEFT JOIN dbo.Companies c ON s.CompanyId = c.Id
+                        WHERE cst.Id = @Id", new { Id = userWaveId });
+
+                    if (cNom == null || string.IsNullOrWhiteSpace((string)cNom.Email))
+                    {
+                        return Json(new { success = false, message = "لم يتم العثور على بريد المتدرب أو السجل غير موجود." });
+                    }
+
+                    DispatchCompanySessionApprovalEmail((string)cNom.Email, (string)cNom.TraineeName, cNom);
+                    return Json(new { success = true, message = $"تم إعادة إرسال إيميل الاعتماد بنجاح إلى: {cNom.Email}" });
+                }
+                else
+                {
+                    var nom = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                        SELECT uw.Id, uw.UserId, uw.WaveId, uw.ApprovalStatus, u.BranchId, ISNULL(u.FullName, u.UserName) as StudentName,
+                               u.Email, u.PhoneNumber, ISNULL(u.UserCode, '--') as UserCode, b.BranchName, 
+                               tw.WaveName, tw.StartDate, tw.IsOnline, tw.Mode, tw.CustomEmailSubject, tw.CustomEmailBody
+                        FROM dbo.UserWaves uw
+                        JOIN AspNetUsers u ON uw.UserId = u.Id
+                        LEFT JOIN Branches b ON u.BranchId = b.Id
+                        JOIN dbo.TrainingWaves tw ON uw.WaveId = tw.Id
+                        WHERE uw.Id = @Id", new { Id = userWaveId });
+
+                    if (nom == null || string.IsNullOrWhiteSpace((string)nom.Email))
+                    {
+                        return Json(new { success = false, message = "لم يتم العثور على بريد المتدرب أو السجل غير موجود." });
+                    }
+
+                    DispatchWaveApprovalEmail(
+                        (string)nom.Email,
+                        (string)nom.StudentName,
+                        (string)(nom.UserCode ?? ""),
+                        (string)(nom.PhoneNumber ?? ""),
+                        (int?)nom.BranchId,
+                        (string)(nom.BranchName ?? "الفرع"),
+                        nom);
+
+                    return Json(new { success = true, message = $"تم إعادة إرسال إيميل اعتماد الويف بنجاح إلى: {nom.Email}" });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
         private void DispatchWaveApprovalEmail(string candEmail, string studentName, string userCode, string? phone, int? branchId, string branchName, dynamic nomination)
         {
             if (string.IsNullOrWhiteSpace(candEmail) || !candEmail.Contains("@")) return;
+
+            string siteUrl = "";
+            try
+            {
+                if (Request != null && Request.Host.HasValue)
+                {
+                    siteUrl = $"{Request.Scheme}://{Request.Host}";
+                }
+            }
+            catch
+            {
+                siteUrl = "https://academy.eltarshouby.com";
+            }
+            if (string.IsNullOrEmpty(siteUrl)) siteUrl = "https://academy.eltarshouby.com";
+
+            string waveName = (string)(nomination.WaveName ?? "Training Wave");
+            DateTime? startDateVal = nomination.StartDate != null ? (DateTime?)nomination.StartDate : null;
+            string formattedDate = startDateVal.HasValue ? startDateVal.Value.ToString("yyyy-MM-dd hh:mm tt") : "يحدد لاحقاً";
+            bool isOnline = (nomination.IsOnline == true) || (nomination.Mode != null && nomination.Mode.ToString().ToLower().Contains("online"));
+            string location = isOnline ? "Online" : (!string.IsNullOrWhiteSpace((string)nomination.Mode) ? (string)nomination.Mode : "الفرع الرئيسي / Offline");
+            string customSubj = (string)(nomination.CustomEmailSubject ?? "");
+            string customBody = (string)(nomination.CustomEmailBody ?? "");
+            int waveId = (int)nomination.WaveId;
+            string userId = (string)nomination.UserId;
 
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    string waveName = (string)nomination.WaveName;
-                    DateTime? startDateVal = nomination.StartDate != null ? (DateTime?)nomination.StartDate : null;
-                    string formattedDate = startDateVal.HasValue ? startDateVal.Value.ToString("yyyy-MM-dd hh:mm tt") : "يحدد لاحقاً";
-                    bool isOnline = (nomination.IsOnline == true) || (nomination.Mode != null && nomination.Mode.ToString().ToLower().Contains("online"));
-                    string location = isOnline ? "Online" : (!string.IsNullOrWhiteSpace((string)nomination.Mode) ? (string)nomination.Mode : "الفرع الرئيسي / Offline");
-                    string siteUrl = $"{Request.Scheme}://{Request.Host}";
-
-                    string subject = !string.IsNullOrWhiteSpace((string)nomination.CustomEmailSubject)
-                        ? (string)nomination.CustomEmailSubject
+                    string subject = !string.IsNullOrWhiteSpace(customSubj)
+                        ? customSubj.Replace("{WaveName}", waveName).Replace("{Name}", studentName).Trim()
                         : $"تهانينا! تم اعتماد تسجيلك في الدورة التدريبية: {waveName}";
+
+                    string customBodyHtml = "";
+                    if (!string.IsNullOrWhiteSpace(customBody))
+                    {
+                        var resolved = customBody
+                            .Replace("{Name}", studentName)
+                            .Replace("{WaveName}", waveName)
+                            .Replace("{StartDate}", formattedDate)
+                            .Replace("{Location}", location)
+                            .Replace("\r\n", "<br/>")
+                            .Replace("\n", "<br/>");
+                        customBodyHtml = $"<div style='font-size: 14px; margin-bottom: 20px; line-height: 1.8;'>{resolved}</div>";
+                    }
 
                     string emailHtml = $@"<div style='font-family: Arial, sans-serif; direction: rtl; text-align: right; line-height: 1.8; color: #1e293b; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;'>
                         <h2 style='color: #0f766e; margin-top: 0;'>تهانينا {studentName}! تم اعتماد ترشيحك بنجاح ✅</h2>
                         <p>يسعدنا إبلاغك بأنه تم اعتماد ترشيحك رسمياً من قِبل إدارة الفرع للانضمام إلى: <strong>{waveName}</strong></p>
+                        {customBodyHtml}
                         <div style='background-color: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 15px 0;'>
                             <p style='margin: 5px 0;'><strong>اسم الدورة:</strong> {waveName}</p>
                             <p style='margin: 5px 0;'><strong>تاريخ البداية:</strong> {formattedDate}</p>
@@ -1447,7 +1543,7 @@ namespace Exam.Controllers
                             var n8nPayload = new
                             {
                                 @event = "wave_nomination_approved",
-                                waveId = (int)nomination.WaveId,
+                                waveId = waveId,
                                 waveName = waveName,
                                 startDate = startDateVal?.ToString("yyyy-MM-dd"),
                                 formattedStartDate = formattedDate,
@@ -1457,7 +1553,7 @@ namespace Exam.Controllers
                                 {
                                     new
                                     {
-                                        id = (string)nomination.UserId,
+                                        id = userId,
                                         fullName = studentName,
                                         userName = studentName,
                                         email = candEmail,
@@ -1471,15 +1567,22 @@ namespace Exam.Controllers
                             };
                             n8nSent = await _n8nService.TriggerWaveNominationNotificationAsync(n8nPayload);
                         }
-                        catch { }
+                        catch (Exception n8nEx)
+                        {
+                            Console.WriteLine($"[n8n Wave Webhook Warning] {n8nEx.Message}");
+                        }
                     }
 
                     if (!n8nSent && _emailSender != null)
                     {
                         await _emailSender.SendEmailAsync(candEmail, subject, emailHtml);
+                        Console.WriteLine($"[Email Sent] Wave approval email delivered successfully to {candEmail}");
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Wave Approval Email Error] {ex.Message}");
+                }
             });
         }
 
@@ -1487,15 +1590,18 @@ namespace Exam.Controllers
         {
             if (string.IsNullOrWhiteSpace(trEmail) || !trEmail.Contains("@")) return;
 
+            string sName = (string)(cNomination.SessionName ?? "Company Training Session");
+            string cName = (string)(cNomination.CompanyName ?? "");
+            string sDate = cNomination.SessionDate != null ? ((DateTime)cNomination.SessionDate).ToString("yyyy-MM-dd") : "";
+            string sTime = cNomination.StartTime != null ? $"{((TimeSpan)cNomination.StartTime):hh\\:mm}" : "09:00";
+            string eTime = cNomination.EndTime != null ? $"{((TimeSpan)cNomination.EndTime):hh\\:mm}" : "12:00";
+            int sessionId = (int)cNomination.SessionId;
+            string phone = (string)(cNomination.Phone ?? "");
+
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    string sName = (string)cNomination.SessionName;
-                    string cName = (string)(cNomination.CompanyName ?? "");
-                    string sDate = cNomination.SessionDate != null ? ((DateTime)cNomination.SessionDate).ToString("yyyy-MM-dd") : "";
-                    string sTime = cNomination.StartTime != null ? $"{((TimeSpan)cNomination.StartTime):hh\\:mm}" : "09:00";
-                    string eTime = cNomination.EndTime != null ? $"{((TimeSpan)cNomination.EndTime):hh\\:mm}" : "12:00";
                     string subject = $"تأكيد اعتماد حضور تدريب شركة: {sName} - {cName}";
                     string html = $@"<div dir='rtl' style='font-family: Arial, sans-serif; padding: 20px; line-height: 1.8; color: #1e293b; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;'>
                         <h2 style='color: #0f766e;'>تهانينا {trName}! تم اعتماد حضورك للتدريب بنجاح ✅</h2>
@@ -1518,26 +1624,33 @@ namespace Exam.Controllers
                             var n8nPayload = new
                             {
                                 @event = "company_session_approved",
-                                sessionId = (int)cNomination.SessionId,
+                                sessionId = sessionId,
                                 sessionName = sName,
                                 sessionDate = sDate,
                                 companyName = cName,
                                 trainees = new[]
                                 {
-                                    new { fullName = trName, email = trEmail, phone = (string)(cNomination.Phone ?? "") }
+                                    new { fullName = trName, email = trEmail, phone = phone }
                                 }
                             };
                             n8nSent = await _n8nService.TriggerCompanySessionNotificationAsync(n8nPayload);
                         }
-                        catch { }
+                        catch (Exception n8nEx)
+                        {
+                            Console.WriteLine($"[n8n Company Webhook Warning] {n8nEx.Message}");
+                        }
                     }
 
                     if (!n8nSent && _emailSender != null)
                     {
                         await _emailSender.SendEmailAsync(trEmail, subject, html);
+                        Console.WriteLine($"[Email Sent] Company session approval email delivered successfully to {trEmail}");
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Company Approval Email Error] {ex.Message}");
+                }
             });
         }
     }

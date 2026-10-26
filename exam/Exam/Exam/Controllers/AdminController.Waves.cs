@@ -975,21 +975,126 @@ Eltarshoubi Training Academy Team";
                 int capacity = filter.Capacity > 0 ? filter.Capacity : 50;
                 int resitterPct = Math.Clamp(filter.ResitterPercentage, 0, 100);
 
-                int targetResitters = (int)Math.Round(capacity * (resitterPct / 100.0));
-                int targetFresh = capacity - targetResitters;
+                var selectedFresh = new List<WaveCandidateDto>();
+                var selectedResitters = new List<WaveCandidateDto>();
+                var pickedUserIds = new HashSet<string>();
 
-                // Select from both pools
-                var selectedResitters = allResitters.Take(targetResitters).ToList();
-                int remainingSpots = capacity - selectedResitters.Count;
+                bool hasCustomQuotas = filter.BranchQuotas != null && filter.BranchQuotas.Any(kvp => kvp.Value > 0);
+                var branchesWithFixedQuota = filter.BranchQuotas != null
+                    ? filter.BranchQuotas.Where(kvp => kvp.Value > 0).Select(kvp => kvp.Key).ToHashSet()
+                    : new HashSet<int>();
 
-                var selectedFresh = allFresh.Take(remainingSpots).ToList();
-                
-                // If fresh candidates didn't fill all remaining spots, take more resitters if available
-                if (selectedFresh.Count < remainingSpots && allResitters.Count > selectedResitters.Count)
+                if (hasCustomQuotas)
                 {
-                    int extraNeeded = remainingSpots - selectedFresh.Count;
-                    var extraResitters = allResitters.Skip(selectedResitters.Count).Take(extraNeeded).ToList();
-                    selectedResitters.AddRange(extraResitters);
+                    // 1. Fulfill branch-specific quotas first
+                    foreach (var kvp in filter.BranchQuotas.Where(kvp => kvp.Value > 0))
+                    {
+                        int branchId = kvp.Key;
+                        int branchQuota = kvp.Value;
+
+                        var branchFresh = allFresh.Where(c => c.BranchId == branchId && !pickedUserIds.Contains(c.UserId)).ToList();
+                        var branchResitters = allResitters.Where(c => c.BranchId == branchId && !pickedUserIds.Contains(c.UserId)).ToList();
+
+                        int branchTargetResitters = (int)Math.Round(branchQuota * (resitterPct / 100.0));
+                        int branchTargetFresh = branchQuota - branchTargetResitters;
+
+                        var pickedRes = branchResitters.Take(branchTargetResitters).ToList();
+                        int remBranch = branchQuota - pickedRes.Count;
+                        var pickedFr = branchFresh.Take(remBranch).ToList();
+
+                        // If fresh didn't fill remaining quota for this branch, take more resitters if available
+                        if (pickedFr.Count < remBranch && branchResitters.Count > pickedRes.Count)
+                        {
+                            var extraRes = branchResitters.Skip(pickedRes.Count).Take(remBranch - pickedFr.Count).ToList();
+                            pickedRes.AddRange(extraRes);
+                        }
+
+                        foreach (var c in pickedFr) { selectedFresh.Add(c); pickedUserIds.Add(c.UserId); }
+                        foreach (var c in pickedRes) { selectedResitters.Add(c); pickedUserIds.Add(c.UserId); }
+                    }
+                }
+
+                // 2. Fulfill remaining capacity (or fair balanced round-robin across selected branches)
+                // Branches with fixed quotas are strictly capped and excluded from receiving additional spillover seats.
+                int totalPicked = selectedFresh.Count + selectedResitters.Count;
+                int remainingCapacity = Math.Max(0, capacity - totalPicked);
+
+                if (remainingCapacity > 0)
+                {
+                    var remFresh = allFresh
+                        .Where(c => !pickedUserIds.Contains(c.UserId) && (!c.BranchId.HasValue || !branchesWithFixedQuota.Contains(c.BranchId.Value)))
+                        .ToList();
+                    var remResitters = allResitters
+                        .Where(c => !pickedUserIds.Contains(c.UserId) && (!c.BranchId.HasValue || !branchesWithFixedQuota.Contains(c.BranchId.Value)))
+                        .ToList();
+
+                    int targetRemResitters = (int)Math.Round(remainingCapacity * (resitterPct / 100.0));
+                    int targetRemFresh = remainingCapacity - targetRemResitters;
+
+                    if (filter.BalanceAcrossBranches)
+                    {
+                        // Fair round-robin across branches
+                        var freshByBranch = remFresh.GroupBy(c => c.BranchId ?? 0).Select(g => new Queue<WaveCandidateDto>(g)).ToList();
+                        var resByBranch = remResitters.GroupBy(c => c.BranchId ?? 0).Select(g => new Queue<WaveCandidateDto>(g)).ToList();
+
+                        while (selectedResitters.Count - (hasCustomQuotas ? totalPicked : 0) < targetRemResitters && resByBranch.Any(q => q.Count > 0))
+                        {
+                            bool anyAdded = false;
+                            foreach (var q in resByBranch)
+                            {
+                                if (q.Count > 0 && (selectedFresh.Count + selectedResitters.Count) < capacity)
+                                {
+                                    var c = q.Dequeue();
+                                    selectedResitters.Add(c);
+                                    pickedUserIds.Add(c.UserId);
+                                    anyAdded = true;
+                                }
+                            }
+                            if (!anyAdded) break;
+                        }
+
+                        while ((selectedFresh.Count + selectedResitters.Count) < capacity && freshByBranch.Any(q => q.Count > 0))
+                        {
+                            bool anyAdded = false;
+                            foreach (var q in freshByBranch)
+                            {
+                                if (q.Count > 0 && (selectedFresh.Count + selectedResitters.Count) < capacity)
+                                {
+                                    var c = q.Dequeue();
+                                    selectedFresh.Add(c);
+                                    pickedUserIds.Add(c.UserId);
+                                    anyAdded = true;
+                                }
+                            }
+                            if (!anyAdded) break;
+                        }
+
+                        // Fill remaining spots if any from whatever is available
+                        while ((selectedFresh.Count + selectedResitters.Count) < capacity && resByBranch.Any(q => q.Count > 0))
+                        {
+                            var q = resByBranch.FirstOrDefault(x => x.Count > 0);
+                            if (q == null) break;
+                            var c = q.Dequeue();
+                            selectedResitters.Add(c);
+                            pickedUserIds.Add(c.UserId);
+                        }
+                    }
+                    else
+                    {
+                        var extraResitters = remResitters.Take(targetRemResitters).ToList();
+                        foreach (var c in extraResitters) { selectedResitters.Add(c); pickedUserIds.Add(c.UserId); }
+
+                        int remSpots = capacity - (selectedFresh.Count + selectedResitters.Count);
+                        var extraFresh = remFresh.Take(remSpots).ToList();
+                        foreach (var c in extraFresh) { selectedFresh.Add(c); pickedUserIds.Add(c.UserId); }
+
+                        int stillNeeded = capacity - (selectedFresh.Count + selectedResitters.Count);
+                        if (stillNeeded > 0)
+                        {
+                            var leftoverRes = remResitters.Where(c => !pickedUserIds.Contains(c.UserId)).Take(stillNeeded).ToList();
+                            foreach (var c in leftoverRes) { selectedResitters.Add(c); pickedUserIds.Add(c.UserId); }
+                        }
+                    }
                 }
 
                 var finalCandidates = new List<WaveCandidateDto>();
@@ -1001,6 +1106,18 @@ Eltarshoubi Training Academy Team";
 
                 var distinctBranches = finalCandidates.Where(c => !string.IsNullOrEmpty(c.BranchName) && c.BranchName != "--").Select(c => c.BranchName).Distinct().Count();
 
+                var branchBreakdown = finalCandidates
+                    .GroupBy(c => string.IsNullOrWhiteSpace(c.BranchName) ? "بدون فرع" : c.BranchName)
+                    .Select(g => new
+                    {
+                        branchName = g.Key,
+                        total = g.Count(),
+                        fresh = g.Count(c => c.CandidateType == "New"),
+                        resitters = g.Count(c => c.CandidateType != "New")
+                    })
+                    .OrderByDescending(b => b.total)
+                    .ToList();
+
                 return Json(new
                 {
                     success = true,
@@ -1010,6 +1127,7 @@ Eltarshoubi Training Academy Team";
                     branchesCount = distinctBranches,
                     availableFreshPool = allFresh.Count,
                     availableResittersPool = allResitters.Count,
+                    branchBreakdown = branchBreakdown,
                     candidates = finalCandidates
                 });
             }

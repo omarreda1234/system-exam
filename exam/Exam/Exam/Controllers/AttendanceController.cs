@@ -907,7 +907,11 @@ namespace Exam.Controllers
                         companyId = companyId.Value,
                         companyName = (string)(session.CompanyName ?? "")
                     },
-                    assignedCount = assigned.Count,
+                    assignedCount = assigned.Count(t => t.approvalStatus == "Approved"),
+                    totalAssignedCount = assigned.Count,
+                    approvedCount = assigned.Count(t => t.approvalStatus == "Approved"),
+                    pendingCount = assigned.Count(t => t.approvalStatus == "Pending"),
+                    replacedCount = assigned.Count(t => t.approvalStatus == "Replaced"),
                     assignedTrainees = assigned,
                     availablePool = new List<dynamic>()
                 });
@@ -1548,6 +1552,343 @@ namespace Exam.Controllers
             catch (Exception ex)
             {
                 return Json(new { success = false, message = "فشل استيراد الملف: " + ex.Message });
+            }
+        }
+
+        // ==========================================
+        // SESSION INJECTION RULES (قواعد الحقن والتوزيع الدوري حسب الأقسام)
+        // ==========================================
+
+        [HttpGet]
+        public async Task<IActionResult> GetDepartmentsForInjection()
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var depts = (await conn.QueryAsync<dynamic>(@"
+                    SELECT d.Id, d.Name, ISNULL(d.Code, '') AS Code,
+                           (SELECT COUNT(*) FROM AspNetUsers u WHERE u.DepartmentId = d.Id AND u.IsActive = 1) AS ActiveStaffCount
+                    FROM Departments d
+                    WHERE d.IsActive = 1 OR d.IsActive IS NULL
+                    ORDER BY d.Name")).ToList();
+
+                var result = depts.Select(d => {
+                    var dict = (IDictionary<string, object>)d;
+                    return new {
+                        id = dict.ContainsKey("Id") ? dict["Id"] : null,
+                        name = dict.ContainsKey("Name") && dict["Name"] != null ? dict["Name"].ToString() : "Department",
+                        code = dict.ContainsKey("Code") && dict["Code"] != null ? dict["Code"].ToString() : "",
+                        staffCount = dict.ContainsKey("ActiveStaffCount") && dict["ActiveStaffCount"] != null ? Convert.ToInt32(dict["ActiveStaffCount"]) : 0
+                    };
+                }).ToList();
+
+                return Json(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetCompanyInjectionRules(int? companyId)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var rules = await conn.QueryAsync<CompanyInjectionRuleDto>(@"
+                    SELECT Id, CompanyId, RuleName, DepartmentQuotasJson, CreatedAt, UpdatedAt
+                    FROM CompanyInjectionRules
+                    WHERE (CompanyId = @CompanyId OR CompanyId IS NULL)
+                    ORDER BY UpdatedAt DESC", new { CompanyId = companyId });
+                return Json(new { success = true, data = rules });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> SaveCompanyInjectionRule(int? id, int? companyId, string ruleName, string quotasJson)
+        {
+            if (string.IsNullOrWhiteSpace(ruleName) || string.IsNullOrWhiteSpace(quotasJson))
+            {
+                return Json(new { success = false, message = "اسم القاعدة وتوزيع الكوتة مطلوبان." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                if (!id.HasValue || id.Value <= 0)
+                {
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO CompanyInjectionRules (CompanyId, RuleName, DepartmentQuotasJson, CreatedAt, UpdatedAt)
+                        VALUES (@CompanyId, @RuleName, @QuotasJson, GETDATE(), GETDATE())",
+                        new { CompanyId = companyId, RuleName = ruleName.Trim(), QuotasJson = quotasJson });
+                    return Json(new { success = true, message = "تم حفظ قاعدة التوزيع كقالب بنجاح." });
+                }
+                else
+                {
+                    await conn.ExecuteAsync(@"
+                        UPDATE CompanyInjectionRules 
+                        SET RuleName = @RuleName, DepartmentQuotasJson = @QuotasJson, UpdatedAt = GETDATE()
+                        WHERE Id = @Id",
+                        new { Id = id.Value, RuleName = ruleName.Trim(), QuotasJson = quotasJson });
+                    return Json(new { success = true, message = "تم تحديث قاعدة التوزيع بنجاح." });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> DeleteCompanyInjectionRule(int id)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.ExecuteAsync("DELETE FROM CompanyInjectionRules WHERE Id = @Id", new { Id = id });
+                return Json(new { success = true, message = "تم حذف قاعدة التوزيع." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> PreviewInjectionRule([FromBody] InjectionRulePreviewRequest req)
+        {
+            if (req == null || req.SessionId <= 0 || req.DepartmentQuotas == null || !req.DepartmentQuotas.Any(q => q.Quota > 0))
+            {
+                return Json(new { success = false, message = "يرجى تحديد حصة لواحد أو أكثر من الأقسام." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var previewList = new List<InjectionCandidatePreviewDto>();
+
+                foreach (var dq in req.DepartmentQuotas.Where(q => q.Quota > 0))
+                {
+                    var candidates = (await conn.QueryAsync<InjectionCandidatePreviewDto>(@"
+                        SELECT 
+                            CONCAT('U_', u.Id) AS CandidateKey,
+                            u.Id AS UserId,
+                            ISNULL(u.FullName, u.UserName) AS FullName,
+                            ISNULL(u.UserCode, '--') AS UserCode,
+                            ISNULL(u.UserRoleCustom, 'Trainee') AS JobTitle,
+                            ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                            @DeptId AS DepartmentId,
+                            @DeptName AS DepartmentName,
+                            (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
+                            (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
+                            1 AS IsSelected
+                        FROM AspNetUsers u WITH (NOLOCK)
+                        LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                        WHERE u.DepartmentId = @DeptId
+                          AND u.IsActive = 1
+                          AND NOT EXISTS (
+                              SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                              WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                          )
+                        ORDER BY PreviousAttendedCount ASC, LastAttendedDate ASC, u.CreatedAt ASC",
+                        new { DeptId = dq.DepartmentId, DeptName = dq.DepartmentName, SessionId = req.SessionId }))
+                        .Take(dq.Quota)
+                        .ToList();
+
+                    previewList.AddRange(candidates);
+                }
+
+                return Json(new
+                {
+                    success = true,
+                    totalCount = previewList.Count,
+                    candidates = previewList
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ExecuteInjectionRule([FromBody] InjectionRuleExecuteRequest req)
+        {
+            if (req == null || req.SessionId <= 0)
+            {
+                return Json(new { success = false, message = "بيانات الطلب غير صالحة." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                var session = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT S.Id, S.SessionName, S.SessionDate, S.StartTime, S.EndTime, S.CompanyId, C.Name AS CompanyName
+                    FROM AttendanceSessions S
+                    LEFT JOIN Companies C ON S.CompanyId = C.Id
+                    WHERE S.Id = @Id", new { Id = req.SessionId });
+
+                if (session == null) return NotFound(new { success = false, message = "الجلسة غير موجودة." });
+
+                List<string> userIdsToInject = new List<string>();
+
+                if (req.ConfirmedCandidateKeys != null && req.ConfirmedCandidateKeys.Any())
+                {
+                    foreach (var key in req.ConfirmedCandidateKeys)
+                    {
+                        if (key.StartsWith("U_")) userIdsToInject.Add(key.Substring(2));
+                        else userIdsToInject.Add(key);
+                    }
+                }
+                else if (req.DepartmentQuotas != null && req.DepartmentQuotas.Any(q => q.Quota > 0))
+                {
+                    foreach (var dq in req.DepartmentQuotas.Where(q => q.Quota > 0))
+                    {
+                        var uids = (await conn.QueryAsync<string>(@"
+                            SELECT u.Id
+                            FROM AspNetUsers u WITH (NOLOCK)
+                            WHERE u.DepartmentId = @DeptId
+                              AND u.IsActive = 1
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                  WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                              )
+                            ORDER BY 
+                                (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                u.CreatedAt ASC",
+                            new { DeptId = dq.DepartmentId, SessionId = req.SessionId }))
+                            .Take(dq.Quota)
+                            .ToList();
+
+                        userIdsToInject.AddRange(uids);
+                    }
+                }
+
+                if (!userIdsToInject.Any())
+                {
+                    return Json(new { success = false, message = "لم يتم العثور على موظفين مؤهلين للحقن في هذه الأقسام." });
+                }
+
+                var assignedBy = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                int count = 0;
+                string status = req.BypassApproval ? "Approved" : "Pending";
+                var injectedPayloads = new List<dynamic>();
+
+                foreach (var uId in userIdsToInject.Distinct())
+                {
+                    var u = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                        SELECT u.Id, u.FullName, u.UserName, u.UserCode, u.Email, u.PhoneNumber, u.UserRoleCustom,
+                               u.BranchId, b.BranchName
+                        FROM AspNetUsers u
+                        LEFT JOIN Branches b ON u.BranchId = b.Id
+                        WHERE u.Id = @UserId", new { UserId = uId });
+
+                    if (u == null) continue;
+
+                    string fullName = !string.IsNullOrWhiteSpace((string)(u.FullName ?? "")) ? (string)u.FullName : (string)(u.UserName ?? "Trainee");
+                    string userCode = (string)(u.UserCode ?? "--");
+                    string email = (string)(u.Email ?? "");
+                    string phone = (string)(u.PhoneNumber ?? "");
+                    string branchName = (string)(u.BranchName ?? "بدون فرع");
+
+                    int? companyTraineeId = null;
+                    if (session.CompanyId != null)
+                    {
+                        var ct = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                            SELECT TOP 1 Id FROM CompanyTrainees 
+                            WHERE CompanyId = @CompanyId AND ((UserCode = @Code AND UserCode <> '--') OR (Email = @Email AND Email <> '--'))",
+                            new { CompanyId = (int)session.CompanyId, Code = userCode, Email = email });
+
+                        if (ct != null)
+                        {
+                            companyTraineeId = (int)ct.Id;
+                        }
+                        else
+                        {
+                            companyTraineeId = await conn.QueryFirstOrDefaultAsync<int>(@"
+                                INSERT INTO CompanyTrainees (CompanyId, FullName, UserCode, JobTitle, BranchName, Email, Phone, CreatedAt)
+                                VALUES (@CompanyId, @FullName, @UserCode, @JobTitle, @BranchName, @Email, @Phone, GETDATE());
+                                SELECT CAST(SCOPE_IDENTITY() AS INT);",
+                                new {
+                                    CompanyId = (int)session.CompanyId,
+                                    FullName = fullName,
+                                    UserCode = userCode,
+                                    JobTitle = (string)(u.UserRoleCustom ?? "Trainee"),
+                                    BranchName = branchName,
+                                    Email = email,
+                                    Phone = phone
+                                });
+                        }
+                    }
+
+                    int affected = await conn.ExecuteAsync(@"
+                        IF NOT EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees WHERE SessionId = @SessionId AND UserId = @UserId)
+                        BEGIN
+                            INSERT INTO dbo.CompanySessionTrainees (SessionId, CompanyTraineeId, UserId, AssignedAt, AssignedBy, ApprovalStatus)
+                            VALUES (@SessionId, @TraineeId, @UserId, GETDATE(), @AssignedBy, @Status)
+                        END",
+                        new { SessionId = req.SessionId, TraineeId = companyTraineeId, UserId = uId, AssignedBy = assignedBy, Status = status });
+
+                    if (affected > 0)
+                    {
+                        count++;
+                        injectedPayloads.Add(new
+                        {
+                            id = companyTraineeId ?? 0,
+                            userId = uId,
+                            fullName = fullName,
+                            userCode = userCode,
+                            email = email,
+                            phone = phone,
+                            branchName = branchName
+                        });
+
+                        if (req.SendNotification)
+                        {
+                            await conn.ExecuteAsync(@"
+                                INSERT INTO Notifications (UserId, Title, Message, LinkUrl, Type, CreatedAt)
+                                VALUES (@UserId, N'ترشيح لحضور سيشن تدريبية 🎯', CONCAT(N'تم ترشيحك لحضور جلسة: ', @SessionName, N' الخاصة بشركة: ', @CompanyName), '/Home/Profile?tab=mycompanies', 'CompanySessionAssigned', GETDATE())",
+                                new { UserId = uId, SessionName = (string)session.SessionName, CompanyName = (string)(session.CompanyName ?? "") });
+                        }
+                    }
+                }
+
+                if (req.SendN8nWebhook && injectedPayloads.Any())
+                {
+                    var webhookPayload = new
+                    {
+                        event_type = "company_session_nomination",
+                        sessionId = (int)session.Id,
+                        sessionName = (string)session.SessionName,
+                        sessionDate = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd"),
+                        companyName = (string)(session.CompanyName ?? ""),
+                        trainees = injectedPayloads
+                    };
+
+                    _ = Task.Run(async () =>
+                    {
+                        try { await _n8nService.TriggerCompanySessionNotificationAsync(webhookPayload); } catch { }
+                    });
+                }
+
+                return Json(new
+                {
+                    success = true,
+                    injectedCount = count,
+                    message = $"تم تعيين {count} متدرب بنجاح بنظام التناوب الدوري العادل (Fair Rotation)!"
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "خطأ أثناء تنفيذ قاعدة الحقن: " + ex.Message });
             }
         }
     }

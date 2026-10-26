@@ -36,6 +36,8 @@ namespace Exam.DTOs
         public int ResitterPercentage { get; set; } = 20; // 0% - 50%
         public string ProposedWaveName { get; set; } = "";
         public DateTime? ProposedStartDate { get; set; }
+        public Dictionary<int, int>? BranchQuotas { get; set; } = new();
+        public bool BalanceAcrossBranches { get; set; } = false;
     }
 
     public class WaveProposalResultDto

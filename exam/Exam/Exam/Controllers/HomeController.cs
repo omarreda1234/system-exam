@@ -39,7 +39,66 @@ namespace Exam.Controllers
         public async Task<IActionResult> Index()
         {
             var cmsData = await _homeCmsService.GetHomeCmsDataAsync(activeOnly: true);
+
+            try
+            {
+                using var conn = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
+                var partnerCompanies = await conn.QueryAsync<dynamic>(@"
+                    SELECT C.Id, C.Name, C.Description, 
+                           ISNULL(C.CompanyType, 'Medical') AS CompanyType, 
+                           C.LogoUrl, C.Website, C.Tagline,
+                           (SELECT COUNT(*) FROM CompanyProducts CP WHERE CP.CompanyId = C.Id AND CP.IsActive = 1) AS ProductCount
+                    FROM Companies C
+                    WHERE C.LogoUrl IS NOT NULL AND C.LogoUrl <> ''
+                      AND ISNULL(C.IsVisibleOnHome, 1) = 1
+                    ORDER BY ProductCount DESC, C.CreatedAt DESC");
+                ViewBag.PartnerCompanies = partnerCompanies.ToList();
+            }
+            catch { }
+
             return View(cmsData);
+        }
+
+        public async Task<IActionResult> CompanyProfile(int id)
+        {
+            if (id <= 0)
+            {
+                return RedirectToAction(nameof(Index));
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
+                
+                var company = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT C.Id, C.Name, C.LogoUrl, C.CoverImageUrl, C.Tagline, C.Description, 
+                           ISNULL(C.CompanyType, 'Medical') AS CompanyType, 
+                           C.Website, C.Phone, C.Email, C.ContactPerson,
+                           (SELECT COUNT(1) FROM dbo.CompanyProducts CP WHERE CP.CompanyId = C.Id AND CP.IsActive = 1) AS ProductCount,
+                           (SELECT COUNT(1) FROM dbo.CompanySessionTrainees CST WHERE CST.CompanyId = C.Id) AS TraineesCount,
+                           (SELECT COUNT(1) FROM dbo.AttendanceSessions S WHERE S.CompanyId = C.Id) AS SessionsCount
+                    FROM dbo.Companies C
+                    WHERE C.Id = @Id", new { Id = id });
+
+                if (company == null)
+                {
+                    return NotFound();
+                }
+
+                var products = await conn.QueryAsync<CompanyProductDto>(@"
+                    SELECT Id, CompanyId, ProductName, GenericName, Category, DosageForm, Price, Description, ImageUrl, IsActive, CreatedAt
+                    FROM dbo.CompanyProducts
+                    WHERE CompanyId = @Id AND IsActive = 1
+                    ORDER BY ProductName ASC", new { Id = id });
+
+                ViewBag.Company = company;
+                ViewBag.Products = products.ToList();
+                return View();
+            }
+            catch
+            {
+                return RedirectToAction(nameof(Index));
+            }
         }
 
         public IActionResult Privacy()

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60" width="240" height="60">
+  <circle cx="35" cy="30" r="16" fill="none" stroke="#004B87" stroke-width="5"/>
+  <rect x="25" y="27" width="20" height="6" fill="#E30613" rx="2"/>
+  <text x="62" y="40" font-family="'Segoe UI', Arial, sans-serif" font-size="30" font-weight="900" letter-spacing="2" fill="#004B87">PHARCO</text>
+</svg>

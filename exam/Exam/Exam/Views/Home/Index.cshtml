@@ -290,6 +290,64 @@
         </section>
     }
 
+    <!-- Section: Strategic Partners (Smooth Infinite Logo Ticker) -->
+    @{
+        var partnerCompaniesList = (ViewBag.PartnerCompanies as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>())
+            .Where(c => !string.IsNullOrEmpty((string)c.LogoUrl))
+            .ToList();
+    }
+    @if (partnerCompaniesList.Any())
+    {
+        <style>
+            @@keyframes smoothMarquee {
+                0% { transform: translateX(0); }
+                100% { transform: translateX(-50%); }
+            }
+            .marquee-track {
+                display: flex;
+                width: max-content;
+                animation: smoothMarquee 30s linear infinite;
+                will-change: transform;
+            }
+            .marquee-container:hover .marquee-track {
+                animation-play-state: paused;
+            }
+            .marquee-fade-edges {
+                mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+                -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+            }     
+        </style>
+        <section id="partners" class="py-12 overflow-hidden">
+            <div class="max-w-7xl mx-auto px-6 mb-8 text-center">
+                <span class="text-xs font-black text-brand-600 uppercase tracking-[0.3em] mb-2 block">STRATEGIC HEALTHCARE ALLIANCES</span>
+                <h2 class="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
+                    Our Companies
+                </h2>
+                <p class="text-slate-500 font-medium leading-relaxed max-w-2xl mx-auto mt-2 text-sm sm:text-base">
+                    Leading pharmaceutical and cosmeceutical manufacturers actively contracted with Eltarshouby Academy
+                </p>
+            </div>
+
+            <!-- Smooth Infinite Marquee: Logos Only -->
+            <div class="marquee-container marquee-fade-edges relative w-full overflow-hidden py-3">
+                <div class="marquee-track flex items-center gap-8">
+                    @* Render twice for continuous, seamless infinite loop *@
+                    @for (int loop = 0; loop < 2; loop++)
+                    {
+                        @foreach (var comp in partnerCompaniesList)
+                        {
+                            <a href="@Url.Action("CompanyProfile", "Home", new { id = comp.Id })"
+                               class="flex items-center justify-center h-20 px-8 py-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700/80 shadow-sm hover:shadow-xl hover:border-brand-500/50 hover:scale-105 transition-all duration-300 cursor-pointer shrink-0 select-none group"
+                               title="@comp.Name">
+                                <img src="@comp.LogoUrl" alt="@comp.Name" class="h-10 max-w-[150px] w-auto object-contain transition-all duration-300 group-hover:scale-105" />
+                            </a>
+                        }
+                    }
+                </div>
+            </div>
+        </section>
+    }
+
     <!-- Custom Additional Sections -->
     @if (Model?.CustomSections != null)
     {

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60" width="240" height="60">
+  <rect x="15" y="15" width="30" height="30" rx="8" fill="#008080" />
+  <text x="30" y="37" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="900" text-anchor="middle" fill="#FFFFFF">R</text>
+  <text x="56" y="40" font-family="'Segoe UI', Arial, sans-serif" font-size="28" font-weight="900" letter-spacing="1" fill="#008080">rameda</text>
+</svg>

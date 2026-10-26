@@ -204,48 +204,51 @@
 @if (isCompany)
 {
     <!-- Modal: Manage Session Trainees (Assignment per Session) -->
-    <div id="sessionTraineesModal" class="hidden fixed inset-0 z-[105] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+    <div id="sessionTraineesModal" class="hidden fixed inset-0 z-[105] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
         <div class="bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
             <!-- Modal Header -->
-            <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/60 dark:bg-slate-800/40">
-                <div class="flex items-center gap-3">
-                    <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl shadow-sm">
+            <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/40">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-11 h-11 rounded-2xl bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400 flex items-center justify-center text-lg shadow-sm border border-brand-100 dark:border-brand-900/50">
                         <i class="fas fa-users-cog"></i>
                     </div>
                     <div>
                         <div class="flex items-center gap-2">
-                            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase" id="modalSessionTitle">Manage Session Trainees</h3>
-                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 uppercase border border-indigo-200 dark:border-indigo-800">Session Level</span>
+                            <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight" id="modalSessionTitle">Manage Session Trainees</h3>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-400 uppercase border border-brand-200 dark:border-brand-800 font-mono">Session Level</span>
                         </div>
-                        <p class="text-xs text-slate-400 font-medium mt-0.5">تحديد متدربي هذه السيشن وتفعيل إشعارات المنصة وإرسال الإيميلات عبر n8n API</p>
+                        <p class="text-xs text-slate-400 font-medium mt-0.5">Assign attendees, trigger in-app notifications, and dispatch email invites via n8n API</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button type="button" id="btnRefreshSessionTrainees" onclick="refreshCurrentSessionTrainees()" class="px-3.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95" title="تحديث قائمة المتدربين فورياً">
-                        <i class="fas fa-sync-alt" id="iconRefreshSessionTrainees"></i>
-                        <span>تحديث</span>
+                    <button type="button" id="btnRefreshSessionTrainees" onclick="refreshCurrentSessionTrainees()" class="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95" title="Refresh Trainee List">
+                        <i class="fas fa-sync-alt text-brand-600" id="iconRefreshSessionTrainees"></i>
+                        <span>Refresh</span>
                     </button>
-                    <button type="button" onclick="closeManageSessionTrainees()" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                    <button type="button" onclick="closeManageSessionTrainees()" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
                         <i class="fas fa-times text-base"></i>
                     </button>
                 </div>
             </div>
 
             <!-- Tabs -->
-            <div class="flex border-b border-slate-100 dark:border-slate-800 px-6 pt-3 bg-white dark:bg-slate-900 gap-2">
-                <button type="button" onclick="switchTraineesTab('current')" id="tabBtnCurrent" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-indigo-600 border-b-2 border-indigo-600 flex items-center gap-2 transition-all">
-                    <i class="fas fa-user-check"></i> المتدربين المعينين (<span id="assignedCountBadge">0</span>)
+            <div class="flex border-b border-slate-100 dark:border-slate-800 px-6 pt-3 bg-white dark:bg-slate-900 gap-2 overflow-x-auto custom-scrollbar">
+                <button type="button" onclick="switchTraineesTab('current')" id="tabBtnCurrent" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-brand-600 border-b-2 border-brand-600 flex items-center gap-2 transition-all shrink-0">
+                    <i class="fas fa-user-check"></i> <span>Assigned Trainees (<span id="assignedCountBadge">0</span>)</span>
                 </button>
-                <button type="button" onclick="switchTraineesTab('assign')" id="tabBtnAssign" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent flex items-center gap-2 transition-all">
-                    <i class="fas fa-user-plus"></i> تعيين متدربين للسيشن
+                <button type="button" onclick="switchTraineesTab('assign')" id="tabBtnAssign" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent flex items-center gap-2 transition-all shrink-0">
+                    <i class="fas fa-user-plus"></i> <span>Assign Trainees</span>
                 </button>
-                <button type="button" onclick="switchTraineesTab('excel')" id="tabBtnExcel" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent flex items-center gap-2 transition-all">
-                    <i class="fas fa-file-excel"></i> استيراد شيت إكسيل للسيشن
+                <button type="button" onclick="switchTraineesTab('excel')" id="tabBtnExcel" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent flex items-center gap-2 transition-all shrink-0">
+                    <i class="fas fa-file-excel text-emerald-500"></i> <span>Import Excel Roster</span>
+                </button>
+                <button type="button" onclick="switchTraineesTab('injection')" id="tabBtnInjection" class="pb-3 px-4 text-xs font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent flex items-center gap-2 transition-all shrink-0">
+                    <i class="fas fa-random text-purple-500"></i> <span>Fair Rotation Rule</span>
                 </button>
             </div>
 
             <!-- Modal Content Area -->
-            <div class="p-6 overflow-y-auto flex-1 custom-scrollbar">
+            <div class="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-4">
                 <input type="hidden" id="currentSessionId" />
 
                 <!-- Tab 1: Current Assigned -->
@@ -261,33 +264,33 @@
                         <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
                             <div class="relative w-full flex-1">
                                 <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                                <input type="text" id="traineeSearchInput" onkeyup="filterTraineePool()" placeholder="ابحث بالاسم أو كود الموظف، أو الصق عدة أكواد مفصولة بـ ( , ) أو ( | ) مثل: 5061, 5063, 5065..." class="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-white transition-all shadow-inner" autocomplete="off" />
-                                <div id="searchSpinner" class="hidden absolute right-3.5 top-1/2 -translate-y-1/2 text-indigo-500">
+                                <input type="text" id="traineeSearchInput" onkeyup="filterTraineePool()" placeholder="Search by name, employee code, or paste multiple codes (e.g. 5061, 5063, 5065)..." class="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:border-brand-500 text-slate-900 dark:text-white transition-all shadow-inner" autocomplete="off" />
+                                <div id="searchSpinner" class="hidden absolute right-3.5 top-1/2 -translate-y-1/2 text-brand-600">
                                     <i class="fas fa-spinner fa-spin text-sm"></i>
                                 </div>
                             </div>
                             <div class="flex items-center gap-2.5 shrink-0">
                                 <button type="button" onclick="clearSearchInput()" class="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white text-xs font-bold transition-all flex items-center gap-1.5">
-                                    <i class="fas fa-times text-[10px]"></i> مسح
+                                    <i class="fas fa-times text-[10px]"></i> <span>Clear</span>
                                 </button>
-                                <span id="selectedPoolCount" class="text-xs font-mono font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-3.5 py-2 rounded-xl border border-indigo-200/50 dark:border-indigo-900/50">0 محدد</span>
+                                <span id="selectedPoolCount" class="text-xs font-mono font-black text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40 px-3.5 py-2 rounded-xl border border-brand-200/50 dark:border-brand-900/50">0 Selected</span>
                             </div>
                         </div>
                         <p class="text-[11px] text-slate-400 font-bold flex items-center gap-1.5 pt-0.5">
                             <i class="fas fa-lightbulb text-amber-500 text-xs"></i>
-                            <span>بحث فردي أو جماعي: اكتب الاسم أو الكود، أو الصق عدة أكواد مفصولة بـ <strong>( , )</strong> أو <strong>( | )</strong> للتعيين الجماعي المباشر.</span>
+                            <span>Individual or bulk search: Enter candidate name or employee code, or paste multiple codes separated by commas ( , ) or pipes ( | ).</span>
                         </p>
                     </div>
 
                     <!-- Selected Candidates Queue Tray -->
-                    <div id="selectedTrayContainer" class="hidden p-3.5 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl space-y-2">
+                    <div id="selectedTrayContainer" class="hidden p-3.5 bg-brand-50/40 dark:bg-brand-950/20 border border-brand-100 dark:border-brand-900/40 rounded-2xl space-y-2">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-black text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
-                                <i class="fas fa-user-check text-indigo-600"></i>
-                                المتدربين المحددين للتعيين (<span id="trayCount" class="font-mono">0</span>)
+                            <span class="text-xs font-black text-brand-900 dark:text-brand-300 flex items-center gap-1.5">
+                                <i class="fas fa-user-check text-brand-600"></i>
+                                <span>Selected Candidates for Assignment (<span id="trayCount" class="font-mono">0</span>)</span>
                             </span>
                             <button type="button" onclick="clearAllSelected()" class="text-[11px] font-bold text-rose-500 hover:underline">
-                                مسح الكل
+                                Clear All
                             </button>
                         </div>
                         <div id="selectedChipsList" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar p-0.5">
@@ -296,63 +299,164 @@
                     </div>
 
                     <!-- Options for Notification, n8n Email & Branch Exemption -->
-                    <div class="p-4 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/60 rounded-2xl space-y-2.5">
+                    <div class="p-4 bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/60 rounded-2xl space-y-2.5">
                         <label class="flex items-center gap-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
                             <input type="checkbox" id="chkSendNotification" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
-                            <span>🔔 إرسال إشعار فوري للمتدربين على المنصة (In-App Notification)</span>
+                            <span>🔔 Send instant in-app platform notification to trainees</span>
                         </label>
                         <label class="flex items-center gap-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
                             <input type="checkbox" id="chkSendN8nEmail" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
-                            <span>⚡ إرسال بيانات المتدربين والسيشن إلى <strong>n8n Webhook API</strong> لإرسال الإيميلات والأتمتة</span>
+                            <span>⚡ Trigger <strong>n8n Webhook API</strong> for automated session confirmation emails</span>
                         </label>
                         <label class="flex items-center gap-2.5 text-xs font-bold text-amber-700 dark:text-amber-300 cursor-pointer pt-2 border-t border-emerald-200/60 dark:border-emerald-800/60">
                             <input type="checkbox" id="chkBypassApproval" class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500" />
-                            <span>⚡ <strong>اعتماد فوري واستثنائي (Bypass Approval):</strong> تأكيد ترشيح المتدربين فوراً بدون انتظار موافقة مدير الفرع</span>
+                            <span>⚡ <strong>Instant Direct Approval (Bypass Approval):</strong> Confirm trainees immediately without branch manager review</span>
                         </label>
                     </div>
 
                     <!-- Search Results Header & Quick Selection -->
                     <div id="searchResultsHeader" class="hidden flex items-center justify-between px-2 pt-1">
                         <span id="searchResultCountText" class="text-xs font-black text-slate-600 dark:text-slate-300"></span>
-                        <button type="button" id="btnSelectAllSearchResults" onclick="toggleSelectAllSearchResults()" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1">
-                            <i class="fas fa-check-double text-[11px]"></i> <span>تحديد كل نتائج البحث</span>
+                        <button type="button" id="btnSelectAllSearchResults" onclick="toggleSelectAllSearchResults()" class="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1">
+                            <i class="fas fa-check-double text-[11px]"></i> <span>Select All Results</span>
                         </button>
                     </div>
 
                     <div id="traineePoolList" class="max-h-80 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
-                        <!-- Rendered by JS like Trainee 360 -->
+                        <!-- Rendered by JS -->
                     </div>
 
                     <div class="flex justify-end pt-2">
-                        <button type="button" onclick="saveTraineesAssignment()" class="px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2">
-                            <i class="fas fa-check"></i> حفظ تعيين المتدربين للسيشن
+                        <button type="button" onclick="saveTraineesAssignment()" class="px-6 py-3 rounded-2xl bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-brand-600/20 transition-all flex items-center gap-2">
+                            <i class="fas fa-check"></i> <span>Save & Assign Trainees to Session</span>
                         </button>
                     </div>
                 </div>
 
                 <!-- Tab 3: Excel Direct Import -->
                 <div id="tabContentExcel" class="hidden space-y-5">
-                    <div class="p-6 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center bg-slate-50/50 dark:bg-slate-800/20">
+                    <div class="p-6 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-center bg-slate-50/50 dark:bg-slate-800/20">
                         <i class="fas fa-file-excel text-4xl text-emerald-500 mb-3 block"></i>
-                        <h4 class="text-sm font-black text-slate-800 dark:text-white">رفع شيت إكسيل لمتدربي هذه السيشن مباشرة</h4>
+                        <h4 class="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">Upload Session Excel Roster</h4>
                         <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                            الأعمدة المطلوبة: FullName, UserCode, JobTitle, BranchName, Email, Phone.
-                            سيتم ربطهم بهذه السيشن تلقائياً وإرسال بياناتهم إلى n8n API.
+                            Required columns: FullName, UserCode, JobTitle, BranchName, Email, Phone.
+                            Personnel will be enrolled directly into this session and forwarded to n8n API.
                         </p>
                         <input type="file" id="sessionExcelFile" accept=".xlsx, .xls" class="mt-4 text-xs font-bold text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer" />
                         
                         <div class="mt-4 flex items-center justify-center">
                             <label class="flex items-center gap-2.5 text-xs font-bold text-amber-700 dark:text-amber-300 cursor-pointer bg-amber-500/10 border border-amber-500/30 px-4 py-2.5 rounded-xl">
                                 <input type="checkbox" id="chkExcelBypassApproval" class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500" />
-                                <span>⚡ اعتماد فوري لمتدربي الشيت وتخطي موافقة مدير الفرع (Direct Confirm)</span>
+                                <span>⚡ Direct Approval: Bypass branch manager review (Direct Confirm)</span>
                             </label>
                         </div>
                     </div>
 
                     <div class="flex justify-end">
                         <button type="button" onclick="uploadSessionExcelDirect()" class="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2">
-                            <i class="fas fa-cloud-upload-alt"></i> رفع وتسكين المتدربين في السيشن
+                            <i class="fas fa-cloud-upload-alt"></i> <span>Import & Enroll Trainees</span>
                         </button>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Injection Rule with Fair Rotation -->
+                <div id="tabContentInjection" class="hidden space-y-5">
+                    <!-- Header Card / Explainer -->
+                    <div class="p-4 bg-gradient-to-r from-purple-500/10 via-brand-500/10 to-transparent border border-purple-200/60 dark:border-purple-800/40 rounded-2xl flex items-start justify-between gap-4">
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-purple-600/20 text-lg">
+                                <i class="fas fa-random"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase flex items-center gap-2">
+                                    <span>Fair-Rotation Department Distribution (Injection Rule)</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 uppercase">Auto-Rotation</span>
+                                </h4>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                    Define seat quotas per department (e.g. 5 Customer Service, 2 Quality Assurance). The algorithm automatically prioritizes candidates who have <strong>never attended first</strong>, rotating staff fairly across upcoming sessions.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Presets bar: Saved Rules -->
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2.5 w-full sm:w-auto flex-1">
+                            <span class="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0"><i class="fas fa-bookmark text-purple-500 mr-1"></i> Saved Presets:</span>
+                            <select id="injectionRuleSelect" onchange="applySelectedInjectionRule()" class="w-full sm:max-w-xs px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-purple-500">
+                                <option value="">-- Select Saved Rule Preset --</option>
+                            </select>
+                            <button type="button" onclick="deleteCurrentSelectedRule()" id="btnDeleteSelectedRule" class="hidden px-2.5 py-2 text-rose-500 hover:bg-rose-50 rounded-xl text-xs font-bold transition-colors" title="Delete this rule preset">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                            <button type="button" onclick="promptSaveCurrentInjectionRule()" class="px-3.5 py-2 bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-50 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5">
+                                <i class="fas fa-save text-[11px]"></i> <span>Save Quotas as Preset</span>
+                            </button>
+                            <button type="button" onclick="clearInjectionQuotas()" class="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-xl transition-all">
+                                Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Department Quotas List Container -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between px-1">
+                            <span class="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                                <i class="fas fa-sitemap text-brand-600"></i> <span>Department Quotas Allocation</span>
+                            </span>
+                            <span id="injectionTotalHeadcountBadge" class="text-xs font-black font-mono text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-3 py-1 rounded-xl border border-purple-200 dark:border-purple-800">
+                                Total Required: 0 Seats
+                            </span>
+                        </div>
+
+                        <div id="injectionDepartmentsList" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto custom-scrollbar p-1">
+                            <div class="col-span-full text-center py-8 text-slate-400">
+                                <i class="fas fa-spinner fa-spin text-xl text-purple-500 mb-2 block"></i>
+                                Loading departments and available personnel...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Options: Notifications & Approval -->
+                    <div class="p-4 bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200/50 dark:border-purple-800/40 rounded-2xl space-y-2.5">
+                        <label class="flex items-center gap-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
+                            <input type="checkbox" id="chkInjectionSendNotif" checked class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500" />
+                            <span>🔔 Send instant in-app platform notification to nominated candidates</span>
+                        </label>
+                        <label class="flex items-center gap-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
+                            <input type="checkbox" id="chkInjectionSendN8n" checked class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500" />
+                            <span>⚡ Trigger <strong>n8n Webhook API</strong> for automated email invitations</span>
+                        </label>
+                        <label class="flex items-center gap-2.5 text-xs font-bold text-amber-700 dark:text-amber-300 cursor-pointer pt-2 border-t border-purple-200/40 dark:border-purple-800/40">
+                            <input type="checkbox" id="chkInjectionBypassApproval" class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500" />
+                            <span>⚡ <strong>Instant Direct Approval (Bypass Approval):</strong> Confirm attendance without waiting for branch manager review</span>
+                        </label>
+                    </div>
+
+                    <!-- Preview & Action Buttons -->
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                        <button type="button" onclick="previewInjectionRule()" class="w-full sm:w-auto px-6 py-3 rounded-2xl bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-100 dark:hover:bg-brand-900/50 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2">
+                            <i class="fas fa-eye"></i> <span>Preview Fair Rotation</span>
+                        </button>
+                        <button type="button" onclick="executeInjectionRule()" id="btnExecuteInjection" class="w-full sm:w-auto px-8 py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-brand-600 hover:from-purple-700 hover:to-brand-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-purple-600/25 transition-all flex items-center justify-center gap-2">
+                            <i class="fas fa-bolt"></i> <span>Confirm & Enroll Candidates</span>
+                        </button>
+                    </div>
+
+                    <!-- Preview Results Area -->
+                    <div id="injectionPreviewResultsCard" class="hidden p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-black text-slate-800 dark:text-white flex items-center gap-2">
+                                <i class="fas fa-users text-purple-600"></i>
+                                <span>Rotation Preview Results: <span id="injectionPreviewCountBadge" class="font-mono text-purple-600">0</span> Candidates</span>
+                            </span>
+                            <span class="text-[11px] font-bold text-slate-400">Sorted: Lowest attendance history first, followed by registration date</span>
+                        </div>
+                        <div id="injectionPreviewCandidatesList" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                            <!-- Rendered by JS -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -376,32 +480,32 @@
 
         async function editSession(id, currentName, currentDate, currentStart, currentEnd) {
             const { value: formValues } = await Swal.fire({
-                title: '<div class="text-base font-black uppercase text-slate-800 dark:text-white">تعديل المحاضرة / الجلسة (Edit Session)</div>',
+                title: '<div class="text-base font-black uppercase text-slate-800 dark:text-white">Edit Session</div>',
                 html: `
-                    <div class="text-right space-y-4" dir="rtl">
+                    <div class="text-left space-y-4">
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">مسمى المحاضرة / Label:</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Session Name / Label:</label>
                             <input id="sw-edit-name" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-xs font-bold outline-none focus:border-brand-500 transition-all text-slate-900 dark:text-white" value="${currentName || ''}" placeholder="e.g. Session 1">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">تاريخ المحاضرة (Date):</label>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Session Date:</label>
                             <input id="sw-edit-date" type="date" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-xs font-bold outline-none focus:border-brand-500 transition-all text-slate-900 dark:text-white" value="${currentDate}">
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">وقت البداية (Start):</label>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Start Time:</label>
                                 <input id="sw-edit-start" type="time" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-xs font-bold outline-none focus:border-brand-500 transition-all text-slate-900 dark:text-white" value="${currentStart}">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">وقت النهاية (End):</label>
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">End Time:</label>
                                 <input id="sw-edit-end" type="time" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-xs font-bold outline-none focus:border-brand-500 transition-all text-slate-900 dark:text-white" value="${currentEnd}">
                             </div>
                         </div>
                     </div>
                 `,
                 showCancelButton: true,
-                confirmButtonText: 'حفظ التعديلات',
-                cancelButtonText: 'إلغاء',
+                confirmButtonText: 'Save Changes',
+                cancelButtonText: 'Cancel',
                 customClass: {
                     popup: 'rounded-[28px] border border-slate-100 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900',
                     confirmButton: 'bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase shadow-md mr-2',
@@ -414,11 +518,11 @@
                     const start = document.getElementById('sw-edit-start').value;
                     const end = document.getElementById('sw-edit-end').value;
                     if (!name || !name.trim()) {
-                        Swal.showValidationMessage('اسم المحاضرة مطلوب');
+                        Swal.showValidationMessage('Session name is required');
                         return false;
                     }
                     if (!date) {
-                        Swal.showValidationMessage('تاريخ المحاضرة مطلوب');
+                        Swal.showValidationMessage('Session date is required');
                         return false;
                     }
                     return { name: name.trim(), date, start, end };
@@ -443,10 +547,10 @@
                     if (json.success) {
                         location.reload();
                     } else {
-                        Swal.fire('خطأ', json.message || 'تعذر تعديل المحاضرة', 'error');
+                        Swal.fire('Error', json.message || 'Could not update session', 'error');
                     }
                 } catch(e) {
-                    Swal.fire('خطأ', 'حدث خطأ أثناء التواصل مع السيرفر', 'error');
+                    Swal.fire('Error', 'An error occurred while communicating with the server', 'error');
                 }
             }
         }
@@ -568,6 +672,7 @@
 
         window.openManageSessionTrainees = function (sessionId, sessionName, companyId) {
             sessionTraineesState.sessionId = sessionId;
+            sessionTraineesState.companyId = companyId;
             sessionTraineesState.hasModified = false;
             sessionTraineesState.selectedCandidates.clear();
             sessionTraineesState.currentResults = [];
@@ -587,8 +692,8 @@
                 if (sessionBadge) {
                     const approvedCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'approved').length;
                     const pendingCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'pending').length;
-                    let badgeText = `${approvedCount} Session Trainees`;
-                    if (pendingCount > 0) badgeText += ` (${pendingCount} معلق)`;
+                    let badgeText = `${approvedCount} Trainees`;
+                    if (pendingCount > 0) badgeText += ` (${pendingCount} Pending)`;
                     sessionBadge.className = 'text-[9px] sm:text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800';
                     sessionBadge.innerHTML = `<i class="fas fa-users mr-1"></i> ${badgeText}`;
                 }
@@ -596,7 +701,7 @@
         };
 
         window.switchTraineesTab = function (tab) {
-            const tabs = ['current', 'assign', 'excel'];
+            const tabs = ['current', 'assign', 'excel', 'injection'];
             tabs.forEach(t => {
                 const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
                 const content = document.getElementById('tabContent' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -612,6 +717,12 @@
                     }
                 }
             });
+            if (tab === 'injection') {
+                if (!injectionState.loaded) {
+                    loadInjectionDepartments();
+                }
+                loadCompanyInjectionRules(sessionTraineesState.companyId);
+            }
         };
 
         window.loadSessionTraineesData = async function (sessionId) {
@@ -621,7 +732,7 @@
             listWrapper.innerHTML = `
                 <div class="text-center py-10 text-slate-400">
                     <i class="fas fa-spinner fa-spin text-2xl text-indigo-500 mb-2 block"></i>
-                    جاري تحميل متدربي السيشن...
+                    Loading session trainees...
                 </div>`;
 
             try {
@@ -634,79 +745,103 @@
                 }
 
                 sessionTraineesState.assignedTrainees = data.assignedTrainees || [];
-                countBadge.textContent = sessionTraineesState.assignedTrainees.length;
+                const approvedCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'approved').length;
+                const pendingCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'pending').length;
+
+                // Set approved count as main count badge
+                countBadge.textContent = approvedCount;
 
                 // Sync badge on outer session card in real-time
                 const sessionBadge = document.getElementById(`session-badge-${sessionId}`);
                 if (sessionBadge) {
-                    const approvedCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'approved').length;
-                    const pendingCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'pending').length;
                     if (approvedCount > 0 || pendingCount > 0) {
-                        let badgeText = `${approvedCount} Session Trainees`;
-                        if (pendingCount > 0) badgeText += ` (${pendingCount} معلق)`;
+                        let badgeText = `${approvedCount} Trainees`;
+                        if (pendingCount > 0) badgeText += ` (${pendingCount} Pending)`;
                         sessionBadge.className = 'text-[9px] sm:text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800';
                         sessionBadge.innerHTML = `<i class="fas fa-users mr-1"></i> ${badgeText}`;
                     }
                 }
 
-                // 1. Render Current Assigned Trainees with Approval Badges
+                // Split active vs replaced trainees
+                const activeTrainees = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() !== 'replaced');
+                const replacedTrainees = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'replaced');
+
                 if (sessionTraineesState.assignedTrainees.length === 0) {
                     listWrapper.innerHTML = `
                         <div class="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
                             <div class="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-500 flex items-center justify-center mx-auto mb-3 text-xl">
                                 <i class="fas fa-info-circle"></i>
                             </div>
-                            <h4 class="text-xs font-black uppercase text-slate-800 dark:text-white">لم يتم تخصيص متدربين محددين لهذه السيشن بعد</h4>
+                            <h4 class="text-xs font-black uppercase text-slate-800 dark:text-white">No trainees assigned to this session yet</h4>
                             <p class="text-[11px] text-slate-400 mt-1 max-w-md mx-auto">
-                                يمكنك البحث عن موظفين أو متدربين وتسكينهم في هذه السيشن مباشرة عبر تبويب "تعيين متدربين للسيشن" أو رفع شيت إكسيل.
+                                You can search and assign employees via "Assign Trainees", import an Excel file, or use "Fair Rotation".
                             </p>
                             <button type="button" onclick="switchTraineesTab('assign')" class="mt-4 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all">
-                                <i class="fas fa-user-plus mr-1"></i> تخصيص متدربين للسيشن الآن
+                                <i class="fas fa-user-plus mr-1"></i> Assign Trainees Now
                             </button>
                         </div>`;
                 } else {
-                    listWrapper.innerHTML = sessionTraineesState.assignedTrainees.map(t => {
+                    const renderTraineeRow = (t) => {
                         const traineeId = t.traineeId || t.TraineeId || t.id || t.Id;
                         const fullName = t.fullName || t.FullName || 'Trainee';
                         const userCode = t.userCode || t.UserCode || '--';
-                        const branchName = t.branchName || t.BranchName || 'عام';
+                        const branchName = t.branchName || t.BranchName || 'General';
                         const jobTitle = t.jobTitle || t.JobTitle || 'Trainee';
                         const status = (t.approvalStatus || t.ApprovalStatus || 'Approved').toLowerCase();
                         let badgeHtml = '';
                         if (status === 'approved') {
-                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1"><i class="fas fa-check-circle"></i> معتمد (Approved)</span>`;
+                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1"><i class="fas fa-check-circle"></i> Approved</span>`;
                         } else if (status === 'pending') {
-                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center gap-1"><i class="fas fa-clock"></i> معلق بانتظار الفرع (Pending)</span>`;
+                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 flex items-center gap-1"><i class="fas fa-clock"></i> Pending Branch</span>`;
                         } else if (status === 'rejected') {
-                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 flex items-center gap-1" title="سبب الرفض: ${t.rejectionReason || t.RejectionReason || 'بدون سبب'}"><i class="fas fa-times-circle"></i> تم الاعتذار: ${t.rejectionReason || t.RejectionReason || 'بدون سبب'}</span>`;
+                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 flex items-center gap-1" title="Reason: ${t.rejectionReason || t.RejectionReason || 'None'}"><i class="fas fa-times-circle"></i> Declined</span>`;
                         } else if (status === 'replaced') {
-                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1"><i class="fas fa-exchange-alt"></i> تم الاستبدال (Replaced)</span>`;
+                            badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center gap-1"><i class="fas fa-exchange-alt"></i> Replaced (Inactive)</span>`;
                         }
 
                         return `
-                        <div class="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+                        <div class="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm flex items-center justify-between gap-4">
                             <div class="flex items-center gap-3">
                                 <div class="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center text-xs">
                                     ${(fullName || 'T')[0]}
                                 </div>
                                 <div>
                                     <h4 class="text-xs font-black text-slate-800 dark:text-white leading-tight">${fullName}</h4>
-                                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">الكود: ${userCode} | الفرع: ${branchName} | ${jobTitle}</p>
+                                    <p class="text-[10px] text-slate-400 font-mono mt-0.5">Code: ${userCode} | Branch: ${branchName} | ${jobTitle}</p>
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
                                 ${badgeHtml}
-                                <button type="button" onclick="removeTraineeFromSession(${sessionId}, ${traineeId}, '${encodeURIComponent(fullName)}')" class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center text-xs transition-all" title="إزالة من هذه السيشن">
+                                <button type="button" onclick="removeTraineeFromSession(${sessionId}, ${traineeId}, '${encodeURIComponent(fullName)}')" class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center text-xs transition-all" title="Remove from session">
                                     <i class="fas fa-trash-alt"></i>
                                 </button>
                             </div>
-                        </div>
-                    `}).join('');
+                        </div>`;
+                    };
+
+                    let html = activeTrainees.map(renderTraineeRow).join('');
+
+                    if (replacedTrainees.length > 0) {
+                        html += `
+                            <div class="pt-4 mt-4 border-t border-dashed border-slate-200 dark:border-slate-800">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                        <i class="fas fa-history"></i> Replaced / Inactive Trainees (${replacedTrainees.length})
+                                    </span>
+                                </div>
+                                <div class="space-y-2 opacity-75">
+                                    ${replacedTrainees.map(renderTraineeRow).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    listWrapper.innerHTML = html;
                 }
 
                 renderEmptySearchState();
             } catch (err) {
-                listWrapper.innerHTML = `<div class="text-center py-6 text-rose-500 font-bold">فشل جلب البيانات: ${err.message}</div>`;
+                listWrapper.innerHTML = `<div class="text-center py-6 text-rose-500 font-bold">Failed to load data: ${err.message}</div>`;
             }
         };
 
@@ -721,9 +856,9 @@
                     <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 flex items-center justify-center mx-auto mb-2 text-xl">
                         <i class="fas fa-id-card-clip"></i>
                     </div>
-                    <h4 class="text-xs font-black text-slate-800 dark:text-white">ابحث عن المتدربين لإضافتهم للسيشن</h4>
+                    <h4 class="text-xs font-black text-slate-800 dark:text-white">Search Trainees to Assign</h4>
                     <p class="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
-                        اكتب كود أو اسم المتدرب، أو الصق عدة أكواد مفصولة بفاصلة <strong>( , )</strong> أو <strong>( | )</strong> للبحث الجماعي الفوري.
+                        Type code, name, or paste multiple codes separated by comma <strong>( , )</strong> or pipe <strong>( | )</strong> for instant bulk search.
                     </p>
                 </div>`;
         };
@@ -752,7 +887,7 @@
                         sessionTraineesState.currentResults = data.candidates;
                         renderSearchResults(data.candidates, data.isMultiCode);
                     } else {
-                        document.getElementById('traineePoolList').innerHTML = `<div class="p-6 text-center text-xs text-rose-500 font-bold">${data.message || 'حدث خطأ في البحث'}</div>`;
+                        document.getElementById('traineePoolList').innerHTML = `<div class="p-6 text-center text-xs text-rose-500 font-bold">${data.message || 'Search error occurred'}</div>`;
                     }
                 } catch(err) {
                     document.getElementById('searchSpinner').classList.add('hidden');
@@ -771,14 +906,14 @@
                 poolWrapper.innerHTML = `
                     <div class="p-8 text-center bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
                         <i class="fas fa-user-slash text-2xl text-slate-400 mb-2 block"></i>
-                        <h4 class="text-xs font-black text-slate-700 dark:text-slate-300">لم يتم العثور على أي متدرب مطابق</h4>
-                        <p class="text-[10px] text-slate-400 mt-1">تأكد من كتابة الأكواد بشكل صحيح أو جرب البحث بالاسم أو الفرع.</p>
+                        <h4 class="text-xs font-black text-slate-700 dark:text-slate-300">No matching candidates found</h4>
+                        <p class="text-[10px] text-slate-400 mt-1">Check the codes or try searching by name or branch.</p>
                     </div>`;
                 return;
             }
 
             header.classList.remove('hidden');
-            countText.textContent = `تم العثور على (${candidates.length}) ${isMultiCode ? 'متدرب مطابق للأكواد' : 'نتيجة مطابقة'}`;
+            countText.textContent = `Found (${candidates.length}) ${isMultiCode ? 'candidates matching codes' : 'matching results'}`;
 
             // If multi-code search, auto-select them all for convenience!
             if (isMultiCode) {
@@ -786,7 +921,7 @@
                     const key = c.candidateKey || c.CandidateKey || (c.companyTraineeId || c.CompanyTraineeId ? `CT_${c.companyTraineeId || c.CompanyTraineeId}` : `U_${c.userId || c.UserId}`);
                     const fn = c.fullName || c.FullName || c.userName || c.UserName || 'Trainee';
                     const cd = c.userCode || c.UserCode || '--';
-                    const br = c.branchName || c.BranchName || 'بدون فرع';
+                    const br = c.branchName || c.BranchName || 'General';
                     sessionTraineesState.selectedCandidates.set(key, {
                         key: key,
                         fullName: fn,
@@ -803,7 +938,7 @@
                 const isExempt = (t.isBranchExempt == 1 || t.IsBranchExempt == 1 || t.isBranchExempt === true || t.IsBranchExempt === true);
                 const fullName = t.fullName || t.FullName || t.userName || t.UserName || 'Trainee';
                 const role = t.jobTitle || t.JobTitle || 'Trainee';
-                const branch = t.branchName || t.BranchName || 'بدون فرع';
+                const branch = t.branchName || t.BranchName || 'General';
                 const code = t.userCode || t.UserCode || '--';
 
                 return `
@@ -817,7 +952,7 @@
                             <div>
                                 <div class="flex items-center gap-1.5">
                                     <span class="text-xs font-black text-slate-900 dark:text-white leading-tight">${fullName}</span>
-                                    ${isExempt ? '<span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-300/50">معفى</span>' : ''}
+                                    ${isExempt ? '<span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-300/50">Exempt</span>' : ''}
                                 </div>
                                 <div class="text-[10px] text-slate-500 dark:text-slate-400 font-bold">${role} - Branch: ${branch}</div>
                             </div>
@@ -898,7 +1033,7 @@
                 } else {
                     const fn = c.fullName || c.FullName || c.userName || c.UserName || 'Trainee';
                     const cd = c.userCode || c.UserCode || '--';
-                    const br = c.branchName || c.BranchName || 'بدون فرع';
+                    const br = c.branchName || c.BranchName || 'General';
                     sessionTraineesState.selectedCandidates.set(key, {
                         key: key,
                         fullName: fn,
@@ -919,7 +1054,7 @@
             const trayCount = document.getElementById('trayCount');
             const chipsList = document.getElementById('selectedChipsList');
 
-            if (badge) badge.textContent = `${count} محدد`;
+            if (badge) badge.textContent = `${count} Selected`;
             if (trayCount) trayCount.textContent = count;
 
             if (count > 0) {
@@ -929,7 +1064,7 @@
                         <i class="fas fa-user-check text-[9px] text-indigo-500"></i>
                         <span>${item.fullName}</span>
                         <span class="font-mono text-[9px] text-slate-400">(${item.userCode})</span>
-                        <button type="button" onclick="removeSelectedKey('${item.key}')" class="hover:text-rose-500 ml-1 text-xs font-bold leading-none" title="إزالة">×</button>
+                        <button type="button" onclick="removeSelectedKey('${item.key}')" class="hover:text-rose-500 ml-1 text-xs font-bold leading-none" title="Remove">×</button>
                     </span>
                 `).join('');
             } else {
@@ -1038,6 +1173,396 @@
                 }
             } catch (err) {
                 showAppToast('error', 'Upload Failed', err.message);
+            }
+        };
+
+        // ==========================================
+        // Session Injection Rule & Fair Rotation Logic
+        // ==========================================
+        let injectionState = {
+            loaded: false,
+            departments: [],
+            savedRules: [],
+            previewCandidates: []
+        };
+
+        window.loadInjectionDepartments = async function () {
+            const listWrapper = document.getElementById('injectionDepartmentsList');
+            if (!listWrapper) return;
+            listWrapper.innerHTML = `
+                <div class="col-span-full text-center py-8 text-slate-400">
+                    <i class="fas fa-spinner fa-spin text-xl text-purple-500 mb-2 block"></i>
+                    Loading departments and staff data...
+                </div>`;
+
+            try {
+                const res = await fetch('/Attendance/GetDepartmentsForInjection');
+                const data = await res.json();
+                if (data.success && data.data) {
+                    injectionState.departments = data.data;
+                    injectionState.loaded = true;
+                    renderInjectionDepartments();
+                } else {
+                    listWrapper.innerHTML = `<div class="col-span-full text-center py-6 text-rose-500 font-bold">${data.message || 'Failed to load departments'}</div>`;
+                }
+            } catch (err) {
+                listWrapper.innerHTML = `<div class="col-span-full text-center py-6 text-rose-500 font-bold">Connection error: ${err.message}</div>`;
+            }
+        };
+
+        window.renderInjectionDepartments = function () {
+            const listWrapper = document.getElementById('injectionDepartmentsList');
+            if (!listWrapper) return;
+            if (!injectionState.departments || injectionState.departments.length === 0) {
+                listWrapper.innerHTML = `<div class="col-span-full text-center py-6 text-slate-400">No departments found in the system</div>`;
+                return;
+            }
+
+            listWrapper.innerHTML = injectionState.departments.map(d => {
+                const deptId = d.id ?? d.Id;
+                const deptName = d.name || d.Name || 'Department';
+                const staffCount = d.staffCount ?? d.ActiveStaffCount ?? 0;
+
+                return `
+                <div class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3 shadow-sm hover:border-purple-300 dark:hover:border-purple-800 transition-colors">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xs shrink-0 font-bold">
+                            <i class="fas fa-users-gear"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <h5 class="text-xs font-black text-slate-900 dark:text-white truncate">${deptName}</h5>
+                            <span class="text-[10px] text-slate-400 font-bold">${staffCount} Available Staff</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <span class="text-[10px] font-bold text-slate-400">Quota:</span>
+                        <input type="number" min="0" max="${staffCount}" data-dept-id="${deptId}" data-dept-name="${deptName}"
+                               oninput="updateInjectionHeadcount()"
+                               placeholder="0"
+                               class="dept-quota-input w-16 px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-black text-center text-purple-700 dark:text-purple-300 outline-none focus:border-purple-500 transition-all font-mono" />
+                    </div>
+                </div>`;
+            }).join('');
+            updateInjectionHeadcount();
+        };
+
+        window.updateInjectionHeadcount = function () {
+            let total = 0;
+            document.querySelectorAll('.dept-quota-input').forEach(input => {
+                const val = parseInt(input.value) || 0;
+                total += val;
+            });
+            const badge = document.getElementById('injectionTotalHeadcountBadge');
+            if (badge) {
+                badge.textContent = `Total Required: ${total} Seats`;
+            }
+        };
+
+        window.clearInjectionQuotas = function () {
+            document.querySelectorAll('.dept-quota-input').forEach(input => input.value = '');
+            updateInjectionHeadcount();
+            const previewCard = document.getElementById('injectionPreviewResultsCard');
+            if (previewCard) previewCard.classList.add('hidden');
+            const select = document.getElementById('injectionRuleSelect');
+            if (select) select.value = '';
+            const btnDelete = document.getElementById('btnDeleteSelectedRule');
+            if (btnDelete) btnDelete.classList.add('hidden');
+        };
+
+        window.loadCompanyInjectionRules = async function (companyId) {
+            const select = document.getElementById('injectionRuleSelect');
+            if (!select) return;
+            try {
+                const res = await fetch(`/Attendance/GetCompanyInjectionRules?companyId=${companyId || 0}`);
+                const data = await res.json();
+                if (data.success && data.data) {
+                    injectionState.savedRules = data.data;
+                    select.innerHTML = '<option value="">-- Select Saved Rule --</option>' +
+                        data.data.map(r => `<option value="${r.id}">${r.ruleName}</option>`).join('');
+                }
+            } catch (err) {
+                console.error('Failed to load rules:', err);
+            }
+        };
+
+        window.applySelectedInjectionRule = function () {
+            const select = document.getElementById('injectionRuleSelect');
+            const ruleId = parseInt(select.value);
+            const btnDelete = document.getElementById('btnDeleteSelectedRule');
+
+            if (!ruleId) {
+                if (btnDelete) btnDelete.classList.add('hidden');
+                return;
+            }
+            if (btnDelete) btnDelete.classList.remove('hidden');
+
+            const rule = injectionState.savedRules.find(r => r.id === ruleId);
+            if (!rule) return;
+
+            try {
+                const quotas = typeof rule.departmentQuotasJson === 'string' ? JSON.parse(rule.departmentQuotasJson) : rule.departmentQuotasJson;
+                document.querySelectorAll('.dept-quota-input').forEach(input => input.value = '');
+                quotas.forEach(q => {
+                    const input = document.querySelector(`.dept-quota-input[data-dept-id="${q.departmentId || q.DepartmentId}"]`);
+                    if (input) {
+                        input.value = q.quota || q.Quota || 0;
+                    }
+                });
+                updateInjectionHeadcount();
+                showAppToast('info', 'Rule Applied', `Applied quotas from: ${rule.ruleName}`);
+            } catch (err) {
+                showAppToast('error', 'Error', 'Failed to read rule data.');
+            }
+        };
+
+        window.promptSaveCurrentInjectionRule = async function () {
+            const quotas = [];
+            document.querySelectorAll('.dept-quota-input').forEach(input => {
+                const val = parseInt(input.value) || 0;
+                if (val > 0) {
+                    quotas.push({
+                        departmentId: parseInt(input.dataset.deptId),
+                        departmentName: input.dataset.deptName,
+                        quota: val
+                    });
+                }
+            });
+
+            if (quotas.length === 0) {
+                showAppToast('warning', 'Notice', 'Please specify a quota for at least one department before saving.');
+                return;
+            }
+
+            const { value: ruleName } = await Swal.fire({
+                title: 'Save Current Rotation Rule',
+                input: 'text',
+                inputLabel: 'Rule Name (e.g. Call Center 5 + Quality 2)',
+                inputPlaceholder: 'Enter a descriptive rule name...',
+                showCancelButton: true,
+                confirmButtonText: 'Save Rule',
+                cancelButtonText: 'Cancel',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Please enter a name for the rule!';
+                    }
+                }
+            });
+
+            if (ruleName) {
+                try {
+                    const res = await fetch('/Attendance/SaveCompanyInjectionRule', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            companyId: sessionTraineesState.companyId || null,
+                            ruleName: ruleName.trim(),
+                            departmentQuotasJson: JSON.stringify(quotas)
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showAppToast('success', 'Saved Successfully', data.message || 'Rotation rule saved successfully.');
+                        loadCompanyInjectionRules(sessionTraineesState.companyId);
+                    } else {
+                        showAppToast('error', 'Save Failed', data.message);
+                    }
+                } catch (err) {
+                    showAppToast('error', 'Connection Error', err.message);
+                }
+            }
+        };
+
+        window.deleteCurrentSelectedRule = async function () {
+            const select = document.getElementById('injectionRuleSelect');
+            const ruleId = parseInt(select.value);
+            if (!ruleId) return;
+
+            const confirm = await Swal.fire({
+                title: 'Are you sure you want to delete this rule?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                confirmButtonText: 'Yes, Delete',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (confirm.isConfirmed) {
+                try {
+                    const res = await fetch(`/Attendance/DeleteCompanyInjectionRule?ruleId=${ruleId}`, { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        showAppToast('success', 'Deleted Successfully', 'The rotation rule has been deleted.');
+                        loadCompanyInjectionRules(sessionTraineesState.companyId);
+                        const btnDelete = document.getElementById('btnDeleteSelectedRule');
+                        if (btnDelete) btnDelete.classList.add('hidden');
+                    } else {
+                        showAppToast('error', 'Delete Failed', data.message);
+                    }
+                } catch (err) {
+                    showAppToast('error', 'Error', err.message);
+                }
+            }
+        };
+
+        window.previewInjectionRule = async function () {
+            const quotas = [];
+            document.querySelectorAll('.dept-quota-input').forEach(input => {
+                const val = parseInt(input.value) || 0;
+                if (val > 0) {
+                    quotas.push({
+                        departmentId: parseInt(input.dataset.deptId),
+                        departmentName: input.dataset.deptName,
+                        quota: val
+                    });
+                }
+            });
+
+            if (quotas.length === 0) {
+                showAppToast('warning', 'Notice', 'Please specify a quota for at least one department.');
+                return;
+            }
+
+            const previewCard = document.getElementById('injectionPreviewResultsCard');
+            const listWrapper = document.getElementById('injectionPreviewCandidatesList');
+            const countBadge = document.getElementById('injectionPreviewCountBadge');
+
+            previewCard.classList.remove('hidden');
+            listWrapper.innerHTML = `
+                <div class="text-center py-6 text-slate-400">
+                    <i class="fas fa-spinner fa-spin text-xl text-purple-500 mb-2 block"></i>
+                    Calculating fair rotation and selecting lowest attendance candidates...
+                </div>`;
+
+            try {
+                const res = await fetch('/Attendance/PreviewInjectionRule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: sessionTraineesState.sessionId,
+                        companyId: sessionTraineesState.companyId || null,
+                        departmentQuotas: quotas
+                    })
+                });
+                const data = await res.json();
+                if (data.success && data.candidates) {
+                    injectionState.previewCandidates = data.candidates;
+                    countBadge.textContent = data.candidates.length;
+
+                    if (data.candidates.length === 0) {
+                        listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-amber-600 font-bold">No available staff found in selected departments (or all already assigned to this session).</div>`;
+                        return;
+                    }
+
+                    listWrapper.innerHTML = data.candidates.map((c, idx) => {
+                        const attended = c.previousAttendedCount || 0;
+                        const isNeverAttended = attended === 0;
+                        const badgeClass = isNeverAttended ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200';
+                        const badgeText = isNeverAttended ? '⭐ Never Attended (Top Priority)' : `Attended ${attended} Previous Sessions`;
+
+                        return `
+                            <div class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3 select-none">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-lg ${isNeverAttended ? 'bg-emerald-100 text-emerald-700' : 'bg-purple-100 text-purple-700'} font-bold flex items-center justify-center text-xs shrink-0">
+                                        ${idx + 1}
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <h5 class="text-xs font-black text-slate-900 dark:text-white">${c.fullName}</h5>
+                                            <span class="font-mono text-[10px] text-slate-400">(${c.userCode})</span>
+                                        </div>
+                                        <div class="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
+                                            <span class="font-bold text-purple-600">${c.departmentName}</span>
+                                            <span>•</span>
+                                            <span>Branch: ${c.branchName || 'General'}</span>
+                                            <span>•</span>
+                                            <span class="px-2 py-0.5 rounded text-[9px] font-bold border ${badgeClass}">${badgeText}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <input type="checkbox" checked data-preview-user-id="${c.userId}" class="preview-candidate-chk w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 cursor-pointer" />
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    showAppToast('success', 'Preview Ready', `Selected ${data.candidates.length} candidates via Fair Rotation.`);
+                } else {
+                    listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-rose-500 font-bold">${data.message || 'Preview calculation failed'}</div>`;
+                }
+            } catch (err) {
+                listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-rose-500 font-bold">Preview error: ${err.message}</div>`;
+            }
+        };
+
+        window.executeInjectionRule = async function () {
+            const previewCheckboxes = document.querySelectorAll('.preview-candidate-chk:checked');
+            let userIds = [];
+            if (previewCheckboxes.length > 0) {
+                previewCheckboxes.forEach(chk => userIds.push(chk.dataset.previewUserId));
+            }
+
+            const quotas = [];
+            document.querySelectorAll('.dept-quota-input').forEach(input => {
+                const val = parseInt(input.value) || 0;
+                if (val > 0) {
+                    quotas.push({
+                        departmentId: parseInt(input.dataset.deptId),
+                        departmentName: input.dataset.deptName,
+                        quota: val
+                    });
+                }
+            });
+
+            if (quotas.length === 0 && userIds.length === 0) {
+                showAppToast('warning', 'Notice', 'Please specify department quotas first or preview candidates.');
+                return;
+            }
+
+            const sendNotif = document.getElementById('chkInjectionSendNotif').checked;
+            const sendN8n = document.getElementById('chkInjectionSendN8n').checked;
+            const bypassApproval = document.getElementById('chkInjectionBypassApproval').checked;
+
+            const confirm = await Swal.fire({
+                title: 'Confirm Trainee Assignment',
+                text: `Trainees will be enrolled using Fair Rotation (lowest previous attendance first) and notifications will be sent.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#7c3aed',
+                confirmButtonText: 'Yes, Assign Now',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (!confirm.isConfirmed) return;
+
+            showAppToast('info', 'Assigning...', 'Enrolling trainees and triggering n8n webhook notifications...');
+
+            try {
+                const res = await fetch('/Attendance/ExecuteInjectionRule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: sessionTraineesState.sessionId,
+                        companyId: sessionTraineesState.companyId || null,
+                        departmentQuotas: quotas,
+                        userIds: userIds.length > 0 ? userIds : null,
+                        bypassApproval: bypassApproval,
+                        sendNotification: sendNotif,
+                        sendN8nEmail: sendN8n
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    sessionTraineesState.hasModified = true;
+                    showAppToast('success', 'Assigned Successfully', data.message || `Successfully enrolled ${data.enrolledCount} trainees.`);
+                    switchTraineesTab('current');
+                    loadSessionTraineesData(sessionTraineesState.sessionId);
+                } else {
+                    showAppToast('error', 'Assignment Failed', data.message || 'An error occurred during assignment.');
+                }
+            } catch (err) {
+                showAppToast('error', 'Connection Error', err.message);
             }
         };
     </script>

@@ -92,12 +92,12 @@
                     </div>
                 </div>
 
-                <!-- 3. Target Branches -->
-                <div class="space-y-2 lg:col-span-2">
+                <!-- 3. Target Branches & Custom Allocation -->
+                <div class="space-y-3 lg:col-span-2">
                     <div class="flex items-center justify-between">
                         <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
                             <i class="fas fa-code-branch text-brand-600"></i>
-                            Target Branches
+                            <span>Target Branches & Custom Allocation</span>
                         </label>
                         <div class="flex items-center gap-2 text-xs">
                             <button type="button" onclick="selectAllBranches(true)" class="text-[11px] font-bold text-brand-600 hover:underline">Select All</button>
@@ -105,20 +105,54 @@
                             <button type="button" onclick="selectAllBranches(false)" class="text-[11px] font-bold text-rose-500 hover:underline">Clear</button>
                         </div>
                     </div>
+
+                    <!-- Quota Tools Bar -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 p-2 bg-brand-50/50 dark:bg-brand-950/20 border border-brand-200/50 dark:border-brand-900/40 rounded-xl">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-black text-brand-900 dark:text-brand-200 flex items-center gap-1">
+                                <i class="fas fa-sliders text-brand-600"></i>
+                                <span>Branch Quotas:</span>
+                            </span>
+                            <button type="button" onclick="distributeEvenlyAcrossBranches()" class="px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm flex items-center gap-1" title="Distribute total capacity evenly across selected branches">
+                                <i class="fas fa-balance-scale"></i> Distribute Evenly
+                            </button>
+                            <button type="button" onclick="clearBranchQuotas()" class="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-700 dark:text-slate-300 font-bold text-[10px] transition-all" title="Clear customized branch quotas">
+                                Clear Quotas
+                            </button>
+                        </div>
+                        <span id="allocatedQuotaBadge" class="text-[10px] font-black px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-mono">
+                            Allocated: 0 Seats
+                        </span>
+                    </div>
+
                     <div class="border border-slate-200 dark:border-slate-700 rounded-2xl p-3 bg-slate-50/50 dark:bg-slate-800/30 space-y-2">
                         <div class="relative">
-                            <input type="text" id="branchSearchInput" placeholder="Search branch..." oninput="filterBranchList(this.value)" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                            <input type="text" id="branchSearchInput" placeholder="Search branch name..." oninput="filterBranchList(this.value)" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200 shadow-inner" />
                         </div>
-                        <div class="max-h-32 overflow-y-auto space-y-1 pr-1 custom-scrollbar" id="branchOptionsContainer">
+                        <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar" id="branchOptionsContainer">
                             @foreach (var b in branches)
                             {
-                                <label class="branch-item flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-800 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
-                                    <input type="checkbox" name="branchFilter" value="@b.Id" checked class="chk-branch rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="updateBranchSelectedLabel()" />
-                                    <span class="truncate">@b.BranchName.ToUpper()</span>
-                                </label>
+                                <div class="branch-item flex items-center justify-between p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700">
+                                    <label class="flex items-center gap-2.5 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300 flex-1 truncate">
+                                        <input type="checkbox" name="branchFilter" value="@b.Id" checked class="chk-branch rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="updateBranchSelectedLabel()" />
+                                        <span class="truncate">@b.BranchName.ToUpper()</span>
+                                    </label>
+                                    <div class="flex items-center gap-1.5 shrink-0 pl-2">
+                                        <span class="text-[9px] font-bold text-slate-400">Seats:</span>
+                                        <input type="number" min="0" max="100" placeholder="Auto" data-branchid="@b.Id" 
+                                               oninput="updateTotalAllocatedQuota()" 
+                                               class="branch-quota-input w-16 px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-black text-center text-brand-600 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" title="Target seats for this branch (leave blank for automatic balance)" />
+                                    </div>
+                                </div>
                             }
                         </div>
-                        <p class="text-[10px] text-slate-400 font-bold" id="branchCountLabel">All branches selected</p>
+                        <div class="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+                            <p class="text-[10px] text-slate-400 font-bold" id="branchCountLabel">All branches selected</p>
+                            <label class="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" id="balanceAcrossBranchesChk" checked class="rounded text-brand-600 focus:ring-brand-500" />
+                                <span>Fair branch balancing (prevent single-branch concentration)</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -226,6 +260,20 @@
                         <i class="fas fa-code-branch"></i>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Branch Roster Breakdown Pills -->
+        <div id="branchBreakdownContainer" class="hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                    <i class="fas fa-chart-pie text-brand-600"></i>
+                    <span>Branch Quota Breakdown</span>
+                </span>
+                <span id="branchBreakdownTotalCount" class="text-[10px] font-bold text-slate-400"></span>
+            </div>
+            <div id="branchBreakdownChips" class="flex flex-wrap gap-2">
+                <!-- Injected via JS -->
             </div>
         </div>
 
@@ -389,12 +437,61 @@
             } else {
                 $('#branchCountLabel').text(`${checked} of ${total} branches selected`);
             }
+            updateTotalAllocatedQuota();
+        }
+
+        function updateTotalAllocatedQuota() {
+            let total = 0;
+            $('.branch-quota-input').each(function () {
+                const val = parseInt($(this).val());
+                if (!isNaN(val) && val > 0) {
+                    total += val;
+                }
+            });
+            const cap = parseInt($('#capacityInput').val()) || 50;
+            if (total > 0) {
+                $('#allocatedQuotaBadge').text(`Allocated: ${total} of ${cap} Seats`).removeClass('text-slate-600 border-slate-200 bg-white').addClass('text-brand-600 border-brand-300 bg-brand-50');
+            } else {
+                $('#allocatedQuotaBadge').text(`Allocated: 0 Seats`).removeClass('text-brand-600 border-brand-300 bg-brand-50').addClass('text-slate-600 border-slate-200 bg-white');
+            }
+        }
+
+        function distributeEvenlyAcrossBranches() {
+            const checkedBoxes = $('.chk-branch:checked');
+            if (checkedBoxes.length === 0) {
+                Swal.fire({ icon: 'warning', title: 'No Branches Selected', text: 'Please select branches first to distribute seats evenly.' });
+                return;
+            }
+            const cap = parseInt($('#capacityInput').val()) || 50;
+            const perBranch = Math.max(1, Math.floor(cap / checkedBoxes.length));
+            const remainder = cap - (perBranch * checkedBoxes.length);
+
+            $('.branch-quota-input').val('');
+            checkedBoxes.each(function (index) {
+                const bId = $(this).val();
+                let quota = perBranch + (index < remainder ? 1 : 0);
+                $(`.branch-quota-input[data-branchid="${bId}"]`).val(quota);
+            });
+            updateTotalAllocatedQuota();
+            Swal.fire({
+                icon: 'success',
+                title: 'Evenly Distributed',
+                text: `Capacity (${cap} seats) distributed evenly across ${checkedBoxes.length} branches (~${perBranch} seats per branch).`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+
+        function clearBranchQuotas() {
+            $('.branch-quota-input').val('');
+            updateTotalAllocatedQuota();
         }
 
         function updateResitterLabel(val) {
             const cap = parseInt($('#capacityInput').val()) || 50;
             const resCount = Math.round(cap * (val / 100));
             $('#resitterPctLabel').text(`${val}% (~${resCount} seats)`);
+            updateTotalAllocatedQuota();
         }
 
         async function generateProposal() {
@@ -415,6 +512,15 @@
             const capacity = parseInt($('#capacityInput').val()) || 50;
             const resitterPct = parseInt($('#resitterSlider').val()) || 20;
 
+            const branchQuotas = {};
+            $('.branch-quota-input').each(function () {
+                const bId = parseInt($(this).data('branchid'));
+                const quota = parseInt($(this).val());
+                if (!isNaN(quota) && quota > 0 && selectedBranches.includes(bId)) {
+                    branchQuotas[bId] = quota;
+                }
+            });
+
             const payload = {
                 days: daysVal > 0 ? daysVal : null,
                 roles: selectedRoles,
@@ -423,7 +529,9 @@
                 capacity: capacity,
                 resitterPercentage: resitterPct,
                 proposedWaveName: $('#proposedWaveName').val(),
-                proposedStartDate: $('#proposedStartDate').val()
+                proposedStartDate: $('#proposedStartDate').val(),
+                branchQuotas: branchQuotas,
+                balanceAcrossBranches: $('#balanceAcrossBranchesChk').is(':checked')
             };
 
             try {
@@ -457,6 +565,25 @@
                 $('#statFresh').text(data.freshCount);
                 $('#statResitter').text(data.resitterCount);
                 $('#statBranches').text(data.branchesCount);
+
+                // Render Branch Breakdown
+                if (data.branchBreakdown && data.branchBreakdown.length > 0) {
+                    const chipsContainer = $('#branchBreakdownChips');
+                    chipsContainer.empty();
+                    data.branchBreakdown.forEach(b => {
+                        chipsContainer.append(`
+                            <div class="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-2 text-xs font-bold shadow-sm">
+                                <span class="text-slate-800 dark:text-white font-black">${b.branchName}:</span>
+                                <span class="px-2 py-0.5 rounded-md bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-300 font-black text-[11px]">${b.total} seats</span>
+                                <span class="text-[10px] text-slate-400">(${b.fresh} New • ${b.resitters} Resitters)</span>
+                            </div>
+                        `);
+                    });
+                    $('#branchBreakdownTotalCount').text(`${data.branchBreakdown.length} branches included in roster`);
+                    $('#branchBreakdownContainer').removeClass('hidden');
+                } else {
+                    $('#branchBreakdownContainer').addClass('hidden');
+                }
 
                 renderTable();
 

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60" width="240" height="60">
+  <circle cx="30" cy="30" r="16" fill="#1B4D3E"/>
+  <text x="30" y="38" font-family="'Segoe UI', Arial, sans-serif" font-size="20" font-weight="900" text-anchor="middle" fill="#FFFFFF">A</text>
+  <text x="56" y="39" font-family="'Segoe UI', Arial, sans-serif" font-size="24" font-weight="800" fill="#1B4D3E">Averroes</text>
+</svg>
