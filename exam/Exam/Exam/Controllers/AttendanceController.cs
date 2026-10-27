@@ -870,9 +870,12 @@ namespace Exam.Controllers
                            ISNULL(CST.ApprovalStatus, 'Approved') AS ApprovalStatus,
                            CST.RejectionReason,
                            CST.ReplacedWithTraineeId,
-                           CST.ActionedAt
+                           CST.ActionedAt,
+                           CST.UserId,
+                           ISNULL(B.Id, 0) AS BranchId
                     FROM dbo.CompanySessionTrainees CST
-                    JOIN CompanyTrainees CT ON CST.CompanyTraineeId = CT.Id
+                    JOIN dbo.CompanyTrainees CT ON CST.CompanyTraineeId = CT.Id
+                    LEFT JOIN dbo.Branches B ON B.BranchName = CT.BranchName OR LTRIM(RTRIM(B.BranchName)) = LTRIM(RTRIM(CT.BranchName))
                     WHERE CST.SessionId = @SessionId
                     ORDER BY CT.FullName", new { SessionId = sessionId })).ToList();
 
@@ -891,7 +894,9 @@ namespace Exam.Controllers
                         approvalStatus = d.ContainsKey("ApprovalStatus") && d["ApprovalStatus"] != null ? d["ApprovalStatus"].ToString() : "Approved",
                         rejectionReason = d.ContainsKey("RejectionReason") ? d["RejectionReason"] : null,
                         replacedWithTraineeId = d.ContainsKey("ReplacedWithTraineeId") ? d["ReplacedWithTraineeId"] : null,
-                        actionedAt = d.ContainsKey("ActionedAt") ? d["ActionedAt"] : null
+                        actionedAt = d.ContainsKey("ActionedAt") ? d["ActionedAt"] : null,
+                        userId = d.ContainsKey("UserId") && d["UserId"] != null ? d["UserId"].ToString() : null,
+                        branchId = d.ContainsKey("BranchId") && d["BranchId"] != null ? Convert.ToInt32(d["BranchId"]) : 0
                     };
                 }).ToList();
 

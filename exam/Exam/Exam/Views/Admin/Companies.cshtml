@@ -599,12 +599,14 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    Swal.fire({ icon: 'success', title: 'Company Registered', text: data.message, timer: 1500, showConfirmButton: false }).then(() => location.reload());
+                    closeAddCompanyModal();
+                    showProfessionalToast('fas fa-check-circle', data.message || 'Company registered successfully', 'success');
+                    setTimeout(() => location.reload(), 1000);
                 } else {
-                    Swal.fire({ icon: 'error', title: 'Registration Failed', text: data.message });
+                    showProfessionalToast('fas fa-exclamation-circle', data.message || 'Registration Failed', 'error');
                 }
             } catch (err) {
-                Swal.fire({ icon: 'error', title: 'Error', text: 'Server communication failed.' });
+                showProfessionalToast('fas fa-exclamation-triangle', 'Server communication failed.', 'error');
             } finally {
                 btn.prop('disabled', false).text('Register Company');
             }
@@ -705,12 +707,14 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    Swal.fire({ icon: 'success', title: 'Changes Saved', text: data.message, timer: 1500, showConfirmButton: false }).then(() => location.reload());
+                    closeEditCompanyModal();
+                    showProfessionalToast('fas fa-check-circle', data.message || 'Changes saved successfully', 'success');
+                    setTimeout(() => location.reload(), 1000);
                 } else {
-                    Swal.fire({ icon: 'error', title: 'Update Failed', text: data.message });
+                    showProfessionalToast('fas fa-exclamation-circle', data.message || 'Update Failed', 'error');
                 }
             } catch (err) {
-                Swal.fire({ icon: 'error', title: 'Error', text: 'Server communication failed.' });
+                showProfessionalToast('fas fa-exclamation-triangle', 'Server communication failed.', 'error');
             } finally {
                 btn.prop('disabled', false).text('Save Changes');
             }
@@ -742,24 +746,14 @@
                                    .text('Hidden');
                     }
 
-                    const Toast = Swal.mixin({
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 2000,
-                        timerProgressBar: true
-                    });
-                    Toast.fire({
-                        icon: isVisible ? 'success' : 'info',
-                        title: data.message
-                    });
+                    showProfessionalToast(isVisible ? 'fas fa-check-circle' : 'fas fa-eye-slash', data.message || (isVisible ? 'Company shown on homepage' : 'Company hidden from homepage'), isVisible ? 'success' : 'info');
                 } else {
                     $(`#homeVisToggle-${companyId}`).prop('checked', !isVisible);
-                    Swal.fire({ icon: 'error', title: 'Action Failed', text: data.message });
+                    showProfessionalToast('fas fa-exclamation-circle', data.message || 'Action Failed', 'error');
                 }
             } catch (err) {
                 $(`#homeVisToggle-${companyId}`).prop('checked', !isVisible);
-                Swal.fire({ icon: 'error', title: 'Error', text: 'Network communication failed.' });
+                showProfessionalToast('fas fa-exclamation-triangle', 'Network communication failed.', 'error');
             }
         }
 
@@ -966,10 +960,10 @@
                     await loadCompanyProducts(currentActiveCompanyId);
                     showProfessionalToast('fas fa-check-circle', data.message, 'success');
                 } else {
-                    Swal.fire({ icon: 'error', title: 'Save Failed', text: data.message });
+                    showProfessionalToast('fas fa-exclamation-circle', data.message || 'Save Failed', 'error');
                 }
             } catch (err) {
-                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save product details.' });
+                showProfessionalToast('fas fa-exclamation-triangle', 'Failed to save product details.', 'error');
             } finally {
                 btn.prop('disabled', false).text('Save Product');
             }
@@ -1115,24 +1109,13 @@
                     const result = await response.json();
 
                     if (result.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Trainees Imported',
-                            text: result.message
-                        }).then(() => location.reload());
+                        showProfessionalToast('fas fa-check-circle', result.message || 'Trainees imported successfully', 'success');
+                        setTimeout(() => location.reload(), 1200);
                     } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Import Failed',
-                            text: result.message
-                        });
+                        showProfessionalToast('fas fa-exclamation-circle', result.message || 'Import Failed', 'error');
                     }
                 } catch (error) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Upload Error',
-                        text: 'Failed to communicate with server.'
-                    });
+                    showProfessionalToast('fas fa-exclamation-triangle', 'Failed to communicate with server.', 'error');
                 }
             }
         }
@@ -1297,25 +1280,14 @@
                     },
                     success: function (res) {
                         if (res.success) {
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Trainee Enrolled',
-                                text: res.message
-                            }).then(() => location.reload());
+                            showProfessionalToast('fas fa-check-circle', res.message || 'Trainee enrolled successfully', 'success');
+                            setTimeout(() => location.reload(), 1200);
                         } else {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Failed to Enroll',
-                                text: res.message
-                            });
+                            showProfessionalToast('fas fa-exclamation-circle', res.message || 'Failed to Enroll', 'error');
                         }
                     },
                     error: function (xhr, status, error) {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: 'Something went wrong: ' + (xhr.statusText || error || 'Server Error')
-                        });
+                        showProfessionalToast('fas fa-exclamation-triangle', 'Something went wrong: ' + (xhr.statusText || error || 'Server Error'), 'error');
                     }
                 });
             }
@@ -1341,15 +1313,14 @@
                         },
                         success: function(res) {
                             if (res.success) {
-                                Swal.fire({ icon: 'success', title: 'Deleted', text: res.message }).then(() => {
-                                    $(`#row-${cid}`).fadeOut(300, function() { $(this).remove(); });
-                                });
+                                showProfessionalToast('fas fa-check-circle', res.message || 'Deleted successfully', 'success');
+                                $(`#row-${cid}`).fadeOut(300, function() { $(this).remove(); });
                             } else {
-                                Swal.fire({ icon: 'error', title: 'Failed', text: res.message });
+                                showProfessionalToast('fas fa-exclamation-circle', res.message || 'Failed', 'error');
                             }
                         },
                         error: function(xhr, status, error) {
-                            Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong: ' + (xhr.statusText || error || 'Server Error') });
+                            showProfessionalToast('fas fa-exclamation-triangle', 'Something went wrong: ' + (xhr.statusText || error || 'Server Error'), 'error');
                         }
                     });
                 }
@@ -1376,15 +1347,14 @@
                         },
                         success: function(res) {
                             if (res.success) {
-                                Swal.fire({ icon: 'success', title: 'Cleared', text: res.message }).then(() => {
-                                    location.reload();
-                                });
+                                showProfessionalToast('fas fa-check-circle', res.message || 'Cleared successfully', 'success');
+                                setTimeout(() => location.reload(), 1000);
                             } else {
-                                Swal.fire({ icon: 'error', title: 'Failed', text: res.message });
+                                showProfessionalToast('fas fa-exclamation-circle', res.message || 'Failed', 'error');
                             }
                         },
                         error: function(xhr, status, error) {
-                            Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong: ' + (xhr.statusText || error || 'Server Error') });
+                            showProfessionalToast('fas fa-exclamation-triangle', 'Something went wrong: ' + (xhr.statusText || error || 'Server Error'), 'error');
                         }
                     });
                 }
@@ -1523,45 +1493,53 @@
                 container = document.createElement('div');
                 container.id = 'custom-toast-container';
                 container.style.position = 'fixed';
-                container.style.top = '30px';
-                container.style.right = '30px';
+                container.style.top = '24px';
+                container.style.right = '24px';
                 container.style.zIndex = '9999999';
                 container.style.display = 'flex';
                 container.style.flexDirection = 'column';
-                container.style.gap = '12px';
+                container.style.gap = '10px';
+                container.style.pointerEvents = 'none';
                 document.body.appendChild(container);
             }
 
             const toast = document.createElement('div');
-            toast.style.background = type === 'success' ? '#10b981' : (type === 'error' ? '#f43f5e' : '#6366f1');
+            toast.style.pointerEvents = 'auto';
+            let bg = '#4f46e5';
+            if (type === 'success') bg = '#10b981';
+            else if (type === 'error') bg = '#f43f5e';
+            else if (type === 'warning') bg = '#f59e0b';
+
+            toast.style.background = bg;
             toast.style.color = '#fff';
-            toast.style.padding = '14px 28px';
-            toast.style.borderRadius = '16px';
-            toast.style.boxShadow = '0 20px 25px -5px rgba(0,0,0,0.15), 0 10px 10px -5px rgba(0,0,0,0.1)';
+            toast.style.padding = '12px 22px';
+            toast.style.borderRadius = '14px';
+            toast.style.boxShadow = '0 15px 30px -5px rgba(0,0,0,0.25), 0 5px 15px rgba(0,0,0,0.12)';
             toast.style.fontSize = '13px';
-            toast.style.fontWeight = 'bold';
+            toast.style.fontWeight = '700';
             toast.style.display = 'flex';
             toast.style.alignItems = 'center';
             toast.style.gap = '10px';
             toast.style.opacity = '0';
-            toast.style.transform = 'translateX(100px)';
-            toast.style.transition = 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+            toast.style.transform = 'translateY(-15px) scale(0.96)';
+            toast.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+            toast.style.backdropFilter = 'blur(10px)';
 
-            toast.innerHTML = `<i class="${icon} text-base"></i> <span style="letter-spacing: 0.5px;">${message}</span>`;
+            toast.innerHTML = `<i class="${icon} text-base"></i> <span style="letter-spacing: 0.3px;">${message}</span>`;
             container.appendChild(toast);
 
             setTimeout(() => {
                 toast.style.opacity = '1';
-                toast.style.transform = 'translateX(0)';
+                toast.style.transform = 'translateY(0) scale(1)';
             }, 20);
 
             setTimeout(() => {
                 toast.style.opacity = '0';
-                toast.style.transform = 'translateX(100px)';
+                toast.style.transform = 'translateY(-15px) scale(0.96)';
                 setTimeout(() => {
                     toast.remove();
-                }, 400);
-            }, 3500);
+                }, 300);
+            }, 3000);
         }
     </script>
 }

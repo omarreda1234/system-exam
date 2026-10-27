@@ -58,9 +58,19 @@ namespace Exam.Controllers
                     r.Equals("BranchSupervisor", StringComparison.OrdinalIgnoreCase) ||
                     r.Equals("Supervisor", StringComparison.OrdinalIgnoreCase));
 
-                // Get user's branch
+                // Get user's branches (both user's primary BranchId and supervisor assigned branches)
                 int? userBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
                     "SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = userId });
+
+                var branchIds = new List<int>();
+                if (userBranchId.HasValue && userBranchId.Value > 0)
+                {
+                    branchIds.Add(userBranchId.Value);
+                }
+                var supBranchIds = (await conn.QueryAsync<int>(
+                    "SELECT BranchId FROM dbo.SupervisorBranches WITH (NOLOCK) WHERE UserId = @UserId", new { UserId = userId })).ToList();
+                branchIds.AddRange(supBranchIds);
+                branchIds = branchIds.Distinct().ToList();
 
                 // 1. Unread notifications
                 // Managerial notifications sent to BranchId are only shown to Branch Managers / Supervisors.
@@ -69,7 +79,7 @@ namespace Exam.Controllers
                         Id, Title, Message, LinkUrl, Type, ReferenceId, IsRead, CreatedAt, BranchId
                     FROM dbo.AppNotifications
                     WHERE (UserId = @UserId 
-                           OR (@IsBranchApprover = 1 AND BranchId IS NOT NULL AND BranchId = @BranchId)
+                           OR (@IsBranchApprover = 1 AND BranchId IS NOT NULL AND (BranchId = @BranchId OR BranchId IN @BranchIds))
                            OR (RoleTarget IS NOT NULL AND RoleTarget IN @Roles))
                     ORDER BY IsRead ASC, CreatedAt DESC";
 
@@ -77,6 +87,7 @@ namespace Exam.Controllers
                 {
                     UserId = userId,
                     BranchId = userBranchId,
+                    BranchIds = branchIds.Any() ? branchIds : new List<int> { -1 },
                     IsBranchApprover = isBranchApprover ? 1 : 0,
                     Roles = roles.Any() ? roles : new List<string> { "__NONE__" }
                 })).ToList();
@@ -89,9 +100,8 @@ namespace Exam.Controllers
                 int pendingWaveCount = 0;
                 int pendingCompanyCount = 0;
 
-                // STRICT: Review banner & action modal are exclusively for Branch Managers and Supervisors with an assigned branch.
-                // Admins do NOT review branch nominations; they manage waves from the control panel and audit branch actions.
-                bool canReviewNominations = isBranchApprover && !isAdmin && userBranchId.HasValue;
+                // STRICT: Review banner & action modal are exclusively for Branch Managers and Supervisors with assigned branch(es).
+                bool canReviewNominations = isBranchApprover && !isAdmin && branchIds.Any();
 
                 if (canReviewNominations)
                 {
@@ -99,16 +109,18 @@ namespace Exam.Controllers
                         SELECT COUNT(1) 
                         FROM dbo.UserWaves uw
                         JOIN AspNetUsers u ON uw.UserId = u.Id
-                        WHERE uw.ApprovalStatus = 'Pending' AND u.BranchId = @BranchId",
-                        new { BranchId = userBranchId.Value });
+                        WHERE uw.ApprovalStatus = 'Pending' AND u.BranchId IN @BranchIds",
+                        new { BranchIds = branchIds });
 
                     pendingCompanyCount = await conn.ExecuteScalarAsync<int>(@"
                         SELECT COUNT(1)
                         FROM dbo.CompanySessionTrainees cst
                         JOIN dbo.CompanyTrainees ct ON cst.CompanyTraineeId = ct.Id
-                        JOIN dbo.Branches b ON b.BranchName = ct.BranchName
-                        WHERE cst.ApprovalStatus = 'Pending' AND b.Id = @BranchId",
-                        new { BranchId = userBranchId.Value });
+                        LEFT JOIN dbo.Branches b ON b.BranchName = ct.BranchName OR LTRIM(RTRIM(b.BranchName)) = LTRIM(RTRIM(ct.BranchName))
+                        LEFT JOIN AspNetUsers u ON cst.UserId = u.Id OR (ct.UserCode = u.UserCode AND ct.UserCode <> '--')
+                        WHERE cst.ApprovalStatus = 'Pending' 
+                          AND (b.Id IN @BranchIds OR u.BranchId IN @BranchIds OR ct.BranchName IN (SELECT BranchName FROM dbo.Branches WHERE Id IN @BranchIds))",
+                        new { BranchIds = branchIds });
                 }
 
                 int totalPending = pendingWaveCount + pendingCompanyCount;
@@ -149,6 +161,21 @@ namespace Exam.Controllers
                 using var conn = new SqlConnection(_connectionString);
                 await conn.OpenAsync();
                 var userId = CurrentUserId;
+                var roles = CurrentUserRoles;
+                bool isAdmin = roles.Any(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase));
+                bool isBranchApprover = roles.Any(r => r.Equals("BranchManager", StringComparison.OrdinalIgnoreCase) || r.Equals("Supervisor", StringComparison.OrdinalIgnoreCase));
+
+                int? userBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
+                    "SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = userId });
+
+                var supervisorBranches = (await conn.QueryAsync<int>(
+                    "SELECT BranchId FROM dbo.SupervisorBranches WHERE UserId = @UserId",
+                    new { UserId = userId })).ToList();
+
+                var branchIds = new HashSet<int>();
+                if (userBranchId.HasValue && userBranchId.Value > 0) branchIds.Add(userBranchId.Value);
+                foreach (var bid in supervisorBranches) branchIds.Add(bid);
+                var branchList = branchIds.Any() ? branchIds.ToList() : new List<int> { -1 };
 
                 if (id.HasValue && id.Value > 0)
                 {
@@ -156,10 +183,25 @@ namespace Exam.Controllers
                 }
                 else
                 {
-                    await conn.ExecuteAsync("UPDATE dbo.AppNotifications SET IsRead = 1 WHERE UserId = @UserId", new { UserId = userId });
+                    await conn.ExecuteAsync(@"
+                        UPDATE dbo.AppNotifications 
+                        SET IsRead = 1 
+                        WHERE IsRead = 0 
+                          AND (UserId = @UserId 
+                               OR (@IsAdmin = 1 AND (RoleTarget = 'Admin' OR RoleTarget IS NULL))
+                               OR (@IsBranchApprover = 1 AND BranchId IS NOT NULL AND (BranchId = @BranchId OR BranchId IN @BranchIds))
+                               OR (RoleTarget IS NOT NULL AND RoleTarget IN @Roles))",
+                        new {
+                            UserId = userId,
+                            IsAdmin = isAdmin ? 1 : 0,
+                            IsBranchApprover = isBranchApprover ? 1 : 0,
+                            BranchId = userBranchId,
+                            BranchIds = branchList,
+                            Roles = roles.Any() ? roles : new List<string> { "__NONE__" }
+                        });
                 }
 
-                return Json(new { success = true });
+                return Json(new { success = true, message = "تم تحديد جميع الإشعارات كمقروءة." });
             }
             catch (Exception ex)
             {
@@ -177,22 +219,34 @@ namespace Exam.Controllers
                 var userId = CurrentUserId;
                 var roles = CurrentUserRoles;
                 bool isAdmin = roles.Any(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase));
+                bool isBranchApprover = roles.Any(r => r.Equals("BranchManager", StringComparison.OrdinalIgnoreCase) || r.Equals("Supervisor", StringComparison.OrdinalIgnoreCase));
 
                 int? userBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
                     "SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = userId });
 
+                var supervisorBranches = (await conn.QueryAsync<int>(
+                    "SELECT BranchId FROM dbo.SupervisorBranches WHERE UserId = @UserId",
+                    new { UserId = userId })).ToList();
+
+                var branchIds = new HashSet<int>();
+                if (userBranchId.HasValue && userBranchId.Value > 0) branchIds.Add(userBranchId.Value);
+                foreach (var bid in supervisorBranches) branchIds.Add(bid);
+                var branchList = branchIds.Any() ? branchIds.ToList() : new List<int> { -1 };
+
                 await conn.ExecuteAsync(@"
                     DELETE FROM dbo.AppNotifications 
                     WHERE Id = @Id 
-                      AND (@IsAdmin = 1 
-                           OR UserId = @UserId 
-                           OR (BranchId IS NOT NULL AND BranchId = @BranchId)
+                      AND (UserId = @UserId 
+                           OR (@IsAdmin = 1 AND (RoleTarget = 'Admin' OR RoleTarget IS NULL))
+                           OR (@IsBranchApprover = 1 AND BranchId IS NOT NULL AND (BranchId = @BranchId OR BranchId IN @BranchIds))
                            OR (RoleTarget IS NOT NULL AND RoleTarget IN @Roles))",
                     new { 
                         Id = id, 
                         IsAdmin = isAdmin ? 1 : 0, 
+                        IsBranchApprover = isBranchApprover ? 1 : 0,
                         UserId = userId, 
                         BranchId = userBranchId, 
+                        BranchIds = branchList, 
                         Roles = roles.Any() ? roles : new List<string> { "__NONE__" } 
                     });
 
@@ -204,8 +258,55 @@ namespace Exam.Controllers
             }
         }
 
+        [HttpPost]
+        public async Task<IActionResult> DeleteAllNotifications()
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+                var userId = CurrentUserId;
+                var roles = CurrentUserRoles;
+                bool isAdmin = roles.Any(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase));
+                bool isBranchApprover = roles.Any(r => r.Equals("BranchManager", StringComparison.OrdinalIgnoreCase) || r.Equals("Supervisor", StringComparison.OrdinalIgnoreCase));
+
+                int? userBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
+                    "SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = userId });
+
+                var supervisorBranches = (await conn.QueryAsync<int>(
+                    "SELECT BranchId FROM dbo.SupervisorBranches WHERE UserId = @UserId",
+                    new { UserId = userId })).ToList();
+
+                var branchIds = new HashSet<int>();
+                if (userBranchId.HasValue && userBranchId.Value > 0) branchIds.Add(userBranchId.Value);
+                foreach (var bid in supervisorBranches) branchIds.Add(bid);
+                var branchList = branchIds.Any() ? branchIds.ToList() : new List<int> { -1 };
+
+                int deleted = await conn.ExecuteAsync(@"
+                    DELETE FROM dbo.AppNotifications 
+                    WHERE (UserId = @UserId 
+                           OR (@IsAdmin = 1 AND (RoleTarget = 'Admin' OR RoleTarget IS NULL))
+                           OR (@IsBranchApprover = 1 AND BranchId IS NOT NULL AND (BranchId = @BranchId OR BranchId IN @BranchIds))
+                           OR (RoleTarget IS NOT NULL AND RoleTarget IN @Roles))",
+                    new { 
+                        IsAdmin = isAdmin ? 1 : 0, 
+                        IsBranchApprover = isBranchApprover ? 1 : 0,
+                        UserId = userId, 
+                        BranchId = userBranchId, 
+                        BranchIds = branchList, 
+                        Roles = roles.Any() ? roles : new List<string> { "__NONE__" } 
+                    });
+
+                return Json(new { success = true, count = deleted, message = "تم مسح جميع الإشعارات بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpGet]
-        public async Task<IActionResult> GetPendingBranchNominations(int? waveId)
+        public async Task<IActionResult> GetPendingBranchNominations(int? waveId = null, string status = "all")
         {
             try
             {
@@ -224,13 +325,31 @@ namespace Exam.Controllers
                 int? userBranchId = await conn.QueryFirstOrDefaultAsync<int?>(
                     "SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = userId });
 
-                // STRICT: Branch nomination reviews are exclusively for Branch Managers and Supervisors with a valid BranchId.
-                // Admins and HR do NOT review branch nominations via this modal; return empty for Admin/HR.
-                if (isAdminOrHr || !isBranchApprover || !userBranchId.HasValue)
+                var branchIds = new List<int>();
+                if (userBranchId.HasValue && userBranchId.Value > 0)
+                {
+                    branchIds.Add(userBranchId.Value);
+                }
+                var supBranches = (await conn.QueryAsync<int>(
+                    "SELECT BranchId FROM dbo.SupervisorBranches WITH (NOLOCK) WHERE UserId = @UserId", new { UserId = userId })).ToList();
+                branchIds.AddRange(supBranches);
+                branchIds = branchIds.Distinct().ToList();
+
+                // STRICT: Branch nomination reviews are exclusively for Branch Managers and Supervisors with assigned branch(es).
+                if (!isAdminOrHr && (!isBranchApprover || !branchIds.Any()))
                 {
                     return Json(new { success = true, waveNominations = new List<object>(), companyNominations = new List<object>(), totalPending = 0 });
                 }
 
+                // If Admin/HR opens without specific branch assigned, allow seeing across all branches
+                if (isAdminOrHr && !branchIds.Any())
+                {
+                    branchIds = (await conn.QueryAsync<int>("SELECT Id FROM dbo.Branches WITH (NOLOCK)")).ToList();
+                }
+
+                string cleanStatus = (status ?? "all").Trim().ToLowerInvariant();
+
+                // 1. Wave nominations (Pending and/or upcoming Approved)
                 string sql = @"
                     SELECT 
                         uw.Id AS UserWaveId,
@@ -253,15 +372,23 @@ namespace Exam.Controllers
                     JOIN AspNetUsers u WITH (NOLOCK) ON uw.UserId = u.Id
                     LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
                     JOIN dbo.TrainingWaves tw WITH (NOLOCK) ON uw.WaveId = tw.Id
-                    WHERE uw.ApprovalStatus = 'Pending'
+                    WHERE (
+                        (@Status = 'pending' AND uw.ApprovalStatus = 'Pending')
+                        OR (@Status = 'approved' AND uw.ApprovalStatus = 'Approved' AND (tw.EndDate IS NULL OR tw.EndDate >= CAST(GETDATE() AS DATE)))
+                        OR (@Status = 'all' AND (
+                            uw.ApprovalStatus = 'Pending' 
+                            OR (uw.ApprovalStatus = 'Approved' AND (tw.EndDate IS NULL OR tw.EndDate >= CAST(GETDATE() AS DATE)))
+                        ))
+                    )
                       AND (@WaveId IS NULL OR uw.WaveId = @WaveId)
-                      AND u.BranchId = @BranchId
-                    ORDER BY tw.StartDate ASC, b.BranchName ASC, u.FullName ASC";
+                      AND (u.BranchId IN @BranchIds OR b.Id IN @BranchIds)
+                    ORDER BY (CASE WHEN uw.ApprovalStatus = 'Pending' THEN 0 ELSE 1 END), tw.StartDate ASC, b.BranchName ASC, u.FullName ASC";
 
                 var waveNominations = (await conn.QueryAsync<dynamic>(sql, new
                 {
                     WaveId = waveId,
-                    BranchId = userBranchId.Value
+                    BranchIds = branchIds,
+                    Status = cleanStatus
                 })).Select(n => new
                 {
                     userWaveId = (int)n.UserWaveId,
@@ -283,7 +410,7 @@ namespace Exam.Controllers
                     type = "wave"
                 }).ToList();
 
-                // 2. Pending company sessions nominations
+                // 2. Company sessions nominations (Pending and/or upcoming Approved)
                 string companySql = @"
                     SELECT 
                         cst.Id AS CompanySessionTraineeId,
@@ -296,6 +423,7 @@ namespace Exam.Controllers
                         ISNULL(ct.Email, '--') AS Email,
                         ISNULL(ct.Phone, '--') AS PhoneNumber,
                         ISNULL(b.Id, u.BranchId) AS BranchId,
+                        u.Id AS UserId,
                         s.SessionName,
                         s.SessionDate,
                         s.StartTime,
@@ -310,13 +438,21 @@ namespace Exam.Controllers
                     LEFT JOIN dbo.Branches b ON b.BranchName = ct.BranchName OR LTRIM(RTRIM(b.BranchName)) = LTRIM(RTRIM(ct.BranchName)) OR b.Id = u.BranchId
                     JOIN dbo.AttendanceSessions s ON cst.SessionId = s.Id
                     LEFT JOIN dbo.Companies c ON s.CompanyId = c.Id
-                    WHERE cst.ApprovalStatus = 'Pending'
-                      AND (b.Id = @BranchId OR u.BranchId = @BranchId OR ct.BranchName IN (SELECT BranchName FROM Branches WHERE Id = @BranchId))
-                    ORDER BY s.SessionDate ASC, ct.FullName ASC";
+                    WHERE (
+                        (@Status = 'pending' AND cst.ApprovalStatus = 'Pending')
+                        OR (@Status = 'approved' AND cst.ApprovalStatus = 'Approved' AND (s.SessionDate IS NULL OR s.SessionDate >= CAST(GETDATE() AS DATE)))
+                        OR (@Status = 'all' AND (
+                            cst.ApprovalStatus = 'Pending' 
+                            OR (cst.ApprovalStatus = 'Approved' AND (s.SessionDate IS NULL OR s.SessionDate >= CAST(GETDATE() AS DATE)))
+                        ))
+                    )
+                      AND (b.Id IN @BranchIds OR u.BranchId IN @BranchIds OR ct.BranchName IN (SELECT BranchName FROM dbo.Branches WHERE Id IN @BranchIds))
+                    ORDER BY (CASE WHEN cst.ApprovalStatus = 'Pending' THEN 0 ELSE 1 END), s.SessionDate ASC, ct.FullName ASC";
 
                 var companyNominations = (await conn.QueryAsync<dynamic>(companySql, new
                 {
-                    BranchId = userBranchId.Value
+                    BranchIds = branchIds,
+                    Status = cleanStatus
                 })).Select(c => new
                 {
                     companySessionTraineeId = (int)c.CompanySessionTraineeId,
@@ -329,6 +465,7 @@ namespace Exam.Controllers
                     jobTitle = (string)c.JobTitle,
                     branchName = (string)c.BranchName,
                     branchId = (int?)c.BranchId,
+                    userId = (string)c.UserId,
                     email = (string)c.Email,
                     phoneNumber = (string)c.PhoneNumber,
                     sessionName = (string)c.SessionName,
@@ -341,13 +478,22 @@ namespace Exam.Controllers
                     type = "company"
                 }).ToList();
 
+                int pendingWaves = waveNominations.Count(w => (w.approvalStatus as string)?.Equals("Pending", StringComparison.OrdinalIgnoreCase) == true);
+                int pendingCompanies = companyNominations.Count(c => (c.approvalStatus as string)?.Equals("Pending", StringComparison.OrdinalIgnoreCase) == true);
+                int approvedWaves = waveNominations.Count(w => (w.approvalStatus as string)?.Equals("Approved", StringComparison.OrdinalIgnoreCase) == true);
+                int approvedCompanies = companyNominations.Count(c => (c.approvalStatus as string)?.Equals("Approved", StringComparison.OrdinalIgnoreCase) == true);
+
                 return Json(new
                 {
                     success = true,
                     nominations = waveNominations,
                     waveNominations = waveNominations,
                     companyNominations = companyNominations,
-                    totalPending = waveNominations.Count + companyNominations.Count
+                    totalPending = pendingWaves + pendingCompanies,
+                    pendingWaveCount = pendingWaves,
+                    pendingCompanyCount = pendingCompanies,
+                    approvedWaveCount = approvedWaves,
+                    approvedCompanyCount = approvedCompanies
                 });
             }
             catch (Exception ex)
@@ -363,7 +509,8 @@ namespace Exam.Controllers
             int? waveId = null, 
             string? branchName = null, 
             string? excludeUserId = null, 
-            string? excludeUserCode = null)
+            string? excludeUserCode = null,
+            bool allBranches = false)
         {
             try
             {
@@ -417,7 +564,8 @@ namespace Exam.Controllers
                     LEFT JOIN dbo.AspNetUserRoles ur ON u.Id = ur.UserId
                     LEFT JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id
                     WHERE (
-                        (@ResolvedBranchId > 0 AND (u.BranchId = @ResolvedBranchId OR b.Id = @ResolvedBranchId))
+                        @AllBranches = 1
+                        OR (@ResolvedBranchId > 0 AND (u.BranchId = @ResolvedBranchId OR b.Id = @ResolvedBranchId))
                         OR (@ResolvedBranchName <> '' AND (b.BranchName = @ResolvedBranchName OR LTRIM(RTRIM(b.BranchName)) = @ResolvedBranchName))
                     )
                       AND (@ExcludeUserId IS NULL OR @ExcludeUserId = '' OR u.Id <> @ExcludeUserId)
@@ -431,6 +579,7 @@ namespace Exam.Controllers
                     ORDER BY u.FullName ASC";
 
                 var raw = await conn.QueryAsync<dynamic>(sql, new { 
+                    AllBranches = allBranches ? 1 : 0,
                     ResolvedBranchId = resolvedBranchId, 
                     ResolvedBranchName = resolvedBranchName,
                     WaveId = waveId.GetValueOrDefault(),
@@ -475,7 +624,8 @@ namespace Exam.Controllers
             string? branchName = null, 
             int? branchId = null,
             string? excludeUserId = null,
-            string? excludeUserCode = null)
+            string? excludeUserCode = null,
+            bool allBranches = false)
         {
             try
             {
@@ -531,7 +681,8 @@ namespace Exam.Controllers
                         LEFT JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id
                         LEFT JOIN dbo.CompanyTrainees ct WITH (NOLOCK) ON (@CompanyId <= 0 OR ct.CompanyId = @CompanyId) AND (ct.UserCode = u.UserCode OR (ct.Email = u.Email AND ct.Email <> '--'))
                         WHERE (
-                            (@ResolvedBranchId > 0 AND (u.BranchId = @ResolvedBranchId OR b.Id = @ResolvedBranchId))
+                            @AllBranches = 1
+                            OR (@ResolvedBranchId > 0 AND (u.BranchId = @ResolvedBranchId OR b.Id = @ResolvedBranchId))
                             OR (@ResolvedBranchName <> '' AND (b.BranchName = @ResolvedBranchName OR LTRIM(RTRIM(b.BranchName)) = @ResolvedBranchName))
                         )
 
@@ -547,7 +698,8 @@ namespace Exam.Controllers
                             CAST(1 AS BIT) AS IsActive
                         FROM dbo.CompanyTrainees ct WITH (NOLOCK)
                         WHERE (
-                            (@ResolvedBranchId > 0 AND ct.BranchName IN (SELECT BranchName FROM dbo.Branches WHERE Id = @ResolvedBranchId))
+                            @AllBranches = 1
+                            OR (@ResolvedBranchId > 0 AND ct.BranchName IN (SELECT BranchName FROM dbo.Branches WHERE Id = @ResolvedBranchId))
                             OR (@ResolvedBranchName <> '' AND (ct.BranchName = @ResolvedBranchName OR LTRIM(RTRIM(ct.BranchName)) = @ResolvedBranchName))
                         )
                         AND NOT EXISTS (
@@ -555,7 +707,8 @@ namespace Exam.Controllers
                             LEFT JOIN dbo.Branches b2 WITH (NOLOCK) ON u2.BranchId = b2.Id
                             WHERE (u2.UserCode = ct.UserCode OR (u2.Email = ct.Email AND ct.Email <> '--'))
                               AND (
-                                  (@ResolvedBranchId > 0 AND (u2.BranchId = @ResolvedBranchId OR b2.Id = @ResolvedBranchId))
+                                  @AllBranches = 1
+                                  OR (@ResolvedBranchId > 0 AND (u2.BranchId = @ResolvedBranchId OR b2.Id = @ResolvedBranchId))
                                   OR (@ResolvedBranchName <> '' AND (b2.BranchName = @ResolvedBranchName OR LTRIM(RTRIM(b2.BranchName)) = @ResolvedBranchName))
                               )
                         )
@@ -587,6 +740,7 @@ namespace Exam.Controllers
                     ORDER BY bu.FullName ASC";
 
                 var raw = await conn.QueryAsync<dynamic>(sql, new { 
+                    AllBranches = allBranches ? 1 : 0,
                     SessionId = sessionId.GetValueOrDefault(), 
                     CompanyId = companyId.GetValueOrDefault(), 
                     ResolvedBranchName = resolvedBranchName, 
@@ -694,11 +848,12 @@ namespace Exam.Controllers
                     var cNomination = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                         SELECT cst.Id, cst.SessionId, cst.CompanyTraineeId, cst.ApprovalStatus, ct.FullName AS TraineeName,
                                ct.Email, ct.Phone, ISNULL(ct.UserCode, '--') AS UserCode, ISNULL(ct.JobTitle, 'Trainee') AS JobTitle,
-                               ct.BranchName, b.Id AS BranchId, s.SessionName, s.SessionDate, s.StartTime, s.EndTime,
-                               c.Name AS CompanyName, s.CompanyId
+                               ct.BranchName, ISNULL(b.Id, u.BranchId) AS BranchId, s.SessionName, s.SessionDate, s.StartTime, s.EndTime,
+                               c.Name AS CompanyName, s.CompanyId, cst.UserId
                         FROM dbo.CompanySessionTrainees cst
                         JOIN dbo.CompanyTrainees ct ON cst.CompanyTraineeId = ct.Id
-                        LEFT JOIN dbo.Branches b ON b.BranchName = ct.BranchName
+                        LEFT JOIN AspNetUsers u ON cst.UserId = u.Id OR (ct.UserCode = u.UserCode AND ct.UserCode <> '--')
+                        LEFT JOIN dbo.Branches b ON b.BranchName = ct.BranchName OR LTRIM(RTRIM(b.BranchName)) = LTRIM(RTRIM(ct.BranchName)) OR b.Id = u.BranchId
                         JOIN dbo.AttendanceSessions s ON cst.SessionId = s.Id
                         LEFT JOIN dbo.Companies c ON s.CompanyId = c.Id
                         WHERE cst.Id = @Id", new { Id = req.UserWaveId });
@@ -710,11 +865,17 @@ namespace Exam.Controllers
 
                     if (!isAdminOrHr)
                     {
-                        int? managerBranch = await conn.QueryFirstOrDefaultAsync<int?>(
-                            "SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = currentUserId });
-                        if (managerBranch != (int?)cNomination.BranchId)
+                        var allowedBranchIds = new List<int>();
+                        int? uBranch = await conn.QueryFirstOrDefaultAsync<int?>("SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = currentUserId });
+                        if (uBranch.HasValue && uBranch.Value > 0) allowedBranchIds.Add(uBranch.Value);
+                        var sBranches = await conn.QueryAsync<int>("SELECT BranchId FROM dbo.SupervisorBranches WHERE UserId = @UserId", new { UserId = currentUserId });
+                        allowedBranchIds.AddRange(sBranches);
+                        allowedBranchIds = allowedBranchIds.Distinct().ToList();
+
+                        int? nomineeBranchId = (int?)cNomination.BranchId;
+                        if (nomineeBranchId.HasValue && !allowedBranchIds.Contains(nomineeBranchId.Value))
                         {
-                            return Json(new { success = false, message = "ليس لديك صلاحية اعتماد متدربي هذا الفرع." });
+                            return Json(new { success = false, message = "ليس لديك صلاحية اعتماد أو استبدال متدربي هذا الفرع." });
                         }
                     }
 
@@ -849,15 +1010,15 @@ namespace Exam.Controllers
                         string branchName = (string)(cNomination.BranchName ?? "الفرع");
                         var addedNames = new List<string>();
 
-                        async Task<(int? ctId, string? uId, string name, string code)> ResolveCandidate(string key)
+                        async Task<(int? ctId, string? uId, string name, string code, string email, string phone)> ResolveCandidate(string key)
                         {
                             if (int.TryParse(key, out int ctNum))
                             {
                                 var ct = await conn.QueryFirstOrDefaultAsync<dynamic>(
-                                    "SELECT Id, FullName, UserCode FROM CompanyTrainees WHERE Id = @Id", new { Id = ctNum });
+                                    "SELECT Id, FullName, UserCode, Email, Phone FROM CompanyTrainees WHERE Id = @Id", new { Id = ctNum });
                                 if (ct != null)
                                 {
-                                    return (ctNum, null, (string)ct.FullName, (string)(ct.UserCode ?? ctNum.ToString()));
+                                    return (ctNum, null, (string)ct.FullName, (string)(ct.UserCode ?? ctNum.ToString()), (string)(ct.Email ?? "--"), (string)(ct.Phone ?? "--"));
                                 }
                             }
 
@@ -873,6 +1034,7 @@ namespace Exam.Controllers
                                 string uFn = !string.IsNullOrWhiteSpace((string)u.FullName) ? (string)u.FullName : (string)u.UserName;
                                 string uCode = (string)(u.UserCode ?? "--");
                                 string uEmail = (string)(u.Email ?? "--");
+                                string uPhone = (string)(u.PhoneNumber ?? "--");
                                 string uBranch = (string)(u.BranchName ?? branchName);
 
                                 var existingCt = await conn.QueryFirstOrDefaultAsync<int?>(@"
@@ -898,14 +1060,14 @@ namespace Exam.Controllers
                                             JobTitle = (string)(u.UserRoleCustom ?? "Pharmacist"),
                                             BranchName = uBranch,
                                             Email = uEmail,
-                                            Phone = (string)(u.PhoneNumber ?? "--")
+                                            Phone = uPhone
                                         });
                                 }
 
-                                return (ctIdResult, (string)u.Id, uFn, uCode);
+                                return (ctIdResult, (string)u.Id, uFn, uCode, uEmail, uPhone);
                             }
 
-                            return (null, null, "Unknown", "--");
+                            return (null, null, "Unknown", "--", "--", "--");
                         }
 
                         // 1. First Colleague (Direct Replacement)
@@ -945,6 +1107,35 @@ namespace Exam.Controllers
                                 SET IsActive = 1 
                                 WHERE Id = @UserId AND (IsActive = 0 OR IsActive IS NULL)",
                                 new { UserId = firstColleague.uId });
+
+                            // In-app notification to new substitute
+                            await conn.ExecuteAsync(@"
+                                INSERT INTO dbo.AppNotifications (UserId, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
+                                VALUES (@UserId, N'تم تسجيلك في تدريب شركة ✅', CONCAT(N'تم ترشيحك واعتماد حضورك لسيشن تدريب: ', @SessionName), '/Home', 'CompanySessionApproved', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                                new {
+                                    UserId = firstColleague.uId,
+                                    SessionName = (string)cNomination.SessionName,
+                                    Id = req.UserWaveId
+                                });
+                        }
+
+                        // Dispatch invitation email to substitute
+                        if (!string.IsNullOrWhiteSpace(firstColleague.email) && firstColleague.email != "--")
+                        {
+                            DispatchCompanySessionApprovalEmail(firstColleague.email, firstColleague.name, cNomination);
+                        }
+
+                        // Courtesy in-app notification to replaced employee
+                        if (cNomination.UserId != null && !string.IsNullOrWhiteSpace((string)cNomination.UserId))
+                        {
+                            await conn.ExecuteAsync(@"
+                                INSERT INTO dbo.AppNotifications (UserId, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
+                                VALUES (@UserId, N'تحديث الحضور في تدريب شركة 🔄', CONCAT(N'تم قبول اعتذارك واستبدال حضورك في سيشن: ', @SessionName, N' بزميل بديل.'), '/Home', 'CompanySessionReplaced', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                                new {
+                                    UserId = (string)cNomination.UserId,
+                                    SessionName = (string)cNomination.SessionName,
+                                    Id = req.UserWaveId
+                                });
                         }
 
                         // Log to NominationAuditLogs
@@ -1071,11 +1262,16 @@ namespace Exam.Controllers
                 // Verify branch access if not Admin
                 if (!isAdminOrHr)
                 {
-                    int? managerBranch = await conn.QueryFirstOrDefaultAsync<int?>(
-                        "SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = currentUserId });
-                    if (managerBranch != (int?)nomination.BranchId)
+                    var allowedBranchIds = new List<int>();
+                    int? uBranch = await conn.QueryFirstOrDefaultAsync<int?>("SELECT BranchId FROM AspNetUsers WHERE Id = @UserId", new { UserId = currentUserId });
+                    if (uBranch.HasValue && uBranch.Value > 0) allowedBranchIds.Add(uBranch.Value);
+                    var sBranches = await conn.QueryAsync<int>("SELECT BranchId FROM dbo.SupervisorBranches WHERE UserId = @UserId", new { UserId = currentUserId });
+                    allowedBranchIds.AddRange(sBranches);
+                    allowedBranchIds = allowedBranchIds.Distinct().ToList();
+
+                    if (nomination.BranchId != null && !allowedBranchIds.Contains((int)nomination.BranchId))
                     {
-                        return Json(new { success = false, message = "ليس لديك صلاحية اعتماد مرشحي هذا الفرع." });
+                        return Json(new { success = false, message = "ليس لديك صلاحية اعتماد أو استبدال مرشحي هذا الفرع." });
                     }
                 }
 
@@ -1244,7 +1440,7 @@ namespace Exam.Controllers
                     // 1. First Colleague (Direct Replacement)
                     var firstUserId = allWaveKeys[0];
                     var replacementUser = await conn.QueryFirstOrDefaultAsync<dynamic>(
-                        "SELECT Id, ISNULL(FullName, UserName) as FullName, ISNULL(UserCode, '--') as UserCode FROM AspNetUsers WHERE Id = @Id",
+                        "SELECT Id, ISNULL(FullName, UserName) as FullName, ISNULL(UserCode, '--') as UserCode, Email, PhoneNumber FROM AspNetUsers WHERE Id = @Id",
                         new { Id = firstUserId });
 
                     if (replacementUser == null)
@@ -1282,6 +1478,43 @@ namespace Exam.Controllers
                         SET IsActive = 1 
                         WHERE Id = @UserId AND (IsActive = 0 OR IsActive IS NULL)",
                         new { UserId = firstUserId });
+
+                    // In-app notification to substitute
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO dbo.AppNotifications (UserId, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
+                        VALUES (@UserId, N'Nomination Approved ✅', CONCAT(N'Your nomination for wave ', @WaveName, N' has been approved as replacement. Welcome aboard!'), '/Home', 'WaveNominationApproved', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                        new {
+                            UserId = firstUserId,
+                            WaveName = (string)nomination.WaveName,
+                            Id = newId
+                        });
+
+                    // Dispatch confirmation email to new candidate
+                    var repEmail = (string)(replacementUser.Email ?? "");
+                    if (!string.IsNullOrWhiteSpace(repEmail) && repEmail != "--")
+                    {
+                        DispatchWaveApprovalEmail(
+                            repEmail,
+                            firstFn,
+                            (string)(replacementUser.UserCode ?? "--"),
+                            (string)(replacementUser.PhoneNumber ?? "--"),
+                            (int?)nomination.BranchId,
+                            (string)(nomination.BranchName ?? "الفرع"),
+                            nomination);
+                    }
+
+                    // Courtesy notification to replaced candidate
+                    if (nomination.UserId != null && !string.IsNullOrWhiteSpace((string)nomination.UserId))
+                    {
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.AppNotifications (UserId, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
+                            VALUES (@UserId, N'Wave Nomination Update 🔄', CONCAT(N'Your nomination for wave ', @WaveName, N' has been replaced with a colleague upon request.'), '/Home', 'WaveNominationReplaced', CAST(@Id AS NVARCHAR(50)), GETDATE())",
+                            new {
+                                UserId = (string)nomination.UserId,
+                                WaveName = (string)nomination.WaveName,
+                                Id = req.UserWaveId
+                            });
+                    }
 
                     // Generate attendance records for substitute
                     await conn.ExecuteAsync(@"
