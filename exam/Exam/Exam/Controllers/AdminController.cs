@@ -35,6 +35,7 @@ namespace Exam.Controllers
         private readonly IAuthService _authService;
         private readonly IHomeCmsService _homeCmsService;
         private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _env;
+        private readonly Exam.Services.RabbitMQ.IRabbitMqEmailProducer? _rabbitMqProducer;
 
         public AdminController(
             IExamService examService,
@@ -46,7 +47,8 @@ namespace Exam.Controllers
             IAuthService authService,
             IHomeCmsService homeCmsService,
             Microsoft.AspNetCore.Hosting.IWebHostEnvironment env,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            Exam.Services.RabbitMQ.IRabbitMqEmailProducer? rabbitMqProducer = null)
         {
             _examService = examService;
             _emailSender = emailSender;
@@ -58,6 +60,7 @@ namespace Exam.Controllers
             _homeCmsService = homeCmsService;
             _env = env;
             _connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
+            _rabbitMqProducer = rabbitMqProducer;
         }
 
         // Shared utility actions that are always permitted if the user has any valid role
@@ -8476,17 +8479,34 @@ ORDER BY U.UserName ASC";
                     s.ShiftName, 
                     s.StartTime, 
                     s.EndTime,
-                    (SELECT COUNT(1) FROM AspNetUsers u WHERE u.ShiftId = s.Id) AS AssignedUsersCount
+                    (SELECT COUNT(1) FROM AspNetUsers u WHERE u.ShiftId = s.Id) AS AssignedUsersCount,
+                    sg.Id AS GroupId,
+                    sg.GroupName,
+                    sg.ColorCode AS GroupColor
                 FROM Shifts s
+                LEFT JOIN ShiftGroupItems sgi ON s.Id = sgi.ShiftId
+                LEFT JOIN ShiftGroups sg ON sgi.GroupId = sg.Id
                 ORDER BY s.StartTime ASC";
 
             var shifts = (await conn.QueryAsync<ShiftDto>(sql)).ToList();
+
+            var groupsSql = @"
+                SELECT sg.Id, sg.GroupName, sg.Description, sg.ColorCode,
+                       COUNT(sgi.ShiftId) AS ShiftsCount
+                FROM ShiftGroups sg
+                LEFT JOIN ShiftGroupItems sgi ON sg.Id = sgi.GroupId
+                GROUP BY sg.Id, sg.GroupName, sg.Description, sg.ColorCode
+                ORDER BY sg.Id";
+
+            var groups = (await conn.QueryAsync<ShiftGroupDto>(groupsSql)).ToList();
+            ViewBag.ShiftGroups = groups;
+
             return View(shifts);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddShift(string name, string startTime, string endTime)
+        public async Task<IActionResult> AddShift(string name, string startTime, string endTime, int? groupId = null)
         {
             var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
             if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Shifts", "create"))
@@ -8513,9 +8533,14 @@ ORDER BY U.UserName ASC";
                 if (exists > 0)
                     return Json(new { success = false, message = "A shift with this name already exists." });
 
-                await conn.ExecuteAsync(
-                    "INSERT INTO Shifts (ShiftName, StartTime, EndTime) VALUES (@Name, @Start, @End)",
+                var newShiftId = await conn.ExecuteScalarAsync<int>(
+                    "INSERT INTO Shifts (ShiftName, StartTime, EndTime) VALUES (@Name, @Start, @End); SELECT SCOPE_IDENTITY();",
                     new { Name = name.Trim(), Start = parsedStart, End = parsedEnd });
+
+                if (groupId.HasValue && groupId.Value > 0)
+                {
+                    await conn.ExecuteAsync("INSERT INTO ShiftGroupItems (GroupId, ShiftId) VALUES (@GroupId, @ShiftId)", new { GroupId = groupId.Value, ShiftId = newShiftId });
+                }
 
                 return Json(new { success = true, message = "Shift created successfully." });
             }
@@ -8527,7 +8552,7 @@ ORDER BY U.UserName ASC";
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditShift(int id, string name, string startTime, string endTime)
+        public async Task<IActionResult> EditShift(int id, string name, string startTime, string endTime, int? groupId = null)
         {
             var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
             if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Shifts", "edit"))
@@ -8558,11 +8583,115 @@ ORDER BY U.UserName ASC";
                     "UPDATE Shifts SET ShiftName = @Name, StartTime = @Start, EndTime = @End WHERE Id = @Id",
                     new { Id = id, Name = name.Trim(), Start = parsedStart, End = parsedEnd });
 
+                await conn.ExecuteAsync("DELETE FROM ShiftGroupItems WHERE ShiftId = @ShiftId", new { ShiftId = id });
+                if (groupId.HasValue && groupId.Value > 0)
+                {
+                    await conn.ExecuteAsync("INSERT INTO ShiftGroupItems (GroupId, ShiftId) VALUES (@GroupId, @ShiftId)", new { GroupId = groupId.Value, ShiftId = id });
+                }
+
                 return Json(new { success = true, message = "Shift updated successfully." });
             }
             catch (Exception ex)
             {
                 return Json(new { success = false, message = "An error occurred: " + ex.Message });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetShiftGroups()
+        {
+            using var conn = new SqlConnection(_connectionString);
+            var groups = (await conn.QueryAsync<ShiftGroupDto>(@"
+                SELECT sg.Id, sg.GroupName, sg.Description, sg.ColorCode,
+                       COUNT(sgi.ShiftId) AS ShiftsCount
+                FROM ShiftGroups sg
+                LEFT JOIN ShiftGroupItems sgi ON sg.Id = sgi.GroupId
+                GROUP BY sg.Id, sg.GroupName, sg.Description, sg.ColorCode
+                ORDER BY sg.Id")).ToList();
+
+            var mappings = (await conn.QueryAsync<(int GroupId, int ShiftId)>("SELECT GroupId, ShiftId FROM ShiftGroupItems")).ToList();
+            foreach (var g in groups)
+            {
+                g.ShiftIds = mappings.Where(m => m.GroupId == g.Id).Select(m => m.ShiftId).ToList();
+            }
+
+            return Json(new { success = true, groups });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveShiftGroup([FromBody] SaveShiftGroupRequest req)
+        {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Shifts", "edit"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
+            if (req == null || string.IsNullOrWhiteSpace(req.GroupName))
+            {
+                return Json(new { success = false, message = "اسم مجموعة الشيفتات مطلوب." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                int groupId;
+                if (req.Id.HasValue && req.Id.Value > 0)
+                {
+                    groupId = req.Id.Value;
+                    await conn.ExecuteAsync(@"
+                        UPDATE ShiftGroups 
+                        SET GroupName = @GroupName, Description = @Description, ColorCode = @ColorCode
+                        WHERE Id = @Id",
+                        new { Id = groupId, GroupName = req.GroupName.Trim(), Description = req.Description, ColorCode = req.ColorCode ?? "#7C3AED" });
+
+                    await conn.ExecuteAsync("DELETE FROM ShiftGroupItems WHERE GroupId = @GroupId", new { GroupId = groupId });
+                }
+                else
+                {
+                    groupId = await conn.ExecuteScalarAsync<int>(@"
+                        INSERT INTO ShiftGroups (GroupName, Description, ColorCode)
+                        VALUES (@GroupName, @Description, @ColorCode);
+                        SELECT SCOPE_IDENTITY();",
+                        new { GroupName = req.GroupName.Trim(), Description = req.Description, ColorCode = req.ColorCode ?? "#7C3AED" });
+                }
+
+                if (req.ShiftIds != null && req.ShiftIds.Any())
+                {
+                    foreach (var sId in req.ShiftIds.Distinct())
+                    {
+                        await conn.ExecuteAsync("INSERT INTO ShiftGroupItems (GroupId, ShiftId) VALUES (@GroupId, @ShiftId)", new { GroupId = groupId, ShiftId = sId });
+                    }
+                }
+
+                return Json(new { success = true, message = "تم حفظ مجموعة الشيفتات وتعيين الشيفتات بنجاح.", groupId });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "خطأ أثناء حفظ المجموعة: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteShiftGroup(int id)
+        {
+            var userRoles = User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (!userRoles.Contains("Admin") && !await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "Shifts", "delete"))
+            {
+                return Json(new { success = false, message = "Permission denied." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.ExecuteAsync("DELETE FROM ShiftGroups WHERE Id = @Id", new { Id = id });
+                return Json(new { success = true, message = "تم حذف مجموعة الشيفتات بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "خطأ أثناء حذف المجموعة: " + ex.Message });
             }
         }
 

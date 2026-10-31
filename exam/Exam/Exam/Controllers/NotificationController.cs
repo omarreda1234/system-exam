@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Exam.Services;
+using Exam.Services.RabbitMQ;
 
 namespace Exam.Controllers
 {
@@ -21,17 +22,20 @@ namespace Exam.Controllers
         private readonly IHubContext<NotificationHub> _hubContext;
         private readonly IN8nService? _n8nService;
         private readonly IEmailSender? _emailSender;
+        private readonly IRabbitMqEmailProducer? _rabbitMqProducer;
 
         public NotificationController(
             IConfiguration configuration,
             IHubContext<NotificationHub> hubContext,
             IN8nService? n8nService = null,
-            IEmailSender? emailSender = null)
+            IEmailSender? emailSender = null,
+            IRabbitMqEmailProducer? rabbitMqProducer = null)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")!;
             _hubContext = hubContext;
             _n8nService = n8nService;
             _emailSender = emailSender;
+            _rabbitMqProducer = rabbitMqProducer;
         }
 
         private string CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
@@ -1752,23 +1756,27 @@ namespace Exam.Controllers
                         customBodyHtml = $"<div style='font-size: 14px; margin-bottom: 20px; line-height: 1.8;'>{resolved}</div>";
                     }
 
-                    string emailHtml = $@"<div style='font-family: Arial, sans-serif; direction: rtl; text-align: right; line-height: 1.8; color: #1e293b; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;'>
-                        <h2 style='color: #0f766e; margin-top: 0;'>تهانينا {studentName}! تم اعتماد ترشيحك بنجاح ✅</h2>
-                        <p>يسعدنا إبلاغك بأنه تم اعتماد ترشيحك رسمياً من قِبل إدارة الفرع للانضمام إلى: <strong>{waveName}</strong></p>
-                        {customBodyHtml}
-                        <div style='background-color: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 15px 0;'>
-                            <p style='margin: 5px 0;'><strong>اسم الدورة:</strong> {waveName}</p>
-                            <p style='margin: 5px 0;'><strong>تاريخ البداية:</strong> {formattedDate}</p>
-                            <p style='margin: 5px 0;'><strong>مكان / طريقة الحضور:</strong> {location}</p>
-                            <p style='margin: 5px 0;'><strong>الفرع:</strong> {branchName}</p>
-                        </div>
-                        <p>يرجى التنسيق المسبق وتأكيد الجاهزية لحضور المحاضرات وخوض الاختبارات المقررة عبر المنصة.</p>
-                        <p><a href='{siteUrl}' style='display: inline-block; padding: 10px 20px; background-color: #0f766e; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold;'>الدخول إلى المنصة</a></p>
-                        <hr style='border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;'/>
-                        <p style='font-size: 12px; color: #64748b; margin-bottom: 0;'>أكاديمية الطرشوبي - التدريب والتطوير المستمر</p>
-                    </div>";
+                    string emailHtml = EmailTemplateHelper.BuildWaveEnrollmentEmail(studentName, waveName, formattedDate, location, branchName, siteUrl);
 
-                    bool n8nSent = false;
+                    // 1. Dispatch via RabbitMQ Broker if available
+                    if (_rabbitMqProducer != null)
+                    {
+                        var rabbitMsg = new EmailNotificationMessage
+                        {
+                            To = candEmail.Trim(),
+                            Subject = subject,
+                            BodyHtml = emailHtml,
+                            CandidateName = studentName,
+                            UserCode = userCode,
+                            BranchName = branchName,
+                            SessionOrWaveName = waveName,
+                            SessionDate = formattedDate,
+                            EventType = "BranchManagerApproval"
+                        };
+                        await _rabbitMqProducer.EnqueueEmailAsync(rabbitMsg);
+                    }
+
+                    // 2. n8n Notification webhook
                     if (_n8nService != null)
                     {
                         try
@@ -1798,7 +1806,7 @@ namespace Exam.Controllers
                                     }
                                 }
                             };
-                            n8nSent = await _n8nService.TriggerWaveNominationNotificationAsync(n8nPayload);
+                            await _n8nService.TriggerWaveNominationNotificationAsync(n8nPayload);
                         }
                         catch (Exception n8nEx)
                         {
@@ -1806,7 +1814,8 @@ namespace Exam.Controllers
                         }
                     }
 
-                    if (!n8nSent && _emailSender != null)
+                    // 3. Direct SMTP fallback if RabbitMQ producer is not registered
+                    if (_rabbitMqProducer == null && _emailSender != null)
                     {
                         await _emailSender.SendEmailAsync(candEmail, subject, emailHtml);
                         Console.WriteLine($"[Email Sent] Wave approval email delivered successfully to {candEmail}");
@@ -1828,6 +1837,7 @@ namespace Exam.Controllers
             string sDate = cNomination.SessionDate != null ? ((DateTime)cNomination.SessionDate).ToString("yyyy-MM-dd") : "";
             string sTime = cNomination.StartTime != null ? $"{((TimeSpan)cNomination.StartTime):hh\\:mm}" : "09:00";
             string eTime = cNomination.EndTime != null ? $"{((TimeSpan)cNomination.EndTime):hh\\:mm}" : "12:00";
+            string branchName = (string)(cNomination.BranchName ?? "الفرع");
             int sessionId = (int)cNomination.SessionId;
             string phone = (string)(cNomination.Phone ?? "");
 
@@ -1836,20 +1846,30 @@ namespace Exam.Controllers
                 try
                 {
                     string subject = $"تأكيد اعتماد حضور تدريب شركة: {sName} - {cName}";
-                    string html = $@"<div dir='rtl' style='font-family: Arial, sans-serif; padding: 20px; line-height: 1.8; color: #1e293b; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px;'>
-                        <h2 style='color: #0f766e;'>تهانينا {trName}! تم اعتماد حضورك للتدريب بنجاح ✅</h2>
-                        <p>يسعدنا إبلاغك بأنه تم اعتماد حضورك رسمياً لجلسة تدريب خاصة بشركة: <strong>{cName}</strong></p>
-                        <div style='background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0;'>
-                            <p style='margin: 5px 0;'><strong>اسم الجلسة:</strong> {sName}</p>
-                            <p style='margin: 5px 0;'><strong>التاريخ:</strong> {sDate}</p>
-                            <p style='margin: 5px 0;'><strong>الوقت:</strong> من {sTime} إلى {eTime}</p>
-                        </div>
-                        <p>نتمنى لك دوام التوفيق والنجاح.</p>
-                        <hr style='border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;'/>
-                        <p style='font-size: 12px; color: #64748b;'>أكاديمية الطرشوبي - التدريب والتطوير المستمر</p>
-                    </div>";
+                    string html = EmailTemplateHelper.BuildCompanySessionEmail(trName, sName, cName, sDate, sTime, eTime, branchName, "BranchManagerApproval");
 
-                    bool n8nSent = false;
+                    // 1. Dispatch via RabbitMQ Broker
+                    if (_rabbitMqProducer != null)
+                    {
+                        var rabbitMsg = new EmailNotificationMessage
+                        {
+                            To = trEmail.Trim(),
+                            Subject = subject,
+                            BodyHtml = html,
+                            CandidateName = trName,
+                            UserCode = (string)(cNomination.UserCode ?? "--"),
+                            BranchName = branchName,
+                            SessionOrWaveName = sName,
+                            SessionDate = sDate,
+                            StartTime = sTime,
+                            EndTime = eTime,
+                            CompanyName = cName,
+                            EventType = "BranchManagerApproval"
+                        };
+                        await _rabbitMqProducer.EnqueueEmailAsync(rabbitMsg);
+                    }
+
+                    // 2. n8n webhook
                     if (_n8nService != null)
                     {
                         try
@@ -1866,7 +1886,7 @@ namespace Exam.Controllers
                                     new { fullName = trName, email = trEmail, phone = phone }
                                 }
                             };
-                            n8nSent = await _n8nService.TriggerCompanySessionNotificationAsync(n8nPayload);
+                            await _n8nService.TriggerCompanySessionNotificationAsync(n8nPayload);
                         }
                         catch (Exception n8nEx)
                         {
@@ -1874,7 +1894,8 @@ namespace Exam.Controllers
                         }
                     }
 
-                    if (!n8nSent && _emailSender != null)
+                    // 3. Direct SMTP fallback if RabbitMQ producer is not registered
+                    if (_rabbitMqProducer == null && _emailSender != null)
                     {
                         await _emailSender.SendEmailAsync(trEmail, subject, html);
                         Console.WriteLine($"[Email Sent] Company session approval email delivered successfully to {trEmail}");

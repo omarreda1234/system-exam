@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Data.SqlClient;
+using Exam.Services.RabbitMQ;
 using Dapper;
 using System.Collections.Generic;
 using System.Drawing;
@@ -818,6 +819,9 @@ Eltarshoubi Training Academy Team";
             var branches = (await conn.QueryAsync<BranchDto>(
                 "SELECT CAST(Id AS NVARCHAR(50)) AS Id, BranchName FROM Branches ORDER BY BranchName")).ToList();
 
+            var shifts = (await conn.QueryAsync<ShiftDto>(
+                "SELECT Id, ShiftName, StartTime, EndTime FROM Shifts ORDER BY ShiftName ASC")).ToList();
+
             var roles = (await conn.QueryAsync<string>(
                 @"SELECT DISTINCT r.Name 
                   FROM AspNetRoles r
@@ -834,6 +838,7 @@ Eltarshoubi Training Academy Team";
                 "SELECT TOP 20 Id, WaveName, StartDate, EndDate, IsActive FROM TrainingWaves ORDER BY Id DESC")).ToList();
 
             ViewBag.Branches = branches;
+            ViewBag.Shifts = shifts;
             ViewBag.Roles = roles;
             ViewBag.RecentWaves = recentWaves;
             ViewBag.DefaultWaveName = $"Batch {recentWaves.Count + 1} - Proposed";
@@ -878,6 +883,7 @@ Eltarshoubi Training Academy Team";
                         u.CreatedAt,
                         u.BranchId,
                         ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                        u.ShiftId,
                         ISNULL(s.ShiftName, '--') AS ShiftName,
                         COALESCE(ur.RoleName, N'User') AS RoleName,
                         'New' AS CandidateType,
@@ -920,6 +926,7 @@ Eltarshoubi Training Academy Team";
                         u.CreatedAt,
                         u.BranchId,
                         ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                        u.ShiftId,
                         ISNULL(s.ShiftName, '--') AS ShiftName,
                         COALESCE(ur.RoleName, N'User') AS RoleName,
                         'Resitter' AS CandidateType,
@@ -972,6 +979,13 @@ Eltarshoubi Training Academy Team";
                     allResitters = allResitters.Where(u => u.BranchId.HasValue && filter.BranchIds.Contains(u.BranchId.Value)).ToList();
                 }
 
+                // Filter by Shifts if specified
+                if (filter.ShiftIds != null && filter.ShiftIds.Any())
+                {
+                    allFresh = allFresh.Where(u => u.ShiftId.HasValue && filter.ShiftIds.Contains(u.ShiftId.Value)).ToList();
+                    allResitters = allResitters.Where(u => u.ShiftId.HasValue && filter.ShiftIds.Contains(u.ShiftId.Value)).ToList();
+                }
+
                 int capacity = filter.Capacity > 0 ? filter.Capacity : 50;
                 int resitterPct = Math.Clamp(filter.ResitterPercentage, 0, 100);
 
@@ -979,121 +993,272 @@ Eltarshoubi Training Academy Team";
                 var selectedResitters = new List<WaveCandidateDto>();
                 var pickedUserIds = new HashSet<string>();
 
-                bool hasCustomQuotas = filter.BranchQuotas != null && filter.BranchQuotas.Any(kvp => kvp.Value > 0);
-                var branchesWithFixedQuota = filter.BranchQuotas != null
-                    ? filter.BranchQuotas.Where(kvp => kvp.Value > 0).Select(kvp => kvp.Key).ToHashSet()
-                    : new HashSet<int>();
+                bool hasBranchQuotas = filter.BranchQuotas != null && filter.BranchQuotas.Any(kvp => kvp.Value > 0);
+                bool hasShiftQuotas = filter.ShiftQuotas != null && filter.ShiftQuotas.Any(kvp => kvp.Value > 0);
 
-                if (hasCustomQuotas)
+                var branchQuotaRemaining = filter.BranchQuotas != null
+                    ? filter.BranchQuotas.Where(kvp => kvp.Value > 0).ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                    : new Dictionary<int, int>();
+
+                var shiftQuotaRemaining = filter.ShiftQuotas != null
+                    ? filter.ShiftQuotas.Where(kvp => kvp.Value > 0).ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                    : new Dictionary<int, int>();
+
+                var branchesWithFixedQuota = branchQuotaRemaining.Keys.ToHashSet();
+                var shiftsWithFixedQuota = shiftQuotaRemaining.Keys.ToHashSet();
+
+                // If user allocated explicit quotas to all selected branches, total batch capacity is strictly capped to their sum
+                int sumBranchQuotas = branchQuotaRemaining.Values.Sum();
+                bool allSelectedBranchesHaveFixedQuota = filter.BranchIds != null 
+                    && filter.BranchIds.Any() 
+                    && filter.BranchIds.All(bId => branchesWithFixedQuota.Contains(bId));
+
+                if (allSelectedBranchesHaveFixedQuota && sumBranchQuotas > 0)
                 {
-                    // 1. Fulfill branch-specific quotas first
-                    foreach (var kvp in filter.BranchQuotas.Where(kvp => kvp.Value > 0))
+                    capacity = Math.Min(capacity, sumBranchQuotas);
+                }
+
+                void PickCandidate(WaveCandidateDto c)
+                {
+                    if (pickedUserIds.Contains(c.UserId)) return;
+                    pickedUserIds.Add(c.UserId);
+                    if (c.CandidateType == "New")
+                        selectedFresh.Add(c);
+                    else
+                        selectedResitters.Add(c);
+
+                    if (c.BranchId.HasValue && branchQuotaRemaining.ContainsKey(c.BranchId.Value))
+                        branchQuotaRemaining[c.BranchId.Value] = Math.Max(0, branchQuotaRemaining[c.BranchId.Value] - 1);
+
+                    if (c.ShiftId.HasValue && shiftQuotaRemaining.ContainsKey(c.ShiftId.Value))
+                        shiftQuotaRemaining[c.ShiftId.Value] = Math.Max(0, shiftQuotaRemaining[c.ShiftId.Value] - 1);
+                }
+
+                // Step 1: Fulfill branch-specific quotas first
+                if (hasBranchQuotas)
+                {
+                    foreach (var bId in branchQuotaRemaining.Keys.ToList())
                     {
-                        int branchId = kvp.Key;
-                        int branchQuota = kvp.Value;
+                        int quota = branchQuotaRemaining[bId];
+                        if (quota <= 0) continue;
 
-                        var branchFresh = allFresh.Where(c => c.BranchId == branchId && !pickedUserIds.Contains(c.UserId)).ToList();
-                        var branchResitters = allResitters.Where(c => c.BranchId == branchId && !pickedUserIds.Contains(c.UserId)).ToList();
+                        var bFresh = allFresh.Where(c => c.BranchId == bId && !pickedUserIds.Contains(c.UserId))
+                                             .OrderByDescending(c => c.ShiftId.HasValue && shiftQuotaRemaining.ContainsKey(c.ShiftId.Value) && shiftQuotaRemaining[c.ShiftId.Value] > 0)
+                                             .ToList();
+                        var bResitters = allResitters.Where(c => c.BranchId == bId && !pickedUserIds.Contains(c.UserId))
+                                                     .OrderByDescending(c => c.ShiftId.HasValue && shiftQuotaRemaining.ContainsKey(c.ShiftId.Value) && shiftQuotaRemaining[c.ShiftId.Value] > 0)
+                                                     .ToList();
 
-                        int branchTargetResitters = (int)Math.Round(branchQuota * (resitterPct / 100.0));
-                        int branchTargetFresh = branchQuota - branchTargetResitters;
+                        Dictionary<int, int>? bShiftQuotas = null;
+                        bool hasCustomShiftsForBranch = filter.BranchShiftQuotas != null 
+                            && filter.BranchShiftQuotas.TryGetValue(bId, out bShiftQuotas) 
+                            && bShiftQuotas != null
+                            && bShiftQuotas.Any(kvp => kvp.Value > 0);
 
-                        var pickedRes = branchResitters.Take(branchTargetResitters).ToList();
-                        int remBranch = branchQuota - pickedRes.Count;
-                        var pickedFr = branchFresh.Take(remBranch).ToList();
-
-                        // If fresh didn't fill remaining quota for this branch, take more resitters if available
-                        if (pickedFr.Count < remBranch && branchResitters.Count > pickedRes.Count)
+                        if (hasCustomShiftsForBranch && bShiftQuotas != null)
                         {
-                            var extraRes = branchResitters.Skip(pickedRes.Count).Take(remBranch - pickedFr.Count).ToList();
-                            pickedRes.AddRange(extraRes);
-                        }
+                            int branchFilled = 0;
+                            foreach (var shiftKvp in bShiftQuotas.Where(kvp => kvp.Value > 0))
+                            {
+                                int sId = shiftKvp.Key;
+                                int sCount = shiftKvp.Value;
 
-                        foreach (var c in pickedFr) { selectedFresh.Add(c); pickedUserIds.Add(c.UserId); }
-                        foreach (var c in pickedRes) { selectedResitters.Add(c); pickedUserIds.Add(c.UserId); }
+                                var bsFresh = bFresh.Where(c => c.ShiftId == sId && !pickedUserIds.Contains(c.UserId)).ToList();
+                                var bsResitters = bResitters.Where(c => c.ShiftId == sId && !pickedUserIds.Contains(c.UserId)).ToList();
+
+                                int sTargetRes = (int)Math.Round(sCount * (resitterPct / 100.0));
+                                int sTargetFr = sCount - sTargetRes;
+
+                                var pRes = bsResitters.Take(sTargetRes).ToList();
+                                int remFr = sCount - pRes.Count;
+                                var pFr = bsFresh.Take(remFr).ToList();
+
+                                if (pFr.Count < remFr && bsResitters.Count > pRes.Count)
+                                {
+                                    var extraRes = bsResitters.Skip(pRes.Count).Take(remFr - pFr.Count).ToList();
+                                    pRes.AddRange(extraRes);
+                                }
+
+                                foreach (var c in pFr) PickCandidate(c);
+                                foreach (var c in pRes) PickCandidate(c);
+
+                                branchFilled += (pFr.Count + pRes.Count);
+                            }
+
+                            // If branch quota has remainder beyond specified shifts, fill from remaining eligible in this branch
+                            int remainingBranchQuota = quota - branchFilled;
+                            if (remainingBranchQuota > 0)
+                            {
+                                var remBFresh = bFresh.Where(c => !pickedUserIds.Contains(c.UserId)).ToList();
+                                var remBResitters = bResitters.Where(c => !pickedUserIds.Contains(c.UserId)).ToList();
+
+                                int bTargetRes = (int)Math.Round(remainingBranchQuota * (resitterPct / 100.0));
+                                var pRes = remBResitters.Take(bTargetRes).ToList();
+                                int remFr = remainingBranchQuota - pRes.Count;
+                                var pFr = remBFresh.Take(remFr).ToList();
+
+                                if (pFr.Count < remFr && remBResitters.Count > pRes.Count)
+                                {
+                                    var extraRes = remBResitters.Skip(pRes.Count).Take(remFr - pFr.Count).ToList();
+                                    pRes.AddRange(extraRes);
+                                }
+
+                                foreach (var c in pFr) PickCandidate(c);
+                                foreach (var c in pRes) PickCandidate(c);
+                            }
+                        }
+                        else
+                        {
+                            int bTargetRes = (int)Math.Round(quota * (resitterPct / 100.0));
+                            int bTargetFr = quota - bTargetRes;
+
+                            var pRes = bResitters.Take(bTargetRes).ToList();
+                            int remFr = quota - pRes.Count;
+                            var pFr = bFresh.Take(remFr).ToList();
+
+                            if (pFr.Count < remFr && bResitters.Count > pRes.Count)
+                            {
+                                var extraRes = bResitters.Skip(pRes.Count).Take(remFr - pFr.Count).ToList();
+                                pRes.AddRange(extraRes);
+                            }
+
+                            foreach (var c in pFr) PickCandidate(c);
+                            foreach (var c in pRes) PickCandidate(c);
+                        }
                     }
                 }
 
-                // 2. Fulfill remaining capacity (or fair balanced round-robin across selected branches)
-                // Branches with fixed quotas are strictly capped and excluded from receiving additional spillover seats.
+                // Step 2: Fulfill shift-specific quotas (if any remaining)
+                if (hasShiftQuotas)
+                {
+                    foreach (var sId in shiftQuotaRemaining.Keys.ToList())
+                    {
+                        int needed = shiftQuotaRemaining[sId];
+                        if (needed <= 0) continue;
+
+                        var sFresh = allFresh.Where(c => c.ShiftId == sId && !pickedUserIds.Contains(c.UserId)
+                                                      && (!c.BranchId.HasValue || !branchesWithFixedQuota.Contains(c.BranchId.Value) || branchQuotaRemaining.GetValueOrDefault(c.BranchId.Value) > 0)).ToList();
+                        var sResitters = allResitters.Where(c => c.ShiftId == sId && !pickedUserIds.Contains(c.UserId)
+                                                          && (!c.BranchId.HasValue || !branchesWithFixedQuota.Contains(c.BranchId.Value) || branchQuotaRemaining.GetValueOrDefault(c.BranchId.Value) > 0)).ToList();
+
+                        int sTargetRes = (int)Math.Round(needed * (resitterPct / 100.0));
+                        int sTargetFr = needed - sTargetRes;
+
+                        var pRes = sResitters.Take(sTargetRes).ToList();
+                        int remFr = needed - pRes.Count;
+                        var pFr = sFresh.Take(remFr).ToList();
+
+                        if (pFr.Count < remFr && sResitters.Count > pRes.Count)
+                        {
+                            var extraRes = sResitters.Skip(pRes.Count).Take(remFr - pFr.Count).ToList();
+                            pRes.AddRange(extraRes);
+                        }
+
+                        foreach (var c in pFr) PickCandidate(c);
+                        foreach (var c in pRes) PickCandidate(c);
+                    }
+                }
+
+                // Step 3: Fulfill remaining capacity (or fair balanced round-robin across selected branches / shifts)
                 int totalPicked = selectedFresh.Count + selectedResitters.Count;
                 int remainingCapacity = Math.Max(0, capacity - totalPicked);
 
                 if (remainingCapacity > 0)
                 {
                     var remFresh = allFresh
-                        .Where(c => !pickedUserIds.Contains(c.UserId) && (!c.BranchId.HasValue || !branchesWithFixedQuota.Contains(c.BranchId.Value)))
+                        .Where(c => !pickedUserIds.Contains(c.UserId) 
+                                 && (!c.BranchId.HasValue || !branchesWithFixedQuota.Contains(c.BranchId.Value))
+                                 && (!c.ShiftId.HasValue || !shiftsWithFixedQuota.Contains(c.ShiftId.Value)))
                         .ToList();
                     var remResitters = allResitters
-                        .Where(c => !pickedUserIds.Contains(c.UserId) && (!c.BranchId.HasValue || !branchesWithFixedQuota.Contains(c.BranchId.Value)))
+                        .Where(c => !pickedUserIds.Contains(c.UserId) 
+                                 && (!c.BranchId.HasValue || !branchesWithFixedQuota.Contains(c.BranchId.Value))
+                                 && (!c.ShiftId.HasValue || !shiftsWithFixedQuota.Contains(c.ShiftId.Value)))
                         .ToList();
 
                     int targetRemResitters = (int)Math.Round(remainingCapacity * (resitterPct / 100.0));
                     int targetRemFresh = remainingCapacity - targetRemResitters;
 
-                    if (filter.BalanceAcrossBranches)
+                    if (filter.BalanceAcrossBranches || filter.BalanceAcrossShifts)
                     {
-                        // Fair round-robin across branches
-                        var freshByBranch = remFresh.GroupBy(c => c.BranchId ?? 0).Select(g => new Queue<WaveCandidateDto>(g)).ToList();
-                        var resByBranch = remResitters.GroupBy(c => c.BranchId ?? 0).Select(g => new Queue<WaveCandidateDto>(g)).ToList();
+                        Func<WaveCandidateDto, object> groupKey = c =>
+                            filter.BalanceAcrossBranches && filter.BalanceAcrossShifts
+                                ? (object)(c.BranchId ?? 0, c.ShiftId ?? 0)
+                                : filter.BalanceAcrossBranches
+                                    ? (object)(c.BranchId ?? 0)
+                                    : (object)(c.ShiftId ?? 0);
 
-                        while (selectedResitters.Count - (hasCustomQuotas ? totalPicked : 0) < targetRemResitters && resByBranch.Any(q => q.Count > 0))
+                        var freshQueues = remFresh.GroupBy(groupKey).Select(g => new Queue<WaveCandidateDto>(g)).ToList();
+                        var resQueues = remResitters.GroupBy(groupKey).Select(g => new Queue<WaveCandidateDto>(g)).ToList();
+
+                        while (selectedResitters.Count - ((hasBranchQuotas || hasShiftQuotas) ? totalPicked : 0) < targetRemResitters && resQueues.Any(q => q.Count > 0))
                         {
                             bool anyAdded = false;
-                            foreach (var q in resByBranch)
+                            foreach (var q in resQueues)
                             {
                                 if (q.Count > 0 && (selectedFresh.Count + selectedResitters.Count) < capacity)
                                 {
-                                    var c = q.Dequeue();
-                                    selectedResitters.Add(c);
-                                    pickedUserIds.Add(c.UserId);
+                                    PickCandidate(q.Dequeue());
                                     anyAdded = true;
                                 }
                             }
                             if (!anyAdded) break;
                         }
 
-                        while ((selectedFresh.Count + selectedResitters.Count) < capacity && freshByBranch.Any(q => q.Count > 0))
+                        while ((selectedFresh.Count + selectedResitters.Count) < capacity && freshQueues.Any(q => q.Count > 0))
                         {
                             bool anyAdded = false;
-                            foreach (var q in freshByBranch)
+                            foreach (var q in freshQueues)
                             {
                                 if (q.Count > 0 && (selectedFresh.Count + selectedResitters.Count) < capacity)
                                 {
-                                    var c = q.Dequeue();
-                                    selectedFresh.Add(c);
-                                    pickedUserIds.Add(c.UserId);
+                                    PickCandidate(q.Dequeue());
                                     anyAdded = true;
                                 }
                             }
                             if (!anyAdded) break;
                         }
 
-                        // Fill remaining spots if any from whatever is available
-                        while ((selectedFresh.Count + selectedResitters.Count) < capacity && resByBranch.Any(q => q.Count > 0))
+                        while ((selectedFresh.Count + selectedResitters.Count) < capacity && resQueues.Any(q => q.Count > 0))
                         {
-                            var q = resByBranch.FirstOrDefault(x => x.Count > 0);
+                            var q = resQueues.FirstOrDefault(x => x.Count > 0);
                             if (q == null) break;
-                            var c = q.Dequeue();
-                            selectedResitters.Add(c);
-                            pickedUserIds.Add(c.UserId);
+                            PickCandidate(q.Dequeue());
                         }
                     }
                     else
                     {
-                        var extraResitters = remResitters.Take(targetRemResitters).ToList();
-                        foreach (var c in extraResitters) { selectedResitters.Add(c); pickedUserIds.Add(c.UserId); }
+                        var extraRes = remResitters.Take(targetRemResitters).ToList();
+                        foreach (var c in extraRes) PickCandidate(c);
 
                         int remSpots = capacity - (selectedFresh.Count + selectedResitters.Count);
-                        var extraFresh = remFresh.Take(remSpots).ToList();
-                        foreach (var c in extraFresh) { selectedFresh.Add(c); pickedUserIds.Add(c.UserId); }
+                        var extraFr = remFresh.Take(remSpots).ToList();
+                        foreach (var c in extraFr) PickCandidate(c);
 
                         int stillNeeded = capacity - (selectedFresh.Count + selectedResitters.Count);
                         if (stillNeeded > 0)
                         {
-                            var leftoverRes = remResitters.Where(c => !pickedUserIds.Contains(c.UserId)).Take(stillNeeded).ToList();
-                            foreach (var c in leftoverRes) { selectedResitters.Add(c); pickedUserIds.Add(c.UserId); }
+                            var leftover = remResitters.Where(c => !pickedUserIds.Contains(c.UserId)).Take(stillNeeded).ToList();
+                            foreach (var c in leftover) PickCandidate(c);
                         }
+                    }
+                }
+
+                // If capacity is not reached and unpicked candidates remain from non-fixed branches
+                if ((selectedFresh.Count + selectedResitters.Count) < capacity && !allSelectedBranchesHaveFixedQuota)
+                {
+                    var fallbackFresh = allFresh.Where(c => !pickedUserIds.Contains(c.UserId)
+                        && (!c.BranchId.HasValue || !branchesWithFixedQuota.Contains(c.BranchId.Value))).ToList();
+                    var fallbackRes = allResitters.Where(c => !pickedUserIds.Contains(c.UserId)
+                        && (!c.BranchId.HasValue || !branchesWithFixedQuota.Contains(c.BranchId.Value))).ToList();
+
+                    int stillNeeded = capacity - (selectedFresh.Count + selectedResitters.Count);
+                    foreach (var c in fallbackFresh.Take(stillNeeded)) PickCandidate(c);
+
+                    stillNeeded = capacity - (selectedFresh.Count + selectedResitters.Count);
+                    if (stillNeeded > 0)
+                    {
+                        foreach (var c in fallbackRes.Take(stillNeeded)) PickCandidate(c);
                     }
                 }
 
@@ -1101,10 +1266,16 @@ Eltarshoubi Training Academy Team";
                 finalCandidates.AddRange(selectedFresh);
                 finalCandidates.AddRange(selectedResitters);
 
-                // Sort by BranchName, then RoleName, then StudentName for clean presentation
-                finalCandidates = finalCandidates.OrderBy(c => c.BranchName).ThenBy(c => c.RoleName).ThenBy(c => c.StudentName).ToList();
+                // Sort by BranchName, then ShiftName, then RoleName, then StudentName for clean presentation
+                finalCandidates = finalCandidates
+                    .OrderBy(c => c.BranchName)
+                    .ThenBy(c => c.ShiftName)
+                    .ThenBy(c => c.RoleName)
+                    .ThenBy(c => c.StudentName)
+                    .ToList();
 
                 var distinctBranches = finalCandidates.Where(c => !string.IsNullOrEmpty(c.BranchName) && c.BranchName != "--").Select(c => c.BranchName).Distinct().Count();
+                var distinctShifts = finalCandidates.Where(c => !string.IsNullOrEmpty(c.ShiftName) && c.ShiftName != "--").Select(c => c.ShiftName).Distinct().Count();
 
                 var branchBreakdown = finalCandidates
                     .GroupBy(c => string.IsNullOrWhiteSpace(c.BranchName) ? "بدون فرع" : c.BranchName)
@@ -1118,6 +1289,34 @@ Eltarshoubi Training Academy Team";
                     .OrderByDescending(b => b.total)
                     .ToList();
 
+                var shiftBreakdown = finalCandidates
+                    .GroupBy(c => string.IsNullOrWhiteSpace(c.ShiftName) ? "بدون شيفت" : c.ShiftName)
+                    .Select(g => new
+                    {
+                        shiftName = g.Key,
+                        total = g.Count(),
+                        fresh = g.Count(c => c.CandidateType == "New"),
+                        resitters = g.Count(c => c.CandidateType != "New")
+                    })
+                    .OrderByDescending(s => s.total)
+                    .ToList();
+
+                var branchShiftMatrix = finalCandidates
+                    .GroupBy(c => string.IsNullOrWhiteSpace(c.BranchName) ? "بدون فرع" : c.BranchName)
+                    .Select(bg => new
+                    {
+                        branchName = bg.Key,
+                        total = bg.Count(),
+                        fresh = bg.Count(c => c.CandidateType == "New"),
+                        resitters = bg.Count(c => c.CandidateType != "New"),
+                        shifts = bg.GroupBy(c => string.IsNullOrWhiteSpace(c.ShiftName) ? "بدون شيفت" : c.ShiftName)
+                                   .Select(sg => new { shiftName = sg.Key, count = sg.Count() })
+                                   .OrderByDescending(x => x.count)
+                                   .ToList()
+                    })
+                    .OrderByDescending(b => b.total)
+                    .ToList();
+
                 return Json(new
                 {
                     success = true,
@@ -1125,9 +1324,12 @@ Eltarshoubi Training Academy Team";
                     freshCount = selectedFresh.Count,
                     resitterCount = selectedResitters.Count,
                     branchesCount = distinctBranches,
+                    shiftsCount = distinctShifts,
                     availableFreshPool = allFresh.Count,
                     availableResittersPool = allResitters.Count,
                     branchBreakdown = branchBreakdown,
+                    shiftBreakdown = shiftBreakdown,
+                    branchShiftMatrix = branchShiftMatrix,
                     candidates = finalCandidates
                 });
             }
@@ -1426,6 +1628,80 @@ Eltarshoubi Training Academy Team";
 
                     wsSummary.Columns().AdjustToContents();
 
+                    // Sheet 3: Summary by Shift (ملخص أعداد الورديات والشيفتات)
+                    var wsShift = workbook.Worksheets.Add("ملخص أعداد الورديات");
+                    wsShift.RightToLeft = true;
+
+                    wsShift.Range("A1:E1").Merge();
+                    wsShift.Cell("A1").Value = "توزيع المرشحين حسب الشيفتات والورديات";
+                    wsShift.Cell("A1").Style.Font.Bold = true;
+                    wsShift.Cell("A1").Style.Font.FontSize = 14;
+                    wsShift.Cell("A1").Style.Font.FontColor = XLColor.White;
+                    wsShift.Cell("A1").Style.Fill.BackgroundColor = XLColor.FromHtml("#4F46E5"); // Indigo 600
+                    wsShift.Cell("A1").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    wsShift.Row(1).Height = 30;
+
+                    int shRow = 3;
+                    string[] shHeaders = { "الوردية / الشيفت", "عدد الصيادلة", "عدد المساعدين", "أدوار أخرى", "إجمالي مرشحي الشيفت" };
+                    for (int i = 0; i < shHeaders.Length; i++)
+                    {
+                        var sc = wsShift.Cell(shRow, i + 1);
+                        sc.Value = shHeaders[i];
+                        sc.Style.Font.Bold = true;
+                        sc.Style.Fill.BackgroundColor = XLColor.FromHtml("#312E81"); // Indigo 900
+                        sc.Style.Font.FontColor = XLColor.White;
+                        sc.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    }
+                    wsShift.Row(shRow).Height = 24;
+
+                    var shiftGroups = candidates.GroupBy(c => string.IsNullOrWhiteSpace(Convert.ToString(c.ShiftName)) ? "بدون شيفت" : Convert.ToString(c.ShiftName))
+                                               .OrderBy(g => g.Key);
+
+                    int totalShiftPharm = 0, totalShiftAsst = 0, totalShiftOther = 0;
+                    foreach (var sg in shiftGroups)
+                    {
+                        shRow++;
+                        string sName = sg.Key;
+                        int pharmCount = sg.Count(c => Convert.ToString(c.RoleName).ToLower().Contains("pharmacist") || Convert.ToString(c.RoleName).Contains("صيدل"));
+                        int asstCount = sg.Count(c => Convert.ToString(c.RoleName).ToLower().Contains("assistant") || Convert.ToString(c.RoleName).Contains("مساعد"));
+                        int otherCount = sg.Count() - (pharmCount + asstCount);
+
+                        totalShiftPharm += pharmCount;
+                        totalShiftAsst += asstCount;
+                        totalShiftOther += otherCount;
+
+                        wsShift.Cell(shRow, 1).Value = sName;
+                        wsShift.Cell(shRow, 2).Value = pharmCount;
+                        wsShift.Cell(shRow, 3).Value = asstCount;
+                        wsShift.Cell(shRow, 4).Value = otherCount;
+                        wsShift.Cell(shRow, 5).Value = sg.Count();
+
+                        var sRange = wsShift.Range(shRow, 1, shRow, 5);
+                        sRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                        if (shRow % 2 == 0) sRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#F5F3FF");
+                        wsShift.Row(shRow).Height = 20;
+                    }
+
+                    // Total Shift Row
+                    shRow++;
+                    wsShift.Cell(shRow, 1).Value = "الإجمالي العام";
+                    wsShift.Cell(shRow, 2).Value = totalShiftPharm;
+                    wsShift.Cell(shRow, 3).Value = totalShiftAsst;
+                    wsShift.Cell(shRow, 4).Value = totalShiftOther;
+                    wsShift.Cell(shRow, 5).Value = candidates.Count;
+                    var totShiftRange = wsShift.Range(shRow, 1, shRow, 5);
+                    totShiftRange.Style.Font.Bold = true;
+                    totShiftRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#E0E7FF");
+                    totShiftRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    wsShift.Row(shRow).Height = 24;
+
+                    var sumShiftTableRange = wsShift.Range(3, 1, shRow, 5);
+                    sumShiftTableRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+                    sumShiftTableRange.Style.Border.InsideBorderColor = XLColor.FromHtml("#C7D2FE");
+                    sumShiftTableRange.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+
+                    wsShift.Columns().AdjustToContents();
+
                     using var stream = new MemoryStream();
                     workbook.SaveAs(stream);
                     var content = stream.ToArray();
@@ -1518,6 +1794,56 @@ Eltarshoubi Training Academy Team";
                     }
                 }
                 catch { }
+
+                // Asynchronous RabbitMQ Email Dispatch to enrolled wave candidates
+                if (request.SendEmail && _rabbitMqProducer != null && request.UserIds.Any())
+                {
+                    var waveInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                        "SELECT StartDate, Mode FROM TrainingWaves WHERE Id = @Id", new { Id = targetWaveId });
+
+                    DateTime? sDateVal = waveInfo?.StartDate != null ? (DateTime?)waveInfo.StartDate : request.NewStartDate;
+                    string formattedDate = sDateVal.HasValue ? sDateVal.Value.ToString("yyyy-MM-dd") : "يحدد لاحقاً";
+                    string modeDesc = (string)(waveInfo?.Mode ?? request.Mode ?? "الفرع الرئيسي / Offline");
+
+                    var candidateUsers = (await conn.QueryAsync<dynamic>(@"
+                        SELECT u.Id, ISNULL(u.FullName, u.UserName) AS StudentName, u.UserCode, u.Email, u.PhoneNumber,
+                               ISNULL(b.BranchName, N'الفرع الرئيسي') AS BranchName
+                        FROM AspNetUsers u
+                        LEFT JOIN Branches b ON u.BranchId = b.Id
+                        WHERE u.Id IN @UserIds", new { UserIds = request.UserIds })).ToList();
+
+                    var messages = new List<EmailNotificationMessage>();
+                    foreach (var cu in candidateUsers)
+                    {
+                        string email = (string)(cu.Email ?? "");
+                        string name = (string)(cu.StudentName ?? "Trainee");
+                        string branch = (string)(cu.BranchName ?? "الفرع");
+
+                        if (!string.IsNullOrWhiteSpace(email) && email.Contains("@"))
+                        {
+                            messages.Add(new EmailNotificationMessage
+                            {
+                                To = email.Trim(),
+                                Subject = $"تهانينا! تم تسكينك واعتماد ترشيحك في: {waveName}",
+                                BodyHtml = EmailTemplateHelper.BuildWaveEnrollmentEmail(name, waveName, formattedDate, modeDesc, branch),
+                                CandidateName = name,
+                                UserCode = (string)(cu.UserCode ?? "--"),
+                                BranchName = branch,
+                                SessionOrWaveName = waveName,
+                                SessionDate = formattedDate,
+                                EventType = "WaveEnrollment"
+                            });
+                        }
+                    }
+
+                    if (messages.Any())
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try { await _rabbitMqProducer.EnqueueEmailsAsync(messages); } catch { }
+                        });
+                    }
+                }
 
                 return Json(new
                 {

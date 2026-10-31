@@ -39,7 +39,13 @@ namespace Exam.DTOs
     {
         public int SessionId { get; set; }
         public int? CompanyId { get; set; }
-        public List<DepartmentQuotaItem> DepartmentQuotas { get; set; } = new();
+        public List<DepartmentQuotaItem>? DepartmentQuotas { get; set; } = new();
+
+        public string? Mode { get; set; } // "branchStaff", "departments", or "combined"
+        public int PharmacistQuota { get; set; } = 0;
+        public int AssistantQuota { get; set; } = 0;
+        public List<int>? BranchIds { get; set; }
+        public List<int>? ShiftIds { get; set; }
     }
 
     public class InjectionCandidatePreviewDto
@@ -50,6 +56,7 @@ namespace Exam.DTOs
         public string UserCode { get; set; } = "--";
         public string JobTitle { get; set; } = "--";
         public string BranchName { get; set; } = "بدون فرع";
+        public string ShiftName { get; set; } = "غير محدد";
         public int DepartmentId { get; set; }
         public string DepartmentName { get; set; } = "--";
         public int PreviousAttendedCount { get; set; } = 0;
@@ -63,8 +70,29 @@ namespace Exam.DTOs
         public int? CompanyId { get; set; }
         public List<DepartmentQuotaItem>? DepartmentQuotas { get; set; }
         public List<string>? ConfirmedCandidateKeys { get; set; } // Specific candidate keys from preview (e.g. U_...)
+        public List<string>? UserIds { get; set; }
         public bool BypassApproval { get; set; } = true;
         public bool SendNotification { get; set; } = true;
         public bool SendN8nWebhook { get; set; } = true;
+        public bool SendEmail { get; set; } = true;
+
+        public string? Mode { get; set; }
+        public int PharmacistQuota { get; set; } = 0;
+        public int AssistantQuota { get; set; } = 0;
+        public List<int>? BranchIds { get; set; }
+        public List<int>? ShiftIds { get; set; }
+    }
+
+    public class BranchStaffFilterCountRequest
+    {
+        public int SessionId { get; set; }
+        public List<int>? BranchIds { get; set; }
+        public List<int>? ShiftIds { get; set; }
+    }
+
+    public class ExportInjectionPreviewRequest
+    {
+        public int SessionId { get; set; }
+        public List<InjectionCandidatePreviewDto>? Candidates { get; set; }
     }
 }

@@ -14,6 +14,7 @@ namespace Exam.DTOs
         public DateTime? CreatedAt { get; set; }
         public int? BranchId { get; set; }
         public string BranchName { get; set; } = "--";
+        public int? ShiftId { get; set; }
         public string ShiftName { get; set; } = "--";
         public string RoleName { get; set; } = "User";
         public string CandidateType { get; set; } = "New"; // "New" or "Resitter"
@@ -31,13 +32,17 @@ namespace Exam.DTOs
         public DateTime? DateTo { get; set; }
         public List<string> Roles { get; set; } = new();
         public List<int> BranchIds { get; set; } = new();
+        public List<int> ShiftIds { get; set; } = new();
         public bool ActiveOnly { get; set; } = true;
         public int Capacity { get; set; } = 50;
         public int ResitterPercentage { get; set; } = 20; // 0% - 50%
         public string ProposedWaveName { get; set; } = "";
         public DateTime? ProposedStartDate { get; set; }
         public Dictionary<int, int>? BranchQuotas { get; set; } = new();
+        public Dictionary<int, int>? ShiftQuotas { get; set; } = new();
+        public Dictionary<int, Dictionary<int, int>>? BranchShiftQuotas { get; set; } = new();
         public bool BalanceAcrossBranches { get; set; } = false;
+        public bool BalanceAcrossShifts { get; set; } = false;
     }
 
     public class WaveProposalResultDto
@@ -46,6 +51,7 @@ namespace Exam.DTOs
         public int FreshCount { get; set; }
         public int ResitterCount { get; set; }
         public int BranchesCount { get; set; }
+        public int ShiftsCount { get; set; }
         public List<WaveCandidateDto> Candidates { get; set; } = new();
     }
 
@@ -67,5 +73,6 @@ namespace Exam.DTOs
         public DateTime? NewStartDate { get; set; }
         public DateTime? NewEndDate { get; set; }
         public string? Mode { get; set; } = "Offline in Main Branch";
+        public bool SendEmail { get; set; } = true;
     }
 }

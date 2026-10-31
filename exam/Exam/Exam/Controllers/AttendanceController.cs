@@ -10,8 +10,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using System;
+using System.Security.Claims;
 using ClosedXML.Excel;
 using System.IO;
+using Exam.Services.RabbitMQ;
 
 namespace Exam.Controllers
 {
@@ -22,17 +24,20 @@ namespace Exam.Controllers
         private readonly Exam.Services.IN8nService _n8nService;
         private readonly Microsoft.AspNetCore.SignalR.IHubContext<Exam.Hubs.NotificationHub> _hubContext;
         private readonly Exam.Services.IEmailSender? _emailSender;
+        private readonly IRabbitMqEmailProducer? _rabbitMqProducer;
 
         public AttendanceController(
             IConfiguration configuration,
             Exam.Services.IN8nService n8nService,
             Microsoft.AspNetCore.SignalR.IHubContext<Exam.Hubs.NotificationHub> hubContext,
-            Exam.Services.IEmailSender? emailSender = null)
+            Exam.Services.IEmailSender? emailSender = null,
+            IRabbitMqEmailProducer? rabbitMqProducer = null)
         {
             _connectionString = configuration.GetConnectionString("DefaultConnection")!;
             _n8nService = n8nService;
             _hubContext = hubContext;
             _emailSender = emailSender;
+            _rabbitMqProducer = rabbitMqProducer;
         }
 
         [HttpGet]
@@ -855,7 +860,7 @@ namespace Exam.Controllers
                 using var conn = new SqlConnection(_connectionString);
                 await conn.OpenAsync();
                 var session = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                    SELECT S.Id, S.SessionName, S.SessionDate, S.StartTime, S.EndTime, S.CompanyId, C.Name AS CompanyName
+                    SELECT S.Id, S.SessionName, S.SessionDate, S.StartTime, S.EndTime, S.CompanyId, S.TotalSeats, C.Name AS CompanyName
                     FROM AttendanceSessions S
                     LEFT JOIN Companies C ON S.CompanyId = C.Id
                     WHERE S.Id = @Id", new { Id = sessionId });
@@ -900,6 +905,8 @@ namespace Exam.Controllers
                     };
                 }).ToList();
 
+                int totalSeatsVal = session.TotalSeats != null ? (int)session.TotalSeats : 50;
+
                 return Json(new
                 {
                     success = true,
@@ -910,8 +917,10 @@ namespace Exam.Controllers
                         date = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd"),
                         time = session.StartTime != null ? $"{((TimeSpan)session.StartTime):hh\\:mm} - {((TimeSpan)session.EndTime):hh\\:mm}" : "",
                         companyId = companyId.Value,
-                        companyName = (string)(session.CompanyName ?? "")
+                        companyName = (string)(session.CompanyName ?? ""),
+                        totalSeats = totalSeatsVal
                     },
+                    totalSeats = totalSeatsVal,
                     assignedCount = assigned.Count(t => t.approvalStatus == "Approved"),
                     totalAssignedCount = assigned.Count,
                     approvedCount = assigned.Count(t => t.approvalStatus == "Approved"),
@@ -920,6 +929,22 @@ namespace Exam.Controllers
                     assignedTrainees = assigned,
                     availablePool = new List<dynamic>()
                 });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateSessionTotalSeats([FromBody] UpdateSessionTotalSeatsRequest req)
+        {
+            if (req == null || req.SessionId <= 0) return BadRequest(new { success = false, message = "Invalid sessionId" });
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.ExecuteAsync("UPDATE AttendanceSessions SET TotalSeats = @TotalSeats WHERE Id = @Id", new { Id = req.SessionId, TotalSeats = req.TotalSeats });
+                return Json(new { success = true, totalSeats = req.TotalSeats });
             }
             catch (Exception ex)
             {
@@ -1310,7 +1335,53 @@ namespace Exam.Controllers
                         new { BranchId = bId, Title = title, Message = message, LinkUrl = linkUrl, ReferenceId = session.Id.ToString() });
                 }
 
-                // 2. n8n Webhook Trigger (for email dispatch and automation workflows)
+                // 2. RabbitMQ Message Broker Email Dispatch
+                if (req.SendRabbitMqEmail && _rabbitMqProducer != null && assignedTraineePayloads.Any())
+                {
+                    string sName = (string)session.SessionName;
+                    string cName = (string)(session.CompanyName ?? "");
+                    string sDate = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd");
+                    string sTime = session.StartTime != null ? $"{((TimeSpan)session.StartTime):hh\\:mm}" : "09:00";
+                    string eTime = session.EndTime != null ? $"{((TimeSpan)session.EndTime):hh\\:mm}" : "12:00";
+
+                    var messages = new List<EmailNotificationMessage>();
+                    foreach (var trainee in assignedTraineePayloads)
+                    {
+                        string tEmail = (string)(trainee.email ?? "");
+                        string tName = (string)(trainee.fullName ?? "");
+                        string tCode = (string)(trainee.userCode ?? "--");
+                        string tBranch = (string)(trainee.branchName ?? "الفرع");
+
+                        if (!string.IsNullOrWhiteSpace(tEmail) && tEmail.Contains("@"))
+                        {
+                            messages.Add(new EmailNotificationMessage
+                            {
+                                To = tEmail.Trim(),
+                                Subject = $"تأكيد التسجيل والاعتماد في جلسة تدريب: {sName} - {cName}",
+                                BodyHtml = EmailTemplateHelper.BuildCompanySessionEmail(tName, sName, cName, sDate, sTime, eTime, tBranch, req.BypassApproval ? "DirectApproval" : "SessionAssignment"),
+                                CandidateName = tName,
+                                UserCode = tCode,
+                                BranchName = tBranch,
+                                SessionOrWaveName = sName,
+                                SessionDate = sDate,
+                                StartTime = sTime,
+                                EndTime = eTime,
+                                CompanyName = cName,
+                                EventType = req.BypassApproval ? "DirectApproval" : "SessionAssignment"
+                            });
+                        }
+                    }
+
+                    if (messages.Any())
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try { await _rabbitMqProducer.EnqueueEmailsAsync(messages); } catch { }
+                        });
+                    }
+                }
+
+                // 3. n8n Webhook Trigger (for email dispatch and automation workflows)
                 if (req.SendEmailViaN8n && assignedTraineePayloads.Any())
                 {
                     var webhookPayload = new
@@ -1335,8 +1406,8 @@ namespace Exam.Controllers
                         }
                         catch { }
 
-                        // Fallback: If n8n is not running, send directly via SMTP
-                        if (!n8nSent && _emailSender != null)
+                        // Fallback: If n8n is not running and RabbitMQ didn't send, send directly via SMTP
+                        if (!n8nSent && !req.SendRabbitMqEmail && _emailSender != null)
                         {
                             foreach (var trainee in assignedTraineePayloads)
                             {
@@ -1404,7 +1475,197 @@ namespace Exam.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> ImportSessionTraineesFromExcel(int sessionId, Microsoft.AspNetCore.Http.IFormFile excelFile, bool bypassApproval = false)
+        public async Task<IActionResult> ApproveSessionTrainee(int assignmentId, bool sendEmail = true)
+        {
+            if (assignmentId <= 0)
+            {
+                return Json(new { success = false, message = "معرف التعيين غير صالح." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+                string currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                string currentUserName = User.Identity?.Name ?? "الإدارة";
+
+                var traineeInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT CST.Id, CST.SessionId, CST.CompanyTraineeId, CT.FullName AS TraineeName,
+                           CT.UserCode, CT.JobTitle, CT.BranchName, CT.Email, CT.Phone, B.Id AS BranchId, 
+                           S.SessionName, S.SessionDate, S.StartTime, S.EndTime, S.CompanyId, C.Name AS CompanyName
+                    FROM dbo.CompanySessionTrainees CST
+                    JOIN dbo.CompanyTrainees CT ON CST.CompanyTraineeId = CT.Id
+                    JOIN dbo.AttendanceSessions S ON CST.SessionId = S.Id
+                    LEFT JOIN dbo.Companies C ON S.CompanyId = C.Id
+                    LEFT JOIN dbo.Branches B ON B.BranchName = CT.BranchName OR LTRIM(RTRIM(B.BranchName)) = LTRIM(RTRIM(CT.BranchName))
+                    WHERE CST.Id = @Id", new { Id = assignmentId });
+
+                if (traineeInfo == null)
+                {
+                    return Json(new { success = false, message = "سجل التعيين غير موجود." });
+                }
+
+                await conn.ExecuteAsync(@"
+                    UPDATE dbo.CompanySessionTrainees 
+                    SET ApprovalStatus = 'Approved',
+                        ActionedByUserId = @ActionedBy,
+                        ActionedAt = GETDATE()
+                    WHERE Id = @Id",
+                    new { Id = assignmentId, ActionedBy = currentUserId });
+
+                try
+                {
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO dbo.NominationAuditLogs (
+                            EntityType, EntityId, EntityName, CompanyName, TraineeId, TraineeName, TraineeCode, TraineeRole,
+                            BranchId, BranchName, Action, ActionReason, ActionByUserId, ActionByUserName, ActionByUserRole, ActionDate
+                        ) VALUES (
+                            'CompanySession', @EntityId, @EntityName, @CompanyName, @TraineeId, @TraineeName, @TraineeCode, @TraineeRole,
+                            @BranchId, @BranchName, 'Approved', 'Direct Admin Approval', @ActionByUserId, @ActionByUserName, 'Admin', GETDATE()
+                        )", new {
+                            EntityId = (int)traineeInfo.SessionId,
+                            EntityName = (string)traineeInfo.SessionName,
+                            CompanyName = (string)(traineeInfo.CompanyName ?? ""),
+                            TraineeId = traineeInfo.CompanyTraineeId.ToString(),
+                            TraineeName = (string)traineeInfo.TraineeName,
+                            TraineeCode = (string)(traineeInfo.UserCode ?? "--"),
+                            TraineeRole = (string)(traineeInfo.JobTitle ?? "Trainee"),
+                            BranchId = (int?)traineeInfo.BranchId,
+                            BranchName = (string)(traineeInfo.BranchName ?? "الفرع"),
+                            ActionByUserId = currentUserId,
+                            ActionByUserName = currentUserName
+                        });
+                }
+                catch { }
+
+                // Asynchronous RabbitMQ Email Dispatch upon direct approval
+                if (sendEmail && _rabbitMqProducer != null)
+                {
+                    string toEmail = (string)(traineeInfo.Email ?? "");
+                    if (!string.IsNullOrWhiteSpace(toEmail) && toEmail.Contains("@"))
+                    {
+                        string sName = (string)traineeInfo.SessionName;
+                        string cName = (string)(traineeInfo.CompanyName ?? "");
+                        string sDate = traineeInfo.SessionDate != null ? ((DateTime)traineeInfo.SessionDate).ToString("yyyy-MM-dd") : "";
+                        string sTime = traineeInfo.StartTime != null ? $"{((TimeSpan)traineeInfo.StartTime):hh\\:mm}" : "09:00";
+                        string eTime = traineeInfo.EndTime != null ? $"{((TimeSpan)traineeInfo.EndTime):hh\\:mm}" : "12:00";
+                        string bName = (string)(traineeInfo.BranchName ?? "الفرع");
+                        string trName = (string)traineeInfo.TraineeName;
+
+                        var emailMsg = new EmailNotificationMessage
+                        {
+                            To = toEmail.Trim(),
+                            Subject = $"تأكيد اعتماد حضور تدريب شركة: {sName} - {cName}",
+                            BodyHtml = EmailTemplateHelper.BuildCompanySessionEmail(trName, sName, cName, sDate, sTime, eTime, bName, "DirectApproval"),
+                            CandidateName = trName,
+                            UserCode = (string)(traineeInfo.UserCode ?? "--"),
+                            BranchName = bName,
+                            SessionOrWaveName = sName,
+                            SessionDate = sDate,
+                            StartTime = sTime,
+                            EndTime = eTime,
+                            CompanyName = cName,
+                            EventType = "DirectApproval"
+                        };
+
+                        _ = Task.Run(async () =>
+                        {
+                            try { await _rabbitMqProducer.EnqueueEmailAsync(emailMsg); } catch { }
+                        });
+                    }
+                }
+
+                await _hubContext.Clients.All.SendAsync("ReceiveNotification", "تم اعتماد وحضور المتدرب مباشرة من قبل الإدارة.");
+                return Json(new { success = true, message = $"تم اعتماد المتدرب {traineeInfo.TraineeName} بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ApproveAllPendingSessionTrainees(int sessionId, bool sendEmail = true)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+                string currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+                var pendingTrainees = (await conn.QueryAsync<dynamic>(@"
+                    SELECT CST.Id, CST.CompanyTraineeId, CT.FullName AS TraineeName, CT.UserCode, CT.Email, CT.Phone, CT.BranchName,
+                           S.SessionName, S.SessionDate, S.StartTime, S.EndTime, C.Name AS CompanyName
+                    FROM dbo.CompanySessionTrainees CST
+                    JOIN dbo.CompanyTrainees CT ON CST.CompanyTraineeId = CT.Id
+                    JOIN dbo.AttendanceSessions S ON CST.SessionId = S.Id
+                    LEFT JOIN dbo.Companies C ON S.CompanyId = C.Id
+                    WHERE CST.SessionId = @SessionId AND CST.ApprovalStatus = 'Pending'",
+                    new { SessionId = sessionId })).ToList();
+
+                int updatedCount = await conn.ExecuteAsync(@"
+                    UPDATE dbo.CompanySessionTrainees 
+                    SET ApprovalStatus = 'Approved',
+                        ActionedByUserId = @ActionedBy,
+                        ActionedAt = GETDATE()
+                    WHERE SessionId = @SessionId AND ApprovalStatus = 'Pending'",
+                    new { SessionId = sessionId, ActionedBy = currentUserId });
+
+                if (sendEmail && _rabbitMqProducer != null && pendingTrainees.Any())
+                {
+                    var messages = new List<EmailNotificationMessage>();
+                    foreach (var pt in pendingTrainees)
+                    {
+                        string email = (string)(pt.Email ?? "");
+                        if (!string.IsNullOrWhiteSpace(email) && email.Contains("@"))
+                        {
+                            string sName = (string)pt.SessionName;
+                            string cName = (string)(pt.CompanyName ?? "");
+                            string sDate = pt.SessionDate != null ? ((DateTime)pt.SessionDate).ToString("yyyy-MM-dd") : "";
+                            string sTime = pt.StartTime != null ? $"{((TimeSpan)pt.StartTime):hh\\:mm}" : "09:00";
+                            string eTime = pt.EndTime != null ? $"{((TimeSpan)pt.EndTime):hh\\:mm}" : "12:00";
+                            string bName = (string)(pt.BranchName ?? "الفرع");
+                            string trName = (string)pt.TraineeName;
+
+                            messages.Add(new EmailNotificationMessage
+                            {
+                                To = email.Trim(),
+                                Subject = $"تأكيد اعتماد حضور تدريب شركة: {sName} - {cName}",
+                                BodyHtml = EmailTemplateHelper.BuildCompanySessionEmail(trName, sName, cName, sDate, sTime, eTime, bName, "DirectApproval"),
+                                CandidateName = trName,
+                                UserCode = (string)(pt.UserCode ?? "--"),
+                                BranchName = bName,
+                                SessionOrWaveName = sName,
+                                SessionDate = sDate,
+                                StartTime = sTime,
+                                EndTime = eTime,
+                                CompanyName = cName,
+                                EventType = "DirectApproval"
+                            });
+                        }
+                    }
+
+                    if (messages.Any())
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try { await _rabbitMqProducer.EnqueueEmailsAsync(messages); } catch { }
+                        });
+                    }
+                }
+
+                await _hubContext.Clients.All.SendAsync("ReceiveNotification", "تم اعتماد وحضور جميع المتدربين المعلقين في الجلسة.");
+                return Json(new { success = true, count = updatedCount, message = $"تم اعتماد وقبول {updatedCount} متدرب معلق بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+
+        [HttpPost]
+        public async Task<IActionResult> ImportSessionTraineesFromExcel(int sessionId, Microsoft.AspNetCore.Http.IFormFile excelFile, bool bypassApproval = false, bool sendEmail = true)
         {
             if (excelFile == null || excelFile.Length == 0)
             {
@@ -1502,6 +1763,51 @@ namespace Exam.Controllers
                         "SELECT Id, FullName, UserCode, BranchName, Email, Phone FROM CompanyTrainees WHERE Id IN @Ids",
                         new { Ids = newTraineeIds })).ToList();
 
+                    // Asynchronous RabbitMQ Email Dispatch for imported trainees
+                    if (sendEmail && _rabbitMqProducer != null && bypassApproval)
+                    {
+                        string sName = (string)session.SessionName;
+                        string cName = (string)(session.CompanyName ?? "");
+                        string sDate = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd");
+                        string sTime = session.StartTime != null ? $"{((TimeSpan)session.StartTime):hh\\:mm}" : "09:00";
+                        string eTime = session.EndTime != null ? $"{((TimeSpan)session.EndTime):hh\\:mm}" : "12:00";
+
+                        var messages = new List<EmailNotificationMessage>();
+                        foreach (var tr in trainees)
+                        {
+                            string trEmail = (string)(tr.Email ?? "");
+                            string trName = (string)(tr.FullName ?? "");
+                            string trBranch = (string)(tr.BranchName ?? "الفرع");
+
+                            if (!string.IsNullOrWhiteSpace(trEmail) && trEmail.Contains("@"))
+                            {
+                                messages.Add(new EmailNotificationMessage
+                                {
+                                    To = trEmail.Trim(),
+                                    Subject = $"تأكيد التسجيل والاعتماد في جلسة تدريب: {sName} - {cName}",
+                                    BodyHtml = EmailTemplateHelper.BuildCompanySessionEmail(trName, sName, cName, sDate, sTime, eTime, trBranch, "ExcelImport"),
+                                    CandidateName = trName,
+                                    UserCode = (string)(tr.UserCode ?? "--"),
+                                    BranchName = trBranch,
+                                    SessionOrWaveName = sName,
+                                    SessionDate = sDate,
+                                    StartTime = sTime,
+                                    EndTime = eTime,
+                                    CompanyName = cName,
+                                    EventType = "ExcelImport"
+                                });
+                            }
+                        }
+
+                        if (messages.Any())
+                        {
+                            _ = Task.Run(async () =>
+                            {
+                                try { await _rabbitMqProducer.EnqueueEmailsAsync(messages); } catch { }
+                            });
+                        }
+                    }
+
                     var webhookPayload = new
                     {
                         @event = "company_session_assignment_excel",
@@ -1517,7 +1823,7 @@ namespace Exam.Controllers
                         bool n8nSent = false;
                         try { n8nSent = await _n8nService.TriggerCompanySessionNotificationAsync(webhookPayload); } catch { }
 
-                        if (!n8nSent && _emailSender != null)
+                        if (!n8nSent && !sendEmail && _emailSender != null)
                         {
                             foreach (var tr in trainees)
                             {
@@ -1564,18 +1870,55 @@ namespace Exam.Controllers
         // SESSION INJECTION RULES (قواعد الحقن والتوزيع الدوري حسب الأقسام)
         // ==========================================
 
-        [HttpGet]
-        public async Task<IActionResult> GetDepartmentsForInjection()
+        [HttpGet, HttpPost]
+        public async Task<IActionResult> GetDepartmentsForInjection([FromBody] BranchStaffFilterCountRequest? filter, string? branchIds = null, string? shiftIds = null, int? sessionId = null)
         {
             try
             {
                 using var conn = new SqlConnection(_connectionString);
-                var depts = (await conn.QueryAsync<dynamic>(@"
+
+                List<int>? targetBranchIds = filter?.BranchIds;
+                List<int>? targetShiftIds = filter?.ShiftIds;
+                int targetSessionId = filter?.SessionId ?? sessionId ?? 0;
+
+                if (targetBranchIds == null && !string.IsNullOrWhiteSpace(branchIds))
+                {
+                    targetBranchIds = branchIds.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                               .Select(s => int.TryParse(s, out var id) ? id : 0)
+                                               .Where(id => id > 0).ToList();
+                }
+
+                if (targetShiftIds == null && !string.IsNullOrWhiteSpace(shiftIds))
+                {
+                    targetShiftIds = shiftIds.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                             .Select(s => int.TryParse(s, out var id) ? id : 0)
+                                             .Where(id => id > 0).ToList();
+                }
+
+                bool hasBranches = targetBranchIds != null && targetBranchIds.Any();
+                bool hasShifts = targetShiftIds != null && targetShiftIds.Any();
+                string branchFilterSql = hasBranches ? "AND u.BranchId IN @BranchIds" : "";
+                string shiftFilterSql = hasShifts ? "AND (u.ShiftId IN @ShiftIds OR u.ShiftId IS NULL)" : "";
+
+                string sql = $@"
                     SELECT d.Id, d.Name, ISNULL(d.Code, '') AS Code,
-                           (SELECT COUNT(*) FROM AspNetUsers u WHERE u.DepartmentId = d.Id AND u.IsActive = 1) AS ActiveStaffCount
+                           (SELECT COUNT(*) FROM AspNetUsers u 
+                            WHERE u.DepartmentId = d.Id 
+                              AND u.IsActive = 1
+                              {branchFilterSql}
+                              {shiftFilterSql}
+                              AND (@SessionId = 0 OR NOT EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees cur WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id))
+                           ) AS ActiveStaffCount
                     FROM Departments d
                     WHERE d.IsActive = 1 OR d.IsActive IS NULL
-                    ORDER BY d.Name")).ToList();
+                    ORDER BY d.Name";
+
+                var depts = (await conn.QueryAsync<dynamic>(sql, new
+                {
+                    BranchIds = targetBranchIds,
+                    ShiftIds = targetShiftIds,
+                    SessionId = targetSessionId
+                })).ToList();
 
                 var result = depts.Select(d => {
                     var dict = (IDictionary<string, object>)d;
@@ -1615,9 +1958,14 @@ namespace Exam.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> SaveCompanyInjectionRule(int? id, int? companyId, string ruleName, string quotasJson)
+        public async Task<IActionResult> SaveCompanyInjectionRule([FromBody] SaveCompanyInjectionRuleRequest? body, int? id, int? companyId, string? ruleName, string? quotasJson)
         {
-            if (string.IsNullOrWhiteSpace(ruleName) || string.IsNullOrWhiteSpace(quotasJson))
+            int? targetId = body?.Id ?? id;
+            int? targetCompanyId = body?.CompanyId ?? companyId;
+            string? targetRuleName = body?.RuleName ?? ruleName;
+            string? targetQuotasJson = body?.DepartmentQuotasJson ?? body?.QuotasJson ?? quotasJson;
+
+            if (string.IsNullOrWhiteSpace(targetRuleName) || string.IsNullOrWhiteSpace(targetQuotasJson))
             {
                 return Json(new { success = false, message = "اسم القاعدة وتوزيع الكوتة مطلوبان." });
             }
@@ -1625,13 +1973,13 @@ namespace Exam.Controllers
             try
             {
                 using var conn = new SqlConnection(_connectionString);
-                if (!id.HasValue || id.Value <= 0)
+                if (!targetId.HasValue || targetId.Value <= 0)
                 {
                     await conn.ExecuteAsync(@"
                         INSERT INTO CompanyInjectionRules (CompanyId, RuleName, DepartmentQuotasJson, CreatedAt, UpdatedAt)
                         VALUES (@CompanyId, @RuleName, @QuotasJson, GETDATE(), GETDATE())",
-                        new { CompanyId = companyId, RuleName = ruleName.Trim(), QuotasJson = quotasJson });
-                    return Json(new { success = true, message = "تم حفظ قاعدة التوزيع كقالب بنجاح." });
+                        new { CompanyId = targetCompanyId, RuleName = targetRuleName.Trim(), QuotasJson = targetQuotasJson });
+                    return Json(new { success = true, message = "تم حفظ قالب التوزيع بنجاح ويمكنك استخدامه في أي جلسة قادمة." });
                 }
                 else
                 {
@@ -1639,8 +1987,8 @@ namespace Exam.Controllers
                         UPDATE CompanyInjectionRules 
                         SET RuleName = @RuleName, DepartmentQuotasJson = @QuotasJson, UpdatedAt = GETDATE()
                         WHERE Id = @Id",
-                        new { Id = id.Value, RuleName = ruleName.Trim(), QuotasJson = quotasJson });
-                    return Json(new { success = true, message = "تم تحديث قاعدة التوزيع بنجاح." });
+                        new { Id = targetId.Value, RuleName = targetRuleName.Trim(), QuotasJson = targetQuotasJson });
+                    return Json(new { success = true, message = "تم تحديث قالب التوزيع بنجاح." });
                 }
             }
             catch (Exception ex)
@@ -1650,13 +1998,189 @@ namespace Exam.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> DeleteCompanyInjectionRule(int id)
+        public async Task<IActionResult> DeleteCompanyInjectionRule(int? id, int? ruleId)
+        {
+            try
+            {
+                var targetId = id ?? ruleId ?? 0;
+                if (targetId <= 0)
+                {
+                    return Json(new { success = false, message = "معرف القالب غير صالح." });
+                }
+
+                using var conn = new SqlConnection(_connectionString);
+                await conn.ExecuteAsync("DELETE FROM CompanyInjectionRules WHERE Id = @Id", new { Id = targetId });
+                return Json(new { success = true, message = "تم حذف قالب التوزيع بنجاح." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        private static string FormatShiftTimeSpan(TimeSpan? time)
+        {
+            if (!time.HasValue) return "";
+            var ts = time.Value;
+            int hour24 = ts.Hours;
+            int minute = ts.Minutes;
+            string period = hour24 >= 12 ? "م" : "ص";
+            int hour12 = hour24 % 12;
+            if (hour12 == 0) hour12 = 12;
+            return $"{hour12:D2}:{minute:D2} {period}";
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetBranchStaffMetadataForInjection(int? sessionId)
         {
             try
             {
                 using var conn = new SqlConnection(_connectionString);
-                await conn.ExecuteAsync("DELETE FROM CompanyInjectionRules WHERE Id = @Id", new { Id = id });
-                return Json(new { success = true, message = "تم حذف قاعدة التوزيع." });
+
+                var branches = (await conn.QueryAsync<dynamic>(@"
+                    SELECT b.Id, b.BranchName,
+                           COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 THEN u.Id END) AS PharmacistCount,
+                           COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%' OR r.Name LIKE '%assistant%' OR r.Name LIKE N'%مساعد%') 
+                                                AND NOT (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') 
+                                                AND u.IsActive = 1 THEN u.Id END) AS AssistantCount,
+                           COUNT(DISTINCT CASE WHEN u.IsActive = 1 THEN u.Id END) AS TotalStaffCount
+                    FROM Branches b WITH (NOLOCK)
+                    LEFT JOIN AspNetUsers u WITH (NOLOCK) ON u.BranchId = b.Id
+                    LEFT JOIN AspNetUserRoles ur WITH (NOLOCK) ON ur.UserId = u.Id
+                    LEFT JOIN AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id
+                    WHERE b.IsActive = 1 OR b.IsActive IS NULL
+                    GROUP BY b.Id, b.BranchName
+                    ORDER BY b.BranchName")).ToList();
+
+                var shiftsData = (await conn.QueryAsync<dynamic>(@"
+                    SELECT s.Id, s.ShiftName, s.StartTime, s.EndTime,
+                           MAX(sg.Id) AS GroupId,
+                           MAX(sg.GroupName) AS GroupName,
+                           MAX(sg.ColorCode) AS GroupColor,
+                           COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 THEN u.Id END) AS PharmacistCount,
+                           COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%' OR r.Name LIKE '%assistant%' OR r.Name LIKE N'%مساعد%') 
+                                                AND NOT (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') 
+                                                AND u.IsActive = 1 THEN u.Id END) AS AssistantCount,
+                           COUNT(DISTINCT CASE WHEN u.IsActive = 1 THEN u.Id END) AS TotalStaffCount
+                    FROM Shifts s WITH (NOLOCK)
+                    LEFT JOIN ShiftGroupItems sgi WITH (NOLOCK) ON s.Id = sgi.ShiftId
+                    LEFT JOIN ShiftGroups sg WITH (NOLOCK) ON sgi.GroupId = sg.Id
+                    LEFT JOIN AspNetUsers u WITH (NOLOCK) ON u.ShiftId = s.Id
+                    LEFT JOIN AspNetUserRoles ur WITH (NOLOCK) ON ur.UserId = u.Id
+                    LEFT JOIN AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id
+                    GROUP BY s.Id, s.ShiftName, s.StartTime, s.EndTime
+                    ORDER BY s.ShiftName")).ToList();
+
+                var shiftGroups = (await conn.QueryAsync<dynamic>(@"
+                    SELECT sg.Id, sg.GroupName, sg.Description, sg.ColorCode,
+                           COUNT(sgi.ShiftId) AS ShiftsCount
+                    FROM ShiftGroups sg WITH (NOLOCK)
+                    LEFT JOIN ShiftGroupItems sgi WITH (NOLOCK) ON sg.Id = sgi.GroupId
+                    GROUP BY sg.Id, sg.GroupName, sg.Description, sg.ColorCode
+                    ORDER BY sg.Id")).ToList();
+
+                var shifts = shiftsData.Select(s => {
+                    var dict = (IDictionary<string, object>)s;
+                    int id = Convert.ToInt32(dict["Id"]);
+                    string name = dict["ShiftName"]?.ToString() ?? "Shift";
+                    TimeSpan? st = dict["StartTime"] is TimeSpan ts1 ? ts1 : null;
+                    TimeSpan? et = dict["EndTime"] is TimeSpan ts2 ? ts2 : null;
+                    string timeFormatted = "";
+                    if (st.HasValue && et.HasValue)
+                    {
+                        double hours = (et.Value - st.Value).TotalHours;
+                        if (hours <= 0) hours += 24;
+                        timeFormatted = $"من {FormatShiftTimeSpan(st)} إلى {FormatShiftTimeSpan(et)} ({hours:0.#} س)";
+                    }
+
+                    int pCount = dict.ContainsKey("PharmacistCount") && dict["PharmacistCount"] != null ? Convert.ToInt32(dict["PharmacistCount"]) : 0;
+                    int aCount = dict.ContainsKey("AssistantCount") && dict["AssistantCount"] != null ? Convert.ToInt32(dict["AssistantCount"]) : 0;
+
+                    int? gId = dict.ContainsKey("GroupId") && dict["GroupId"] != null ? Convert.ToInt32(dict["GroupId"]) : (int?)null;
+                    string gName = dict.ContainsKey("GroupName") && dict["GroupName"] != null ? dict["GroupName"].ToString() : null;
+                    string gColor = dict.ContainsKey("GroupColor") && dict["GroupColor"] != null ? dict["GroupColor"].ToString() : "#7C3AED";
+
+                    return new {
+                        id = id,
+                        shiftName = name,
+                        timeFormatted = timeFormatted,
+                        startTime = st?.ToString(@"hh\:mm"),
+                        endTime = et?.ToString(@"hh\:mm"),
+                        pharmacistCount = pCount,
+                        assistantCount = aCount,
+                        totalStaffCount = pCount + aCount,
+                        groupId = gId,
+                        groupName = gName,
+                        groupColor = gColor
+                    };
+                }).ToList();
+
+                var totalCounts = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT 
+                        COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 THEN u.Id END) AS TotalPharmacists,
+                        COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%' OR r.Name LIKE '%assistant%' OR r.Name LIKE N'%مساعد%') 
+                                            AND NOT (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') 
+                                            AND u.IsActive = 1 THEN u.Id END) AS TotalAssistants
+                    FROM AspNetUsers u WITH (NOLOCK)
+                    LEFT JOIN AspNetUserRoles ur WITH (NOLOCK) ON ur.UserId = u.Id
+                    LEFT JOIN AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id
+                    WHERE u.IsActive = 1");
+
+                return Json(new
+                {
+                    success = true,
+                    branches = branches,
+                    shifts = shifts,
+                    shiftGroups = shiftGroups,
+                    totalPharmacists = (int)(totalCounts?.TotalPharmacists ?? 0),
+                    totalAssistants = (int)(totalCounts?.TotalAssistants ?? 0)
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> GetAvailableBranchStaffCounts([FromBody] BranchStaffFilterCountRequest req)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                bool hasBranches = req?.BranchIds != null && req.BranchIds.Any();
+                bool hasShifts = req?.ShiftIds != null && req.ShiftIds.Any();
+                int sessionId = req?.SessionId ?? 0;
+
+                string branchFilterSql = hasBranches ? "AND u.BranchId IN @BranchIds" : "";
+                string shiftFilterSql = hasShifts ? "AND u.ShiftId IN @ShiftIds" : "";
+
+                string sql = $@"
+                    SELECT 
+                        COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') THEN u.Id END) AS AvailablePharmacists,
+                        COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%' OR r.Name LIKE '%assistant%' OR r.Name LIKE N'%مساعد%') 
+                                            AND NOT (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') THEN u.Id END) AS AvailableAssistants
+                    FROM AspNetUsers u WITH (NOLOCK)
+                    LEFT JOIN AspNetUserRoles ur WITH (NOLOCK) ON ur.UserId = u.Id
+                    LEFT JOIN AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id
+                    WHERE u.IsActive = 1
+                      {branchFilterSql}
+                      {shiftFilterSql}
+                      AND (@SessionId = 0 OR NOT EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees cur WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id))";
+
+                var counts = await conn.QueryFirstOrDefaultAsync<dynamic>(sql, new
+                {
+                    BranchIds = req?.BranchIds,
+                    ShiftIds = req?.ShiftIds,
+                    SessionId = sessionId
+                });
+
+                return Json(new
+                {
+                    success = true,
+                    availablePharmacists = (int)(counts?.AvailablePharmacists ?? 0),
+                    availableAssistants = (int)(counts?.AvailableAssistants ?? 0)
+                });
             }
             catch (Exception ex)
             {
@@ -1667,9 +2191,12 @@ namespace Exam.Controllers
         [HttpPost]
         public async Task<IActionResult> PreviewInjectionRule([FromBody] InjectionRulePreviewRequest req)
         {
-            if (req == null || req.SessionId <= 0 || req.DepartmentQuotas == null || !req.DepartmentQuotas.Any(q => q.Quota > 0))
+            bool hasDeptQuotas = req?.DepartmentQuotas != null && req.DepartmentQuotas.Any(q => q.Quota > 0);
+            bool hasBranchStaffQuotas = (req?.PharmacistQuota > 0) || (req?.AssistantQuota > 0);
+
+            if (req == null || req.SessionId <= 0 || (!hasDeptQuotas && !hasBranchStaffQuotas))
             {
-                return Json(new { success = false, message = "يرجى تحديد حصة لواحد أو أكثر من الأقسام." });
+                return Json(new { success = false, message = "يرجى تحديد حصة عددية للصيادلة أو المساعدين أو الأقسام." });
             }
 
             try
@@ -1677,35 +2204,164 @@ namespace Exam.Controllers
                 using var conn = new SqlConnection(_connectionString);
                 var previewList = new List<InjectionCandidatePreviewDto>();
 
-                foreach (var dq in req.DepartmentQuotas.Where(q => q.Quota > 0))
+                bool hasBranches = req.BranchIds != null && req.BranchIds.Any();
+                bool hasShifts = req.ShiftIds != null && req.ShiftIds.Any();
+                string branchFilterSql = hasBranches ? "AND u.BranchId IN @BranchIds" : "";
+                string shiftFilterSql = hasShifts ? "AND u.ShiftId IN @ShiftIds" : "";
+                string deptShiftFilterSql = hasShifts ? "AND (u.ShiftId IN @ShiftIds OR u.ShiftId IS NULL)" : "";
+
+                // 1. Pharmacists Quota
+                if (req.PharmacistQuota > 0)
                 {
-                    var candidates = (await conn.QueryAsync<InjectionCandidatePreviewDto>(@"
+                    string pharmSql = $@"
                         SELECT 
                             CONCAT('U_', u.Id) AS CandidateKey,
                             u.Id AS UserId,
                             ISNULL(u.FullName, u.UserName) AS FullName,
                             ISNULL(u.UserCode, '--') AS UserCode,
-                            ISNULL(u.UserRoleCustom, 'Trainee') AS JobTitle,
+                            N'صيدلي' AS JobTitle,
                             ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
-                            @DeptId AS DepartmentId,
-                            @DeptName AS DepartmentName,
+                            ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                            0 AS DepartmentId,
+                            N'طاقم الفروع (صيادلة)' AS DepartmentName,
                             (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
                             (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
                             1 AS IsSelected
                         FROM AspNetUsers u WITH (NOLOCK)
                         LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
-                        WHERE u.DepartmentId = @DeptId
-                          AND u.IsActive = 1
+                        LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                        WHERE u.IsActive = 1
+                          AND (
+                              LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' 
+                              OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%'
+                              OR EXISTS (
+                                  SELECT 1 FROM AspNetUserRoles ur 
+                                  JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                  WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                              )
+                          )
+                          {branchFilterSql}
+                          {shiftFilterSql}
                           AND NOT EXISTS (
                               SELECT 1 FROM dbo.CompanySessionTrainees cur 
                               WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
                           )
-                        ORDER BY PreviousAttendedCount ASC, LastAttendedDate ASC, u.CreatedAt ASC",
-                        new { DeptId = dq.DepartmentId, DeptName = dq.DepartmentName, SessionId = req.SessionId }))
-                        .Take(dq.Quota)
-                        .ToList();
+                        ORDER BY PreviousAttendedCount ASC, LastAttendedDate ASC, u.CreatedAt ASC";
 
-                    previewList.AddRange(candidates);
+                    var pharmCandidates = (await conn.QueryAsync<InjectionCandidatePreviewDto>(pharmSql, new
+                    {
+                        SessionId = req.SessionId,
+                        BranchIds = req.BranchIds,
+                        ShiftIds = req.ShiftIds
+                    })).Take(req.PharmacistQuota).ToList();
+
+                    previewList.AddRange(pharmCandidates);
+                }
+
+                // 2. Assistants Quota
+                if (req.AssistantQuota > 0)
+                {
+                    var alreadySelectedUserIds = previewList.Select(p => p.UserId).ToList();
+                    string assistSql = $@"
+                        SELECT 
+                            CONCAT('U_', u.Id) AS CandidateKey,
+                            u.Id AS UserId,
+                            ISNULL(u.FullName, u.UserName) AS FullName,
+                            ISNULL(u.UserCode, '--') AS UserCode,
+                            N'مساعد صيدلي' AS JobTitle,
+                            ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                            ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                            0 AS DepartmentId,
+                            N'طاقم الفروع (مساعدين)' AS DepartmentName,
+                            (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
+                            (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
+                            1 AS IsSelected
+                        FROM AspNetUsers u WITH (NOLOCK)
+                        LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                        LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                        WHERE u.IsActive = 1
+                          AND (
+                              LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' 
+                              OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%'
+                              OR EXISTS (
+                                  SELECT 1 FROM AspNetUserRoles ur 
+                                  JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                  WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
+                              )
+                          )
+                          AND NOT (
+                              LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' 
+                              OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%'
+                              OR EXISTS (
+                                  SELECT 1 FROM AspNetUserRoles ur 
+                                  JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                  WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                              )
+                          )
+                          {branchFilterSql}
+                          {shiftFilterSql}
+                          AND NOT EXISTS (
+                              SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                              WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                          )
+                        ORDER BY PreviousAttendedCount ASC, LastAttendedDate ASC, u.CreatedAt ASC";
+
+                    var assistCandidates = (await conn.QueryAsync<InjectionCandidatePreviewDto>(assistSql, new
+                    {
+                        SessionId = req.SessionId,
+                        BranchIds = req.BranchIds,
+                        ShiftIds = req.ShiftIds
+                    })).Where(c => !alreadySelectedUserIds.Contains(c.UserId)).Take(req.AssistantQuota).ToList();
+
+                    previewList.AddRange(assistCandidates);
+                }
+
+                // 3. Department Quotas
+                if (hasDeptQuotas && req.DepartmentQuotas != null)
+                {
+                    var alreadySelectedUserIds = previewList.Select(p => p.UserId).ToList();
+
+                    foreach (var dq in req.DepartmentQuotas.Where(q => q.Quota > 0))
+                    {
+                        var candidates = (await conn.QueryAsync<InjectionCandidatePreviewDto>($@"
+                            SELECT 
+                                CONCAT('U_', u.Id) AS CandidateKey,
+                                u.Id AS UserId,
+                                ISNULL(u.FullName, u.UserName) AS FullName,
+                                ISNULL(u.UserCode, '--') AS UserCode,
+                                ISNULL(u.UserRoleCustom, 'Trainee') AS JobTitle,
+                                ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                                ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                                @DeptId AS DepartmentId,
+                                @DeptName AS DepartmentName,
+                                (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
+                                (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
+                                1 AS IsSelected
+                            FROM AspNetUsers u WITH (NOLOCK)
+                            LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                            LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                            WHERE u.DepartmentId = @DeptId
+                              AND u.IsActive = 1
+                              {branchFilterSql}
+                              {deptShiftFilterSql}
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                  WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                              )
+                            ORDER BY PreviousAttendedCount ASC, LastAttendedDate ASC, u.CreatedAt ASC",
+                            new { 
+                                DeptId = dq.DepartmentId, 
+                                DeptName = dq.DepartmentName, 
+                                SessionId = req.SessionId,
+                                BranchIds = req.BranchIds,
+                                ShiftIds = req.ShiftIds
+                            }))
+                            .Where(c => !alreadySelectedUserIds.Contains(c.UserId))
+                            .Take(dq.Quota)
+                            .ToList();
+
+                        previewList.AddRange(candidates);
+                    }
                 }
 
                 return Json(new
@@ -1752,15 +2408,40 @@ namespace Exam.Controllers
                         else userIdsToInject.Add(key);
                     }
                 }
-                else if (req.DepartmentQuotas != null && req.DepartmentQuotas.Any(q => q.Quota > 0))
+                else if (req.UserIds != null && req.UserIds.Any())
                 {
-                    foreach (var dq in req.DepartmentQuotas.Where(q => q.Quota > 0))
+                    foreach (var u in req.UserIds)
                     {
-                        var uids = (await conn.QueryAsync<string>(@"
+                        if (u.StartsWith("U_")) userIdsToInject.Add(u.Substring(2));
+                        else userIdsToInject.Add(u);
+                    }
+                }
+                else
+                {
+                    // Direct execution based on quotas
+                    bool hasBranches = req.BranchIds != null && req.BranchIds.Any();
+                    bool hasShifts = req.ShiftIds != null && req.ShiftIds.Any();
+                    string branchFilterSql = hasBranches ? "AND u.BranchId IN @BranchIds" : "";
+                    string shiftFilterSql = hasShifts ? "AND u.ShiftId IN @ShiftIds" : "";
+                    string deptShiftFilterSql = hasShifts ? "AND (u.ShiftId IN @ShiftIds OR u.ShiftId IS NULL)" : "";
+
+                    if (req.PharmacistQuota > 0)
+                    {
+                        var uids = (await conn.QueryAsync<string>($@"
                             SELECT u.Id
                             FROM AspNetUsers u WITH (NOLOCK)
-                            WHERE u.DepartmentId = @DeptId
-                              AND u.IsActive = 1
+                            WHERE u.IsActive = 1
+                              AND (
+                                  LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' 
+                                  OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%'
+                                  OR EXISTS (
+                                      SELECT 1 FROM AspNetUserRoles ur 
+                                      JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                      WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                  )
+                              )
+                              {branchFilterSql}
+                              {shiftFilterSql}
                               AND NOT EXISTS (
                                   SELECT 1 FROM dbo.CompanySessionTrainees cur 
                                   WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
@@ -1769,17 +2450,92 @@ namespace Exam.Controllers
                                 (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
                                 (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
                                 u.CreatedAt ASC",
-                            new { DeptId = dq.DepartmentId, SessionId = req.SessionId }))
-                            .Take(dq.Quota)
+                            new { SessionId = req.SessionId, BranchIds = req.BranchIds, ShiftIds = req.ShiftIds }))
+                            .Take(req.PharmacistQuota)
                             .ToList();
 
                         userIdsToInject.AddRange(uids);
+                    }
+
+                    if (req.AssistantQuota > 0)
+                    {
+                        var uids = (await conn.QueryAsync<string>($@"
+                            SELECT u.Id
+                            FROM AspNetUsers u WITH (NOLOCK)
+                            WHERE u.IsActive = 1
+                              AND (
+                                  LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' 
+                                  OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%'
+                                  OR EXISTS (
+                                      SELECT 1 FROM AspNetUserRoles ur 
+                                      JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                      WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
+                                  )
+                              )
+                              AND NOT (
+                                  LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' 
+                                  OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%'
+                                  OR EXISTS (
+                                      SELECT 1 FROM AspNetUserRoles ur 
+                                      JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                      WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                  )
+                              )
+                              {branchFilterSql}
+                              {shiftFilterSql}
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                  WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                              )
+                            ORDER BY 
+                                (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                u.CreatedAt ASC",
+                            new { SessionId = req.SessionId, BranchIds = req.BranchIds, ShiftIds = req.ShiftIds }))
+                            .Where(id => !userIdsToInject.Contains(id))
+                            .Take(req.AssistantQuota)
+                            .ToList();
+
+                        userIdsToInject.AddRange(uids);
+                    }
+
+                    if (req.DepartmentQuotas != null && req.DepartmentQuotas.Any(q => q.Quota > 0))
+                    {
+                        foreach (var dq in req.DepartmentQuotas.Where(q => q.Quota > 0))
+                        {
+                            var uids = (await conn.QueryAsync<string>($@"
+                                SELECT u.Id
+                                FROM AspNetUsers u WITH (NOLOCK)
+                                WHERE u.DepartmentId = @DeptId
+                                  AND u.IsActive = 1
+                                  {branchFilterSql}
+                                  {deptShiftFilterSql}
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                      WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                                  )
+                                ORDER BY 
+                                    (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                    (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                    u.CreatedAt ASC",
+                                new { 
+                                    DeptId = dq.DepartmentId, 
+                                    SessionId = req.SessionId,
+                                    BranchIds = req.BranchIds,
+                                    ShiftIds = req.ShiftIds
+                                }))
+                                .Where(id => !userIdsToInject.Contains(id))
+                                .Take(dq.Quota)
+                                .ToList();
+
+                            userIdsToInject.AddRange(uids);
+                        }
                     }
                 }
 
                 if (!userIdsToInject.Any())
                 {
-                    return Json(new { success = false, message = "لم يتم العثور على موظفين مؤهلين للحقن في هذه الأقسام." });
+                    return Json(new { success = false, message = "لم يتم العثور على موظفين مؤهلين للحقن وفق الشروط والكوتة المحددة." });
                 }
 
                 var assignedBy = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -1866,6 +2622,51 @@ namespace Exam.Controllers
                     }
                 }
 
+                // Asynchronous RabbitMQ Email Dispatch for Fair Rotation injected trainees
+                if (req.SendEmail && _rabbitMqProducer != null && injectedPayloads.Any())
+                {
+                    string sName = (string)session.SessionName;
+                    string cName = (string)(session.CompanyName ?? "");
+                    string sDate = ((DateTime)session.SessionDate).ToString("yyyy-MM-dd");
+                    string sTime = session.StartTime != null ? $"{((TimeSpan)session.StartTime):hh\\:mm}" : "09:00";
+                    string eTime = session.EndTime != null ? $"{((TimeSpan)session.EndTime):hh\\:mm}" : "12:00";
+
+                    var messages = new List<EmailNotificationMessage>();
+                    foreach (var tr in injectedPayloads)
+                    {
+                        string trEmail = (string)(tr.email ?? "");
+                        string trName = (string)(tr.fullName ?? "");
+                        string trBranch = (string)(tr.branchName ?? "الفرع");
+
+                        if (!string.IsNullOrWhiteSpace(trEmail) && trEmail.Contains("@"))
+                        {
+                            messages.Add(new EmailNotificationMessage
+                            {
+                                To = trEmail.Trim(),
+                                Subject = $"تأكيد الترشيح والاعتماد في جلسة تدريب: {sName} - {cName}",
+                                BodyHtml = EmailTemplateHelper.BuildCompanySessionEmail(trName, sName, cName, sDate, sTime, eTime, trBranch, "FairRotationInjection"),
+                                CandidateName = trName,
+                                UserCode = (string)(tr.userCode ?? "--"),
+                                BranchName = trBranch,
+                                SessionOrWaveName = sName,
+                                SessionDate = sDate,
+                                StartTime = sTime,
+                                EndTime = eTime,
+                                CompanyName = cName,
+                                EventType = "FairRotationInjection"
+                            });
+                        }
+                    }
+
+                    if (messages.Any())
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try { await _rabbitMqProducer.EnqueueEmailsAsync(messages); } catch { }
+                        });
+                    }
+                }
+
                 if (req.SendN8nWebhook && injectedPayloads.Any())
                 {
                     var webhookPayload = new
@@ -1896,6 +2697,227 @@ namespace Exam.Controllers
                 return Json(new { success = false, message = "خطأ أثناء تنفيذ قاعدة الحقن: " + ex.Message });
             }
         }
+
+        [HttpPost]
+        public async Task<IActionResult> ExportInjectionPreviewExcel([FromBody] ExportInjectionPreviewRequest req)
+        {
+            if (req == null || req.Candidates == null || !req.Candidates.Any())
+            {
+                return BadRequest(new { success = false, message = "لا توجد بيانات مرشحين للتصدير." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var session = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT S.Id, S.SessionName, S.SessionDate, S.StartTime, S.EndTime, S.CompanyId, C.Name AS CompanyName
+                    FROM AttendanceSessions S
+                    LEFT JOIN Companies C ON S.CompanyId = C.Id
+                    WHERE S.Id = @Id", new { Id = req.SessionId });
+
+                string sessionName = (string)(session?.SessionName ?? "جلسة تدريب");
+                string companyName = (string)(session?.CompanyName ?? "شركة التدريب");
+                DateTime sessionDate = session?.SessionDate != null ? (DateTime)session.SessionDate : DateTime.Today;
+                string startTimeStr = session?.StartTime != null ? FormatShiftTimeSpan((TimeSpan)session.StartTime) : "--";
+                string endTimeStr = session?.EndTime != null ? FormatShiftTimeSpan((TimeSpan)session.EndTime) : "--";
+
+                using var workbook = new XLWorkbook();
+                var worksheet = workbook.Worksheets.Add("كشف ترشيحات الحضور");
+                worksheet.RightToLeft = true;
+                worksheet.ShowGridLines = true;
+                worksheet.PageSetup.PageOrientation = XLPageOrientation.Landscape;
+
+                // 1. Header Banner (Rows 1-2)
+                var titleRange = worksheet.Range("A1:K2");
+                titleRange.Merge();
+                titleRange.Value = "أكاديمية الطرشوبي للتدريب والتطوير — كشف ترشيحات الحضور والتحضير الفعلي (Fair Rotation)";
+                titleRange.Style.Font.Bold = true;
+                titleRange.Style.Font.FontSize = 14;
+                titleRange.Style.Font.FontColor = XLColor.White;
+                titleRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#58111A"); // Deep Luxury Maroon (نبيتي ملكي داكن)
+                titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                titleRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                // 2. Session Info Block (Rows 3-4)
+                worksheet.Cell("A3").Value = "اسم الشركة الراعية:";
+                worksheet.Cell("B3").Value = companyName;
+                worksheet.Cell("D3").Value = "اسم الجلسة / المحاضرة:";
+                worksheet.Cell("E3").Value = sessionName;
+                worksheet.Cell("G3").Value = "تاريخ وموعد الجلسة:";
+                worksheet.Cell("H3").Value = $"{sessionDate:yyyy-MM-dd} (من {startTimeStr} إلى {endTimeStr})";
+
+                worksheet.Cell("A4").Value = "إجمالي المرشحين:";
+                worksheet.Cell("B4").Value = $"{req.Candidates.Count} متدرب مرشح";
+                worksheet.Cell("D4").Value = "تاريخ استخراج الكشف:";
+                worksheet.Cell("E4").Value = $"{DateTime.Now:yyyy-MM-dd hh:mm tt}";
+                worksheet.Cell("G4").Value = "نظام التوزيع:";
+                worksheet.Cell("H4").Value = "التوزيع العادل التناوبي (الأقل حضوراً أولاً)";
+
+                var infoRange = worksheet.Range("A3:K4");
+                infoRange.Style.Font.FontSize = 10;
+                infoRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#FFF1F2"); // Soft Rose Tint
+                infoRange.Style.Font.FontName = "Calibri";
+                worksheet.Range("A3:A4").Style.Font.Bold = true;
+                worksheet.Range("D3:D4").Style.Font.Bold = true;
+                worksheet.Range("G3:G4").Style.Font.Bold = true;
+
+                // 3. Table Headers (Row 6)
+                int headerRow = 6;
+                worksheet.Row(headerRow).Height = 28;
+                var headers = new (string text, int col)[]
+                {
+                    ("م", 1),
+                    ("كود الموظف", 2),
+                    ("اسم المتدرب / الموظف", 3),
+                    ("المسمى الوظيفي / الدور", 4),
+                    ("القسم الإداري", 5),
+                    ("الفرع", 6),
+                    ("الشيفت", 7),
+                    ("مرات الحضور السابقة", 8),
+                    ("أولوية الاختيار", 9),
+                    ("حالة التحضير الفعلي", 10),
+                    ("توقيع المتدرب", 11)
+                };
+
+                foreach (var h in headers)
+                {
+                    var cell = worksheet.Cell(headerRow, h.col);
+                    cell.Value = h.text;
+                }
+
+                var headerRange = worksheet.Range(headerRow, 1, headerRow, 11);
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Font.FontSize = 11;
+                headerRange.Style.Font.FontColor = XLColor.White;
+                headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#800020"); // Classic Burgundy / Maroon (لون نبيتي فخم)
+                headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                headerRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                // 4. Data Rows
+                int currentRow = 7;
+                int seq = 1;
+                foreach (var c in req.Candidates)
+                {
+                    worksheet.Row(currentRow).Height = 24;
+                    bool isEven = seq % 2 == 0;
+                    var rowBg = isEven ? XLColor.FromHtml("#FFF5F6") : XLColor.White;
+
+                    worksheet.Cell(currentRow, 1).SetValue(seq);
+                    worksheet.Cell(currentRow, 2).SetValue(c.UserCode ?? "--");
+                    worksheet.Cell(currentRow, 3).SetValue(c.FullName ?? "--");
+                    worksheet.Cell(currentRow, 4).SetValue(c.JobTitle ?? "--");
+                    worksheet.Cell(currentRow, 5).SetValue(c.DepartmentName ?? "--");
+                    worksheet.Cell(currentRow, 6).SetValue(c.BranchName ?? "بدون فرع");
+                    worksheet.Cell(currentRow, 7).SetValue(c.ShiftName ?? "غير محدد");
+                    worksheet.Cell(currentRow, 8).SetValue(c.PreviousAttendedCount);
+
+                    var priorityCell = worksheet.Cell(currentRow, 9);
+                    if (c.PreviousAttendedCount == 0)
+                    {
+                        priorityCell.Value = "⭐ أولوية أولى (لم يحضر مسبقاً)";
+                        priorityCell.Style.Fill.BackgroundColor = XLColor.FromHtml("#DCFCE7"); // Soft Emerald
+                        priorityCell.Style.Font.FontColor = XLColor.FromHtml("#15803D"); // Dark Green
+                        priorityCell.Style.Font.Bold = true;
+                    }
+                    else
+                    {
+                        priorityCell.Value = $"حضر {c.PreviousAttendedCount} دورة سابقة";
+                        priorityCell.Style.Fill.BackgroundColor = XLColor.FromHtml("#F1F5F9"); // Slate light
+                        priorityCell.Style.Font.FontColor = XLColor.FromHtml("#475569");
+                    }
+
+                    // Attendance check box for printing/marking on site
+                    var statusCell = worksheet.Cell(currentRow, 10);
+                    statusCell.Value = "[   ] حاضر        [   ] غائب";
+                    statusCell.Style.Font.FontColor = XLColor.FromHtml("#64748B");
+
+                    // Signature space
+                    worksheet.Cell(currentRow, 11).Value = "";
+
+                    // Row style
+                    for (int col = 1; col <= 11; col++)
+                    {
+                        var cell = worksheet.Cell(currentRow, col);
+                        if (col != 9) cell.Style.Fill.BackgroundColor = rowBg;
+                        cell.Style.Border.TopBorder = XLBorderStyleValues.Thin;
+                        cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+                        cell.Style.Border.LeftBorder = XLBorderStyleValues.Thin;
+                        cell.Style.Border.RightBorder = XLBorderStyleValues.Thin;
+                        cell.Style.Border.TopBorderColor = XLColor.FromHtml("#E2E8F0");
+                        cell.Style.Border.BottomBorderColor = XLColor.FromHtml("#E2E8F0");
+                        cell.Style.Border.LeftBorderColor = XLColor.FromHtml("#E2E8F0");
+                        cell.Style.Border.RightBorderColor = XLColor.FromHtml("#E2E8F0");
+                        cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    }
+
+                    worksheet.Cell(currentRow, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(currentRow, 2).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(currentRow, 3).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                    worksheet.Cell(currentRow, 3).Style.Font.Bold = true;
+                    worksheet.Cell(currentRow, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(currentRow, 5).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(currentRow, 6).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(currentRow, 7).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(currentRow, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(currentRow, 9).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    worksheet.Cell(currentRow, 10).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                    currentRow++;
+                    seq++;
+                }
+
+                // Summary Total Row (Clean cell-by-cell borders to prevent Excel OpenXML corruption)
+                worksheet.Row(currentRow).Height = 26;
+                worksheet.Cell(currentRow, 1).SetValue("المجموع");
+                worksheet.Cell(currentRow, 3).SetValue($"إجمالي المرشحين بالكشف: {req.Candidates.Count} متدرب");
+                for (int col = 1; col <= 11; col++)
+                {
+                    var cell = worksheet.Cell(currentRow, col);
+                    cell.Style.Font.Bold = true;
+                    cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#FFE4E6"); // Soft Maroon/Rose tint
+                    cell.Style.Border.TopBorder = XLBorderStyleValues.Medium;
+                    cell.Style.Border.BottomBorder = XLBorderStyleValues.Medium;
+                    cell.Style.Border.LeftBorder = XLBorderStyleValues.Medium;
+                    cell.Style.Border.RightBorder = XLBorderStyleValues.Medium;
+                    cell.Style.Border.TopBorderColor = XLColor.FromHtml("#800020"); // Maroon Border
+                    cell.Style.Border.BottomBorderColor = XLColor.FromHtml("#800020");
+                    cell.Style.Border.LeftBorderColor = XLColor.FromHtml("#800020");
+                    cell.Style.Border.RightBorderColor = XLColor.FromHtml("#800020");
+                    cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                }
+                worksheet.Cell(currentRow, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                worksheet.Cell(currentRow, 1).Style.Font.FontColor = XLColor.FromHtml("#800020");
+                worksheet.Cell(currentRow, 3).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                worksheet.Cell(currentRow, 3).Style.Font.FontColor = XLColor.FromHtml("#800020");
+
+                // Auto-fit columns with safety minimums
+                worksheet.Columns().AdjustToContents();
+                worksheet.Column(1).Width = Math.Max(worksheet.Column(1).Width, 6);
+                worksheet.Column(2).Width = Math.Max(worksheet.Column(2).Width, 14);
+                worksheet.Column(3).Width = Math.Max(worksheet.Column(3).Width, 30);
+                worksheet.Column(4).Width = Math.Max(worksheet.Column(4).Width, 20);
+                worksheet.Column(5).Width = Math.Max(worksheet.Column(5).Width, 20);
+                worksheet.Column(6).Width = Math.Max(worksheet.Column(6).Width, 18);
+                worksheet.Column(7).Width = Math.Max(worksheet.Column(7).Width, 22);
+                worksheet.Column(8).Width = Math.Max(worksheet.Column(8).Width, 18);
+                worksheet.Column(9).Width = Math.Max(worksheet.Column(9).Width, 26);
+                worksheet.Column(10).Width = Math.Max(worksheet.Column(10).Width, 24);
+                worksheet.Column(11).Width = Math.Max(worksheet.Column(11).Width, 20);
+
+                using var memoryStream = new MemoryStream();
+                workbook.SaveAs(memoryStream);
+                memoryStream.Position = 0;
+
+                string cleanSessionName = string.Join("_", sessionName.Split(Path.GetInvalidFileNameChars()));
+                string fileName = $"Trainees_Roster_{cleanSessionName}_{sessionDate:yyyyMMdd}.xlsx";
+
+                return File(memoryStream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = "خطأ أثناء إنشاء ملف الإكسيل: " + ex.Message });
+            }
+        }
     }
 
     public class SessionTraineesAssignRequest
@@ -1906,6 +2928,22 @@ namespace Exam.Controllers
         public bool SendNotification { get; set; } = true;
         public bool SendEmailViaN8n { get; set; } = true;
         public bool BypassApproval { get; set; } = false;
+        public bool SendRabbitMqEmail { get; set; } = true;
+    }
+
+    public class SaveCompanyInjectionRuleRequest
+    {
+        public int? Id { get; set; }
+        public int? CompanyId { get; set; }
+        public string? RuleName { get; set; }
+        public string? QuotasJson { get; set; }
+        public string? DepartmentQuotasJson { get; set; }
+    }
+
+    public class UpdateSessionTotalSeatsRequest
+    {
+        public int SessionId { get; set; }
+        public int? TotalSeats { get; set; }
     }
 }
 

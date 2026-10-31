@@ -325,10 +325,32 @@ namespace Exam.DTOs
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
         public int AssignedUsersCount { get; set; }
+        public int? GroupId { get; set; }
+        public string? GroupName { get; set; }
+        public string? GroupColor { get; set; }
         public double DurationHours => EndTime >= StartTime 
             ? Math.Round((EndTime - StartTime).TotalHours, 1) 
             : Math.Round((EndTime + TimeSpan.FromDays(1) - StartTime).TotalHours, 1);
         public bool IsOvernight => StartTime > EndTime;
+    }
+
+    public class ShiftGroupDto
+    {
+        public int Id { get; set; }
+        public string GroupName { get; set; } = "";
+        public string? Description { get; set; }
+        public string? ColorCode { get; set; } = "#7C3AED";
+        public int ShiftsCount { get; set; }
+        public List<int> ShiftIds { get; set; } = new();
+    }
+
+    public class SaveShiftGroupRequest
+    {
+        public int? Id { get; set; }
+        public string GroupName { get; set; } = "";
+        public string? Description { get; set; }
+        public string? ColorCode { get; set; } = "#7C3AED";
+        public List<int> ShiftIds { get; set; } = new();
     }
 
     // Used for admin dropdown: waves list

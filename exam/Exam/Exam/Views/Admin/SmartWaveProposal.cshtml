@@ -3,6 +3,7 @@
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
 
     var branches = ViewBag.Branches as List<Exam.DTOs.BranchDto> ?? new List<Exam.DTOs.BranchDto>();
+    var shifts = ViewBag.Shifts as List<Exam.DTOs.ShiftDto> ?? new List<Exam.DTOs.ShiftDto>();
     var roles = ViewBag.Roles as List<string> ?? new List<string>();
     var recentWaves = ViewBag.RecentWaves as List<Exam.DTOs.WaveDto> ?? new List<Exam.DTOs.WaveDto>();
     string defaultWaveName = ViewBag.DefaultWaveName as string ?? "Batch - Proposed";
@@ -132,7 +133,7 @@
                         <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar" id="branchOptionsContainer">
                             @foreach (var b in branches)
                             {
-                                <div class="branch-item flex items-center justify-between p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700">
+                                <div class="branch-item flex items-center justify-between p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer" data-branchid="@b.Id" onclick="setActiveBranch(@b.Id, '@b.BranchName.Replace("'", "\\'")')">
                                     <label class="flex items-center gap-2.5 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300 flex-1 truncate">
                                         <input type="checkbox" name="branchFilter" value="@b.Id" checked class="chk-branch rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="updateBranchSelectedLabel()" />
                                         <span class="truncate">@b.BranchName.ToUpper()</span>
@@ -140,8 +141,12 @@
                                     <div class="flex items-center gap-1.5 shrink-0 pl-2">
                                         <span class="text-[9px] font-bold text-slate-400">Seats:</span>
                                         <input type="number" min="0" max="100" placeholder="Auto" data-branchid="@b.Id" 
-                                               oninput="updateTotalAllocatedQuota()" 
-                                               class="branch-quota-input w-16 px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-black text-center text-brand-600 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" title="Target seats for this branch (leave blank for automatic balance)" />
+                                               oninput="onBranchQuotaInput(@b.Id, this.value)" 
+                                               class="branch-quota-input w-14 px-1.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-black text-center text-brand-600 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500" title="Target seats for this branch" />
+                                        <button type="button" onclick="event.stopPropagation(); setActiveBranch(@b.Id, '@b.BranchName.Replace("'", "\\'")')" class="branch-shift-btn px-1.5 py-1 text-[10px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-white dark:bg-slate-900 transition-all flex items-center gap-1 shrink-0" title="تفصيل ورديات هذا الفرع" data-branchid="@b.Id">
+                                            <i class="fas fa-business-time text-[10px]"></i>
+                                            <span class="branch-shift-pill text-[9px] hidden sm:inline">Shifts</span>
+                                        </button>
                                     </div>
                                 </div>
                             }
@@ -150,48 +155,122 @@
                             <p class="text-[10px] text-slate-400 font-bold" id="branchCountLabel">All branches selected</p>
                             <label class="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-400 cursor-pointer">
                                 <input type="checkbox" id="balanceAcrossBranchesChk" checked class="rounded text-brand-600 focus:ring-brand-500" />
-                                <span>Fair branch balancing (prevent single-branch concentration)</span>
+                                <span>Fair branch balancing</span>
                             </label>
                         </div>
                     </div>
                 </div>
 
-                <!-- 4. Batch Capacity -->
-                <div class="space-y-2">
+                <!-- 4. Target Branch Shifts Allocation (توزيع ورديات الفرع المحدد) -->
+                <div class="space-y-3 lg:col-span-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                            <i class="fas fa-business-time text-indigo-600"></i>
+                            <span>Branch Shifts Allocation (توزيع ورديات الفرع)</span>
+                        </label>
+                        <span id="activeBranchHeaderBadge" class="text-[11px] font-black text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-900">
+                            اختر فرعاً لتفصيل وردياته
+                        </span>
+                    </div>
+
+                    <!-- Selected Branches Switcher Bar -->
+                    <div class="p-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1.5">
+                        <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 px-1">
+                            <span>الفروع المحددة (اضغط على الفرع لتوزيع وردياته):</span>
+                            <span id="activeBranchTargetIndicator" class="font-mono text-indigo-600 font-bold"></span>
+                        </div>
+                        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar min-h-[30px]" id="selectedBranchesPillsContainer">
+                            <!-- Populated dynamically via JS: [اجا (5)] [احمد ماهر (5)] ... -->
+                        </div>
+                    </div>
+
+                    <!-- Shift Quota Tools Bar for Active Branch -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 p-2 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/50 dark:border-indigo-900/40 rounded-xl">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
+                                <i class="fas fa-sliders text-indigo-600"></i>
+                                <span id="activeBranchQuotaTitle">Shift Seats:</span>
+                            </span>
+                            <button type="button" onclick="distributeEvenlyForActiveBranch()" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase tracking-wider transition-all shadow-sm flex items-center gap-1" title="توزيع مقاعد الفرع بالتساوي على الورديات">
+                                <i class="fas fa-balance-scale"></i> Distribute Evenly
+                            </button>
+                            <button type="button" onclick="clearActiveBranchShifts()" class="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-700 dark:text-slate-300 font-bold text-[10px] transition-all" title="مسح تخصيص الورديات لهذا الفرع والرجوع للتلقائي">
+                                Clear Shifts
+                            </button>
+                        </div>
+                        <span id="allocatedShiftQuotaBadge" class="text-[10px] font-black px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-mono">
+                            Allocated: 0 Seats
+                        </span>
+                    </div>
+
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-2xl p-3 bg-slate-50/50 dark:bg-slate-800/30 space-y-2">
+                        <div class="relative">
+                            <input type="text" id="shiftSearchInput" placeholder="Search shift name..." oninput="filterShiftList(this.value)" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200 shadow-inner" />
+                        </div>
+                        <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar" id="shiftOptionsContainer">
+                            @foreach (var s in shifts)
+                            {
+                                <div class="shift-item flex items-center justify-between p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700">
+                                    <label class="flex items-center gap-2.5 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300 flex-1 truncate">
+                                        <input type="checkbox" name="activeBranchShiftFilter" value="@s.Id" checked class="chk-branch-shift rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" onchange="onActiveBranchShiftToggle(@s.Id)" />
+                                        <span class="truncate">@s.ShiftName</span>
+                                        <span class="text-[10px] text-slate-400 font-mono font-normal">(@s.StartTime.ToString(@"hh\:mm") - @s.EndTime.ToString(@"hh\:mm"))</span>
+                                    </label>
+                                    <div class="flex items-center gap-1.5 shrink-0 pl-2">
+                                        <span class="text-[9px] font-bold text-slate-400">Seats:</span>
+                                        <input type="number" min="0" max="100" placeholder="Auto" data-shiftid="@s.Id" 
+                                               oninput="onActiveBranchShiftInput(@s.Id, this.value)" 
+                                               class="active-branch-shift-quota-input w-16 px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-black text-center text-indigo-600 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" title="عدد المقاعد من هذه الوردية لهذا الفرع" />
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+                            <p class="text-[10px] text-slate-400 font-bold" id="shiftCountLabel">الورديات غير المحددة مقاعدها تسحب تلقائياً</p>
+                            <label class="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" id="balanceAcrossShiftsChk" checked class="rounded text-brand-600 focus:ring-brand-500" />
+                                <span>توزيع عادل للورديات</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Batch Capacity -->
+                <div class="space-y-2 lg:col-span-1">
                     <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
                         <i class="fas fa-users text-amber-500"></i>
                         Capacity (Target Headcount)
                     </label>
                     <div class="relative">
-                        <input type="number" id="capacityInput" value="50" min="5" max="500" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-black focus:ring-2 focus:ring-brand-500 outline-none" />
+                        <input type="number" id="capacityInput" value="50" min="1" max="500" oninput="updateTotalAllocatedQuota(false); updateResitterLabel($('#resitterSlider').val());" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-black focus:ring-2 focus:ring-brand-500 outline-none" />
                         <span class="absolute right-3 top-2.5 text-xs text-slate-400 font-bold">Seats</span>
                     </div>
                     <p class="text-[10px] text-slate-400">Total recommended seats for this batch</p>
                 </div>
 
-                <!-- 5. Uncertified Resitters Ratio -->
-                <div class="space-y-2">
+                <!-- 6. Uncertified Resitters Ratio -->
+                <div class="space-y-2 lg:col-span-1">
                     <div class="flex items-center justify-between">
                         <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
                             <i class="fas fa-rotate-right text-orange-500"></i>
-                            Resitter Ratio (Uncertified Retries)
+                            Resitter Ratio (Uncertified)
                         </label>
                         <span id="resitterPctLabel" class="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 font-black text-xs border border-orange-200">20% (~10 seats)</span>
                     </div>
                     <input type="range" id="resitterSlider" min="0" max="50" step="5" value="20" oninput="updateResitterLabel(this.value)" class="w-full accent-brand-600 cursor-pointer" />
-                    <p class="text-[10px] text-slate-400">Blend uncertified/failed candidates for second chance</p>
+                    <p class="text-[10px] text-slate-400">Blend uncertified/failed candidates</p>
                 </div>
 
-                <!-- 6. Proposed Wave Metadata -->
-                <div class="space-y-2 lg:col-span-2">
+                <!-- 7. Proposed Wave Metadata -->
+                <div class="space-y-2 lg:col-span-1">
                     <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
                         <i class="fas fa-heading text-brand-600"></i>
                         Proposed Wave Name
                     </label>
-                    <input type="text" id="proposedWaveName" value="@defaultWaveName" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-brand-500 outline-none" placeholder="e.g. Batch 18 - Pharmacists & Assistants" />
+                    <input type="text" id="proposedWaveName" value="@defaultWaveName" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-brand-500 outline-none" placeholder="e.g. Batch 18" />
                 </div>
 
-                <div class="space-y-2 lg:col-span-2">
+                <div class="space-y-2 lg:col-span-1">
                     <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
                         <i class="fas fa-clock text-brand-600"></i>
                         Proposed Start Date
@@ -213,7 +292,7 @@
     <!-- Results Container -->
     <div id="resultsCard" class="hidden space-y-6">
         <!-- Metric Summary Cards -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
                 <div class="flex items-center justify-between">
                     <div>
@@ -261,19 +340,74 @@
                     </div>
                 </div>
             </div>
+
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[11px] font-black uppercase tracking-wider text-indigo-500">Covered Shifts</p>
+                        <h3 id="statShifts" class="text-2xl font-black text-indigo-600 mt-1">0</h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fas fa-business-time"></i>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- Branch Roster Breakdown Pills -->
-        <div id="branchBreakdownContainer" class="hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                    <i class="fas fa-chart-pie text-brand-600"></i>
-                    <span>Branch Quota Breakdown</span>
-                </span>
-                <span id="branchBreakdownTotalCount" class="text-[10px] font-bold text-slate-400"></span>
+        <!-- Quota Breakdowns: Branches & Shifts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Branch Roster Breakdown Pills -->
+            <div id="branchBreakdownContainer" class="hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-code-branch text-brand-600"></i>
+                        <span>Branch Quota Breakdown</span>
+                    </span>
+                    <span id="branchBreakdownTotalCount" class="text-[10px] font-bold text-slate-400"></span>
+                </div>
+                <div id="branchBreakdownChips" class="flex flex-wrap gap-2">
+                    <!-- Injected via JS -->
+                </div>
             </div>
-            <div id="branchBreakdownChips" class="flex flex-wrap gap-2">
-                <!-- Injected via JS -->
+
+            <!-- Shift Roster Breakdown Pills -->
+            <div id="shiftBreakdownContainer" class="hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-business-time text-indigo-600"></i>
+                        <span>Shift Quota Breakdown</span>
+                    </span>
+                    <span id="shiftBreakdownTotalCount" class="text-[10px] font-bold text-slate-400"></span>
+                </div>
+                <div id="shiftBreakdownChips" class="flex flex-wrap gap-2">
+                    <!-- Injected via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Branch x Shift Cross-Distribution Matrix -->
+        <div id="matrixContainer" class="hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 flex items-center justify-center text-base font-black">
+                        <i class="fas fa-table-cells"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Branch × Shift Cross Matrix (توزيع الفروع على الورديات)</h4>
+                        <p class="text-[10px] text-slate-400">Detailed candidate headcount breakdown from each branch categorized by shift</p>
+                    </div>
+                </div>
+                <span id="matrixBranchesCount" class="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"></span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="saas-table w-full text-xs" id="matrixTable">
+                    <thead id="matrixTableHead">
+                        <!-- Dynamic columns -->
+                    </thead>
+                    <tbody id="matrixTableBody" class="font-medium">
+                        <!-- Dynamic rows -->
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -388,6 +522,20 @@
                     }
                 </select>
             </div>
+
+            <!-- RabbitMQ Email Dispatch Toggle -->
+            <label class="flex items-center justify-between p-3.5 bg-indigo-50/50 dark:bg-indigo-950/30 hover:bg-indigo-50/80 border border-indigo-200 dark:border-indigo-800 rounded-2xl cursor-pointer shadow-2xs transition-all">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-xs shrink-0 border border-indigo-200 dark:border-indigo-800">
+                        <i class="fas fa-paper-plane"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-black text-indigo-900 dark:text-indigo-200">إرسال إيميل ترحيبي وتأكيد للمرشحين (RabbitMQ)</div>
+                        <div class="text-[10px] text-indigo-700/80 dark:text-indigo-400 font-medium">إرسال بريد إلكتروني تلقائي بجدول ومواعيد الويف لجميع المرشحين المختارين</div>
+                    </div>
+                </div>
+                <input type="checkbox" id="chkWaveSendRabbitMqEmail" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-indigo-300" />
+            </label>
         </div>
 
         <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
@@ -440,7 +588,7 @@
             updateTotalAllocatedQuota();
         }
 
-        function updateTotalAllocatedQuota() {
+        function updateTotalAllocatedQuota(syncCapacity = false) {
             let total = 0;
             $('.branch-quota-input').each(function () {
                 const val = parseInt($(this).val());
@@ -448,11 +596,23 @@
                     total += val;
                 }
             });
+
+            if (syncCapacity && total > 0) {
+                $('#capacityInput').val(total);
+                updateResitterLabel($('#resitterSlider').val());
+            }
+
             const cap = parseInt($('#capacityInput').val()) || 50;
             if (total > 0) {
-                $('#allocatedQuotaBadge').text(`Allocated: ${total} of ${cap} Seats`).removeClass('text-slate-600 border-slate-200 bg-white').addClass('text-brand-600 border-brand-300 bg-brand-50');
+                if (total === cap) {
+                    $('#allocatedQuotaBadge').text(`Allocated: ${total} of ${cap} Seats (مكتمل)`).removeClass('text-slate-600 border-slate-200 bg-white text-brand-600 border-brand-300 bg-brand-50 text-rose-600 border-rose-300 bg-rose-50').addClass('text-emerald-600 border-emerald-300 bg-emerald-50');
+                } else if (total > cap) {
+                    $('#allocatedQuotaBadge').text(`Allocated: ${total} of ${cap} Seats (تجاوز)`).removeClass('text-slate-600 border-slate-200 bg-white text-brand-600 border-brand-300 bg-brand-50 text-emerald-600 border-emerald-300 bg-emerald-50').addClass('text-rose-600 border-rose-300 bg-rose-50');
+                } else {
+                    $('#allocatedQuotaBadge').text(`Allocated: ${total} of ${cap} Seats`).removeClass('text-slate-600 border-slate-200 bg-white text-emerald-600 border-emerald-300 bg-emerald-50 text-rose-600 border-rose-300 bg-rose-50').addClass('text-brand-600 border-brand-300 bg-brand-50');
+                }
             } else {
-                $('#allocatedQuotaBadge').text(`Allocated: 0 Seats`).removeClass('text-brand-600 border-brand-300 bg-brand-50').addClass('text-slate-600 border-slate-200 bg-white');
+                $('#allocatedQuotaBadge').text(`Allocated: 0 Seats`).removeClass('text-brand-600 border-brand-300 bg-brand-50 text-emerald-600 border-emerald-300 bg-emerald-50 text-rose-600 border-rose-300 bg-rose-50').addClass('text-slate-600 border-slate-200 bg-white');
             }
         }
 
@@ -472,7 +632,12 @@
                 let quota = perBranch + (index < remainder ? 1 : 0);
                 $(`.branch-quota-input[data-branchid="${bId}"]`).val(quota);
             });
-            updateTotalAllocatedQuota();
+            updateTotalAllocatedQuota(false);
+            renderBranchPills();
+            if (activeBranchId) {
+                updateBranchRowPill(activeBranchId);
+                updateActiveBranchAllocatedBadge();
+            }
             Swal.fire({
                 icon: 'success',
                 title: 'Evenly Distributed',
@@ -484,14 +649,280 @@
 
         function clearBranchQuotas() {
             $('.branch-quota-input').val('');
-            updateTotalAllocatedQuota();
+            $('#capacityInput').val(50);
+            updateTotalAllocatedQuota(false);
+            updateResitterLabel($('#resitterSlider').val());
+            renderBranchPills();
+            if (activeBranchId) {
+                updateBranchRowPill(activeBranchId);
+                updateActiveBranchAllocatedBadge();
+            }
+        }
+
+        // State for Branch-specific Shifts:
+        // branchShiftQuotas = { [branchId]: { [shiftId]: count } }
+        let branchShiftQuotas = {};
+        let activeBranchId = null;
+        let activeBranchName = "";
+
+        function filterShiftList(term) {
+            term = (term || '').toLowerCase().trim();
+            $('.shift-item').each(function () {
+                const text = $(this).text().toLowerCase();
+                if (text.includes(term)) {
+                    $(this).removeClass('hidden');
+                } else {
+                    $(this).addClass('hidden');
+                }
+            });
+        }
+
+        function setActiveBranch(bId, bName) {
+            activeBranchId = bId;
+            activeBranchName = bName;
+
+            // Highlight active row on left panel
+            $('.branch-item').removeClass('bg-brand-50/80 border-brand-400 dark:bg-brand-950/60 dark:border-brand-700 ring-2 ring-brand-500/20');
+            const row = $(`.branch-item[data-branchid="${bId}"]`);
+            row.addClass('bg-brand-50/80 border-brand-400 dark:bg-brand-950/60 dark:border-brand-700 ring-2 ring-brand-500/20');
+
+            // Update Header & Badges in Right Panel
+            $('#activeBranchHeaderBadge').html(`<i class="fas fa-store text-indigo-500 mr-1"></i> فرع: <span class="text-indigo-700 dark:text-indigo-300 font-black">${bName}</span>`);
+            $('#activeBranchQuotaTitle').text(`وردية ${bName}:`);
+
+            const bQuota = parseInt(row.find('.branch-quota-input').val()) || 0;
+            if (bQuota > 0) {
+                $('#activeBranchTargetIndicator').text(`الهدف: ${bQuota} مقعد`);
+            } else {
+                $('#activeBranchTargetIndicator').text('المقاعد: تلقائي (Auto)');
+            }
+
+            // Populate shifts for this branch
+            loadActiveBranchShiftsUI();
+            renderBranchPills();
+            updateActiveBranchAllocatedBadge();
+        }
+
+        function loadActiveBranchShiftsUI() {
+            if (!activeBranchId) return;
+            const branchShifts = branchShiftQuotas[activeBranchId] || {};
+
+            $('.active-branch-shift-quota-input').each(function () {
+                const sId = parseInt($(this).data('shiftid'));
+                if (branchShifts[sId] && branchShifts[sId] > 0) {
+                    $(this).val(branchShifts[sId]);
+                } else {
+                    $(this).val('');
+                }
+            });
+        }
+
+        function renderBranchPills() {
+            const container = $('#selectedBranchesPillsContainer');
+            container.empty();
+
+            let foundAny = false;
+            $('.chk-branch:checked').each(function () {
+                foundAny = true;
+                const bId = parseInt($(this).val());
+                const bRow = $(this).closest('.branch-item');
+                const bName = bRow.find('span.truncate').text().trim();
+                const bQuota = parseInt(bRow.find('.branch-quota-input').val()) || 0;
+                const shiftsAssigned = branchShiftQuotas[bId] ? Object.values(branchShiftQuotas[bId]).reduce((a, b) => a + b, 0) : 0;
+
+                const isActive = (activeBranchId === bId);
+                let badgeClass = isActive 
+                    ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-400' 
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-indigo-400';
+
+                let countDisplay = bQuota > 0 ? `${bQuota} مقاعد` : 'Auto';
+                if (shiftsAssigned > 0) {
+                    countDisplay += ` (ورديات: ${shiftsAssigned})`;
+                }
+
+                container.append(`
+                    <button type="button" onclick="setActiveBranch(${bId}, '${bName.replace(/'/g, "\\'")}')" 
+                            class="px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all shrink-0 flex items-center gap-1.5 ${badgeClass}">
+                        <i class="fas fa-store text-[9px] ${isActive ? 'text-white' : 'text-indigo-500'}"></i>
+                        <span>${bName}</span>
+                        <span class="px-1.5 py-0.2 rounded-md ${isActive ? 'bg-indigo-700 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'} font-mono text-[10px]">${countDisplay}</span>
+                    </button>
+                `);
+            });
+
+            if (!foundAny) {
+                container.html('<span class="text-[11px] text-slate-400 font-medium">لم يتم تحديد أي فرع بعد.</span>');
+            }
+        }
+
+        function onBranchQuotaInput(bId, val) {
+            updateTotalAllocatedQuota(true);
+            if (activeBranchId === bId) {
+                const bQuota = parseInt(val) || 0;
+                if (bQuota > 0) {
+                    $('#activeBranchTargetIndicator').text(`الهدف: ${bQuota} مقعد`);
+                } else {
+                    $('#activeBranchTargetIndicator').text('المقاعد: تلقائي (Auto)');
+                }
+                updateActiveBranchAllocatedBadge();
+            }
+            renderBranchPills();
+            updateBranchRowPill(bId);
+        }
+
+        function onActiveBranchShiftInput(shiftId, val) {
+            if (!activeBranchId) {
+                const first = $('.chk-branch:checked').first();
+                if (first.length > 0) {
+                    const bId = parseInt(first.val());
+                    const bName = first.closest('.branch-item').find('span.truncate').text().trim();
+                    setActiveBranch(bId, bName);
+                } else {
+                    Swal.fire({ icon: 'warning', text: 'يرجى اختيار فرع أولاً من قائمة الفروع على اليسار لتحديد وردياته.' });
+                    return;
+                }
+            }
+
+            branchShiftQuotas[activeBranchId] = branchShiftQuotas[activeBranchId] || {};
+            const q = parseInt(val);
+            if (!isNaN(q) && q > 0) {
+                branchShiftQuotas[activeBranchId][shiftId] = q;
+            } else {
+                delete branchShiftQuotas[activeBranchId][shiftId];
+            }
+
+            updateActiveBranchAllocatedBadge();
+            updateBranchRowPill(activeBranchId);
+            renderBranchPills();
+
+            // If branch didn't have a quota yet, sync branch quota with the assigned shifts
+            const totalBranchShifts = Object.values(branchShiftQuotas[activeBranchId] || {}).reduce((a, b) => a + b, 0);
+            const bInput = $(`.branch-quota-input[data-branchid="${activeBranchId}"]`);
+            const bQuota = parseInt(bInput.val()) || 0;
+            if (bQuota === 0 && totalBranchShifts > 0) {
+                bInput.val(totalBranchShifts);
+                updateTotalAllocatedQuota(true);
+            }
+        }
+
+        function onActiveBranchShiftToggle(shiftId) {
+            if (!activeBranchId) return;
+            const chk = $(`.chk-branch-shift[value="${shiftId}"]`);
+            if (!chk.is(':checked')) {
+                const input = $(`.active-branch-shift-quota-input[data-shiftid="${shiftId}"]`);
+                input.val('');
+                if (branchShiftQuotas[activeBranchId]) {
+                    delete branchShiftQuotas[activeBranchId][shiftId];
+                }
+            }
+            updateActiveBranchAllocatedBadge();
+            updateBranchRowPill(activeBranchId);
+            renderBranchPills();
+        }
+
+        function updateActiveBranchAllocatedBadge() {
+            if (!activeBranchId) {
+                $('#allocatedShiftQuotaBadge').text('اختر فرعاً').removeClass('text-emerald-600 border-emerald-300 bg-emerald-50 text-indigo-600 border-indigo-300 bg-indigo-50').addClass('text-slate-600 border-slate-200 bg-white');
+                return;
+            }
+
+            const branchShifts = branchShiftQuotas[activeBranchId] || {};
+            const totalAssigned = Object.values(branchShifts).reduce((a, b) => a + b, 0);
+            const bQuota = parseInt($(`.branch-quota-input[data-branchid="${activeBranchId}"]`).val()) || 0;
+
+            const badge = $('#allocatedShiftQuotaBadge');
+            if (bQuota > 0) {
+                if (totalAssigned === bQuota) {
+                    badge.text(`Allocated: ${totalAssigned} of ${bQuota} Seats (مكتمل)`).removeClass('text-slate-600 border-slate-200 bg-white text-indigo-600 border-indigo-300 bg-indigo-50').addClass('text-emerald-600 border-emerald-300 bg-emerald-50');
+                } else if (totalAssigned > bQuota) {
+                    badge.text(`Allocated: ${totalAssigned} of ${bQuota} Seats (تجاوز)`).removeClass('text-slate-600 border-slate-200 bg-white text-emerald-600 border-emerald-300 bg-emerald-50').addClass('text-rose-600 border-rose-300 bg-rose-50');
+                } else {
+                    badge.text(`Allocated: ${totalAssigned} of ${bQuota} Seats (${bQuota - totalAssigned} متبقي)`).removeClass('text-slate-600 border-slate-200 bg-white text-emerald-600 border-emerald-300 bg-emerald-50').addClass('text-indigo-600 border-indigo-300 bg-indigo-50');
+                }
+            } else {
+                if (totalAssigned > 0) {
+                    badge.text(`Allocated: ${totalAssigned} Seats (Auto)`).removeClass('text-slate-600 border-slate-200 bg-white').addClass('text-indigo-600 border-indigo-300 bg-indigo-50');
+                } else {
+                    badge.text(`Allocated: 0 Seats (Auto)`).removeClass('text-indigo-600 border-indigo-300 bg-indigo-50 text-emerald-600 border-emerald-300 bg-emerald-50').addClass('text-slate-600 border-slate-200 bg-white');
+                }
+            }
+        }
+
+        function updateBranchRowPill(bId) {
+            const btn = $(`.branch-shift-btn[data-branchid="${bId}"]`);
+            if (!btn.length) return;
+            const bQuota = parseInt($(`.branch-quota-input[data-branchid="${bId}"]`).val()) || 0;
+            const bShifts = branchShiftQuotas[bId] || {};
+            const totalAssigned = Object.values(bShifts).reduce((a, b) => a + b, 0);
+
+            if (totalAssigned > 0) {
+                btn.removeClass('text-slate-400 border-slate-200').addClass('text-indigo-600 border-indigo-400 bg-indigo-50 dark:bg-indigo-950/40');
+                btn.find('.branch-shift-pill').text(`${totalAssigned}/${bQuota > 0 ? bQuota : 'Auto'}`);
+            } else {
+                btn.removeClass('text-indigo-600 border-indigo-400 bg-indigo-50 dark:bg-indigo-950/40').addClass('text-slate-400 border-slate-200');
+                btn.find('.branch-shift-pill').text('Shifts');
+            }
+        }
+
+        function distributeEvenlyForActiveBranch() {
+            if (!activeBranchId) {
+                Swal.fire({ icon: 'warning', title: 'اختر فرعاً أولاً', text: 'يرجى اختيار الفرع المراد توزيع مقاعده بالتساوي على وردياته.' });
+                return;
+            }
+
+            const bQuota = parseInt($(`.branch-quota-input[data-branchid="${activeBranchId}"]`).val()) || 0;
+            if (bQuota <= 0) {
+                Swal.fire({ icon: 'info', title: 'حدد مقاعد الفرع أولاً', text: `يرجى كتابة عدد مقاعد فرع (${activeBranchName}) أولاً لتوزيعها بالتساوي على الشيفتات.` });
+                return;
+            }
+
+            const checkedShifts = $('.chk-branch-shift:checked');
+            if (checkedShifts.length === 0) {
+                Swal.fire({ icon: 'warning', text: 'يرجى تحديد الوردية المستهدفة لهذا الفرع.' });
+                return;
+            }
+
+            const perShift = Math.floor(bQuota / checkedShifts.length);
+            const remainder = bQuota % checkedShifts.length;
+
+            branchShiftQuotas[activeBranchId] = {};
+            $('.active-branch-shift-quota-input').val('');
+
+            checkedShifts.each(function (index) {
+                const sId = parseInt($(this).val());
+                const count = perShift + (index < remainder ? 1 : 0);
+                if (count > 0) {
+                    branchShiftQuotas[activeBranchId][sId] = count;
+                    $(`.active-branch-shift-quota-input[data-shiftid="${sId}"]`).val(count);
+                }
+            });
+
+            updateActiveBranchAllocatedBadge();
+            updateBranchRowPill(activeBranchId);
+            renderBranchPills();
+
+            Swal.fire({
+                icon: 'success',
+                title: 'تم التوزيع بنجاح',
+                text: `تم توزيع ${bQuota} مقاعد بالتساوي على ورديات فرع (${activeBranchName}).`,
+                timer: 1800,
+                showConfirmButton: false
+            });
+        }
+
+        function clearActiveBranchShifts() {
+            if (!activeBranchId) return;
+            delete branchShiftQuotas[activeBranchId];
+            $('.active-branch-shift-quota-input').val('');
+            updateActiveBranchAllocatedBadge();
+            updateBranchRowPill(activeBranchId);
+            renderBranchPills();
         }
 
         function updateResitterLabel(val) {
             const cap = parseInt($('#capacityInput').val()) || 50;
             const resCount = Math.round(cap * (val / 100));
             $('#resitterPctLabel').text(`${val}% (~${resCount} seats)`);
-            updateTotalAllocatedQuota();
         }
 
         async function generateProposal() {
@@ -509,17 +940,49 @@
             });
 
             const daysVal = parseInt($('#filterDays').val());
-            const capacity = parseInt($('#capacityInput').val()) || 50;
+            let capacity = parseInt($('#capacityInput').val()) || 50;
             const resitterPct = parseInt($('#resitterSlider').val()) || 20;
 
             const branchQuotas = {};
+            let branchQuotaSum = 0;
             $('.branch-quota-input').each(function () {
                 const bId = parseInt($(this).data('branchid'));
                 const quota = parseInt($(this).val());
                 if (!isNaN(quota) && quota > 0 && selectedBranches.includes(bId)) {
                     branchQuotas[bId] = quota;
+                    branchQuotaSum += quota;
                 }
             });
+
+            // If user allocated explicit branch quotas for the selected branches, capacity should match strictly
+            if (branchQuotaSum > 0) {
+                const allSelectedBranchesHaveQuota = selectedBranches.length > 0 && selectedBranches.every(bId => branchQuotas[bId] && branchQuotas[bId] > 0);
+                if (allSelectedBranchesHaveQuota || branchQuotaSum >= capacity) {
+                    capacity = branchQuotaSum;
+                    $('#capacityInput').val(branchQuotaSum);
+                }
+            }
+
+            // Clean branchShiftQuotas to send only active selected branches
+            const cleanBranchShiftQuotas = {};
+            for (const bIdStr in branchShiftQuotas) {
+                const bId = parseInt(bIdStr);
+                if (selectedBranches.includes(bId)) {
+                    const shifts = branchShiftQuotas[bId];
+                    const cleanShifts = {};
+                    let hasAny = false;
+                    for (const sIdStr in shifts) {
+                        const sCount = parseInt(shifts[sIdStr]);
+                        if (!isNaN(sCount) && sCount > 0) {
+                            cleanShifts[parseInt(sIdStr)] = sCount;
+                            hasAny = true;
+                        }
+                    }
+                    if (hasAny) {
+                        cleanBranchShiftQuotas[bId] = cleanShifts;
+                    }
+                }
+            }
 
             const payload = {
                 days: daysVal > 0 ? daysVal : null,
@@ -531,7 +994,9 @@
                 proposedWaveName: $('#proposedWaveName').val(),
                 proposedStartDate: $('#proposedStartDate').val(),
                 branchQuotas: branchQuotas,
-                balanceAcrossBranches: $('#balanceAcrossBranchesChk').is(':checked')
+                branchShiftQuotas: cleanBranchShiftQuotas,
+                balanceAcrossBranches: $('#balanceAcrossBranchesChk').is(':checked'),
+                balanceAcrossShifts: $('#balanceAcrossShiftsChk').is(':checked')
             };
 
             try {
@@ -565,6 +1030,7 @@
                 $('#statFresh').text(data.freshCount);
                 $('#statResitter').text(data.resitterCount);
                 $('#statBranches').text(data.branchesCount);
+                $('#statShifts').text(data.shiftsCount || 0);
 
                 // Render Branch Breakdown
                 if (data.branchBreakdown && data.branchBreakdown.length > 0) {
@@ -579,10 +1045,38 @@
                             </div>
                         `);
                     });
-                    $('#branchBreakdownTotalCount').text(`${data.branchBreakdown.length} branches included in roster`);
+                    $('#branchBreakdownTotalCount').text(`${data.branchBreakdown.length} branches included`);
                     $('#branchBreakdownContainer').removeClass('hidden');
                 } else {
                     $('#branchBreakdownContainer').addClass('hidden');
+                }
+
+                // Render Shift Breakdown
+                if (data.shiftBreakdown && data.shiftBreakdown.length > 0) {
+                    const shiftChipsContainer = $('#shiftBreakdownChips');
+                    shiftChipsContainer.empty();
+                    data.shiftBreakdown.forEach(s => {
+                        shiftChipsContainer.append(`
+                            <div class="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-2 text-xs font-bold shadow-sm">
+                                <span class="text-slate-800 dark:text-white font-black">${s.shiftName}:</span>
+                                <span class="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 font-black text-[11px]">${s.total} seats</span>
+                                <span class="text-[10px] text-slate-400">(${s.fresh} New • ${s.resitters} Resitters)</span>
+                            </div>
+                        `);
+                    });
+                    $('#shiftBreakdownTotalCount').text(`${data.shiftBreakdown.length} shifts represented`);
+                    $('#shiftBreakdownContainer').removeClass('hidden');
+                } else {
+                    $('#shiftBreakdownContainer').addClass('hidden');
+                }
+
+                // Render Branch x Shift Cross-Distribution Matrix
+                if (data.branchShiftMatrix && data.branchShiftMatrix.length > 0) {
+                    renderMatrix(data.branchShiftMatrix);
+                    $('#matrixBranchesCount').text(`${data.branchShiftMatrix.length} Branches × ${data.shiftsCount} Shifts`);
+                    $('#matrixContainer').removeClass('hidden');
+                } else {
+                    $('#matrixContainer').addClass('hidden');
                 }
 
                 renderTable();
@@ -610,6 +1104,99 @@
             }
         }
 
+        function renderMatrix(matrix) {
+            const shiftSet = new Set();
+            matrix.forEach(b => {
+                if (b.shifts && b.shifts.length > 0) {
+                    b.shifts.forEach(s => {
+                        if (s.shiftName) shiftSet.add(s.shiftName);
+                    });
+                }
+            });
+            const shiftNames = Array.from(shiftSet).sort();
+
+            let theadHtml = `
+                <tr>
+                    <th class="text-left font-black uppercase text-[10px] tracking-wider py-3 px-4">Branch Name (الفرع)</th>
+            `;
+            shiftNames.forEach(sName => {
+                theadHtml += `<th class="text-center font-black uppercase text-[10px] tracking-wider py-3 px-3 text-indigo-600">${sName}</th>`;
+            });
+            theadHtml += `
+                    <th class="text-center font-black uppercase text-[10px] tracking-wider py-3 px-3 text-emerald-600">New (جديد)</th>
+                    <th class="text-center font-black uppercase text-[10px] tracking-wider py-3 px-3 text-amber-600">Resitter (معاد)</th>
+                    <th class="text-center font-black uppercase text-[10px] tracking-wider py-3 px-4">Total (الإجمالي)</th>
+                </tr>
+            `;
+            $('#matrixTableHead').html(theadHtml);
+
+            let tbodyHtml = '';
+            let grandTotal = 0, grandFresh = 0, grandResitters = 0;
+            const shiftTotals = {};
+            shiftNames.forEach(sn => shiftTotals[sn] = 0);
+
+            matrix.forEach(b => {
+                grandTotal += b.total;
+                grandFresh += b.fresh;
+                grandResitters += b.resitters;
+
+                tbodyHtml += `
+                    <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800 transition-colors">
+                        <td class="py-3 px-4 font-bold text-slate-800 dark:text-slate-100 uppercase flex items-center gap-2">
+                            <i class="fas fa-store text-slate-400 text-[10px]"></i>
+                            <span>${b.branchName}</span>
+                        </td>
+                `;
+
+                shiftNames.forEach(sName => {
+                    const shiftObj = b.shifts ? b.shifts.find(x => x.shiftName === sName) : null;
+                    const count = shiftObj ? shiftObj.count : 0;
+                    shiftTotals[sName] += count;
+
+                    if (count > 0) {
+                        tbodyHtml += `
+                            <td class="text-center py-3 px-3">
+                                <span class="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 font-bold font-mono text-[11px]">${count}</span>
+                            </td>
+                        `;
+                    } else {
+                        tbodyHtml += `<td class="text-center py-3 px-3 text-slate-300 dark:text-slate-600 font-mono text-[11px]">-</td>`;
+                    }
+                });
+
+                tbodyHtml += `
+                        <td class="text-center py-3 px-3 font-mono font-bold text-emerald-600">${b.fresh}</td>
+                        <td class="text-center py-3 px-3 font-mono font-bold text-amber-600">${b.resitters}</td>
+                        <td class="text-center py-3 px-4">
+                            <span class="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-black font-mono text-xs border border-slate-200 dark:border-slate-700">${b.total}</span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            // Grand Total Footer Row
+            let tfootHtml = `
+                <tr class="bg-slate-100/70 dark:bg-slate-800/60 font-black text-slate-900 dark:text-white border-t-2 border-slate-200 dark:border-slate-700">
+                    <td class="py-3 px-4 font-black uppercase text-xs">Total Candidates (المجموع الكلي)</td>
+            `;
+            shiftNames.forEach(sName => {
+                tfootHtml += `
+                    <td class="text-center py-3 px-3 font-mono font-black text-indigo-600 text-xs">${shiftTotals[sName]}</td>
+                `;
+            });
+            tfootHtml += `
+                    <td class="text-center py-3 px-3 font-mono font-black text-emerald-600 text-xs">${grandFresh}</td>
+                    <td class="text-center py-3 px-3 font-mono font-black text-amber-600 text-xs">${grandResitters}</td>
+                    <td class="text-center py-3 px-4">
+                        <span class="px-3 py-1 rounded-full bg-brand-600 text-white font-black font-mono text-xs shadow-sm">${grandTotal}</span>
+                    </td>
+                </tr>
+            `;
+            tbodyHtml += tfootHtml;
+
+            $('#matrixTableBody').html(tbodyHtml);
+        }
+
         let candidatesDataTable = null;
 
         function updateRosterStats() {
@@ -617,11 +1204,13 @@
             const fresh = currentCandidates.filter(c => c.candidateType === 'New').length;
             const resitter = total - fresh;
             const branches = new Set(currentCandidates.map(c => c.branchName).filter(Boolean)).size;
+            const shifts = new Set(currentCandidates.map(c => c.shiftName).filter(Boolean)).size;
 
             $('#statTotal').text(total);
             $('#statFresh').text(fresh);
             $('#statResitter').text(resitter);
             $('#statBranches').text(branches);
+            $('#statShifts').text(shifts);
         }
 
         function renderTable() {
@@ -881,7 +1470,8 @@
             const enrollType = $('input[name="enrollType"]:checked').val();
 
             let payload = {
-                userIds: userIds
+                userIds: userIds,
+                sendEmail: $('#chkWaveSendRabbitMqEmail').length ? $('#chkWaveSendRabbitMqEmail').is(':checked') : true
             };
 
             if (enrollType === 'new') {
@@ -936,5 +1526,27 @@
                 btn.prop('disabled', false).text('Confirm Enrollment');
             }
         }
+
+        $(document).ready(function () {
+            // Pick first checked branch with quota or first branch
+            const firstWithQuota = $('.branch-quota-input').filter(function () {
+                const val = parseInt($(this).val());
+                return !isNaN(val) && val > 0;
+            }).first();
+
+            if (firstWithQuota.length > 0) {
+                const bId = parseInt(firstWithQuota.data('branchid'));
+                const bName = firstWithQuota.closest('.branch-item').find('span.truncate').text().trim();
+                setActiveBranch(bId, bName);
+            } else {
+                const first = $('.chk-branch:checked').first();
+                if (first.length > 0) {
+                    const bId = parseInt(first.val());
+                    const bName = first.closest('.branch-item').find('span.truncate').text().trim();
+                    setActiveBranch(bId, bName);
+                }
+            }
+            renderBranchPills();
+        });
     </script>
 }

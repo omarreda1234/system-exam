@@ -58,6 +58,9 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 builder.Services.AddTransient<IAuthService, AuthService>();
 // email sender
 builder.Services.AddSingleton<Exam.Services.IEmailSender, Exam.Services.SmtpEmailSender>();
+// RabbitMQ Asynchronous Email Infrastructure
+builder.Services.AddSingleton<Exam.Services.RabbitMQ.IRabbitMqEmailProducer, Exam.Services.RabbitMQ.RabbitMqEmailProducer>();
+builder.Services.AddHostedService<Exam.Services.RabbitMQ.RabbitMqEmailConsumer>();
 // exam service
 builder.Services.AddScoped<IExamService, ExamService>();
 // home cms service

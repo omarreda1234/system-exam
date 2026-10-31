@@ -47,8 +47,12 @@
                         <i class="fas fa-users text-xs"></i>
                         <span>Personnel Registry</span>
                     </a>
-                    @if (User.IsInRole("Admin") || HasSpecificPermission("create"))
+                    @if (User.IsInRole("Admin") || HasSpecificPermission("create") || HasSpecificPermission("access") || HasSpecificPermission("edit"))
                     {
+                        <button onclick="openManageShiftGroupsModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-purple-600/20 flex items-center gap-2">
+                            <i class="fas fa-layer-group text-xs"></i>
+                            <span>Shift Groups / مجموعات الشيفتات</span>
+                        </button>
                         <button onclick="openUploadShiftsModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2">
                             <i class="fas fa-file-excel text-xs"></i>
                             <span>Upload Shifts (.xlsx) / رفع الشيفتات</span>
@@ -86,29 +90,70 @@
     <!-- Shifts Table Section -->
     <div class="max-w-7xl mx-auto px-6 mt-8">
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
-            <div class="px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div class="px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 class="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Active Work Windows</h2>
-                    <p class="text-[11px] text-slate-400 font-medium">قائمة الشيفتات المتاحة وتوزيع الموظفين عليها</p>
+                    <p class="text-[11px] text-slate-400 font-medium">قائمة الشيفتات المتاحة وتوزيع الموظفين عليها مع إمكانية التجميع والبحث الفوري</p>
                 </div>
-                <span class="text-[10px] font-black uppercase tracking-widest px-3 py-1 bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-400 rounded-full border border-brand-200/50">
-                    Live Shift Enforcer
-                </span>
+                <div class="flex items-center gap-3">
+                    <button type="button" onclick="openManageShiftGroupsModal()" class="text-[10px] font-black uppercase tracking-wider px-3.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl border border-purple-200 transition-all flex items-center gap-1.5 shadow-2xs">
+                        <i class="fas fa-layer-group text-purple-600"></i>
+                        <span>إدارة المجموعات</span>
+                    </button>
+                    <span class="text-[10px] font-black uppercase tracking-widest px-3 py-1 bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-400 rounded-full border border-brand-200/50">
+                        Live Shift Enforcer
+                    </span>
+                </div>
+            </div>
+
+            <!-- DataTable Live Search & Filter Bar -->
+            <div class="px-8 py-4 bg-slate-50/70 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <!-- Search Box -->
+                <div class="relative flex-1 max-w-md">
+                    <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="shiftSearchInput" oninput="filterShiftsTable()" placeholder="ابحث باسم الشيفت، التوقيت، أو المجموعة..." 
+                           class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl pl-10 pr-10 py-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500 shadow-2xs transition-all" />
+                    <button type="button" onclick="clearShiftSearch()" id="btnClearShiftSearch" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm font-black">×</button>
+                </div>
+
+                <!-- Shift Groups Quick Filter Dropdown -->
+                <div class="flex items-center gap-2 shrink-0">
+                    <div class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 shadow-2xs">
+                        <i class="fas fa-layer-group text-purple-600 text-xs shrink-0"></i>
+                        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0">المجموعة:</span>
+                        <select id="shiftGroupFilterSelect" onchange="filterByGroup(this.value)" class="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer">
+                            <option value="all">🌟 جميع المجموعات (@shiftsList.Count)</option>
+                            @if (ViewBag.ShiftGroups is List<Exam.DTOs.ShiftGroupDto> shiftGroupsList)
+                            {
+                                foreach (var g in shiftGroupsList)
+                                {
+                                    <option value="@g.Id">🏷️ @g.GroupName (@g.ShiftsCount)</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Count Info -->
+                <div class="text-[11px] font-mono font-bold text-slate-500 shrink-0" id="shiftsCountDisplay">
+                    عرض @shiftsList.Count شيفت
+                </div>
             </div>
 
             <div class="overflow-x-auto w-full">
-                <table class="w-full text-left border-collapse">
+                <table class="w-full text-left border-collapse" id="shiftsMainTable">
                     <thead>
-                        <tr class="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                            <th class="py-4 px-6">Shift Identity</th>
-                            <th class="py-4 px-6">Start Time</th>
-                            <th class="py-4 px-6">End Time</th>
-                            <th class="py-4 px-6">Calculated Duration</th>
-                            <th class="py-4 px-6 text-center">Assigned Users</th>
+                        <tr class="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider select-none">
+                            <th class="py-4 px-6 cursor-pointer hover:text-brand-600" onclick="sortTable(0)">Shift Identity <i class="fas fa-sort text-[8px] ml-1"></i></th>
+                            <th class="py-4 px-6 cursor-pointer hover:text-brand-600" onclick="sortTable(1)">Group / المجموعة <i class="fas fa-sort text-[8px] ml-1"></i></th>
+                            <th class="py-4 px-6 cursor-pointer hover:text-brand-600" onclick="sortTable(2)">Start Time <i class="fas fa-sort text-[8px] ml-1"></i></th>
+                            <th class="py-4 px-6 cursor-pointer hover:text-brand-600" onclick="sortTable(3)">End Time <i class="fas fa-sort text-[8px] ml-1"></i></th>
+                            <th class="py-4 px-6 cursor-pointer hover:text-brand-600" onclick="sortTable(4)">Calculated Duration <i class="fas fa-sort text-[8px] ml-1"></i></th>
+                            <th class="py-4 px-6 text-center cursor-pointer hover:text-brand-600" onclick="sortTable(5)">Assigned Users <i class="fas fa-sort text-[8px] ml-1"></i></th>
                             <th class="py-4 px-6 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60" id="shiftsTableBody">
                         @if (!shiftsList.Any())
                         {
                             <tr>
@@ -122,7 +167,16 @@
                             DateTime startDt = DateTime.Today.Add(s.StartTime);
                             DateTime endDt = DateTime.Today.Add(s.EndTime);
 
-                            <tr id="shift-row-@s.Id" class="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors">
+                            <tr id="shift-row-@s.Id" 
+                                class="shift-data-row hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors"
+                                data-shift-id="@s.Id"
+                                data-shift-name="@s.ShiftName.ToLower()"
+                                data-group-id="@(s.GroupId ?? 0)"
+                                data-group-name="@(s.GroupName?.ToLower() ?? "")"
+                                data-start-time="@startDt.ToString("HH:mm")"
+                                data-end-time="@endDt.ToString("HH:mm")"
+                                data-duration="@s.DurationHours"
+                                data-users="@s.AssignedUsersCount">
                                 <td class="py-4 px-6">
                                     <div class="flex items-center gap-3">
                                         <div class="w-10 h-10 rounded-xl @(s.IsOvernight ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400" : "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400") flex items-center justify-center font-black text-sm shadow-sm">
@@ -133,6 +187,20 @@
                                             <span class="text-[10px] font-mono text-slate-400">ID: #@s.Id</span>
                                         </div>
                                     </div>
+                                </td>
+                                <td class="py-4 px-6">
+                                    @if (!string.IsNullOrEmpty(s.GroupName))
+                                    {
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black border shadow-2xs"
+                                              style="background-color: @(s.GroupColor ?? "#7C3AED")15; color: @(s.GroupColor ?? "#7C3AED"); border-color: @(s.GroupColor ?? "#7C3AED")40;">
+                                            <i class="fas fa-layer-group text-[9px]"></i>
+                                            @s.GroupName
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-[10px] font-bold text-slate-400 italic">بدون مجموعة</span>
+                                    }
                                 </td>
                                 <td class="py-4 px-6">
                                     <div class="flex items-center gap-2">
@@ -171,7 +239,7 @@
                                     <div class="flex items-center justify-end gap-2">
                                         @if (User.IsInRole("Admin") || HasSpecificPermission("edit"))
                                         {
-                                            <button onclick="openShiftModal(@s.Id, '@JavaScriptEncoder.Default.Encode(s.ShiftName)', '@s.StartTime.ToString(@"hh\:mm")', '@s.EndTime.ToString(@"hh\:mm")')" 
+                                            <button onclick="openShiftModal(@s.Id, '@JavaScriptEncoder.Default.Encode(s.ShiftName)', '@s.StartTime.ToString(@"hh\:mm")', '@s.EndTime.ToString(@"hh\:mm")', @(s.GroupId ?? 0))" 
                                                     class="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950/40 rounded-lg transition-all" title="Edit Shift">
                                                 <i class="fas fa-pen text-xs"></i>
                                             </button>
@@ -219,6 +287,21 @@
                 <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Shift Name / اسم الشيفت</label>
                 <input type="text" id="shiftName" required placeholder="e.g. Morning Shift, Evening Shift B" 
                        class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500 transition-all" />
+            </div>
+
+            <!-- Shift Group Selector -->
+            <div>
+                <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Shift Group / مجموعة الشيفت (اختياري)</label>
+                <select id="shiftGroupId" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-brand-500 transition-all">
+                    <option value="0">-- بدون مجموعة (None) --</option>
+                    @if (ViewBag.ShiftGroups is List<Exam.DTOs.ShiftGroupDto> modalShiftGroups)
+                    {
+                        foreach (var g in modalShiftGroups)
+                        {
+                            <option value="@g.Id">@g.GroupName</option>
+                        }
+                    }
+                </select>
             </div>
 
             <!-- Times Grid -->
@@ -342,14 +425,279 @@
     </div>
 </div>
 
+<!-- Modal: Shift Groups Management -->
+<div id="shiftGroupsModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl relative max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div class="flex items-center gap-3.5">
+                <div class="w-12 h-12 rounded-2xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl shadow-inner border border-purple-200/50">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">Shift Groups / إدارة مجموعات الشيفتات</h3>
+                    <p class="text-xs text-slate-400 font-medium">تجميع الشيفتات تحت مظلة واحدة (مثل: شيفتات صباحية، مسائية، ليلية) للتحكم والفلترة السريعة في الشركات</p>
+                </div>
+            </div>
+            <button onclick="closeManageShiftGroupsModal()" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                <i class="fas fa-times text-base"></i>
+            </button>
+        </div>
+
+        <!-- Body Grid: Left = Create/Edit Form, Right = Existing Groups List -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-5 overflow-y-auto flex-1 custom-scrollbar">
+            <!-- Form: Create / Edit Group (lg:col-span-6) -->
+            <div class="lg:col-span-6 bg-slate-50 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col space-y-4">
+                <div class="flex items-center justify-between">
+                    <h4 id="groupFormTitle" class="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-plus-circle text-purple-600"></i>
+                        <span>إضافة مجموعة شيفتات جديدة</span>
+                    </h4>
+                    <button type="button" onclick="resetGroupModalForm()" id="btnResetGroupForm" class="hidden px-2.5 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 dark:bg-purple-950/60 dark:hover:bg-purple-900 text-[11px] font-bold text-purple-700 dark:text-purple-300 transition-all flex items-center gap-1 cursor-pointer">
+                        <i class="fas fa-arrow-right"></i> <span>العودة لإنشاء مجموعة جديدة</span>
+                    </button>
+                </div>
+
+                <form id="shiftGroupForm" onsubmit="submitShiftGroup(event)" class="space-y-3.5 flex-1 flex flex-col">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" id="groupEditId" value="0" />
+
+                    <!-- Group Name -->
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">اسم المجموعة (Group Name)</label>
+                        <input type="text" id="groupNameInput" required placeholder="مثال: Morning Shifts / شيفتات صباحية"
+                               class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-purple-500 transition-all shadow-2xs" />
+                    </div>
+
+                    <!-- Description -->
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">الوصف (Description)</label>
+                        <input type="text" id="groupDescInput" placeholder="وصف مختصر للمجموعة أو أوقاتها..."
+                               class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-purple-500 transition-all shadow-2xs" />
+                    </div>
+
+                    <!-- Color Code -->
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">لون التمييز (Color Theme)</label>
+                        <div class="flex items-center gap-2">
+                            <input type="color" id="groupColorInput" value="#7C3AED" class="w-10 h-9 p-0.5 rounded-xl border border-slate-200 cursor-pointer bg-white" />
+                            <div class="flex items-center gap-1.5">
+                                <button type="button" onclick="setGroupColor('#D97706')" class="w-6 h-6 rounded-lg bg-amber-500 shadow-2xs hover:scale-110 transition-transform" title="Amber"></button>
+                                <button type="button" onclick="setGroupColor('#2563EB')" class="w-6 h-6 rounded-lg bg-blue-600 shadow-2xs hover:scale-110 transition-transform" title="Blue"></button>
+                                <button type="button" onclick="setGroupColor('#7C3AED')" class="w-6 h-6 rounded-lg bg-purple-600 shadow-2xs hover:scale-110 transition-transform" title="Purple"></button>
+                                <button type="button" onclick="setGroupColor('#059669')" class="w-6 h-6 rounded-lg bg-emerald-600 shadow-2xs hover:scale-110 transition-transform" title="Emerald"></button>
+                                <button type="button" onclick="setGroupColor('#DC2626')" class="w-6 h-6 rounded-lg bg-rose-600 shadow-2xs hover:scale-110 transition-transform" title="Rose"></button>
+                                <button type="button" onclick="setGroupColor('#475569')" class="w-6 h-6 rounded-lg bg-slate-600 shadow-2xs hover:scale-110 transition-transform" title="Slate"></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Shifts Checklist -->
+                    <div class="flex-1 flex flex-col space-y-2">
+                        <div class="flex items-center justify-between">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                تعيين الشيفتات التابعة للمجموعة (<span id="modalSelectedShiftsCount">0</span> محدد)
+                            </label>
+                            <div class="flex items-center gap-2 text-xs">
+                                <button type="button" onclick="toggleModalGroupShifts(true)" class="text-[10px] font-bold text-purple-600 hover:underline">الكل</button>
+                                <span class="text-slate-300">|</span>
+                                <button type="button" onclick="toggleModalGroupShifts(false)" class="text-[10px] font-bold text-slate-400 hover:underline">إلغاء</button>
+                            </div>
+                        </div>
+                        <input type="text" id="modalShiftFilterInput" oninput="filterModalShiftsList(this.value)" placeholder="ابحث باسم الشيفت لتعيينه..."
+                               class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-purple-500 shadow-2xs" />
+                        
+                        <div id="modalShiftsChecklist" class="max-h-48 overflow-y-auto custom-scrollbar p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1">
+                            <!-- Populated dynamically by JS -->
+                        </div>
+                    </div>
+
+                    <div class="pt-2 flex items-center justify-end gap-2">
+                        <button type="submit" id="btnSaveShiftGroup" class="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-purple-600/20 transition-all flex items-center justify-center gap-2">
+                            <i class="fas fa-save"></i>
+                            <span id="btnSaveShiftGroupText">حفظ المجموعة</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Existing Groups List (lg:col-span-6) -->
+            <div class="lg:col-span-6 flex flex-col space-y-3">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div class="flex items-center gap-2">
+                        <h4 class="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-list text-purple-600"></i>
+                            <span>المجموعات الحالية في النظام</span>
+                        </h4>
+                        <span id="existingGroupsCountBadge" class="text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-0.5 rounded-full"></span>
+                    </div>
+                    <button type="button" onclick="resetGroupModalForm()" class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 active:scale-95 text-white text-xs font-black shadow-sm transition-all flex items-center gap-1.5 cursor-pointer" title="إنشاء وإضافة مجموعة جديدة">
+                        <i class="fas fa-plus text-xs"></i>
+                        <span>+ إضافة مجموعة جديدة</span>
+                    </button>
+                </div>
+
+                <div id="modalExistingGroupsList" class="space-y-2.5 overflow-y-auto max-h-[460px] custom-scrollbar p-1">
+                    <!-- Populated dynamically by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-    function openShiftModal(id, name = '', start = '08:00', end = '16:00') {
+    const allShiftsData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(shiftsList.Select(s => new {
+        id = s.Id,
+        name = s.ShiftName,
+        start = DateTime.Today.Add(s.StartTime).ToString("hh:mm tt"),
+        end = DateTime.Today.Add(s.EndTime).ToString("hh:mm tt"),
+        duration = s.DurationHours,
+        groupId = s.GroupId ?? 0,
+        groupName = s.GroupName ?? ""
+    })));
+
+    let currentFilterGroupId = 'all';
+    let sortColumnIndex = -1;
+    let sortAscending = true;
+    let shiftGroupsCache = [];
+
+    // ==========================================
+    // DataTable Instant Filter & Search
+    // ==========================================
+    function filterShiftsTable() {
+        const query = (document.getElementById('shiftSearchInput')?.value || '').trim().toLowerCase();
+        const clearBtn = document.getElementById('btnClearShiftSearch');
+        if (clearBtn) {
+            if (query.length > 0) clearBtn.classList.remove('hidden');
+            else clearBtn.classList.add('hidden');
+        }
+
+        const rows = document.querySelectorAll('.shift-data-row');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const name = row.getAttribute('data-shift-name') || '';
+            const gId = row.getAttribute('data-group-id') || '0';
+            const gName = row.getAttribute('data-group-name') || '';
+            const sTime = row.getAttribute('data-start-time') || '';
+            const eTime = row.getAttribute('data-end-time') || '';
+            const duration = row.getAttribute('data-duration') || '';
+            const shiftId = row.getAttribute('data-shift-id') || '';
+
+            const matchesGroup = (currentFilterGroupId === 'all' || currentFilterGroupId === null) || (gId === String(currentFilterGroupId));
+            const matchesQuery = !query || 
+                name.includes(query) || 
+                gName.includes(query) || 
+                sTime.includes(query) || 
+                eTime.includes(query) || 
+                duration.includes(query) ||
+                shiftId.includes(query);
+
+            if (matchesGroup && matchesQuery) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        const countDisplay = document.getElementById('shiftsCountDisplay');
+        if (countDisplay) {
+            countDisplay.textContent = `عرض ${visibleCount} من ${rows.length} شيفت`;
+        }
+
+        let emptyRow = document.getElementById('shiftsNoMatchRow');
+        if (visibleCount === 0 && rows.length > 0) {
+            if (!emptyRow) {
+                emptyRow = document.createElement('tr');
+                emptyRow.id = 'shiftsNoMatchRow';
+                emptyRow.innerHTML = `<td colspan="7" class="py-10 text-center text-xs font-bold text-slate-400">لا توجد شيفتات مطابقة لمعايير البحث الحالية.</td>`;
+                document.getElementById('shiftsTableBody')?.appendChild(emptyRow);
+            }
+            emptyRow.style.display = '';
+        } else if (emptyRow) {
+            emptyRow.style.display = 'none';
+        }
+    }
+
+    function clearShiftSearch() {
+        const input = document.getElementById('shiftSearchInput');
+        if (input) input.value = '';
+        filterShiftsTable();
+    }
+
+    function filterByGroup(groupId) {
+        currentFilterGroupId = (groupId === null || groupId === 'all' || !groupId) ? 'all' : String(groupId);
+        const sel = document.getElementById('shiftGroupFilterSelect');
+        if (sel && sel.value !== currentFilterGroupId) {
+            sel.value = currentFilterGroupId;
+        }
+        filterShiftsTable();
+    }
+
+    // ==========================================
+    // Table Column Sorting
+    // ==========================================
+    function sortTable(colIndex) {
+        const tbody = document.getElementById('shiftsTableBody');
+        const rows = Array.from(document.querySelectorAll('.shift-data-row'));
+        if (rows.length === 0) return;
+
+        if (sortColumnIndex === colIndex) {
+            sortAscending = !sortAscending;
+        } else {
+            sortColumnIndex = colIndex;
+            sortAscending = true;
+        }
+
+        rows.sort((a, b) => {
+            let valA, valB;
+            switch (colIndex) {
+                case 0: // Name
+                    valA = a.getAttribute('data-shift-name') || '';
+                    valB = b.getAttribute('data-shift-name') || '';
+                    return sortAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                case 1: // Group
+                    valA = a.getAttribute('data-group-name') || '';
+                    valB = b.getAttribute('data-group-name') || '';
+                    return sortAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                case 2: // Start Time
+                    valA = a.getAttribute('data-start-time') || '';
+                    valB = b.getAttribute('data-start-time') || '';
+                    return sortAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                case 3: // End Time
+                    valA = a.getAttribute('data-end-time') || '';
+                    valB = b.getAttribute('data-end-time') || '';
+                    return sortAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                case 4: // Duration
+                    valA = parseFloat(a.getAttribute('data-duration') || '0');
+                    valB = parseFloat(b.getAttribute('data-duration') || '0');
+                    return sortAscending ? valA - valB : valB - valA;
+                case 5: // Users
+                    valA = parseInt(a.getAttribute('data-users') || '0', 10);
+                    valB = parseInt(b.getAttribute('data-users') || '0', 10);
+                    return sortAscending ? valA - valB : valB - valA;
+                default:
+                    return 0;
+            }
+        });
+
+        rows.forEach(r => tbody.appendChild(r));
+    }
+
+    // ==========================================
+    // Add / Edit Shift Modal
+    // ==========================================
+    function openShiftModal(id, name = '', start = '08:00', end = '16:00', groupId = 0) {
         document.getElementById('shiftId').value = id;
         document.getElementById('modalTitle').textContent = id > 0 ? 'Edit Shift / تعديل الشيفت' : 'Add New Shift / إضافة شيفت جديد';
         document.getElementById('shiftName').value = name;
         document.getElementById('shiftStartTime').value = start || '08:00';
         document.getElementById('shiftEndTime').value = end || '16:00';
         
+        const grpSelect = document.getElementById('shiftGroupId');
+        if (grpSelect) grpSelect.value = groupId || 0;
+
         calculateDurationPreview();
         document.getElementById('shiftModal').classList.remove('hidden');
     }
@@ -418,6 +766,7 @@
         const name = document.getElementById('shiftName').value.trim();
         const startTime = document.getElementById('shiftStartTime').value;
         const endTime = document.getElementById('shiftEndTime').value;
+        const groupId = parseInt(document.getElementById('shiftGroupId')?.value || '0', 10);
         const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
 
         const url = id > 0 ? '/Admin/EditShift' : '/Admin/AddShift';
@@ -426,6 +775,7 @@
         formData.append('name', name);
         formData.append('startTime', startTime);
         formData.append('endTime', endTime);
+        if (groupId > 0) formData.append('groupId', groupId);
         formData.append('__RequestVerificationToken', token);
 
         const btn = document.getElementById('btnSubmitShift');
@@ -477,6 +827,7 @@
             if (data.success) {
                 const row = document.getElementById('shift-row-' + id);
                 if (row) row.remove();
+                filterShiftsTable();
             } else {
                 alert(data.message || 'Failed to delete shift.');
             }
@@ -485,6 +836,298 @@
         }
     }
 
+    // ==========================================
+    // Shift Groups Management Modal
+    // ==========================================
+    function setGroupColor(hex) {
+        document.getElementById('groupColorInput').value = hex;
+    }
+
+    async function openManageShiftGroupsModal() {
+        document.getElementById('shiftGroupsModal').classList.remove('hidden');
+        resetGroupModalForm();
+        await loadShiftGroups();
+    }
+
+    function closeManageShiftGroupsModal() {
+        document.getElementById('shiftGroupsModal').classList.add('hidden');
+    }
+
+    function renderModalShiftsChecklist(selectedIds = []) {
+        const container = document.getElementById('modalShiftsChecklist');
+        if (!container) return;
+
+        const selSet = new Set(selectedIds);
+        container.innerHTML = allShiftsData.map(s => {
+            const isChecked = selSet.has(s.id);
+            return `
+                <label class="modal-shift-item flex items-center justify-between p-2 rounded-xl border ${isChecked ? 'bg-purple-50/80 border-purple-300 text-purple-950 font-bold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'} cursor-pointer text-xs select-none hover:border-purple-300 transition-all" data-shift-name="${s.name.toLowerCase()}">
+                    <div class="flex items-center gap-2 truncate">
+                        <input type="checkbox" value="${s.id}" ${isChecked ? 'checked' : ''} onchange="updateModalSelectedCount()" class="modal-shift-chk w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 border-slate-300" />
+                        <span class="truncate">${s.name}</span>
+                    </div>
+                    <span class="text-[10px] font-mono text-slate-400 shrink-0 ml-2">
+                        ${s.duration} hrs (${s.start} - ${s.end})
+                    </span>
+                </label>
+            `;
+        }).join('');
+
+        updateModalSelectedCount();
+    }
+
+    function filterModalShiftsList(term) {
+        const q = (term || '').trim().toLowerCase();
+        document.querySelectorAll('.modal-shift-item').forEach(el => {
+            const name = el.getAttribute('data-shift-name') || '';
+            el.style.display = (!q || name.includes(q)) ? '' : 'none';
+        });
+    }
+
+    function toggleModalGroupShifts(selectAll) {
+        document.querySelectorAll('.modal-shift-chk').forEach(c => {
+            // Only affect visible items
+            if (c.closest('.modal-shift-item').style.display !== 'none') {
+                c.checked = selectAll;
+            }
+        });
+        updateModalSelectedCount();
+    }
+
+    function updateModalSelectedCount() {
+        const checked = document.querySelectorAll('.modal-shift-chk:checked').length;
+        const countEl = document.getElementById('modalSelectedShiftsCount');
+        if (countEl) countEl.textContent = checked;
+    }
+
+    async function loadShiftGroups() {
+        try {
+            const res = await fetch('/Admin/GetShiftGroups');
+            const data = await res.json();
+            if (data.success && data.groups) {
+                shiftGroupsCache = data.groups;
+                renderExistingGroupsList(data.groups);
+            }
+        } catch (err) {
+            console.error('Failed to load shift groups:', err);
+        }
+    }
+
+    function renderExistingGroupsList(groups) {
+        const container = document.getElementById('modalExistingGroupsList');
+        const badge = document.getElementById('existingGroupsCountBadge');
+        if (!container) return;
+
+        if (badge) badge.textContent = `${groups.length} مجموعات`;
+
+        if (groups.length === 0) {
+            container.innerHTML = `
+                <div class="p-8 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+                    لم يتم إنشاء أي مجموعات بعد. استخدم النموذج لإضافة مجموعة جديدة.
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = groups.map(g => {
+            const color = g.colorCode || '#7C3AED';
+            const count = g.shiftsCount || (g.shiftIds ? g.shiftIds.length : 0);
+            return `
+                <div class="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xs hover:shadow-xs flex items-center justify-between gap-3 transition-all">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm text-sm font-bold" style="background-color: ${color};">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <h5 class="text-xs font-black text-slate-900 dark:text-white truncate flex items-center gap-2">
+                                <span>${g.groupName}</span>
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-black border" style="background-color: ${color}15; color: ${color}; border-color: ${color}30;">
+                                    ${count} شيفت
+                                </span>
+                            </h5>
+                            <p class="text-[10px] text-slate-400 truncate mt-0.5">${g.description || 'بدون وصف'}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button type="button" onclick="editGroupInModal(${g.id})" class="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded-xl text-xs transition-colors" title="تعديل المجموعة">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                        <button type="button" onclick="deleteShiftGroupFromModal(${g.id}, '${g.groupName.replace(/'/g, "\\'")}')" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs transition-colors" title="حذف المجموعة">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function editGroupInModal(groupId) {
+        const group = shiftGroupsCache.find(g => g.id === groupId);
+        if (!group) return;
+
+        document.getElementById('groupEditId').value = group.id;
+        document.getElementById('groupNameInput').value = group.groupName;
+        document.getElementById('groupDescInput').value = group.description || '';
+        document.getElementById('groupColorInput').value = group.colorCode || '#7C3AED';
+
+        document.getElementById('groupFormTitle').innerHTML = `<i class="fas fa-pen text-purple-600"></i> <span>تعديل مجموعة: ${group.groupName}</span>`;
+        document.getElementById('btnSaveShiftGroupText').textContent = 'تحديث وحفظ المجموعة';
+        document.getElementById('btnResetGroupForm').classList.remove('hidden');
+
+        renderModalShiftsChecklist(group.shiftIds || []);
+    }
+
+    function resetGroupModalForm() {
+        document.getElementById('groupEditId').value = '0';
+        document.getElementById('groupNameInput').value = '';
+        document.getElementById('groupDescInput').value = '';
+        document.getElementById('groupColorInput').value = '#7C3AED';
+
+        document.getElementById('groupFormTitle').innerHTML = `<i class="fas fa-plus-circle text-purple-600"></i> <span>إضافة مجموعة شيفتات جديدة</span>`;
+        document.getElementById('btnSaveShiftGroupText').textContent = 'حفظ وإنشاء المجموعة';
+        document.getElementById('btnResetGroupForm').classList.add('hidden');
+
+        renderModalShiftsChecklist([]);
+
+        const nameInput = document.getElementById('groupNameInput');
+        if (nameInput) {
+            nameInput.focus();
+            nameInput.classList.add('ring-2', 'ring-purple-500');
+            setTimeout(() => nameInput.classList.remove('ring-2', 'ring-purple-500'), 1500);
+        }
+    }
+
+    async function submitShiftGroup(e) {
+        e.preventDefault();
+        const id = parseInt(document.getElementById('groupEditId').value, 10) || 0;
+        const name = document.getElementById('groupNameInput').value.trim();
+        const desc = document.getElementById('groupDescInput').value.trim();
+        const color = document.getElementById('groupColorInput').value || '#7C3AED';
+
+        const shiftIds = Array.from(document.querySelectorAll('.modal-shift-chk:checked')).map(c => parseInt(c.value, 10));
+
+        const btn = document.getElementById('btnSaveShiftGroup');
+        const origText = document.getElementById('btnSaveShiftGroupText').textContent;
+        btn.disabled = true;
+        const token = document.querySelector('#shiftGroupForm input[name="__RequestVerificationToken"]')?.value
+                   || document.querySelector('input[name="__RequestVerificationToken"]')?.value 
+                   || (window.$ ? $('input[name="__RequestVerificationToken"]').val() : '') 
+                   || '';
+
+        try {
+            const res = await fetch('/Admin/SaveShiftGroup', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': token,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    id: id,
+                    groupName: name,
+                    description: desc,
+                    colorCode: color,
+                    shiftIds: shiftIds
+                })
+            });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                let errMsg = `خطأ في الخادم (${res.status})`;
+                try {
+                    const parsed = JSON.parse(errText);
+                    if (parsed.message) errMsg = parsed.message;
+                } catch {
+                    if (res.status === 400) errMsg = 'تعذر التحقق من رمز الحماية (400 Bad Request). يرجى تحديث الصفحة والمحاولة مجدداً.';
+                    else if (res.status === 401 || res.status === 403) errMsg = 'غير مصرح لك بتنفيذ هذه العملية.';
+                }
+                Swal.fire('خطأ', errMsg, 'error');
+                return;
+            }
+
+            const data = await res.json();
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم الحفظ',
+                    text: data.message || 'تم حفظ مجموعة الشيفتات بنجاح.',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            } else {
+                Swal.fire('خطأ', data.message || 'فشل حفظ المجموعة', 'error');
+            }
+        } catch (err) {
+            Swal.fire('خطأ', 'حدث خطأ أثناء الاتصال: ' + err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            document.getElementById('btnSaveShiftGroupText').textContent = origText;
+        }
+    }
+
+    async function deleteShiftGroupFromModal(groupId, groupName) {
+        const confirm = await Swal.fire({
+            title: `<div class="text-base font-black text-slate-800 dark:text-white">حذف مجموعة: ${groupName}</div>`,
+            text: 'هل أنت متأكد من حذف هذه المجموعة؟ لن يتم حذف الشيفتات ذاتها بل سيتم إزالتها فقط من هذه المجموعة.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'نعم، حذف',
+            cancelButtonText: 'إلغاء',
+            customClass: {
+                confirmButton: 'px-4 py-2 rounded-xl bg-rose-600 text-white font-bold text-xs',
+                cancelButton: 'px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs'
+            }
+        });
+
+        if (confirm.isConfirmed) {
+            try {
+                const token = document.querySelector('#shiftGroupForm input[name="__RequestVerificationToken"]')?.value
+                           || document.querySelector('input[name="__RequestVerificationToken"]')?.value 
+                           || (window.$ ? $('input[name="__RequestVerificationToken"]').val() : '') 
+                           || '';
+
+                const res = await fetch(`/Admin/DeleteShiftGroup?id=${groupId}`, { 
+                    method: 'POST',
+                    headers: {
+                        'RequestVerificationToken': token,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    let errMsg = `خطأ في الخادم (${res.status})`;
+                    try {
+                        const parsed = JSON.parse(errText);
+                        if (parsed.message) errMsg = parsed.message;
+                    } catch {
+                        if (res.status === 400) errMsg = 'تعذر التحقق من رمز الحماية (400 Bad Request). يرجى تحديث الصفحة.';
+                    }
+                    Swal.fire('خطأ', errMsg, 'error');
+                    return;
+                }
+
+                const data = await res.json();
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'تم الحذف',
+                        text: data.message,
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => location.reload());
+                } else {
+                    Swal.fire('خطأ', data.message || 'تعذر حذف المجموعة', 'error');
+                }
+            } catch (err) {
+                Swal.fire('خطأ', err.message, 'error');
+            }
+        }
+    }
+
+    // ==========================================
+    // Upload Excel
+    // ==========================================
     function openUploadShiftsModal() {
         const fileInput = document.getElementById('shiftsExcelFileInput');
         if (fileInput) fileInput.value = '';

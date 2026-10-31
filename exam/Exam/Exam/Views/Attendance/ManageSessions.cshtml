@@ -237,7 +237,20 @@
                         <p class="text-xs text-slate-500 font-medium mt-0.5">Assign attendees, trigger in-app notifications, and dispatch email invites via n8n API</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap justify-end">
+                    <!-- Total Seats Control -->
+                    <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200/90 shadow-2xs" title="إجمالي سعة المقاعد المخصصة لهذه الجلسة التدريبية">
+                        <span class="text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                            <i class="fas fa-chair text-purple-600"></i>
+                            <span>سعة المقاعد:</span>
+                        </span>
+                        <input type="number" id="inputSessionTotalSeats" min="1" max="1000" value="50" oninput="onSessionTotalSeatsChanged()"
+                               class="w-14 text-center text-xs font-black text-purple-700 bg-purple-50 rounded-lg py-1 border border-purple-200 outline-none focus:ring-1 focus:ring-purple-500 font-mono" />
+                        <button type="button" onclick="saveSessionTotalSeatsDirect()" class="text-xs font-black text-purple-600 hover:text-purple-800 p-1 transition-all" title="حفظ سعة المقاعد للجلسة">
+                            <i class="fas fa-save"></i>
+                        </button>
+                    </div>
+
                     <button type="button" id="btnRefreshSessionTrainees" onclick="refreshCurrentSessionTrainees()" class="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs flex items-center gap-2 transition-all shadow-2xs active:scale-95" title="Refresh Trainee List">
                         <i class="fas fa-sync-alt text-brand-600" id="iconRefreshSessionTrainees"></i>
                         <span>Refresh</span>
@@ -345,6 +358,19 @@
                             <input type="checkbox" id="chkSendN8nEmail" checked class="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300" />
                         </label>
 
+                        <label class="flex items-center justify-between p-3.5 bg-white hover:bg-slate-50/80 border border-slate-200/90 rounded-2xl cursor-pointer shadow-2xs transition-all">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm shrink-0 border border-emerald-100">
+                                    <i class="fas fa-paper-plane"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-black text-slate-800">إرسال إيميلات الاعتماد (عبر RabbitMQ Broker)</div>
+                                    <div class="text-[11px] text-slate-400 font-medium">إرسال إيميل فوري للمرشحين المعتمدين عبر وسيط الرسائل</div>
+                                </div>
+                            </div>
+                            <input type="checkbox" id="chkManualSendRabbitMqEmail" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300" />
+                        </label>
+
                         <label class="flex items-center justify-between p-3.5 bg-amber-50/40 hover:bg-amber-50/70 border border-amber-200/80 rounded-2xl cursor-pointer shadow-2xs transition-all">
                             <div class="flex items-center gap-3">
                                 <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-sm shrink-0 border border-amber-200">
@@ -389,10 +415,14 @@
                         </p>
                         <input type="file" id="sessionExcelFile" accept=".xlsx, .xls" class="mt-4 text-xs font-bold text-slate-600 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer shadow-2xs" />
                         
-                        <div class="mt-4 flex items-center justify-center">
+                        <div class="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
                             <label class="flex items-center gap-2.5 text-xs font-bold text-amber-800 cursor-pointer bg-amber-50/80 border border-amber-200 px-4 py-2.5 rounded-xl shadow-2xs">
                                 <input type="checkbox" id="chkExcelBypassApproval" class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-amber-300" />
                                 <span>⚡ Direct Approval: Bypass branch manager review (Direct Confirm)</span>
+                            </label>
+                            <label class="flex items-center gap-2.5 text-xs font-bold text-emerald-800 cursor-pointer bg-emerald-50/80 border border-emerald-200 px-4 py-2.5 rounded-xl shadow-2xs">
+                                <input type="checkbox" id="chkExcelSendRabbitMqEmail" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-emerald-300" />
+                                <span>✉️ إرسال إيميل فوري للمرشحين المعتمدين (RabbitMQ)</span>
                             </label>
                         </div>
                     </div>
@@ -431,13 +461,14 @@
                             <select id="injectionRuleSelect" onchange="applySelectedInjectionRule()" class="w-full sm:max-w-xs px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-purple-500 shadow-2xs">
                                 <option value="">-- Select Saved Rule Preset --</option>
                             </select>
-                            <button type="button" onclick="deleteCurrentSelectedRule()" id="btnDeleteSelectedRule" class="hidden px-2.5 py-2 text-rose-500 hover:bg-rose-50 rounded-xl text-xs font-bold transition-colors" title="Delete this rule preset">
-                                <i class="fas fa-trash-alt"></i>
+                            <button type="button" onclick="deleteCurrentSelectedRule()" id="btnDeleteSelectedRule" class="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 shrink-0" title="حذف القالب">
+                                <i class="fas fa-trash-alt text-rose-500"></i>
+                                <span id="btnDeleteSelectedRuleText">حذف قالب</span>
                             </button>
                         </div>
                         <div class="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
-                            <button type="button" onclick="promptSaveCurrentInjectionRule()" class="px-3.5 py-2 bg-white border border-purple-200 hover:bg-purple-50 text-purple-700 text-xs font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1.5">
-                                <i class="fas fa-save text-[11px]"></i> <span>Save Quotas as Preset</span>
+                            <button type="button" onclick="promptSaveCurrentInjectionRule()" class="px-3.5 py-2 bg-purple-50 border border-purple-200/80 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1.5" title="حفظ الكوتة المحددة كقالب جاهز للاستخدام لاحقاً بضغطة زر">
+                                <i class="fas fa-save text-[11px]"></i> <span>حفظ الكوتة كقالب (Save Preset)</span>
                             </button>
                             <button type="button" onclick="clearInjectionQuotas()" class="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-all shadow-2xs">
                                 Reset
@@ -445,17 +476,176 @@
                         </div>
                     </div>
 
-                    <!-- Department Quotas List Container -->
-                    <div class="space-y-2.5">
-                        <div class="flex items-center justify-between px-1">
-                            <span class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                                <i class="fas fa-sitemap text-purple-600"></i> <span>Department Quotas Allocation</span>
-                            </span>
-                            <span id="injectionTotalHeadcountBadge" class="text-xs font-black font-mono text-purple-700 bg-purple-50 px-3.5 py-1.5 rounded-xl border border-purple-200/80 shadow-2xs">
-                                Total Required: 0 Seats
-                            </span>
+                    <!-- Scope Filters: Target Branches & Shifts (Universal for Pharmacists/Assistants AND Corporate Departments) -->
+                    <div class="p-4 bg-gradient-to-br from-slate-50 via-purple-50/20 to-slate-50 rounded-2xl border border-purple-200/70 space-y-3.5 shadow-2xs">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-100/80 pb-2.5">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center text-xs shadow-sm">
+                                    <i class="fas fa-filter"></i>
+                                </div>
+                                <div>
+                                    <h5 class="text-xs font-black text-slate-800 flex items-center gap-2">
+                                        <span>نطاق الفروع والشيفتات المستهدفة (Target Branches & Shifts)</span>
+                                    </h5>
+                                    <p class="text-[10px] text-slate-500 font-semibold">تصفية المرشحين من فروع وشيفتات محددة (يطبق على كوتة الصيادلة والمساعدين وكذلك على موظفي الأقسام الإدارية)</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 self-start sm:self-auto">
+                                <span id="scopeActiveFiltersBadge" class="text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200 px-3 py-1 rounded-full shadow-2xs">
+                                    جميع الفروع • جميع الشيفتات
+                                </span>
+                            </div>
                         </div>
 
+                        <!-- Branches & Shifts in Responsive Grid -->
+                        <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+                            <!-- Branches (lg:col-span-8) -->
+                            <div class="lg:col-span-8 bg-white p-3.5 rounded-xl border border-slate-200/80 space-y-2.5 shadow-2xs">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-code-branch text-purple-600 text-xs"></i>
+                                        <span class="text-xs font-black text-slate-800">الفروع المستهدفة</span>
+                                        <span id="selectedBranchesCountBadge" class="text-[10px] font-black bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full">
+                                            جميع الفروع
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-2 text-xs">
+                                        <button type="button" onclick="selectAllInjectionBranches(true)" class="text-[11px] font-bold text-purple-600 hover:underline">اختيار الكل</button>
+                                        <span class="text-slate-300">|</span>
+                                        <button type="button" onclick="selectAllInjectionBranches(false)" class="text-[11px] font-bold text-slate-500 hover:underline">إلغاء التحديد</button>
+                                    </div>
+                                </div>
+
+                                <div class="relative">
+                                    <i class="fas fa-search absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                                    <input type="text" id="injectionBranchSearchInput" oninput="filterInjectionBranchesList(this.value)" placeholder="ابحث باسم الفرع..." class="w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 focus:bg-white shadow-2xs" />
+                                </div>
+
+                                <div id="injectionBranchesContainer" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto custom-scrollbar p-1">
+                                    <!-- Populated dynamically by JS -->
+                                </div>
+                            </div>
+
+                            <!-- Shifts (lg:col-span-4) -->
+                            <div class="lg:col-span-4 bg-white p-3.5 rounded-xl border border-slate-200/80 space-y-2.5 shadow-2xs flex flex-col">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-clock text-indigo-600 text-xs"></i>
+                                        <span class="text-xs font-black text-slate-800">شيفتات العمل</span>
+                                        <span id="selectedShiftsCountBadge" class="text-[10px] font-black bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full">
+                                            جميع الشيفتات
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-2 text-xs">
+                                        <a href="/Admin/Shifts" target="_blank" class="text-[10px] font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1" title="إدارة وإضافة مجموعات الشيفتات">
+                                            <i class="fas fa-layer-group text-[9px]"></i> <span>المجموعات</span>
+                                        </a>
+                                        <span class="text-slate-300">|</span>
+                                        <button type="button" onclick="selectAllInjectionShifts(true)" class="text-[11px] font-bold text-indigo-600 hover:underline">الكل</button>
+                                        <span class="text-slate-300">|</span>
+                                        <button type="button" onclick="selectAllInjectionShifts(false)" class="text-[11px] font-bold text-slate-500 hover:underline">إلغاء</button>
+                                    </div>
+                                </div>
+
+                                <!-- Shift Groups Quick Filter Dropdown -->
+                                <div id="injectionShiftGroupsBar" class="w-full">
+                                    <!-- Rendered dynamically by JS -->
+                                </div>
+
+                                <div class="relative">
+                                    <i class="fas fa-search absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                                    <input type="text" id="injectionShiftSearchInput" oninput="filterInjectionShiftsList(this.value)" placeholder="ابحث باسم الشيفت..." class="w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 focus:bg-white shadow-2xs" />
+                                </div>
+
+                                <div id="injectionShiftsContainer" class="flex flex-col gap-1.5 overflow-y-auto max-h-44 custom-scrollbar p-1 flex-1">
+                                    <!-- Populated dynamically by JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Distribution Mode Tabs: Branch Staff (Pharmacists & Assistants) vs Departments vs Combined -->
+                    <div class="flex items-center p-1 bg-slate-100 rounded-2xl border border-slate-200 gap-1">
+                        <button type="button" id="btnModeBranchStaff" onclick="switchInjectionMode('branchStaff')" class="flex-1 py-2.5 px-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5 bg-white text-purple-700 shadow-sm border border-purple-200/50">
+                            <i class="fas fa-user-doctor"></i>
+                            <span>طاقم الفروع (صيادلة ومساعدين)</span>
+                            <span id="badgeTabBranchStaffCount" class="hidden text-[10px] font-black bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full"></span>
+                        </button>
+                        <button type="button" id="btnModeDepartments" onclick="switchInjectionMode('departments')" class="flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-800">
+                            <i class="fas fa-sitemap"></i>
+                            <span>الأقسام الإدارية (Departments)</span>
+                            <span id="badgeTabDeptCount" class="hidden text-[10px] font-black bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full"></span>
+                        </button>
+                        <button type="button" id="btnModeCombined" onclick="switchInjectionMode('combined')" class="flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-800" title="عرض الصيادلة والمساعدين والأقسام الإدارية معاً في شاشة واحدة">
+                            <i class="fas fa-layer-group"></i>
+                            <span>عرض الكل معاً (Combined)</span>
+                        </button>
+                    </div>
+
+                    <!-- Headcount Badge Bar -->
+                    <div class="flex items-center justify-between px-1">
+                        <span id="injectionModeTitleBadge" class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-hospital-user text-purple-600"></i> <span id="injectionSectionTitle">كوتة الصيادلة والمساعدين بالفروع</span>
+                        </span>
+                        <span id="injectionTotalHeadcountBadge" class="text-xs font-black font-mono text-purple-700 bg-purple-50 px-3.5 py-1.5 rounded-xl border border-purple-200/80 shadow-2xs">
+                            المقاعد المطلوبة: 0 مقعد
+                        </span>
+                    </div>
+
+                    <!-- Container 1: Branch Staff Quotas (الصيادلة والمساعدين) -->
+                    <div id="injectionBranchStaffContainer" class="space-y-4">
+                        <!-- Quota Inputs for Pharmacist and Assistant -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <!-- Pharmacist Card -->
+                            <div class="p-4 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 rounded-2xl border-2 border-purple-200/80 shadow-2xs space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center text-lg font-black shadow-sm">
+                                            <i class="fas fa-user-doctor"></i>
+                                        </div>
+                                        <div>
+                                            <h5 class="text-xs font-black text-slate-900">كوتة الصيادلة (Pharmacists)</h5>
+                                            <span id="badgeAvailablePharmacists" class="text-[10px] font-bold text-purple-700 bg-purple-100/90 px-2.5 py-0.5 rounded-full mt-1 inline-block">
+                                                جاري التحميل...
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 bg-white border-2 border-purple-300 rounded-xl px-3 py-1.5 focus-within:border-purple-600 shadow-2xs">
+                                        <span class="text-[10px] font-black uppercase tracking-wider text-purple-600">المقاعد:</span>
+                                        <input type="number" id="inputQuotaPharmacist" min="0" value="0"
+                                               oninput="onBranchStaffQuotaChanged()"
+                                               class="w-14 text-center text-sm font-black text-purple-800 outline-none font-mono" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Assistant Card -->
+                            <div class="p-4 bg-gradient-to-br from-indigo-50/70 via-white to-indigo-50/30 rounded-2xl border-2 border-indigo-200/80 shadow-2xs space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white flex items-center justify-center text-lg font-black shadow-sm">
+                                            <i class="fas fa-hand-holding-medical"></i>
+                                        </div>
+                                        <div>
+                                            <h5 class="text-xs font-black text-slate-900">كوتة المساعدين (Assistants)</h5>
+                                            <span id="badgeAvailableAssistants" class="text-[10px] font-bold text-indigo-700 bg-indigo-100/90 px-2.5 py-0.5 rounded-full mt-1 inline-block">
+                                                جاري التحميل...
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 bg-white border-2 border-indigo-300 rounded-xl px-3 py-1.5 focus-within:border-indigo-600 shadow-2xs">
+                                        <span class="text-[10px] font-black uppercase tracking-wider text-indigo-600">المقاعد:</span>
+                                        <input type="number" id="inputQuotaAssistant" min="0" value="0"
+                                               oninput="onBranchStaffQuotaChanged()"
+                                               class="w-14 text-center text-sm font-black text-indigo-800 outline-none font-mono" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Container 2: Department Quotas List Container (Corporate Departments) -->
+                    <div id="injectionDepartmentsContainer" class="hidden space-y-2.5">
                         <div id="injectionDepartmentsList" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto custom-scrollbar p-1">
                             <div class="col-span-full text-center py-8 text-slate-400">
                                 <i class="fas fa-spinner fa-spin text-xl text-purple-500 mb-2 block"></i>
@@ -494,6 +684,20 @@
                             <input type="checkbox" id="chkInjectionSendN8n" checked class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300" />
                         </label>
 
+                        <!-- RabbitMQ Email Dispatch -->
+                        <label class="flex items-center justify-between p-3.5 bg-indigo-50/40 hover:bg-indigo-50/70 border border-indigo-200/80 rounded-2xl cursor-pointer shadow-2xs transition-all">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm shrink-0 border border-indigo-200">
+                                    <i class="fas fa-paper-plane"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-black text-indigo-900">إرسال إيميل رسمي للمرشحين (RabbitMQ Broker)</div>
+                                    <div class="text-[11px] text-indigo-700/80 font-medium">إرسال تفاصيل وموعد الدورة إلى بريد الموظف تلقائياً عبر وسيط الرسائل</div>
+                                </div>
+                            </div>
+                            <input type="checkbox" id="chkInjectionSendRabbitMqEmail" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-indigo-300" />
+                        </label>
+
                         <!-- Instant Direct Approval -->
                         <label class="flex items-center justify-between p-3.5 bg-amber-50/40 hover:bg-amber-50/70 border border-amber-200/80 rounded-2xl cursor-pointer shadow-2xs transition-all">
                             <div class="flex items-center gap-3">
@@ -511,7 +715,7 @@
 
                     <!-- Preview & Action Buttons -->
                     <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                        <button type="button" onclick="previewInjectionRule()" class="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-black text-xs uppercase tracking-wider shadow-2xs hover:border-purple-300 transition-all flex items-center justify-center gap-2 active:scale-95">
+                        <button type="button" id="btnPreviewInjection" onclick="previewInjectionRule()" class="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-black text-xs uppercase tracking-wider shadow-2xs hover:border-purple-300 transition-all flex items-center justify-center gap-2 active:scale-95">
                             <i class="fas fa-eye text-purple-600"></i> <span>Preview Fair Rotation</span>
                         </button>
                         <button type="button" onclick="executeInjectionRule()" id="btnExecuteInjection" class="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-brand-600 hover:from-purple-700 hover:to-brand-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-purple-600/25 transition-all flex items-center justify-center gap-2">
@@ -521,12 +725,20 @@
 
                     <!-- Preview Results Area -->
                     <div id="injectionPreviewResultsCard" class="hidden p-4 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-black text-slate-800 flex items-center gap-2">
-                                <i class="fas fa-users text-purple-600"></i>
-                                <span>Rotation Preview Results: <span id="injectionPreviewCountBadge" class="font-mono text-purple-600">0</span> Candidates</span>
-                            </span>
-                            <span class="text-[11px] font-bold text-slate-500">Sorted: Lowest attendance history first, followed by registration date</span>
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-black text-slate-800 flex items-center gap-2">
+                                    <i class="fas fa-users text-purple-600"></i>
+                                    <span>Rotation Preview Results: <span id="injectionPreviewCountBadge" class="font-mono text-purple-600">0</span> Candidates</span>
+                                </span>
+                                <span class="text-[11px] font-bold text-slate-400 hidden sm:inline">• الأقل حضوراً أولاً</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="exportPreviewToExcel()" id="btnExportPreviewExcel" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer" title="تصدير كشف التحضير والمتابعة كشيت إكسيل ملون ومنظم">
+                                    <i class="fas fa-file-excel text-sm"></i>
+                                    <span>Export Preview to Excel (تصدير كشف التحضير)</span>
+                                </button>
+                            </div>
                         </div>
                         <div id="injectionPreviewCandidatesList" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
                             <!-- Rendered by JS -->
@@ -790,6 +1002,9 @@
                 }
             });
             if (tab === 'injection') {
+                if (!injectionState.branchStaffLoaded) {
+                    loadInjectionBranchStaffMetadata();
+                }
                 if (!injectionState.loaded) {
                     loadInjectionDepartments();
                 }
@@ -819,6 +1034,11 @@
                 sessionTraineesState.assignedTrainees = data.assignedTrainees || [];
                 const approvedCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'approved').length;
                 const pendingCount = sessionTraineesState.assignedTrainees.filter(t => (t.approvalStatus || t.ApprovalStatus || '').toLowerCase() === 'pending').length;
+
+                // Sync Total Seats
+                sessionTraineesState.totalSeats = data.totalSeats || 50;
+                const totalSeatsInput = document.getElementById('inputSessionTotalSeats');
+                if (totalSeatsInput) totalSeatsInput.value = sessionTraineesState.totalSeats;
 
                 // Set approved count as main count badge
                 countBadge.textContent = approvedCount;
@@ -884,6 +1104,14 @@
                             </div>
                             <div class="flex items-center gap-2">
                                 ${badgeHtml}
+                                ${status === 'pending' ? `
+                                    <button type="button" 
+                                            onclick="adminApproveSessionTrainee(${t.assignmentId || t.AssignmentId || 0}, '${(fullName || '').replace(/'/g, "\\'")}', ${sessionId})" 
+                                            class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center text-xs transition-all shadow-2xs active:scale-95 border border-emerald-200/80" 
+                                            title="اعتماد وقبول المتدرب فوراً كمسؤول (Direct Admin Approval)">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                ` : ''}
                                 ${status !== 'replaced' && status !== 'declined' && status !== 'rejected' ? `
                                     <button type="button" 
                                             onclick="initiateSessionTraineeReplace(${t.assignmentId || t.AssignmentId || 0}, ${sessionId}, ${sessionTraineesState.companyId || 0}, '${(branchName || '').replace(/'/g, "\\'")}', '${(fullName || '').replace(/'/g, "\\'")}', ${t.branchId || t.BranchId || 0}, '${(userCode || '').replace(/'/g, "\\'")}', '${(t.userId || t.UserId || '')}')" 
@@ -899,7 +1127,22 @@
                         </div>`;
                     };
 
-                    let html = activeTrainees.map(renderTraineeRow).join('');
+                    let html = '';
+                    if (pendingCount > 0) {
+                        html += `
+                            <div class="flex items-center justify-between p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl mb-3 shadow-2xs">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                    <span class="text-xs font-bold text-amber-900">يوجد <strong>${pendingCount}</strong> متدرب بانتظار الاعتماد من الفروع</span>
+                                </div>
+                                <button type="button" 
+                                        onclick="adminApproveAllPendingSessionTrainees(${sessionId})" 
+                                        class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-xs active:scale-95 flex items-center gap-1.5">
+                                    <i class="fas fa-check-double"></i> <span>اعتماد وقبول الكل فوراً</span>
+                                </button>
+                            </div>`;
+                    }
+                    html += activeTrainees.map(renderTraineeRow).join('');
 
                     if (replacedTrainees.length > 0) {
                         html += `
@@ -1173,6 +1416,7 @@
             const sendNotif = document.getElementById('chkSendNotification').checked;
             const sendN8n = document.getElementById('chkSendN8nEmail').checked;
             const bypassApproval = document.getElementById('chkBypassApproval') ? document.getElementById('chkBypassApproval').checked : false;
+            const sendRabbitMqEmail = document.getElementById('chkManualSendRabbitMqEmail') ? document.getElementById('chkManualSendRabbitMqEmail').checked : true;
 
             showAppToast('info', 'Assigning...', 'Registering trainees and triggering platform & n8n webhook notifications...');
 
@@ -1185,7 +1429,8 @@
                         candidateKeys: candidateKeys,
                         sendNotification: sendNotif,
                         sendEmailViaN8n: sendN8n,
-                        bypassApproval: bypassApproval
+                        bypassApproval: bypassApproval,
+                        sendRabbitMqEmail: sendRabbitMqEmail
                     })
                 });
                 const data = await res.json();
@@ -1220,6 +1465,57 @@
             }
         };
 
+        window.adminApproveSessionTrainee = async function (assignmentId, traineeName, sessionId, sendEmail = true) {
+            if (!assignmentId) return;
+            try {
+                const res = await fetch(`/Attendance/ApproveSessionTrainee?assignmentId=${assignmentId}&sendEmail=${sendEmail}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    sessionTraineesState.hasModified = true;
+                    showAppToast('success', 'تم الاعتماد بنجاح', data.message || `تم اعتماد المتدرب ${traineeName} بنجاح.`);
+                    loadSessionTraineesData(sessionId || sessionTraineesState.sessionId);
+                } else {
+                    showAppToast('error', 'تعذر الاعتماد', data.message);
+                }
+            } catch (err) {
+                showAppToast('error', 'خطأ في الاتصال', err.message);
+            }
+        };
+
+        window.adminApproveAllPendingSessionTrainees = async function (sessionId, sendEmail = true) {
+            sessionId = sessionId || sessionTraineesState.sessionId;
+            if (!sessionId) return;
+
+            const confirmResult = await Swal.fire({
+                title: '<div class="text-base font-black text-slate-800">اعتماد وقبول جميع المتدربين المعلقين؟</div>',
+                html: '<p class="text-xs text-slate-500 leading-relaxed">سيتم قبول واعتماد جميع المتدربين المعلقين في هذه الجلسة فوراً دون الحاجة لانتظار موافقة مدراء الفروع مع إشعارهم عبر البريد الإلكتروني.</p>',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-check-double mr-1"></i> نعم، اعتماد الكل الآن',
+                cancelButtonText: 'إلغاء',
+                customClass: {
+                    confirmButton: 'px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs',
+                    cancelButton: 'px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs'
+                }
+            });
+
+            if (!confirmResult.isConfirmed) return;
+
+            try {
+                const res = await fetch(`/Attendance/ApproveAllPendingSessionTrainees?sessionId=${sessionId}&sendEmail=${sendEmail}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    sessionTraineesState.hasModified = true;
+                    showAppToast('success', 'تم الاعتماد بنجاح', data.message);
+                    loadSessionTraineesData(sessionId);
+                } else {
+                    showAppToast('error', 'تعذر الاعتماد', data.message);
+                }
+            } catch (err) {
+                showAppToast('error', 'خطأ في الاتصال', err.message);
+            }
+        };
+
         window.initiateSessionTraineeReplace = function (cstId, sessionId, companyId, branchName, traineeName, branchId, userCode, userId) {
             if (typeof openReplaceCompanyModal === 'function') {
                 openReplaceCompanyModal(cstId, sessionId, companyId, branchName, traineeName, branchId, userCode, userId);
@@ -1236,11 +1532,13 @@
             }
 
             const bypassExcel = document.getElementById('chkExcelBypassApproval') ? document.getElementById('chkExcelBypassApproval').checked : false;
+            const sendRabbitMqEmail = document.getElementById('chkExcelSendRabbitMqEmail') ? document.getElementById('chkExcelSendRabbitMqEmail').checked : true;
 
             const formData = new FormData();
             formData.append('sessionId', sessionTraineesState.sessionId);
             formData.append('excelFile', fileInput.files[0]);
             formData.append('bypassApproval', bypassExcel);
+            formData.append('sendEmail', sendRabbitMqEmail);
 
             showAppToast('info', 'Importing...', 'Reading Excel file and assigning trainees...');
 
@@ -1265,40 +1563,510 @@
         };
 
         // ==========================================
+        // Session Total Seats Direct Management
+        // ==========================================
+        window.saveSessionTotalSeatsDirect = async function () {
+            const input = document.getElementById('inputSessionTotalSeats');
+            const val = parseInt(input?.value) || 50;
+            if (val <= 0) {
+                showAppToast('warning', 'Notice', 'يرجى إدخال رقم صحيح لسعة المقاعد.');
+                return;
+            }
+            sessionTraineesState.totalSeats = val;
+            try {
+                const res = await fetch('/Attendance/UpdateSessionTotalSeats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId: sessionTraineesState.sessionId, totalSeats: val })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAppToast('success', 'تم حفظ السعة', `تم تحديث سعة مقاعد الجلسة إلى ${val} مقعد.`);
+                    updateInjectionHeadcount();
+                } else {
+                    showAppToast('error', 'تعذر الحفظ', data.message || 'فشل تحديث سعة المقاعد.');
+                }
+            } catch (err) {
+                showAppToast('error', 'خطأ في الاتصال', err.message);
+            }
+        };
+
+        window.onSessionTotalSeatsChanged = function () {
+            const input = document.getElementById('inputSessionTotalSeats');
+            const val = parseInt(input?.value) || 50;
+            sessionTraineesState.totalSeats = val;
+            updateInjectionHeadcount();
+        };
+
+        // ==========================================
         // Session Injection Rule & Fair Rotation Logic
         // ==========================================
         let injectionState = {
             loaded: false,
+            branchStaffLoaded: false,
+            currentMode: 'branchStaff',
             departments: [],
+            branches: [],
+            shifts: [],
+            shiftGroups: [],
+            selectedBranchIds: [], // Empty means all branches
+            selectedShiftIds: [],  // Empty means all shifts
             savedRules: [],
-            previewCandidates: []
+            previewCandidates: [],
+            availablePharmacists: 0,
+            availableAssistants: 0,
+            _lastExceededCount: null
         };
 
-        window.loadInjectionDepartments = async function () {
+        window.switchInjectionMode = function(mode) {
+            injectionState.currentMode = mode;
+            const btnBranch = document.getElementById('btnModeBranchStaff');
+            const btnDept = document.getElementById('btnModeDepartments');
+            const btnCombined = document.getElementById('btnModeCombined');
+            const containerBranch = document.getElementById('injectionBranchStaffContainer');
+            const containerDept = document.getElementById('injectionDepartmentsContainer');
+            const titleElem = document.getElementById('injectionSectionTitle');
+
+            const activeClass = 'flex-1 py-2.5 px-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5 bg-white text-purple-700 shadow-sm border border-purple-200/50';
+            const inactiveClass = 'flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-800';
+
+            if (btnBranch) btnBranch.className = mode === 'branchStaff' ? activeClass : inactiveClass;
+            if (btnDept) btnDept.className = mode === 'departments' ? activeClass : inactiveClass;
+            if (btnCombined) btnCombined.className = mode === 'combined' ? activeClass : inactiveClass;
+
+            if (mode === 'branchStaff') {
+                containerBranch.classList.remove('hidden');
+                containerDept.classList.add('hidden');
+                if (titleElem) titleElem.textContent = 'كوتة الصيادلة والمساعدين بالفروع';
+                if (!injectionState.branchStaffLoaded) {
+                    loadInjectionBranchStaffMetadata();
+                }
+            } else if (mode === 'departments') {
+                containerDept.classList.remove('hidden');
+                containerBranch.classList.add('hidden');
+                if (titleElem) titleElem.textContent = 'كوتة الأقسام الإدارية (Departments)';
+                if (!injectionState.loaded) {
+                    loadInjectionDepartments();
+                }
+            } else { // combined
+                containerBranch.classList.remove('hidden');
+                containerDept.classList.remove('hidden');
+                if (titleElem) titleElem.textContent = 'توزيع مجمع (صيادلة + مساعدين + أقسام إدارية معاً)';
+                if (!injectionState.branchStaffLoaded) {
+                    loadInjectionBranchStaffMetadata();
+                }
+                if (!injectionState.loaded) {
+                    loadInjectionDepartments();
+                }
+            }
+            updateInjectionHeadcount();
+        };
+
+        window.loadInjectionBranchStaffMetadata = async function () {
+            try {
+                const res = await fetch(`/Attendance/GetBranchStaffMetadataForInjection?sessionId=${sessionTraineesState.sessionId || 0}`);
+                const data = await res.json();
+                if (data.success) {
+                    injectionState.branches = data.branches || [];
+                    injectionState.shifts = data.shifts || [];
+                    injectionState.shiftGroups = data.shiftGroups || [];
+                    injectionState.availablePharmacists = data.totalPharmacists || 0;
+                    injectionState.availableAssistants = data.totalAssistants || 0;
+                    injectionState.branchStaffLoaded = true;
+
+                    renderInjectionBranches();
+                    renderInjectionShiftGroups();
+                    renderInjectionShifts();
+                    updateAvailableStaffBadges(data.totalPharmacists, data.totalAssistants);
+                }
+            } catch (err) {
+                console.error('Failed to load branch staff metadata:', err);
+            }
+        };
+
+        window.renderInjectionShiftGroups = function () {
+            const container = document.getElementById('injectionShiftGroupsBar');
+            if (!container) return;
+            const groups = injectionState.shiftGroups || [];
+            if (groups.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const totalShifts = injectionState.shifts.length;
+            const selectedCount = injectionState.selectedShiftIds.length;
+
+            let currentVal = 'ALL';
+            if (selectedCount === 0) {
+                currentVal = 'NONE';
+            } else if (selectedCount === totalShifts) {
+                currentVal = 'ALL';
+            } else {
+                // Check if it matches a specific group exactly
+                const matchedGroup = groups.find(g => {
+                    const gId = g.id ?? g.Id;
+                    const groupShiftIds = injectionState.shifts.filter(s => (s.groupId ?? s.GroupId) === gId).map(s => s.id ?? s.Id);
+                    return groupShiftIds.length > 0 && 
+                           groupShiftIds.length === selectedCount && 
+                           groupShiftIds.every(id => injectionState.selectedShiftIds.includes(id));
+                });
+                if (matchedGroup) {
+                    currentVal = String(matchedGroup.id ?? matchedGroup.Id);
+                } else {
+                    currentVal = 'CUSTOM';
+                }
+            }
+
+            let optionsHtml = '';
+            if (currentVal === 'CUSTOM') {
+                optionsHtml += `<option value="CUSTOM" selected>✏️ اختيار مخصص (${selectedCount} شيفت محدد)</option>`;
+            }
+            optionsHtml += `<option value="ALL" ${currentVal === 'ALL' ? 'selected' : ''}>🌟 تحديد جميع الشيفتات (الكل - ${totalShifts})</option>`;
+
+            groups.forEach(g => {
+                const gId = String(g.id ?? g.Id);
+                const gName = g.groupName || g.GroupName || 'Group';
+                const count = g.shiftsCount ?? g.ShiftsCount ?? 0;
+                const isSelected = (currentVal === gId);
+                optionsHtml += `<option value="${gId}" ${isSelected ? 'selected' : ''}>🏷️ ${gName} (${count} شيفت)</option>`;
+            });
+
+            optionsHtml += `<option value="NONE" ${currentVal === 'NONE' ? 'selected' : ''}>❌ إلغاء تحديد الكل</option>`;
+
+            container.innerHTML = `
+                <div class="relative w-full">
+                    <div class="flex items-center gap-2 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500 focus-within:bg-white shadow-2xs transition-all">
+                        <i class="fas fa-layer-group text-indigo-600 text-xs shrink-0"></i>
+                        <select id="injectionShiftGroupSelect" onchange="onInjectionShiftGroupSelectChange(this.value)" class="w-full bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer">
+                            ${optionsHtml}
+                        </select>
+                    </div>
+                </div>
+            `;
+        };
+
+        window.onInjectionShiftGroupSelectChange = function (val) {
+            if (!val || val === 'CUSTOM') return;
+
+            if (val === 'ALL') {
+                selectAllInjectionShifts(true);
+                return;
+            }
+
+            if (val === 'NONE') {
+                selectAllInjectionShifts(false);
+                return;
+            }
+
+            const groupId = parseInt(val);
+            const groupShifts = injectionState.shifts.filter(s => (s.groupId ?? s.GroupId) === groupId);
+            const groupShiftIds = groupShifts.map(s => s.id ?? s.Id);
+            const groupObj = injectionState.shiftGroups.find(g => (g.id ?? g.Id) === groupId);
+            const groupName = groupObj ? (groupObj.groupName || groupObj.GroupName) : 'المجموعة المحددة';
+
+            injectionState.selectedShiftIds = [...groupShiftIds];
+            renderInjectionShifts();
+            renderInjectionShiftGroups();
+            updateShiftFilterUI();
+            fetchLiveAvailableStaffCounts();
+
+            showAppToast('info', 'تم تحديد المجموعة', `تم تحديد ${groupShiftIds.length} شيفت تابع لمجموعة "${groupName}".`);
+        };
+
+        window.toggleShiftGroupByPill = function (groupId) {
+            onInjectionShiftGroupSelectChange(String(groupId));
+        };
+
+        window.updateAvailableStaffBadges = function (pharmCount, assistCount) {
+            const pharmBadge = document.getElementById('badgeAvailablePharmacists');
+            const assistBadge = document.getElementById('badgeAvailableAssistants');
+            if (pharmBadge) {
+                pharmBadge.innerHTML = `<i class="fas fa-check-circle text-purple-600 mr-1"></i> ${pharmCount} صيدلي متاح`;
+            }
+            if (assistBadge) {
+                assistBadge.innerHTML = `<i class="fas fa-check-circle text-indigo-600 mr-1"></i> ${assistCount} مساعد متاح`;
+            }
+        };
+
+        window.updateScopeBadge = function () {
+            const scopeBadge = document.getElementById('scopeActiveFiltersBadge');
+            if (!scopeBadge) return;
+            const bTotal = injectionState.branches.length;
+            const bSel = injectionState.selectedBranchIds.length;
+            const sTotal = injectionState.shifts.length;
+            const sSel = injectionState.selectedShiftIds.length;
+
+            const bText = (bSel === 0 || bSel === bTotal) ? 'جميع الفروع' : `${bSel} فرع محدد`;
+            const sText = (sSel === 0 || sSel === sTotal) ? 'جميع الشيفتات' : `${sSel} شيفت محدد`;
+
+            scopeBadge.textContent = `${bText} • ${sText}`;
+            if ((bSel > 0 && bSel < bTotal) || (sSel > 0 && sSel < sTotal)) {
+                scopeBadge.className = 'text-[10px] font-black bg-purple-600 text-white px-3 py-1 rounded-full shadow-2xs';
+            } else {
+                scopeBadge.className = 'text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200 px-3 py-1 rounded-full shadow-2xs';
+            }
+        };
+
+        let liveCountDebounceTimer = null;
+        window.fetchLiveAvailableStaffCounts = function () {
+            clearTimeout(liveCountDebounceTimer);
+            liveCountDebounceTimer = setTimeout(async () => {
+                try {
+                    // 1. Live counts for Pharmacists & Assistants
+                    const res = await fetch('/Attendance/GetAvailableBranchStaffCounts', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sessionId: sessionTraineesState.sessionId || 0,
+                            branchIds: injectionState.selectedBranchIds.length > 0 ? injectionState.selectedBranchIds : null,
+                            shiftIds: injectionState.selectedShiftIds.length > 0 ? injectionState.selectedShiftIds : null
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        injectionState.availablePharmacists = data.availablePharmacists || 0;
+                        injectionState.availableAssistants = data.availableAssistants || 0;
+                        updateAvailableStaffBadges(data.availablePharmacists, data.availableAssistants);
+                    }
+
+                    // 2. Also refresh Department personnel live counts based on chosen branches and shifts!
+                    await loadInjectionDepartments(true);
+                } catch (err) {
+                    console.error('Failed to fetch live counts:', err);
+                }
+            }, 250);
+        };
+
+        window.renderInjectionBranches = function (filteredList) {
+            const container = document.getElementById('injectionBranchesContainer');
+            if (!container) return;
+            const list = filteredList || injectionState.branches;
+            if (!list || list.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center py-4 text-xs text-slate-400">لا توجد فروع مطابقة للبحث</div>';
+                return;
+            }
+
+            container.innerHTML = list.map(b => {
+                const bId = b.id ?? b.Id;
+                const bName = b.branchName || b.BranchName || 'Branch';
+                const isChecked = injectionState.selectedBranchIds.includes(bId);
+                const pCount = b.pharmacistCount ?? b.PharmacistCount ?? 0;
+                const aCount = b.assistantCount ?? b.AssistantCount ?? 0;
+
+                return `
+                    <label class="flex items-center justify-between p-2 rounded-xl border ${isChecked ? 'bg-purple-50/90 border-purple-300 text-purple-900 shadow-2xs font-bold' : 'bg-white border-slate-200/90 text-slate-700 hover:border-purple-200'} cursor-pointer transition-all select-none text-xs">
+                        <div class="flex items-center gap-2 truncate min-w-0">
+                            <input type="checkbox" value="${bId}" ${isChecked ? 'checked' : ''} onchange="toggleInjectionBranch(${bId}, this.checked)" class="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 border-slate-300" />
+                            <span class="truncate">${bName}</span>
+                        </div>
+                        <span class="text-[9px] font-mono text-slate-400 shrink-0 ml-1" title="الصيادلة: ${pCount} | المساعدين: ${aCount}">
+                            ${pCount}ص / ${aCount}م
+                        </span>
+                    </label>
+                `;
+            }).join('');
+        };
+
+        window.filterInjectionBranchesList = function (term) {
+            if (!term || !term.trim()) {
+                renderInjectionBranches();
+                return;
+            }
+            const q = term.trim().toLowerCase();
+            const filtered = injectionState.branches.filter(b => {
+                const name = (b.branchName || b.BranchName || '').toLowerCase();
+                return name.includes(q);
+            });
+            renderInjectionBranches(filtered);
+        };
+
+        window.toggleInjectionBranch = function (bId, isChecked) {
+            if (isChecked) {
+                if (!injectionState.selectedBranchIds.includes(bId)) {
+                    injectionState.selectedBranchIds.push(bId);
+                }
+            } else {
+                injectionState.selectedBranchIds = injectionState.selectedBranchIds.filter(id => id !== bId);
+            }
+            updateBranchFilterUI();
+            fetchLiveAvailableStaffCounts();
+        };
+
+        window.selectAllInjectionBranches = function (selectAll) {
+            if (selectAll) {
+                injectionState.selectedBranchIds = injectionState.branches.map(b => b.id ?? b.Id);
+            } else {
+                injectionState.selectedBranchIds = [];
+            }
+            renderInjectionBranches();
+            updateBranchFilterUI();
+            fetchLiveAvailableStaffCounts();
+        };
+
+        window.updateBranchFilterUI = function () {
+            const badge = document.getElementById('selectedBranchesCountBadge');
+            const total = injectionState.branches.length;
+            const selected = injectionState.selectedBranchIds.length;
+
+            if (badge) {
+                if (selected === 0 || selected === total) {
+                    badge.textContent = `جميع الفروع (${total})`;
+                    badge.className = 'text-[10px] font-black bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full';
+                } else {
+                    badge.textContent = `تم تحديد ${selected} من ${total} فرع`;
+                    badge.className = 'text-[10px] font-black bg-brand-100 text-brand-700 px-2.5 py-0.5 rounded-full';
+                }
+            }
+            updateScopeBadge();
+        };
+
+        window.renderInjectionShifts = function (filteredList) {
+            const container = document.getElementById('injectionShiftsContainer');
+            if (!container) return;
+            const list = filteredList || injectionState.shifts;
+            if (!list || list.length === 0) {
+                container.innerHTML = '<span class="text-xs text-slate-400 p-2 block text-center">لا توجد شيفتات مسجلة</span>';
+                return;
+            }
+
+            container.innerHTML = list.map(s => {
+                const sId = s.id ?? s.Id;
+                const sName = s.shiftName || s.ShiftName || 'Shift';
+                const isChecked = injectionState.selectedShiftIds.includes(sId);
+                const timeStr = s.timeFormatted || (s.startTime && s.endTime ? `من ${s.startTime} إلى ${s.endTime}` : '');
+                const pCount = s.pharmacistCount ?? 0;
+                const aCount = s.assistantCount ?? 0;
+                const gName = s.groupName || s.GroupName || '';
+                const gColor = s.groupColor || s.GroupColor || '#7C3AED';
+
+                return `
+                    <label class="flex items-center justify-between p-2 rounded-xl border ${isChecked ? 'bg-indigo-50 border-indigo-400 text-indigo-950 shadow-2xs font-bold' : 'bg-white border-slate-200/90 text-slate-700 hover:border-indigo-300 font-medium'} cursor-pointer text-xs transition-all select-none">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <input type="checkbox" value="${sId}" ${isChecked ? 'checked' : ''} onchange="toggleInjectionShift(${sId}, this.checked)" class="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 shrink-0" />
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="font-black text-slate-900 truncate">${sName}</span>
+                                    ${gName ? `<span class="px-1.5 py-0.5 rounded text-[8px] font-black border" style="background-color: ${gColor}15; color: ${gColor}; border-color: ${gColor}40;">${gName}</span>` : ''}
+                                </div>
+                                ${timeStr ? `<div class="text-[10px] text-indigo-700 font-bold mt-0.5 flex items-center gap-1"><i class="fas fa-clock text-[9px] text-indigo-500"></i><span>${timeStr}</span></div>` : ''}
+                            </div>
+                        </div>
+                        <span class="text-[9px] font-mono text-slate-400 shrink-0 ml-1.5" title="الصيادلة: ${pCount} | المساعدين: ${aCount}">
+                            ${pCount}ص / ${aCount}م
+                        </span>
+                    </label>
+                `;
+            }).join('');
+        };
+
+        window.filterInjectionShiftsList = function (term) {
+            if (!term || !term.trim()) {
+                renderInjectionShifts();
+                return;
+            }
+            const q = term.trim().toLowerCase();
+            const filtered = injectionState.shifts.filter(s => {
+                const name = (s.shiftName || s.ShiftName || '').toLowerCase();
+                const time = (s.timeFormatted || '').toLowerCase();
+                const gName = (s.groupName || s.GroupName || '').toLowerCase();
+                return name.includes(q) || time.includes(q) || gName.includes(q);
+            });
+            renderInjectionShifts(filtered);
+        };
+
+        window.toggleInjectionShift = function (sId, isChecked) {
+            if (isChecked) {
+                if (!injectionState.selectedShiftIds.includes(sId)) {
+                    injectionState.selectedShiftIds.push(sId);
+                }
+            } else {
+                injectionState.selectedShiftIds = injectionState.selectedShiftIds.filter(id => id !== sId);
+            }
+            renderInjectionShiftGroups();
+            updateShiftFilterUI();
+            fetchLiveAvailableStaffCounts();
+        };
+
+        window.selectAllInjectionShifts = function (selectAll) {
+            if (selectAll) {
+                injectionState.selectedShiftIds = injectionState.shifts.map(s => s.id ?? s.Id);
+            } else {
+                injectionState.selectedShiftIds = [];
+            }
+            renderInjectionShifts();
+            renderInjectionShiftGroups();
+            updateShiftFilterUI();
+            fetchLiveAvailableStaffCounts();
+        };
+
+        window.updateShiftFilterUI = function () {
+            const badge = document.getElementById('selectedShiftsCountBadge');
+            const total = injectionState.shifts.length;
+            const selected = injectionState.selectedShiftIds.length;
+
+            if (badge) {
+                if (selected === 0 || selected === total) {
+                    badge.textContent = `جميع الشيفتات (${total})`;
+                    badge.className = 'text-[10px] font-black bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full';
+                } else {
+                    badge.textContent = `تم تحديد ${selected} من ${total} شيفت`;
+                    badge.className = 'text-[10px] font-black bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full';
+                }
+            }
+            updateScopeBadge();
+        };
+
+        window.onBranchStaffQuotaChanged = function () {
+            updateInjectionHeadcount();
+        };
+
+        window.loadInjectionDepartments = async function (preserveValues = false) {
             const listWrapper = document.getElementById('injectionDepartmentsList');
             if (!listWrapper) return;
-            listWrapper.innerHTML = `
-                <div class="col-span-full text-center py-8 text-slate-400">
-                    <i class="fas fa-spinner fa-spin text-xl text-purple-500 mb-2 block"></i>
-                    Loading departments and staff data...
-                </div>`;
+
+            // Save any values entered by the user
+            const savedQuotas = {};
+            if (preserveValues) {
+                document.querySelectorAll('.dept-quota-input').forEach(input => {
+                    const val = parseInt(input.value) || 0;
+                    if (val > 0) savedQuotas[input.dataset.deptId] = val;
+                });
+            } else if (!injectionState.departments || injectionState.departments.length === 0) {
+                listWrapper.innerHTML = `
+                    <div class="col-span-full text-center py-8 text-slate-400">
+                        <i class="fas fa-spinner fa-spin text-xl text-purple-500 mb-2 block"></i>
+                        Loading departments and staff data...
+                    </div>`;
+            }
 
             try {
-                const res = await fetch('/Attendance/GetDepartmentsForInjection');
+                const res = await fetch('/Attendance/GetDepartmentsForInjection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: sessionTraineesState.sessionId || 0,
+                        branchIds: injectionState.selectedBranchIds.length > 0 ? injectionState.selectedBranchIds : null,
+                        shiftIds: injectionState.selectedShiftIds.length > 0 ? injectionState.selectedShiftIds : null
+                    })
+                });
                 const data = await res.json();
                 if (data.success && data.data) {
                     injectionState.departments = data.data;
                     injectionState.loaded = true;
-                    renderInjectionDepartments();
+                    renderInjectionDepartments(savedQuotas);
                 } else {
-                    listWrapper.innerHTML = `<div class="col-span-full text-center py-6 text-rose-500 font-bold">${data.message || 'Failed to load departments'}</div>`;
+                    if (!preserveValues) {
+                        listWrapper.innerHTML = `<div class="col-span-full text-center py-6 text-rose-500 font-bold">${data.message || 'Failed to load departments'}</div>`;
+                    }
                 }
             } catch (err) {
-                listWrapper.innerHTML = `<div class="col-span-full text-center py-6 text-rose-500 font-bold">Connection error: ${err.message}</div>`;
+                if (!preserveValues) {
+                    listWrapper.innerHTML = `<div class="col-span-full text-center py-6 text-rose-500 font-bold">Connection error: ${err.message}</div>`;
+                }
             }
         };
 
-        window.renderInjectionDepartments = function () {
+        window.renderInjectionDepartments = function (savedQuotas = {}) {
             const listWrapper = document.getElementById('injectionDepartmentsList');
             if (!listWrapper) return;
             if (!injectionState.departments || injectionState.departments.length === 0) {
@@ -1310,6 +2078,7 @@
                 const deptId = d.id ?? d.Id;
                 const deptName = d.name || d.Name || 'Department';
                 const staffCount = d.staffCount ?? d.ActiveStaffCount ?? 0;
+                const prevVal = savedQuotas[deptId] !== undefined ? savedQuotas[deptId] : '';
 
                 return `
                 <div class="p-3.5 bg-white rounded-2xl border border-slate-200/90 hover:border-purple-300 flex items-center justify-between gap-3 shadow-2xs hover:shadow-xs transition-all group">
@@ -1329,6 +2098,7 @@
                         <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Quota:</span>
                         <input type="number" min="0" max="${staffCount}" data-dept-id="${deptId}" data-dept-name="${deptName}"
                                oninput="updateInjectionHeadcount()"
+                               value="${prevVal}"
                                placeholder="0"
                                class="dept-quota-input w-14 px-1 py-0.5 bg-transparent text-xs font-black text-center text-purple-700 outline-none font-mono" />
                     </div>
@@ -1338,26 +2108,150 @@
         };
 
         window.updateInjectionHeadcount = function () {
-            let total = 0;
-            document.querySelectorAll('.dept-quota-input').forEach(input => {
-                const val = parseInt(input.value) || 0;
-                total += val;
-            });
             const badge = document.getElementById('injectionTotalHeadcountBadge');
-            if (badge) {
-                badge.textContent = `Total Required: ${total} Seats`;
+            const badgeBranch = document.getElementById('badgeTabBranchStaffCount');
+            const badgeDept = document.getElementById('badgeTabDeptCount');
+
+            const pharmQuota = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
+            const assistQuota = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+            const branchStaffTotal = pharmQuota + assistQuota;
+
+            let deptTotal = 0;
+            document.querySelectorAll('.dept-quota-input').forEach(input => {
+                deptTotal += parseInt(input.value) || 0;
+            });
+
+            if (badgeBranch) {
+                if (branchStaffTotal > 0) {
+                    badgeBranch.textContent = `${branchStaffTotal} مقعد`;
+                    badgeBranch.classList.remove('hidden');
+                } else {
+                    badgeBranch.classList.add('hidden');
+                }
+            }
+
+            if (badgeDept) {
+                if (deptTotal > 0) {
+                    badgeDept.textContent = `${deptTotal} مقعد`;
+                    badgeDept.classList.remove('hidden');
+                } else {
+                    badgeDept.classList.add('hidden');
+                }
+            }
+
+            const grandTotal = branchStaffTotal + deptTotal;
+            const totalSeats = parseInt(document.getElementById('inputSessionTotalSeats')?.value) || sessionTraineesState.totalSeats || 50;
+            const btnPreview = document.getElementById('btnPreviewInjection');
+            const btnExecute = document.getElementById('btnExecuteInjection');
+            const previewCard = document.getElementById('injectionPreviewResultsCard');
+
+            if (grandTotal > totalSeats) {
+                // If count exceeds total seats, immediately hide and reset preview
+                if (previewCard && !previewCard.classList.contains('hidden')) {
+                    previewCard.classList.add('hidden');
+                    injectionState.previewCandidates = [];
+                }
+
+                // Visually disable preview and confirm buttons
+                if (btnPreview) {
+                    btnPreview.classList.add('opacity-50', 'cursor-not-allowed');
+                    btnPreview.title = `تجاوزت سعة المقاعد المحددة (${grandTotal} / ${totalSeats} مقعد)`;
+                }
+                if (btnExecute) {
+                    btnExecute.classList.add('opacity-50', 'cursor-not-allowed');
+                    btnExecute.title = `تجاوزت سعة المقاعد المحددة (${grandTotal} / ${totalSeats} مقعد)`;
+                }
+
+                if (badge) {
+                    let details = [];
+                    if (pharmQuota > 0) details.push(`${pharmQuota} صيدلي`);
+                    if (assistQuota > 0) details.push(`${assistQuota} مساعد`);
+                    if (deptTotal > 0) details.push(`${deptTotal} إداري`);
+
+                    const detailsStr = details.length > 0 ? ` (${details.join(' + ')})` : '';
+
+                    badge.className = 'text-xs font-black font-mono text-rose-700 bg-rose-50 px-3.5 py-1.5 rounded-xl border-2 border-rose-400 shadow-sm animate-pulse';
+                    badge.innerHTML = `<i class="fas fa-exclamation-triangle text-rose-600 mr-1.5"></i> تجاوز سعة المقاعد: ${grandTotal} / ${totalSeats} مقعد${detailsStr}`;
+
+                    // Trigger toast error if count newly exceeds total seats
+                    if (injectionState._lastExceededCount !== grandTotal) {
+                        injectionState._lastExceededCount = grandTotal;
+                        showAppToast('error', 'تم تجاوز سعة المقاعد!', `العدد المطلوب (${grandTotal} مقعد) أكبر من سعة الجلسة المتاحة (${totalSeats} مقعد)! تم إيقاف المعاينة والتسكين.`);
+                    }
+                }
+            } else {
+                injectionState._lastExceededCount = null;
+
+                if (btnPreview) {
+                    btnPreview.classList.remove('opacity-50', 'cursor-not-allowed');
+                    btnPreview.removeAttribute('title');
+                }
+                if (btnExecute) {
+                    btnExecute.classList.remove('opacity-50', 'cursor-not-allowed');
+                    btnExecute.removeAttribute('title');
+                }
+
+                if (badge) {
+                    let details = [];
+                    if (pharmQuota > 0) details.push(`${pharmQuota} صيدلي`);
+                    if (assistQuota > 0) details.push(`${assistQuota} مساعد`);
+                    if (deptTotal > 0) details.push(`${deptTotal} إداري`);
+
+                    const detailsStr = details.length > 0 ? ` (${details.join(' + ')})` : '';
+
+                    badge.className = 'text-xs font-black font-mono text-purple-700 bg-purple-50 px-3.5 py-1.5 rounded-xl border border-purple-200/80 shadow-2xs';
+                    badge.innerHTML = `المقاعد المطلوبة: ${grandTotal} / ${totalSeats} مقعد${detailsStr}`;
+                }
             }
         };
 
         window.clearInjectionQuotas = function () {
+            const pharmInput = document.getElementById('inputQuotaPharmacist');
+            const assistInput = document.getElementById('inputQuotaAssistant');
+            if (pharmInput) pharmInput.value = 0;
+            if (assistInput) assistInput.value = 0;
+
             document.querySelectorAll('.dept-quota-input').forEach(input => input.value = '');
+            injectionState.selectedBranchIds = [];
+            injectionState.selectedShiftIds = [];
+            injectionState._lastExceededCount = null;
+            renderInjectionBranches();
+            renderInjectionShiftGroups();
+            renderInjectionShifts();
+            updateBranchFilterUI();
+            updateShiftFilterUI();
+            fetchLiveAvailableStaffCounts();
             updateInjectionHeadcount();
+
             const previewCard = document.getElementById('injectionPreviewResultsCard');
             if (previewCard) previewCard.classList.add('hidden');
             const select = document.getElementById('injectionRuleSelect');
             if (select) select.value = '';
-            const btnDelete = document.getElementById('btnDeleteSelectedRule');
-            if (btnDelete) btnDelete.classList.add('hidden');
+            if (typeof updateDeleteRuleButtonState === 'function') updateDeleteRuleButtonState();
+        };
+
+        window.updateDeleteRuleButtonState = function () {
+            const select = document.getElementById('injectionRuleSelect');
+            const btn = document.getElementById('btnDeleteSelectedRule');
+            const btnText = document.getElementById('btnDeleteSelectedRuleText');
+            if (!btn) return;
+
+            btn.classList.remove('hidden');
+
+            const ruleId = select ? parseInt(select.value) : 0;
+            if (ruleId && injectionState.savedRules) {
+                const rule = injectionState.savedRules.find(r => r.id === ruleId);
+                if (rule) {
+                    btn.className = "px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 border border-rose-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer";
+                    if (btnText) btnText.textContent = `حذف "${rule.ruleName}"`;
+                    btn.title = `حذف قالب: ${rule.ruleName}`;
+                    return;
+                }
+            }
+
+            btn.className = "px-3 py-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 shrink-0 cursor-pointer";
+            if (btnText) btnText.textContent = "حذف قالب";
+            btn.title = "حذف قالب محفوظ أو استعراض القوالب للحذف";
         };
 
         window.loadCompanyInjectionRules = async function (companyId) {
@@ -1368,45 +2262,93 @@
                 const data = await res.json();
                 if (data.success && data.data) {
                     injectionState.savedRules = data.data;
-                    select.innerHTML = '<option value="">-- Select Saved Rule --</option>' +
+                    const prevVal = select.value;
+                    select.innerHTML = '<option value="">-- Select Saved Rule Preset --</option>' +
                         data.data.map(r => `<option value="${r.id}">${r.ruleName}</option>`).join('');
+                    if (prevVal && data.data.some(r => r.id == prevVal)) {
+                        select.value = prevVal;
+                    }
                 }
             } catch (err) {
                 console.error('Failed to load rules:', err);
             }
+            if (typeof updateDeleteRuleButtonState === 'function') updateDeleteRuleButtonState();
         };
 
         window.applySelectedInjectionRule = function () {
             const select = document.getElementById('injectionRuleSelect');
             const ruleId = parseInt(select.value);
-            const btnDelete = document.getElementById('btnDeleteSelectedRule');
+            if (typeof updateDeleteRuleButtonState === 'function') updateDeleteRuleButtonState();
 
             if (!ruleId) {
-                if (btnDelete) btnDelete.classList.add('hidden');
                 return;
             }
-            if (btnDelete) btnDelete.classList.remove('hidden');
 
             const rule = injectionState.savedRules.find(r => r.id === ruleId);
             if (!rule) return;
 
             try {
-                const quotas = typeof rule.departmentQuotasJson === 'string' ? JSON.parse(rule.departmentQuotasJson) : rule.departmentQuotasJson;
+                const ruleData = typeof rule.departmentQuotasJson === 'string' ? JSON.parse(rule.departmentQuotasJson) : rule.departmentQuotasJson;
+
+                const pharmInput = document.getElementById('inputQuotaPharmacist');
+                const assistInput = document.getElementById('inputQuotaAssistant');
+                if (pharmInput) pharmInput.value = 0;
+                if (assistInput) assistInput.value = 0;
                 document.querySelectorAll('.dept-quota-input').forEach(input => input.value = '');
-                quotas.forEach(q => {
-                    const input = document.querySelector(`.dept-quota-input[data-dept-id="${q.departmentId || q.DepartmentId}"]`);
-                    if (input) {
-                        input.value = q.quota || q.Quota || 0;
+
+                let hasBranchQuotas = false;
+                let hasDeptQuotas = false;
+
+                if (ruleData) {
+                    // 1. Branch Staff Quotas
+                    if (ruleData.pharmacistQuota !== undefined || ruleData.assistantQuota !== undefined) {
+                        const pVal = ruleData.pharmacistQuota || 0;
+                        const aVal = ruleData.assistantQuota || 0;
+                        if (pharmInput) pharmInput.value = pVal;
+                        if (assistInput) assistInput.value = aVal;
+                        if (pVal > 0 || aVal > 0) hasBranchQuotas = true;
                     }
-                });
+
+                    // 2. Department Quotas
+                    const quotas = Array.isArray(ruleData) ? ruleData : (ruleData.departmentQuotas || []);
+                    quotas.forEach(q => {
+                        const input = document.querySelector(`.dept-quota-input[data-dept-id="${q.departmentId || q.DepartmentId}"]`);
+                        if (input) {
+                            const val = q.quota || q.Quota || 0;
+                            input.value = val;
+                            if (val > 0) hasDeptQuotas = true;
+                        }
+                    });
+
+                    // 3. Branches & Shifts Filters
+                    injectionState.selectedBranchIds = ruleData.branchIds || [];
+                    injectionState.selectedShiftIds = ruleData.shiftIds || [];
+                    renderInjectionBranches();
+                    renderInjectionShifts();
+                    updateBranchFilterUI();
+                    updateShiftFilterUI();
+                    fetchLiveAvailableStaffCounts();
+                }
+
+                if (hasBranchQuotas && hasDeptQuotas) {
+                    switchInjectionMode('combined');
+                } else if (hasDeptQuotas) {
+                    switchInjectionMode('departments');
+                } else {
+                    switchInjectionMode('branchStaff');
+                }
+
                 updateInjectionHeadcount();
-                showAppToast('info', 'Rule Applied', `Applied quotas from: ${rule.ruleName}`);
+                showAppToast('info', 'Rule Applied', `تم تطبيق قالب: ${rule.ruleName}`);
             } catch (err) {
                 showAppToast('error', 'Error', 'Failed to read rule data.');
             }
         };
 
         window.promptSaveCurrentInjectionRule = async function () {
+            const pharmQuota = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
+            const assistQuota = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+
             const quotas = [];
             document.querySelectorAll('.dept-quota-input').forEach(input => {
                 const val = parseInt(input.value) || 0;
@@ -1419,22 +2361,37 @@
                 }
             });
 
-            if (quotas.length === 0) {
-                showAppToast('warning', 'Notice', 'Please specify a quota for at least one department before saving.');
+            if (pharmQuota === 0 && assistQuota === 0 && quotas.length === 0) {
+                showAppToast('warning', 'Notice', 'يرجى تحديد كوتة عددية للصيادلة أو المساعدين أو الأقسام الإدارية قبل الحفظ.');
                 return;
             }
 
+            const isCombined = (pharmQuota > 0 || assistQuota > 0) && quotas.length > 0;
+            const rulePayload = {
+                ruleType: isCombined ? 'combined' : (quotas.length > 0 ? 'departments' : 'branchStaff'),
+                pharmacistQuota: pharmQuota,
+                assistantQuota: assistQuota,
+                departmentQuotas: quotas,
+                branchIds: injectionState.selectedBranchIds,
+                shiftIds: injectionState.selectedShiftIds
+            };
+
             const { value: ruleName } = await Swal.fire({
-                title: 'Save Current Rotation Rule',
+                title: '<div class="text-base font-black text-slate-800">حفظ توزيع الكوتة كقالب جاهز</div>',
+                html: '<p class="text-xs text-slate-500 mb-3 leading-relaxed">يتيح لك حفظ أعداد المقاعد المحددة كقالب محفوظ (Preset) لاستدعائه وتطبيقه بضغطة زر واحدة في أي جلسة قادمة دون الحاجة لإعادة كتابة الأرقام يدوياً كل مرة.</p>',
                 input: 'text',
-                inputLabel: 'Rule Name (e.g. Call Center 5 + Quality 2)',
-                inputPlaceholder: 'Enter a descriptive rule name...',
+                inputLabel: 'اسم القالب (مثال: كوتة الفروع 5 صيادلة + 2 مساعدين - صباحي)',
+                inputPlaceholder: 'أدخل اسماً معبراً للقالب...',
                 showCancelButton: true,
-                confirmButtonText: 'Save Rule',
-                cancelButtonText: 'Cancel',
+                confirmButtonText: '<i class="fas fa-save mr-1"></i> حفظ القالب',
+                cancelButtonText: 'إلغاء',
+                customClass: {
+                    confirmButton: 'px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs',
+                    cancelButton: 'px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs'
+                },
                 inputValidator: (value) => {
                     if (!value || !value.trim()) {
-                        return 'Please enter a name for the rule!';
+                        return 'يرجى إدخال اسم للقالب أولاً!';
                     }
                 }
             });
@@ -1447,60 +2404,124 @@
                         body: JSON.stringify({
                             companyId: sessionTraineesState.companyId || null,
                             ruleName: ruleName.trim(),
-                            departmentQuotasJson: JSON.stringify(quotas)
+                            quotasJson: JSON.stringify(rulePayload),
+                            departmentQuotasJson: JSON.stringify(rulePayload)
                         })
                     });
                     const data = await res.json();
                     if (data.success) {
-                        showAppToast('success', 'Saved Successfully', data.message || 'Rotation rule saved successfully.');
+                        showAppToast('success', 'تم الحفظ بنجاح', data.message || 'تم حفظ قالب التوزيع بنجاح.');
                         loadCompanyInjectionRules(sessionTraineesState.companyId);
                     } else {
-                        showAppToast('error', 'Save Failed', data.message);
+                        showAppToast('error', 'تعذر الحفظ', data.message);
                     }
                 } catch (err) {
-                    showAppToast('error', 'Connection Error', err.message);
+                    showAppToast('error', 'خطأ في الاتصال', err.message);
                 }
             }
         };
 
         window.deleteCurrentSelectedRule = async function () {
             const select = document.getElementById('injectionRuleSelect');
-            const ruleId = parseInt(select.value);
-            if (!ruleId) return;
+            const ruleId = select ? parseInt(select.value) : 0;
 
-            const confirm = await Swal.fire({
-                title: 'Are you sure you want to delete this rule?',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#e11d48',
-                confirmButtonText: 'Yes, Delete',
-                cancelButtonText: 'Cancel'
-            });
+            // If a rule is selected in dropdown: confirm and delete it directly
+            if (ruleId && injectionState.savedRules) {
+                const rule = injectionState.savedRules.find(r => r.id === ruleId);
+                const ruleName = rule ? rule.ruleName : 'هذا القالب';
 
-            if (confirm.isConfirmed) {
-                try {
-                    const res = await fetch(`/Attendance/DeleteCompanyInjectionRule?ruleId=${ruleId}`, { method: 'POST' });
-                    const data = await res.json();
-                    if (data.success) {
-                        showAppToast('success', 'Deleted Successfully', 'The rotation rule has been deleted.');
-                        loadCompanyInjectionRules(sessionTraineesState.companyId);
-                        const btnDelete = document.getElementById('btnDeleteSelectedRule');
-                        if (btnDelete) btnDelete.classList.add('hidden');
-                    } else {
-                        showAppToast('error', 'Delete Failed', data.message);
+                const confirm = await Swal.fire({
+                    title: `<div class="text-base font-black text-slate-800">حذف قالب: ${ruleName}</div>`,
+                    html: `<p class="text-xs text-slate-600 mt-2">هل أنت متأكد من حذف هذا القالب نهائياً؟<br><span class="text-[11px] text-slate-400">لن يؤثر الحذف على أي جلسات تم تعيين المرشحين لها مسبقاً.</span></p>`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fas fa-trash-alt mr-1"></i> نعم، حذف القالب',
+                    cancelButtonText: 'إلغاء',
+                    customClass: {
+                        confirmButton: 'px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs',
+                        cancelButton: 'px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs'
                     }
-                } catch (err) {
-                    showAppToast('error', 'Error', err.message);
+                });
+
+                if (confirm.isConfirmed) {
+                    await executeDeleteRuleDirect(ruleId, ruleName);
                 }
+                return;
+            }
+
+            // If no rule is selected: open a modal showing all saved rules to pick and delete
+            if (!injectionState.savedRules || injectionState.savedRules.length === 0) {
+                Swal.fire({
+                    title: '<div class="text-sm font-black text-slate-800">لا توجد قوالب محفوظة</div>',
+                    text: 'لم يتم حفظ أي قوالب للكوتة حتى الآن. يمكنك تحديد الكوتة والفلاتر ثم الضغط على "حفظ الكوتة كقالب".',
+                    icon: 'info',
+                    confirmButtonText: 'حسناً',
+                    customClass: {
+                        confirmButton: 'px-4 py-2 rounded-xl bg-purple-600 text-white font-bold text-xs'
+                    }
+                });
+                return;
+            }
+
+            const rulesListHtml = `
+                <div class="space-y-2 max-h-72 overflow-y-auto text-right p-1" dir="rtl">
+                    ${injectionState.savedRules.map(r => `
+                        <div class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-rose-50/40 border border-slate-200 rounded-xl transition-all">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-bookmark text-purple-600 text-xs"></i>
+                                <span class="text-xs font-bold text-slate-800">${r.ruleName}</span>
+                            </div>
+                            <button type="button" onclick="executeDeleteRuleDirect(${r.id}, '${r.ruleName.replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-200 hover:border-rose-600 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shadow-2xs cursor-pointer">
+                                <i class="fas fa-trash-alt text-[10px]"></i>
+                                <span>حذف</span>
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            Swal.fire({
+                title: '<div class="text-base font-black text-slate-800">إدارة وحذف قوالب الكوتة المحفوظة</div>',
+                html: `<p class="text-xs text-slate-500 mb-3">اضغط على زر الحذف بجانب القالب الذي ترغب في إزالته:</p>${rulesListHtml}`,
+                showConfirmButton: false,
+                showCancelButton: true,
+                cancelButtonText: 'إغلاق',
+                customClass: {
+                    cancelButton: 'px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs'
+                }
+            });
+        };
+
+        window.executeDeleteRuleDirect = async function (ruleId, ruleName) {
+            try {
+                const res = await fetch(`/Attendance/DeleteCompanyInjectionRule?id=${ruleId}&ruleId=${ruleId}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showAppToast('success', 'تم الحذف', `تم حذف قالب "${ruleName}" بنجاح.`);
+                    await loadCompanyInjectionRules(sessionTraineesState.companyId);
+                    const select = document.getElementById('injectionRuleSelect');
+                    if (select && select.value == ruleId) {
+                        select.value = '';
+                    }
+                    if (typeof updateDeleteRuleButtonState === 'function') updateDeleteRuleButtonState();
+                    Swal.close();
+                } else {
+                    showAppToast('error', 'تعذر الحذف', data.message || 'حدث خطأ أثناء محاولة الحذف.');
+                }
+            } catch (err) {
+                showAppToast('error', 'خطأ في الاتصال', err.message);
             }
         };
 
         window.previewInjectionRule = async function () {
-            const quotas = [];
+            const pharmQuota = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
+            const assistQuota = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+
+            const deptQuotas = [];
             document.querySelectorAll('.dept-quota-input').forEach(input => {
                 const val = parseInt(input.value) || 0;
                 if (val > 0) {
-                    quotas.push({
+                    deptQuotas.push({
                         departmentId: parseInt(input.dataset.deptId),
                         departmentName: input.dataset.deptName,
                         quota: val
@@ -1508,8 +2529,32 @@
                 }
             });
 
-            if (quotas.length === 0) {
-                showAppToast('warning', 'Notice', 'Please specify a quota for at least one department.');
+            if (pharmQuota === 0 && assistQuota === 0 && deptQuotas.length === 0) {
+                showAppToast('warning', 'Notice', 'يرجى تحديد كوتة عددية للصيادلة أو المساعدين أو الأقسام الإدارية للمعاينة.');
+                return;
+            }
+
+            const grandTotal = pharmQuota + assistQuota + deptQuotas.reduce((a, b) => a + b.quota, 0);
+            const totalSeats = parseInt(document.getElementById('inputSessionTotalSeats')?.value) || sessionTraineesState.totalSeats || 50;
+
+            if (grandTotal > totalSeats) {
+                const previewCard = document.getElementById('injectionPreviewResultsCard');
+                if (previewCard) previewCard.classList.add('hidden');
+                injectionState.previewCandidates = [];
+
+                showAppToast('error', 'تم تجاوز سعة المقاعد!', `لا يمكن عرض المعاينة! إجمالي المقاعد المطلوبة (${grandTotal}) أكبر من سعة الجلسة المحددة (${totalSeats} مقعد).`);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'عفواً، تم تجاوز سعة المقاعد!',
+                    html: `<div class="text-right space-y-2" dir="rtl">
+                        <p class="text-xs text-slate-700 leading-relaxed font-bold">لا يمكن تشغيل المعاينة (Preview) لأن إجمالي المقاعد المطلوبة (<strong>${grandTotal}</strong> مقعد) أكبر من سعة الجلسة المحددة (<strong>${totalSeats}</strong> مقعد).</p>
+                        <p class="text-[11px] text-rose-600 font-bold bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                            💡 يرجى تقليل الكوتة المطلوبة لتصبح ضمن الحد الأقصى (${totalSeats})، أو قم بزيادة "سعة المقاعد" من أعلى النافذة ثم اضغط حفظ.
+                        </p>
+                    </div>`,
+                    confirmButtonText: 'حسناً، فهمت',
+                    confirmButtonColor: '#e11d48'
+                });
                 return;
             }
 
@@ -1521,7 +2566,7 @@
             listWrapper.innerHTML = `
                 <div class="text-center py-6 text-slate-400">
                     <i class="fas fa-spinner fa-spin text-xl text-purple-500 mb-2 block"></i>
-                    Calculating fair rotation and selecting lowest attendance candidates...
+                    Calculating fair rotation and selecting lowest attendance candidates across all chosen roles and departments...
                 </div>`;
 
             try {
@@ -1531,7 +2576,12 @@
                     body: JSON.stringify({
                         sessionId: sessionTraineesState.sessionId,
                         companyId: sessionTraineesState.companyId || null,
-                        departmentQuotas: quotas
+                        mode: 'combined',
+                        pharmacistQuota: pharmQuota,
+                        assistantQuota: assistQuota,
+                        branchIds: injectionState.selectedBranchIds.length > 0 ? injectionState.selectedBranchIds : null,
+                        shiftIds: injectionState.selectedShiftIds.length > 0 ? injectionState.selectedShiftIds : null,
+                        departmentQuotas: deptQuotas.length > 0 ? deptQuotas : null
                     })
                 });
                 const data = await res.json();
@@ -1540,7 +2590,7 @@
                     countBadge.textContent = data.candidates.length;
 
                     if (data.candidates.length === 0) {
-                        listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-amber-600 font-bold">No available staff found in selected departments (or all already assigned to this session).</div>`;
+                        listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-amber-600 font-bold">لم يتم العثور على موظفين متاحين وفق الشروط المحددة (أو جميعهم مسجلون بالفعل في هذه السيشن).</div>`;
                         return;
                     }
 
@@ -1548,7 +2598,7 @@
                         const attended = c.previousAttendedCount || 0;
                         const isNeverAttended = attended === 0;
                         const badgeClass = isNeverAttended ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200';
-                        const badgeText = isNeverAttended ? '⭐ Never Attended (Top Priority)' : `Attended ${attended} Previous Sessions`;
+                        const badgeText = isNeverAttended ? '⭐ لم يحضر مسبقاً (أعلى أولوية)' : `حضر ${attended} سيشن سابقة`;
 
                         return `
                             <div class="p-3 bg-white rounded-xl border border-slate-200/90 flex items-center justify-between gap-3 select-none shadow-2xs hover:border-purple-200 transition-all">
@@ -1561,10 +2611,12 @@
                                             <h5 class="text-xs font-black text-slate-800">${c.fullName}</h5>
                                             <span class="font-mono text-[10px] text-slate-400">(${c.userCode})</span>
                                         </div>
-                                        <div class="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
-                                            <span class="font-bold text-purple-600">${c.departmentName}</span>
+                                        <div class="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5 flex-wrap">
+                                            <span class="font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100">${c.jobTitle || c.departmentName}</span>
                                             <span>•</span>
-                                            <span>Branch: ${c.branchName || 'General'}</span>
+                                            <span><i class="fas fa-code-branch text-purple-500 mr-0.5"></i> ${c.branchName || 'بدون فرع'}</span>
+                                            <span>•</span>
+                                            <span><i class="fas fa-clock text-indigo-500 mr-0.5"></i> ${c.shiftName || 'غير محدد'}</span>
                                             <span>•</span>
                                             <span class="px-2 py-0.5 rounded text-[9px] font-bold border ${badgeClass}">${badgeText}</span>
                                         </div>
@@ -1577,12 +2629,12 @@
                         `;
                     }).join('');
 
-                    showAppToast('success', 'Preview Ready', `Selected ${data.candidates.length} candidates via Fair Rotation.`);
+                    showAppToast('success', 'Preview Ready', `تم ترشيح ${data.candidates.length} موظف مجمعين (صيادلة + مساعدين + أقسام إدارية).`);
                 } else {
-                    listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-rose-500 font-bold">${data.message || 'Preview calculation failed'}</div>`;
+                    listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-rose-500 font-bold">${data.message || 'تعذر حساب المعاينة'}</div>`;
                 }
             } catch (err) {
-                listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-rose-500 font-bold">Preview error: ${err.message}</div>`;
+                listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-rose-500 font-bold">خطأ في الاتصال: ${err.message}</div>`;
             }
         };
 
@@ -1593,11 +2645,14 @@
                 previewCheckboxes.forEach(chk => userIds.push(chk.dataset.previewUserId));
             }
 
-            const quotas = [];
+            const pharmQuota = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
+            const assistQuota = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+
+            const deptQuotas = [];
             document.querySelectorAll('.dept-quota-input').forEach(input => {
                 const val = parseInt(input.value) || 0;
                 if (val > 0) {
-                    quotas.push({
+                    deptQuotas.push({
                         departmentId: parseInt(input.dataset.deptId),
                         departmentName: input.dataset.deptName,
                         quota: val
@@ -1605,28 +2660,52 @@
                 }
             });
 
-            if (quotas.length === 0 && userIds.length === 0) {
-                showAppToast('warning', 'Notice', 'Please specify department quotas first or preview candidates.');
+            if (userIds.length === 0 && pharmQuota === 0 && assistQuota === 0 && deptQuotas.length === 0) {
+                showAppToast('warning', 'Notice', 'يرجى تحديد الكوتة أولاً أو معاينة المرشحين.');
                 return;
             }
 
             const sendNotif = document.getElementById('chkInjectionSendNotif').checked;
             const sendN8n = document.getElementById('chkInjectionSendN8n').checked;
             const bypassApproval = document.getElementById('chkInjectionBypassApproval').checked;
+            const sendRabbitMqEmail = document.getElementById('chkInjectionSendRabbitMqEmail') ? document.getElementById('chkInjectionSendRabbitMqEmail').checked : true;
+
+            const totalCandidateCount = userIds.length > 0 ? userIds.length : (pharmQuota + assistQuota + deptQuotas.reduce((a, b) => a + b.quota, 0));
+            const totalSeats = parseInt(document.getElementById('inputSessionTotalSeats')?.value) || sessionTraineesState.totalSeats || 50;
+
+            if (totalCandidateCount > totalSeats) {
+                showAppToast('error', 'ممنوع التسكين!', `إجمالي عدد المرشحين (${totalCandidateCount}) أكبر من سعة الجلسة (${totalSeats} مقعد).`);
+                await Swal.fire({
+                    title: '<div class="text-base font-black text-rose-600">❌ تم تجاوز سعة المقاعد!</div>',
+                    html: `<div class="text-right space-y-2" dir="rtl">
+                        <p class="text-xs text-slate-700 leading-relaxed font-bold">إجمالي عدد المرشحين المطلوب تسكينهم (<strong>${totalCandidateCount}</strong>) أكبر من سعة الجلسة المحددة (<strong>${totalSeats}</strong> مقعد).</p>
+                        <p class="text-[11px] text-rose-600 font-bold bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                            لا يمكن إتمام عملية التسكين عند تجاوز الحد الأقصى للمقاعد. يرجى تعديل الكوتة أو زيادة سعة الجلسة أولاً.
+                        </p>
+                    </div>`,
+                    icon: 'error',
+                    confirmButtonText: 'حسناً',
+                    confirmButtonColor: '#e11d48',
+                    customClass: {
+                        confirmButton: 'px-4 py-2 rounded-xl bg-rose-600 text-white font-bold text-xs shadow-sm'
+                    }
+                });
+                return;
+            }
 
             const confirm = await Swal.fire({
-                title: 'Confirm Trainee Assignment',
-                text: `Trainees will be enrolled using Fair Rotation (lowest previous attendance first) and notifications will be sent.`,
+                title: 'تأكيد تسكين وتوزيع المرشحين مجمعين',
+                html: `<p class="text-xs text-slate-600 leading-relaxed">سيتم تسكين <strong>${totalCandidateCount}</strong> متدرب مجمعين (صيادلة + مساعدين + أقسام إدارية) وفق التوزيع العادل (الأقل حضوراً أولاً) وإرسال الإشعارات والإيميلات فوراً.</p>`,
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#7c3aed',
-                confirmButtonText: 'Yes, Assign Now',
-                cancelButtonText: 'Cancel'
+                confirmButtonText: 'نعم، تسكين المرشحين الآن',
+                cancelButtonText: 'إلغاء'
             });
 
             if (!confirm.isConfirmed) return;
 
-            showAppToast('info', 'Assigning...', 'Enrolling trainees and triggering n8n webhook notifications...');
+            showAppToast('info', 'جاري التسكين...', 'يتم تسكين المرشحين مجمعين وإرسال الإيميلات والإشعارات...');
 
             try {
                 const res = await fetch('/Attendance/ExecuteInjectionRule', {
@@ -1635,25 +2714,84 @@
                     body: JSON.stringify({
                         sessionId: sessionTraineesState.sessionId,
                         companyId: sessionTraineesState.companyId || null,
-                        departmentQuotas: quotas,
+                        mode: 'combined',
+                        pharmacistQuota: pharmQuota,
+                        assistantQuota: assistQuota,
+                        branchIds: injectionState.selectedBranchIds.length > 0 ? injectionState.selectedBranchIds : null,
+                        shiftIds: injectionState.selectedShiftIds.length > 0 ? injectionState.selectedShiftIds : null,
+                        departmentQuotas: deptQuotas.length > 0 ? deptQuotas : null,
                         userIds: userIds.length > 0 ? userIds : null,
+                        confirmedCandidateKeys: userIds.length > 0 ? userIds.map(u => `U_${u}`) : null,
                         bypassApproval: bypassApproval,
                         sendNotification: sendNotif,
-                        sendN8nEmail: sendN8n
+                        sendN8nWebhook: sendN8n,
+                        sendEmail: sendRabbitMqEmail
                     })
                 });
 
                 const data = await res.json();
                 if (data.success) {
                     sessionTraineesState.hasModified = true;
-                    showAppToast('success', 'Assigned Successfully', data.message || `Successfully enrolled ${data.enrolledCount} trainees.`);
+                    showAppToast('success', 'تم التسكين بنجاح', data.message || `تم تسكين المرشحين مجمعين بنجاح.`);
                     switchTraineesTab('current');
                     loadSessionTraineesData(sessionTraineesState.sessionId);
                 } else {
-                    showAppToast('error', 'Assignment Failed', data.message || 'An error occurred during assignment.');
+                    showAppToast('error', 'فشل التسكين', data.message || 'حدث خطأ أثناء التسكين.');
                 }
             } catch (err) {
-                showAppToast('error', 'Connection Error', err.message);
+                showAppToast('error', 'خطأ في الاتصال', err.message);
+            }
+        };
+
+        window.exportPreviewToExcel = async function () {
+            if (!injectionState.previewCandidates || injectionState.previewCandidates.length === 0) {
+                showAppToast('warning', 'Notice', 'يرجى إجراء المعاينة (Preview) أولاً للحصول على المرشحين قبل التصدير.');
+                return;
+            }
+
+            // Only export candidates that are checked in the preview
+            const checkedBoxes = document.querySelectorAll('.preview-candidate-chk:checked');
+            let checkedUserIds = new Set();
+            checkedBoxes.forEach(chk => checkedUserIds.add(chk.dataset.previewUserId));
+
+            let candidatesToExport = injectionState.previewCandidates.filter(c => checkedUserIds.has(c.userId));
+            if (candidatesToExport.length === 0) {
+                candidatesToExport = injectionState.previewCandidates;
+            }
+
+            showAppToast('info', 'جاري التصدير...', 'يتم إنشاء وتنسيق شيت الإكسيل الاحترافي...');
+
+            try {
+                const res = await fetch('/Attendance/ExportInjectionPreviewExcel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: sessionTraineesState.sessionId,
+                        candidates: candidatesToExport
+                    })
+                });
+
+                if (!res.ok) {
+                    const errJson = await res.json().catch(() => null);
+                    throw new Error(errJson?.message || 'تعذر استخراج ملف الإكسيل.');
+                }
+
+                const buffer = await res.arrayBuffer();
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Trainees_Roster_Session_${sessionTraineesState.sessionId || 'Preview'}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                }, 3000);
+
+                showAppToast('success', 'تم التصدير بنجاح', `تم تحميل شيت الإكسيل بنجاح (${candidatesToExport.length} متدرب).`);
+            } catch (err) {
+                showAppToast('error', 'فشل التصدير', err.message);
             }
         };
     </script>
