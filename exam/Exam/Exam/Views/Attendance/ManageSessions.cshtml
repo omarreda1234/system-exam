@@ -1719,19 +1719,19 @@
 
             let optionsHtml = '';
             if (currentVal === 'CUSTOM') {
-                optionsHtml += `<option value="CUSTOM" selected>✏️ اختيار مخصص (${selectedCount} شيفت محدد)</option>`;
+                optionsHtml += `<option value="CUSTOM" selected>اختيار مخصص (${selectedCount} شيفت محدد)</option>`;
             }
-            optionsHtml += `<option value="ALL" ${currentVal === 'ALL' ? 'selected' : ''}>🌟 تحديد جميع الشيفتات (الكل - ${totalShifts})</option>`;
+            optionsHtml += `<option value="ALL" ${currentVal === 'ALL' ? 'selected' : ''}>تحديد جميع الشيفتات (الكل - ${totalShifts})</option>`;
 
             groups.forEach(g => {
                 const gId = String(g.id ?? g.Id);
                 const gName = g.groupName || g.GroupName || 'Group';
                 const count = g.shiftsCount ?? g.ShiftsCount ?? 0;
                 const isSelected = (currentVal === gId);
-                optionsHtml += `<option value="${gId}" ${isSelected ? 'selected' : ''}>🏷️ ${gName} (${count} شيفت)</option>`;
+                optionsHtml += `<option value="${gId}" ${isSelected ? 'selected' : ''}>${gName} (${count} شيفت)</option>`;
             });
 
-            optionsHtml += `<option value="NONE" ${currentVal === 'NONE' ? 'selected' : ''}>❌ إلغاء تحديد الكل</option>`;
+            optionsHtml += `<option value="NONE" ${currentVal === 'NONE' ? 'selected' : ''}>إلغاء تحديد الكل</option>`;
 
             container.innerHTML = `
                 <div class="relative w-full">
