@@ -2599,6 +2599,8 @@
                         const isNeverAttended = attended === 0;
                         const badgeClass = isNeverAttended ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200';
                         const badgeText = isNeverAttended ? '⭐ لم يحضر مسبقاً (أعلى أولوية)' : `حضر ${attended} سيشن سابقة`;
+                        const titleText = (c.jobTitle && c.jobTitle !== 'Trainee' && c.jobTitle !== '--') ? c.jobTitle : (c.departmentName && c.departmentName !== '--' ? c.departmentName : 'متدرب');
+                        const showDeptBadge = c.departmentName && c.departmentName !== '--' && !c.departmentName.startsWith('طاقم الفروع') && c.departmentName !== titleText;
 
                         return `
                             <div class="p-3 bg-white rounded-xl border border-slate-200/90 flex items-center justify-between gap-3 select-none shadow-2xs hover:border-purple-200 transition-all">
@@ -2612,7 +2614,8 @@
                                             <span class="font-mono text-[10px] text-slate-400">(${c.userCode})</span>
                                         </div>
                                         <div class="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5 flex-wrap">
-                                            <span class="font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100">${c.jobTitle || c.departmentName}</span>
+                                            <span class="font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100">${titleText}</span>
+                                            ${showDeptBadge ? `<span>•</span><span class="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200"><i class="fas fa-building text-slate-400 mr-0.5"></i> ${c.departmentName}</span>` : ''}
                                             <span>•</span>
                                             <span><i class="fas fa-code-branch text-purple-500 mr-0.5"></i> ${c.branchName || 'بدون فرع'}</span>
                                             <span>•</span>

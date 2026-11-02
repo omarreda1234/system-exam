@@ -871,7 +871,27 @@ namespace Exam.Controllers
                 if (!companyId.HasValue) return BadRequest(new { success = false, message = "This session does not belong to a company." });
 
                 var assignedRaw = (await conn.QueryAsync<dynamic>(@"
-                    SELECT CST.Id AS AssignmentId, CT.Id AS TraineeId, CT.FullName, CT.UserCode, CT.JobTitle, CT.BranchName, CT.Email, CT.Phone, CST.AssignedAt,
+                    SELECT CST.Id AS AssignmentId, CT.Id AS TraineeId, CT.FullName, CT.UserCode,
+                           COALESCE(
+                               NULLIF(CT.JobTitle, ''),
+                               NULLIF(U.UserRoleCustom, ''),
+                               (SELECT TOP 1 
+                                   CASE 
+                                       WHEN LOWER(r.Name) = 'assistant' THEN N'مساعد صيدلي'
+                                       WHEN LOWER(r.Name) = 'pharmacist' THEN N'صيدلي'
+                                       WHEN LOWER(r.Name) = 'branch manager' THEN N'مدير فرع'
+                                       WHEN LOWER(r.Name) = 'branch supervisor' THEN N'مشرف فرع'
+                                       WHEN LOWER(r.Name) IN ('user', 'trainee') THEN NULL
+                                       ELSE r.Name 
+                                   END
+                                FROM dbo.AspNetUserRoles ur 
+                                JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id 
+                                WHERE ur.UserId = CST.UserId AND r.Name NOT IN ('User', 'Trainee')),
+                               D.Name,
+                               CT.JobTitle,
+                               N'متدرب'
+                           ) AS JobTitle,
+                           CT.BranchName, CT.Email, CT.Phone, CST.AssignedAt,
                            ISNULL(CST.ApprovalStatus, 'Approved') AS ApprovalStatus,
                            CST.RejectionReason,
                            CST.ReplacedWithTraineeId,
@@ -880,6 +900,8 @@ namespace Exam.Controllers
                            ISNULL(B.Id, 0) AS BranchId
                     FROM dbo.CompanySessionTrainees CST
                     JOIN dbo.CompanyTrainees CT ON CST.CompanyTraineeId = CT.Id
+                    LEFT JOIN dbo.AspNetUsers U WITH (NOLOCK) ON CST.UserId = U.Id
+                    LEFT JOIN dbo.Departments D WITH (NOLOCK) ON U.DepartmentId = D.Id
                     LEFT JOIN dbo.Branches B ON B.BranchName = CT.BranchName OR LTRIM(RTRIM(B.BranchName)) = LTRIM(RTRIM(CT.BranchName))
                     WHERE CST.SessionId = @SessionId
                     ORDER BY CT.FullName", new { SessionId = sessionId })).ToList();
@@ -1010,10 +1032,29 @@ namespace Exam.Controllers
                             COALESCE(NULLIF(ct.BranchName, ''), NULLIF(b.BranchName, ''), N'بدون فرع') AS BranchName,
                             COALESCE(NULLIF(ct.Email, ''), NULLIF(u.Email, ''), N'--') AS Email,
                             COALESCE(NULLIF(ct.Phone, ''), NULLIF(u.PhoneNumber, ''), N'--') AS Phone,
-                            COALESCE(NULLIF(ct.JobTitle, ''), NULLIF(u.UserRoleCustom, ''), N'Trainee') AS JobTitle,
+                            COALESCE(
+                                NULLIF(ct.JobTitle, ''),
+                                NULLIF(u.UserRoleCustom, ''),
+                                (SELECT TOP 1 
+                                    CASE 
+                                        WHEN LOWER(r.Name) = 'assistant' THEN N'مساعد صيدلي'
+                                        WHEN LOWER(r.Name) = 'pharmacist' THEN N'صيدلي'
+                                        WHEN LOWER(r.Name) = 'branch manager' THEN N'مدير فرع'
+                                        WHEN LOWER(r.Name) = 'branch supervisor' THEN N'مشرف فرع'
+                                        WHEN LOWER(r.Name) IN ('user', 'trainee') THEN NULL
+                                        ELSE r.Name 
+                                    END
+                                 FROM dbo.AspNetUserRoles ur 
+                                 JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id 
+                                 WHERE ur.UserId = u.Id AND r.Name NOT IN ('User', 'Trainee')),
+                                d.Name,
+                                (SELECT TOP 1 r.Name FROM dbo.AspNetUserRoles ur JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id WHERE ur.UserId = u.Id),
+                                N'متدرب'
+                            ) AS JobTitle,
                             ISNULL(b.BypassApproval, 0) AS IsBranchExempt
                         FROM AspNetUsers u WITH (NOLOCK)
                         LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                        LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
                         LEFT JOIN CompanyTrainees ct WITH (NOLOCK) ON ct.CompanyId = @CompanyId AND (ct.UserCode = u.UserCode OR (ct.Email = u.Email AND ct.Email <> '--'))
                         WHERE (u.IsActive = 1 OR ct.Id IS NOT NULL)
 
@@ -1157,10 +1198,29 @@ namespace Exam.Controllers
                     {
                         targetUserId = key.Substring(2);
                         var u = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                            SELECT u.Id, u.FullName, u.UserName, u.UserCode, u.Email, u.PhoneNumber, u.UserRoleCustom,
+                            SELECT u.Id, u.FullName, u.UserName, u.UserCode, u.Email, u.PhoneNumber,
+                                   COALESCE(
+                                       NULLIF(u.UserRoleCustom, ''),
+                                       (SELECT TOP 1 
+                                           CASE 
+                                               WHEN LOWER(r.Name) = 'assistant' THEN N'مساعد صيدلي'
+                                               WHEN LOWER(r.Name) = 'pharmacist' THEN N'صيدلي'
+                                               WHEN LOWER(r.Name) = 'branch manager' THEN N'مدير فرع'
+                                               WHEN LOWER(r.Name) = 'branch supervisor' THEN N'مشرف فرع'
+                                               WHEN LOWER(r.Name) IN ('user', 'trainee') THEN NULL
+                                               ELSE r.Name 
+                                           END
+                                        FROM dbo.AspNetUserRoles ur 
+                                        JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id 
+                                        WHERE ur.UserId = u.Id AND r.Name NOT IN ('User', 'Trainee')),
+                                       d.Name,
+                                       (SELECT TOP 1 r.Name FROM dbo.AspNetUserRoles ur JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id WHERE ur.UserId = u.Id),
+                                       N'متدرب'
+                                   ) AS JobTitle,
                                    u.BranchId, b.BranchName, ISNULL(b.BypassApproval, 0) AS IsBranchExempt
                             FROM AspNetUsers u
                             LEFT JOIN Branches b ON u.BranchId = b.Id
+                            LEFT JOIN Departments d ON u.DepartmentId = d.Id
                             WHERE u.Id = @UserId", new { UserId = targetUserId });
 
                         if (u != null)
@@ -1173,6 +1233,7 @@ namespace Exam.Controllers
                             branchName = (string)(u.BranchName ?? "بدون فرع");
                             branchId = (int?)u.BranchId;
                             isBranchExempt = u.IsBranchExempt != null && (u.IsBranchExempt is bool bVal ? bVal : u.IsBranchExempt.ToString() == "1" || u.IsBranchExempt.ToString().Equals("true", StringComparison.OrdinalIgnoreCase));
+                            string resolvedJobTitle = (string)(u.JobTitle ?? "متدرب");
 
                             // Ensure record exists in CompanyTrainees and pull any missing details
                             var ctInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
@@ -1194,6 +1255,11 @@ namespace Exam.Controllers
                                 {
                                     branchName = ctBr;
                                 }
+                                string ctJt = (string)(ctInfo.JobTitle ?? "");
+                                if ((string.IsNullOrWhiteSpace(ctJt) || ctJt == "Trainee" || ctJt == "متدرب") && !string.IsNullOrWhiteSpace(resolvedJobTitle) && resolvedJobTitle != "Trainee" && resolvedJobTitle != "متدرب")
+                                {
+                                    await conn.ExecuteAsync("UPDATE CompanyTrainees SET JobTitle = @JobTitle WHERE Id = @Id", new { JobTitle = resolvedJobTitle, Id = companyTraineeId });
+                                }
                             }
                             else
                             {
@@ -1205,7 +1271,7 @@ namespace Exam.Controllers
                                         CompanyId = (int)session.CompanyId,
                                         FullName = fullName,
                                         UserCode = userCode,
-                                        JobTitle = (string)(u.UserRoleCustom ?? "Trainee"),
+                                        JobTitle = resolvedJobTitle,
                                         BranchName = branchName,
                                         Email = email,
                                         Phone = phone
@@ -2222,14 +2288,15 @@ namespace Exam.Controllers
                             N'صيدلي' AS JobTitle,
                             ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
                             ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
-                            0 AS DepartmentId,
-                            N'طاقم الفروع (صيادلة)' AS DepartmentName,
+                            ISNULL(u.DepartmentId, 0) AS DepartmentId,
+                            ISNULL(d.Name, N'طاقم الفروع (صيادلة)') AS DepartmentName,
                             (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
                             (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
                             1 AS IsSelected
                         FROM AspNetUsers u WITH (NOLOCK)
                         LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
                         LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                        LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
                         WHERE u.IsActive = 1
                           AND (
                               LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' 
@@ -2271,14 +2338,15 @@ namespace Exam.Controllers
                             N'مساعد صيدلي' AS JobTitle,
                             ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
                             ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
-                            0 AS DepartmentId,
-                            N'طاقم الفروع (مساعدين)' AS DepartmentName,
+                            ISNULL(u.DepartmentId, 0) AS DepartmentId,
+                            ISNULL(d.Name, N'طاقم الفروع (مساعدين)') AS DepartmentName,
                             (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
                             (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
                             1 AS IsSelected
                         FROM AspNetUsers u WITH (NOLOCK)
                         LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
                         LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                        LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
                         WHERE u.IsActive = 1
                           AND (
                               LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' 
@@ -2329,7 +2397,24 @@ namespace Exam.Controllers
                                 u.Id AS UserId,
                                 ISNULL(u.FullName, u.UserName) AS FullName,
                                 ISNULL(u.UserCode, '--') AS UserCode,
-                                ISNULL(u.UserRoleCustom, 'Trainee') AS JobTitle,
+                                COALESCE(
+                                    NULLIF(u.UserRoleCustom, ''),
+                                    (SELECT TOP 1 
+                                        CASE 
+                                            WHEN LOWER(r.Name) = 'assistant' THEN N'مساعد صيدلي'
+                                            WHEN LOWER(r.Name) = 'pharmacist' THEN N'صيدلي'
+                                            WHEN LOWER(r.Name) = 'branch manager' THEN N'مدير فرع'
+                                            WHEN LOWER(r.Name) = 'branch supervisor' THEN N'مشرف فرع'
+                                            WHEN LOWER(r.Name) IN ('user', 'trainee') THEN NULL
+                                            ELSE r.Name 
+                                        END
+                                     FROM dbo.AspNetUserRoles ur 
+                                     JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id 
+                                     WHERE ur.UserId = u.Id AND r.Name NOT IN ('User', 'Trainee')),
+                                    NULLIF(@DeptName, ''),
+                                    (SELECT TOP 1 r.Name FROM dbo.AspNetUserRoles ur JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id WHERE ur.UserId = u.Id),
+                                    N'متدرب'
+                                ) AS JobTitle,
                                 ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
                                 ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
                                 @DeptId AS DepartmentId,
@@ -2546,10 +2631,29 @@ namespace Exam.Controllers
                 foreach (var uId in userIdsToInject.Distinct())
                 {
                     var u = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                        SELECT u.Id, u.FullName, u.UserName, u.UserCode, u.Email, u.PhoneNumber, u.UserRoleCustom,
+                        SELECT u.Id, u.FullName, u.UserName, u.UserCode, u.Email, u.PhoneNumber,
+                               COALESCE(
+                                   NULLIF(u.UserRoleCustom, ''),
+                                   (SELECT TOP 1 
+                                       CASE 
+                                           WHEN LOWER(r.Name) = 'assistant' THEN N'مساعد صيدلي'
+                                           WHEN LOWER(r.Name) = 'pharmacist' THEN N'صيدلي'
+                                           WHEN LOWER(r.Name) = 'branch manager' THEN N'مدير فرع'
+                                           WHEN LOWER(r.Name) = 'branch supervisor' THEN N'مشرف فرع'
+                                           WHEN LOWER(r.Name) IN ('user', 'trainee') THEN NULL
+                                           ELSE r.Name 
+                                       END
+                                    FROM dbo.AspNetUserRoles ur 
+                                    JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id 
+                                    WHERE ur.UserId = u.Id AND r.Name NOT IN ('User', 'Trainee')),
+                                   d.Name,
+                                   (SELECT TOP 1 r.Name FROM dbo.AspNetUserRoles ur JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id WHERE ur.UserId = u.Id),
+                                   N'متدرب'
+                               ) AS JobTitle,
                                u.BranchId, b.BranchName
                         FROM AspNetUsers u
                         LEFT JOIN Branches b ON u.BranchId = b.Id
+                        LEFT JOIN Departments d ON u.DepartmentId = d.Id
                         WHERE u.Id = @UserId", new { UserId = uId });
 
                     if (u == null) continue;
@@ -2559,18 +2663,24 @@ namespace Exam.Controllers
                     string email = (string)(u.Email ?? "");
                     string phone = (string)(u.PhoneNumber ?? "");
                     string branchName = (string)(u.BranchName ?? "بدون فرع");
+                    string resolvedJobTitle = (string)(u.JobTitle ?? "متدرب");
 
                     int? companyTraineeId = null;
                     if (session.CompanyId != null)
                     {
                         var ct = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                            SELECT TOP 1 Id FROM CompanyTrainees 
+                            SELECT TOP 1 Id, JobTitle FROM CompanyTrainees 
                             WHERE CompanyId = @CompanyId AND ((UserCode = @Code AND UserCode <> '--') OR (Email = @Email AND Email <> '--'))",
                             new { CompanyId = (int)session.CompanyId, Code = userCode, Email = email });
 
                         if (ct != null)
                         {
                             companyTraineeId = (int)ct.Id;
+                            string existingJobTitle = (string)(ct.JobTitle ?? "");
+                            if ((string.IsNullOrWhiteSpace(existingJobTitle) || existingJobTitle == "Trainee" || existingJobTitle == "متدرب") && !string.IsNullOrWhiteSpace(resolvedJobTitle) && resolvedJobTitle != "Trainee" && resolvedJobTitle != "متدرب")
+                            {
+                                await conn.ExecuteAsync("UPDATE CompanyTrainees SET JobTitle = @JobTitle WHERE Id = @Id", new { JobTitle = resolvedJobTitle, Id = companyTraineeId });
+                            }
                         }
                         else
                         {
@@ -2582,7 +2692,7 @@ namespace Exam.Controllers
                                     CompanyId = (int)session.CompanyId,
                                     FullName = fullName,
                                     UserCode = userCode,
-                                    JobTitle = (string)(u.UserRoleCustom ?? "Trainee"),
+                                    JobTitle = resolvedJobTitle,
                                     BranchName = branchName,
                                     Email = email,
                                     Phone = phone
