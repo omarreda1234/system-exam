@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.SqlClient;
@@ -2718,12 +2718,12 @@ namespace Exam.Controllers
                             branchName = branchName
                         });
 
-                        if (req.SendNotification)
+                        if (req.SendNotification && !string.IsNullOrEmpty(uId))
                         {
                             await conn.ExecuteAsync(@"
-                                INSERT INTO Notifications (UserId, Title, Message, LinkUrl, Type, CreatedAt)
-                                VALUES (@UserId, N'ترشيح لحضور سيشن تدريبية 🎯', CONCAT(N'تم ترشيحك لحضور جلسة: ', @SessionName, N' الخاصة بشركة: ', @CompanyName), '/Home/Profile?tab=mycompanies', 'CompanySessionAssigned', GETDATE())",
-                                new { UserId = uId, SessionName = (string)session.SessionName, CompanyName = (string)(session.CompanyName ?? "") });
+                                INSERT INTO dbo.AppNotifications (UserId, Title, Message, LinkUrl, Type, ReferenceId, CreatedAt)
+                                VALUES (@UserId, N'ترشيح لحضور سيشن تدريبية 🎯', CONCAT(N'تم ترشيحك لحضور جلسة: ', @SessionName, N' الخاصة بشركة: ', @CompanyName), '/Attendance/MyAttendance', 'CompanySessionAssigned', CAST(@SessionId AS NVARCHAR(50)), GETDATE())",
+                                new { UserId = uId, SessionName = (string)session.SessionName, CompanyName = (string)(session.CompanyName ?? ""), SessionId = req.SessionId });
                         }
                     }
                 }
