@@ -994,7 +994,7 @@ SELECT
     U.CertificateCode,
     B.BranchName,
     B.Id AS BranchId,
-    ISNULL(NULLIF(U.UserRoleCustom, ''), R.Name) AS RoleName,
+    R.Name AS RoleName,
     S.ShiftName,
     U.IsActive
 FROM dbo.AspNetUsers U WITH(NOLOCK)
@@ -1013,7 +1013,7 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                 }
 
                 sql += @" WHERE UW.UserId IS NULL
-                  AND U.UserRoleCustom IN ('Pharmacist', 'Assistant')";
+                  AND R.Name IN ('Pharmacist', 'Assistant')";
 
                 var users = (await conn.QueryAsync<dynamic>(sql, new { WaveId = waveId })).ToList();
 
@@ -1122,7 +1122,7 @@ SELECT
     U.CertificateCode,
     B.BranchName,
     B.Id AS BranchId,
-    ISNULL(NULLIF(U.UserRoleCustom, ''), R.Name) AS RoleName,
+    R.Name AS RoleName,
     S.ShiftName,
     U.IsActive
 FROM dbo.AspNetUsers U WITH(NOLOCK)
@@ -1141,7 +1141,7 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                 }
 
                 sql += @" WHERE UW.UserId IS NULL
-                  AND U.UserRoleCustom IN ('Pharmacist', 'Assistant')";
+                  AND R.Name IN ('Pharmacist', 'Assistant')";
 
                 var users = (await conn.QueryAsync<dynamic>(sql, new { WaveId = waveId })).ToList();
 

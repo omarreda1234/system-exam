@@ -122,7 +122,7 @@
                         {
                             <button onclick="openManageSessionTrainees(@session.Id, '@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(session.SessionName))', @(company?.Id ?? 0))" 
                                     class="flex-1 sm:flex-none text-center bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 sm:py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-1.5" 
-                                    title="تعيين متدربي السيشن وتفعيل إشعارات n8n">
+                                    title="تعيين متدربي السيشن وتفعيل الإشعارات">
                                 <i class="fas fa-users-cog"></i> Manage Trainees
                             </button>
                         }
@@ -234,7 +234,7 @@
                             <h3 class="text-base sm:text-lg font-black text-slate-900 tracking-tight" id="modalSessionTitle">Manage Session Trainees</h3>
                             <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-brand-50 text-brand-700 uppercase border border-brand-200 font-mono tracking-wider">Session Level</span>
                         </div>
-                        <p class="text-xs text-slate-500 font-medium mt-0.5">Assign attendees, trigger in-app notifications, and dispatch email invites via n8n API</p>
+                        <p class="text-xs text-slate-500 font-medium mt-0.5">Assign attendees, trigger in-app notifications, and dispatch email invites via RabbitMQ</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap justify-end">
@@ -330,7 +330,7 @@
                         </div>
                     </div>
 
-                    <!-- Options for Notification, n8n Email & Branch Exemption -->
+                    <!-- Options for Notification, RabbitMQ Email & Direct Approval -->
                     <div class="grid grid-cols-1 gap-2.5">
                         <label class="flex items-center justify-between p-3.5 bg-white hover:bg-slate-50/80 border border-slate-200/90 rounded-2xl cursor-pointer shadow-2xs transition-all">
                             <div class="flex items-center gap-3">
@@ -343,19 +343,6 @@
                                 </div>
                             </div>
                             <input type="checkbox" id="chkSendNotification" checked class="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300" />
-                        </label>
-
-                        <label class="flex items-center justify-between p-3.5 bg-white hover:bg-slate-50/80 border border-slate-200/90 rounded-2xl cursor-pointer shadow-2xs transition-all">
-                            <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-sm shrink-0 border border-purple-100">
-                                    <i class="fas fa-envelope-open-text"></i>
-                                </div>
-                                <div>
-                                    <div class="text-xs font-black text-slate-800">n8n Automated Email Dispatch</div>
-                                    <div class="text-[11px] text-slate-400 font-medium">Trigger <strong>n8n Webhook API</strong> for automated session confirmation emails</div>
-                                </div>
-                            </div>
-                            <input type="checkbox" id="chkSendN8nEmail" checked class="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300" />
                         </label>
 
                         <label class="flex items-center justify-between p-3.5 bg-white hover:bg-slate-50/80 border border-slate-200/90 rounded-2xl cursor-pointer shadow-2xs transition-all">
@@ -411,7 +398,7 @@
                         <h4 class="text-sm font-black text-slate-900 uppercase tracking-tight">Upload Session Excel Roster</h4>
                         <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">
                             Required columns: FullName, UserCode, JobTitle, BranchName, Email, Phone.
-                            Personnel will be enrolled directly into this session and forwarded to n8n API.
+                            Personnel will be enrolled directly into this session and notified via email.
                         </p>
                         <input type="file" id="sessionExcelFile" accept=".xlsx, .xls" class="mt-4 text-xs font-bold text-slate-600 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer shadow-2xs" />
                         
@@ -548,7 +535,7 @@
                                 </div>
 
                                 <!-- Shift Groups Quick Filter Dropdown -->
-                                <div id="injectionShiftGroupsBar" class="w-full">
+                                <div id="injectionShiftGroupsBar" class="w-full relative z-30">
                                     <!-- Rendered dynamically by JS -->
                                 </div>
 
@@ -668,20 +655,6 @@
                                 </div>
                             </div>
                             <input type="checkbox" id="chkInjectionSendNotif" checked class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300" />
-                        </label>
-
-                        <!-- n8n Automated Email Dispatch -->
-                        <label class="flex items-center justify-between p-3.5 bg-white hover:bg-slate-50/80 border border-slate-200/90 rounded-2xl cursor-pointer shadow-2xs transition-all">
-                            <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-sm shrink-0 border border-purple-100">
-                                    <i class="fas fa-envelope-open-text"></i>
-                                </div>
-                                <div>
-                                    <div class="text-xs font-black text-slate-800">n8n Automated Email Dispatch</div>
-                                    <div class="text-[11px] text-slate-400 font-medium">Trigger <strong>n8n Webhook API</strong> for automated calendar and email invitations</div>
-                                </div>
-                            </div>
-                            <input type="checkbox" id="chkInjectionSendN8n" checked class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300" />
                         </label>
 
                         <!-- RabbitMQ Email Dispatch -->
@@ -862,7 +835,7 @@
         }
 
         // ==========================================
-        // Session Trainees Management Logic (n8n API & In-App Notifications)
+        // Session Trainees Management Logic (RabbitMQ & In-App Notifications)
         // ==========================================
         let sessionTraineesState = {
             sessionId: 0,
@@ -1078,7 +1051,7 @@
                         const fullName = t.fullName || t.FullName || 'Trainee';
                         const userCode = t.userCode || t.UserCode || '--';
                         const branchName = t.branchName || t.BranchName || 'General';
-                        const jobTitle = t.jobTitle || t.JobTitle || 'Trainee';
+                        const jobTitle = normalizeRoleTitle(t.jobTitle || t.JobTitle, t.departmentName || t.DepartmentName);
                         const status = (t.approvalStatus || t.ApprovalStatus || 'Approved').toLowerCase();
                         let badgeHtml = '';
                         if (status === 'approved') {
@@ -1260,7 +1233,7 @@
                 const isSelected = sessionTraineesState.selectedCandidates.has(key);
                 const isExempt = (t.isBranchExempt == 1 || t.IsBranchExempt == 1 || t.isBranchExempt === true || t.IsBranchExempt === true);
                 const fullName = t.fullName || t.FullName || t.userName || t.UserName || 'Trainee';
-                const role = t.jobTitle || t.JobTitle || 'Trainee';
+                const role = normalizeRoleTitle(t.jobTitle || t.JobTitle, '');
                 const branch = t.branchName || t.BranchName || 'General';
                 const code = t.userCode || t.UserCode || '--';
 
@@ -1414,11 +1387,10 @@
             }
 
             const sendNotif = document.getElementById('chkSendNotification').checked;
-            const sendN8n = document.getElementById('chkSendN8nEmail').checked;
             const bypassApproval = document.getElementById('chkBypassApproval') ? document.getElementById('chkBypassApproval').checked : false;
             const sendRabbitMqEmail = document.getElementById('chkManualSendRabbitMqEmail') ? document.getElementById('chkManualSendRabbitMqEmail').checked : true;
 
-            showAppToast('info', 'Assigning...', 'Registering trainees and triggering platform & n8n webhook notifications...');
+            showAppToast('info', 'Assigning...', 'Registering trainees and sending platform & email notifications...');
 
             try {
                 const res = await fetch('/Attendance/AssignTraineesToSession', {
@@ -1428,7 +1400,7 @@
                         sessionId: sessionId,
                         candidateKeys: candidateKeys,
                         sendNotification: sendNotif,
-                        sendEmailViaN8n: sendN8n,
+                        sendEmailViaN8n: false,
                         bypassApproval: bypassApproval,
                         sendRabbitMqEmail: sendRabbitMqEmail
                     })
@@ -1695,87 +1667,298 @@
 
             const totalShifts = injectionState.shifts.length;
             const selectedCount = injectionState.selectedShiftIds.length;
+            const isOpen = !!injectionState._shiftGroupDropdownOpen;
 
-            let currentVal = 'ALL';
-            if (selectedCount === 0) {
-                currentVal = 'NONE';
-            } else if (selectedCount === totalShifts) {
-                currentVal = 'ALL';
-            } else {
-                // Check if it matches a specific group exactly
-                const matchedGroup = groups.find(g => {
-                    const gId = g.id ?? g.Id;
-                    const groupShiftIds = injectionState.shifts.filter(s => (s.groupId ?? s.GroupId) === gId).map(s => s.id ?? s.Id);
-                    return groupShiftIds.length > 0 && 
-                           groupShiftIds.length === selectedCount && 
-                           groupShiftIds.every(id => injectionState.selectedShiftIds.includes(id));
-                });
-                if (matchedGroup) {
-                    currentVal = String(matchedGroup.id ?? matchedGroup.Id);
-                } else {
-                    currentVal = 'CUSTOM';
-                }
-            }
-
-            let optionsHtml = '';
-            if (currentVal === 'CUSTOM') {
-                optionsHtml += `<option value="CUSTOM" selected>اختيار مخصص (${selectedCount} شيفت محدد)</option>`;
-            }
-            optionsHtml += `<option value="ALL" ${currentVal === 'ALL' ? 'selected' : ''}>تحديد جميع الشيفتات (الكل - ${totalShifts})</option>`;
+            // Analyze selection state for each group
+            let fullySelectedGroups = [];
+            let partialSelectedGroups = [];
+            let unassignedShifts = injectionState.shifts.filter(s => !(s.groupId ?? s.GroupId));
+            let unassignedSelectedCount = unassignedShifts.filter(s => injectionState.selectedShiftIds.includes(s.id ?? s.Id)).length;
 
             groups.forEach(g => {
-                const gId = String(g.id ?? g.Id);
-                const gName = g.groupName || g.GroupName || 'Group';
-                const count = g.shiftsCount ?? g.ShiftsCount ?? 0;
-                const isSelected = (currentVal === gId);
-                optionsHtml += `<option value="${gId}" ${isSelected ? 'selected' : ''}>${gName} (${count} شيفت)</option>`;
+                const gId = g.id ?? g.Id;
+                const gShifts = injectionState.shifts.filter(s => (s.groupId ?? s.GroupId) === gId);
+                const gTotal = gShifts.length;
+                const gSel = gShifts.filter(s => injectionState.selectedShiftIds.includes(s.id ?? s.Id)).length;
+                if (gTotal > 0) {
+                    if (gSel === gTotal) {
+                        fullySelectedGroups.push({ group: g, count: gTotal });
+                    } else if (gSel > 0) {
+                        partialSelectedGroups.push({ group: g, selected: gSel, total: gTotal });
+                    }
+                }
             });
 
-            optionsHtml += `<option value="NONE" ${currentVal === 'NONE' ? 'selected' : ''}>إلغاء تحديد الكل</option>`;
+            // Build dynamic summary title
+            let summaryTitle = '';
+            if (selectedCount === 0) {
+                summaryTitle = 'لم يتم تحديد أي شيفت (0 شيفت)';
+            } else if (selectedCount === totalShifts) {
+                summaryTitle = `جميع الشيفتات (${totalShifts} شيفت محدد)`;
+            } else if (fullySelectedGroups.length > 0 && partialSelectedGroups.length === 0 && unassignedSelectedCount === 0) {
+                if (fullySelectedGroups.length === 1) {
+                    const g = fullySelectedGroups[0].group;
+                    summaryTitle = `${g.groupName || g.GroupName} (${fullySelectedGroups[0].count} شيفت)`;
+                } else if (fullySelectedGroups.length === 2) {
+                    summaryTitle = fullySelectedGroups.map(fg => fg.group.groupName || fg.group.GroupName).join(' + ') + ` (${selectedCount} شيفت)`;
+                } else {
+                    summaryTitle = `تم تحديد ${fullySelectedGroups.length} مجموعات (${selectedCount} شيفت)`;
+                }
+            } else if (fullySelectedGroups.length > 0) {
+                const gNames = fullySelectedGroups.map(fg => fg.group.groupName || fg.group.GroupName).slice(0, 2).join(' + ');
+                summaryTitle = `${gNames} + مخصص (${selectedCount} شيفت)`;
+            } else {
+                summaryTitle = `اختيار مخصص (${selectedCount} شيفت محدد)`;
+            }
+
+            // Build dropdown list HTML
+            let groupsListHtml = groups.map(g => {
+                const gId = g.id ?? g.Id;
+                const gName = g.groupName || g.GroupName || 'Group';
+                const gColor = g.groupColor || g.GroupColor || '#6366F1';
+                const gShifts = injectionState.shifts.filter(s => (s.groupId ?? s.GroupId) === gId);
+                const gTotal = gShifts.length;
+                const gSel = gShifts.filter(s => injectionState.selectedShiftIds.includes(s.id ?? s.Id)).length;
+                const isAll = (gTotal > 0 && gSel === gTotal);
+                const isPartial = (gSel > 0 && gSel < gTotal);
+
+                return `
+                    <div class="flex items-center justify-between p-2 rounded-xl border transition-all select-none text-xs ${isAll ? 'bg-indigo-50/80 border-indigo-200 text-indigo-950 font-bold' : (isPartial ? 'bg-amber-50/60 border-amber-200 text-slate-800 font-semibold' : 'bg-white hover:bg-slate-50 border-slate-100 text-slate-700')}">
+                        <label class="flex items-center gap-2 truncate min-w-0 cursor-pointer flex-1">
+                            <input type="checkbox" 
+                                   ${isAll ? 'checked' : ''} 
+                                   data-group-id="${gId}"
+                                   onchange="toggleInjectionShiftGroupSelection(${gId}, this.checked, event)" 
+                                   class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 shift-group-chk cursor-pointer shrink-0" />
+                            <div class="flex items-center gap-1.5 truncate">
+                                <span class="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" style="background-color: ${gColor};"></span>
+                                <span class="truncate text-xs font-black">${gName}</span>
+                            </div>
+                        </label>
+                        <div class="flex items-center gap-2 shrink-0 text-[10px]">
+                            ${isPartial ? `<span class="px-1.5 py-0.5 rounded text-[9px] bg-amber-100 text-amber-800 font-black">محدد ${gSel}/${gTotal}</span>` : ''}
+                            <span class="font-mono text-slate-400 font-bold">(${gTotal} شيفت)</span>
+                            <button type="button" onclick="selectOnlyInjectionShiftGroup(${gId}, event)" class="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100/60 px-1.5 py-0.5 rounded transition-colors" title="تحديد هذه المجموعة فقط واستبعاد الباقي">
+                                فقط
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // If there are unassigned shifts
+            if (unassignedShifts.length > 0) {
+                const uTotal = unassignedShifts.length;
+                const uSel = unassignedSelectedCount;
+                const isAll = (uTotal > 0 && uSel === uTotal);
+                const isPartial = (uSel > 0 && uSel < uTotal);
+
+                groupsListHtml += `
+                    <div class="flex items-center justify-between p-2 rounded-xl border transition-all select-none text-xs ${isAll ? 'bg-indigo-50/80 border-indigo-200 text-indigo-950 font-bold' : (isPartial ? 'bg-amber-50/60 border-amber-200 text-slate-800 font-semibold' : 'bg-white hover:bg-slate-50 border-slate-100 text-slate-700')}">
+                        <label class="flex items-center gap-2 truncate min-w-0 cursor-pointer flex-1">
+                            <input type="checkbox" 
+                                   ${isAll ? 'checked' : ''} 
+                                   data-group-id="NO_GROUP"
+                                   onchange="toggleInjectionShiftGroupSelection('NO_GROUP', this.checked, event)" 
+                                   class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 shift-group-chk cursor-pointer shrink-0" />
+                            <div class="flex items-center gap-1.5 truncate">
+                                <span class="w-2.5 h-2.5 rounded-full shrink-0 bg-slate-300"></span>
+                                <span class="truncate text-xs font-bold text-slate-500">شيفتات غير مصنفة</span>
+                            </div>
+                        </label>
+                        <div class="flex items-center gap-2 shrink-0 text-[10px]">
+                            ${isPartial ? `<span class="px-1.5 py-0.5 rounded text-[9px] bg-amber-100 text-amber-800 font-black">محدد ${uSel}/${uTotal}</span>` : ''}
+                            <span class="font-mono text-slate-400 font-bold">(${uTotal} شيفت)</span>
+                            <button type="button" onclick="selectOnlyInjectionShiftGroup('NO_GROUP', event)" class="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100/60 px-1.5 py-0.5 rounded transition-colors" title="تحديد غير المصنف فقط">
+                                فقط
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
 
             container.innerHTML = `
                 <div class="relative w-full">
-                    <div class="flex items-center gap-2 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500 focus-within:bg-white shadow-2xs transition-all">
-                        <i class="fas fa-layer-group text-indigo-600 text-xs shrink-0"></i>
-                        <select id="injectionShiftGroupSelect" onchange="onInjectionShiftGroupSelectChange(this.value)" class="w-full bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer">
-                            ${optionsHtml}
-                        </select>
+                    <button type="button" 
+                            id="btnInjectionShiftGroupToggle" 
+                            onclick="toggleInjectionShiftGroupDropdown(event)"
+                            class="w-full flex items-center justify-between gap-2 bg-slate-50 hover:bg-slate-100/90 border ${isOpen ? 'border-indigo-500 ring-2 ring-indigo-100 bg-white' : 'border-slate-200'} rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800 shadow-2xs transition-all cursor-pointer select-none">
+                        <div class="flex items-center gap-2 truncate min-w-0">
+                            <i class="fas fa-layer-group text-indigo-600 text-xs shrink-0"></i>
+                            <span class="truncate text-xs font-black text-slate-800">${summaryTitle}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <span class="text-[10px] font-mono font-black ${selectedCount > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'} px-2 py-0.5 rounded-full">
+                                ${selectedCount}/${totalShifts}
+                            </span>
+                            <i class="fas fa-chevron-down text-slate-400 text-[10px] transition-transform duration-200 ${isOpen ? 'rotate-180 text-indigo-600' : ''}"></i>
+                        </div>
+                    </button>
+
+                    <!-- Dropdown Panel -->
+                    <div id="injectionShiftGroupDropdown" 
+                         class="${isOpen ? '' : 'hidden'} absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-2.5 space-y-1.5 max-h-72 overflow-y-auto custom-scrollbar">
+                        <!-- Header with select all / deselect all -->
+                        <div class="flex items-center justify-between px-2.5 py-1.5 bg-slate-50 rounded-xl text-[11px] font-bold text-slate-600 border border-slate-100">
+                            <button type="button" onclick="selectAllInjectionShiftsFromDropdown(true, event)" class="text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 cursor-pointer">
+                                <i class="fas fa-check-double text-[10px]"></i> تحديد الكل (${totalShifts})
+                            </button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllInjectionShiftsFromDropdown(false, event)" class="text-rose-500 hover:text-rose-700 hover:underline flex items-center gap-1 cursor-pointer">
+                                <i class="fas fa-times text-[10px]"></i> إلغاء تحديد الكل
+                            </button>
+                        </div>
+
+                        <!-- Groups Items -->
+                        <div class="space-y-1">
+                            ${groupsListHtml}
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-100 px-1 text-[11px]">
+                            <span class="text-slate-500 font-bold">المحدد: <span class="text-indigo-600 font-black">${selectedCount}</span> من <span class="font-black">${totalShifts}</span></span>
+                            <button type="button" onclick="closeInjectionShiftGroupDropdown(event)" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-[10px] shadow-2xs transition-all cursor-pointer">
+                                تم / إغلاق
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
+
+            // Set indeterminate state on checkboxes for partially selected groups
+            setTimeout(() => {
+                container.querySelectorAll('.shift-group-chk').forEach(chk => {
+                    const gId = chk.dataset.groupId;
+                    if (gId === 'NO_GROUP') {
+                        const noGroup = injectionState.shifts.filter(s => !(s.groupId ?? s.GroupId));
+                        const count = noGroup.filter(s => injectionState.selectedShiftIds.includes(s.id ?? s.Id)).length;
+                        if (count > 0 && count < noGroup.length) chk.indeterminate = true;
+                    } else {
+                        const parsedGId = parseInt(gId);
+                        const gShifts = injectionState.shifts.filter(s => (s.groupId ?? s.GroupId) === parsedGId);
+                        const count = gShifts.filter(s => injectionState.selectedShiftIds.includes(s.id ?? s.Id)).length;
+                        if (count > 0 && count < gShifts.length) chk.indeterminate = true;
+                    }
+                });
+            }, 0);
         };
 
-        window.onInjectionShiftGroupSelectChange = function (val) {
-            if (!val || val === 'CUSTOM') return;
+        window.toggleInjectionShiftGroupDropdown = function (event) {
+            if (event) event.stopPropagation();
+            injectionState._shiftGroupDropdownOpen = !injectionState._shiftGroupDropdownOpen;
+            renderInjectionShiftGroups();
+        };
 
-            if (val === 'ALL') {
-                selectAllInjectionShifts(true);
-                return;
+        window.closeInjectionShiftGroupDropdown = function (event) {
+            if (event) event.stopPropagation();
+            injectionState._shiftGroupDropdownOpen = false;
+            renderInjectionShiftGroups();
+        };
+
+        window.toggleInjectionShiftGroupSelection = function (groupId, isChecked, event) {
+            if (event) event.stopPropagation();
+
+            let targetShiftIds = [];
+            let groupName = '';
+
+            if (groupId === 'NO_GROUP') {
+                targetShiftIds = injectionState.shifts.filter(s => !(s.groupId ?? s.GroupId)).map(s => s.id ?? s.Id);
+                groupName = 'شيفتات غير مصنفة';
+            } else {
+                const gId = parseInt(groupId);
+                targetShiftIds = injectionState.shifts.filter(s => (s.groupId ?? s.GroupId) === gId).map(s => s.id ?? s.Id);
+                const groupObj = injectionState.shiftGroups.find(g => (g.id ?? g.Id) === gId);
+                groupName = groupObj ? (groupObj.groupName || groupObj.GroupName) : 'المجموعة المحددة';
             }
 
-            if (val === 'NONE') {
-                selectAllInjectionShifts(false);
-                return;
+            if (targetShiftIds.length === 0) return;
+
+            if (isChecked) {
+                targetShiftIds.forEach(id => {
+                    if (!injectionState.selectedShiftIds.includes(id)) {
+                        injectionState.selectedShiftIds.push(id);
+                    }
+                });
+            } else {
+                injectionState.selectedShiftIds = injectionState.selectedShiftIds.filter(id => !targetShiftIds.includes(id));
             }
 
-            const groupId = parseInt(val);
-            const groupShifts = injectionState.shifts.filter(s => (s.groupId ?? s.GroupId) === groupId);
-            const groupShiftIds = groupShifts.map(s => s.id ?? s.Id);
-            const groupObj = injectionState.shiftGroups.find(g => (g.id ?? g.Id) === groupId);
-            const groupName = groupObj ? (groupObj.groupName || groupObj.GroupName) : 'المجموعة المحددة';
-
-            injectionState.selectedShiftIds = [...groupShiftIds];
+            injectionState._shiftGroupDropdownOpen = true;
             renderInjectionShifts();
             renderInjectionShiftGroups();
             updateShiftFilterUI();
             fetchLiveAvailableStaffCounts();
 
-            showAppToast('info', 'تم تحديد المجموعة', `تم تحديد ${groupShiftIds.length} شيفت تابع لمجموعة "${groupName}".`);
+            showAppToast('info', isChecked ? 'تم تحديد المجموعة' : 'تم استبعاد المجموعة', 
+                         `${isChecked ? 'تم إضافة' : 'تم استبعاد'} ${targetShiftIds.length} شيفت تابع لمجموعة "${groupName}".`);
+        };
+
+        window.selectOnlyInjectionShiftGroup = function (groupId, event) {
+            if (event) event.stopPropagation();
+
+            let targetShiftIds = [];
+            let groupName = '';
+
+            if (groupId === 'NO_GROUP') {
+                targetShiftIds = injectionState.shifts.filter(s => !(s.groupId ?? s.GroupId)).map(s => s.id ?? s.Id);
+                groupName = 'شيفتات غير مصنفة';
+            } else {
+                const gId = parseInt(groupId);
+                targetShiftIds = injectionState.shifts.filter(s => (s.groupId ?? s.GroupId) === gId).map(s => s.id ?? s.Id);
+                const groupObj = injectionState.shiftGroups.find(g => (g.id ?? g.Id) === gId);
+                groupName = groupObj ? (groupObj.groupName || groupObj.GroupName) : 'المجموعة المحددة';
+            }
+
+            injectionState.selectedShiftIds = [...targetShiftIds];
+            injectionState._shiftGroupDropdownOpen = true;
+            renderInjectionShifts();
+            renderInjectionShiftGroups();
+            updateShiftFilterUI();
+            fetchLiveAvailableStaffCounts();
+
+            showAppToast('info', 'تم تحديد المجموعة فقط', `تم حصر التحديد على ${targetShiftIds.length} شيفت لمجموعة "${groupName}".`);
+        };
+
+        window.selectAllInjectionShiftsFromDropdown = function (selectAll, event) {
+            if (event) event.stopPropagation();
+            if (selectAll) {
+                injectionState.selectedShiftIds = injectionState.shifts.map(s => s.id ?? s.Id);
+            } else {
+                injectionState.selectedShiftIds = [];
+            }
+            injectionState._shiftGroupDropdownOpen = true;
+            renderInjectionShifts();
+            renderInjectionShiftGroups();
+            updateShiftFilterUI();
+            fetchLiveAvailableStaffCounts();
+        };
+
+        window.onInjectionShiftGroupSelectChange = function (val) {
+            if (!val || val === 'CUSTOM') return;
+            if (val === 'ALL') {
+                selectAllInjectionShifts(true);
+                return;
+            }
+            if (val === 'NONE') {
+                selectAllInjectionShifts(false);
+                return;
+            }
+            selectOnlyInjectionShiftGroup(val);
         };
 
         window.toggleShiftGroupByPill = function (groupId) {
-            onInjectionShiftGroupSelectChange(String(groupId));
+            toggleInjectionShiftGroupSelection(groupId, true);
         };
+
+        // Close shift group dropdown when clicking outside
+        document.addEventListener('click', function (e) {
+            if (!injectionState || !injectionState._shiftGroupDropdownOpen) return;
+            const bar = document.getElementById('injectionShiftGroupsBar');
+            if (bar && !bar.contains(e.target)) {
+                injectionState._shiftGroupDropdownOpen = false;
+                renderInjectionShiftGroups();
+            }
+        });
 
         window.updateAvailableStaffBadges = function (pharmCount, assistCount) {
             const pharmBadge = document.getElementById('badgeAvailablePharmacists');
@@ -2513,6 +2696,21 @@
             }
         };
 
+        window.normalizeRoleTitle = function (title, deptName) {
+            if (!title || title === '--' || title === 'Trainee' || title === 'متدرب') {
+                return (deptName && deptName !== '--' && !deptName.startsWith('طاقم الفروع')) ? deptName : 'متدرب';
+            }
+            const lower = title.trim().toLowerCase();
+            if (lower === 'pharmacist' || lower === 'doctor') return 'صيدلي';
+            if (lower === 'assistant' || lower === 'مساعد') return 'مساعد صيدلي';
+            if (lower === 'branch manager') return 'مدير فرع';
+            if (lower === 'branch supervisor') return 'مشرف فرع';
+            if (lower === 'trainee' || lower === 'user') {
+                return (deptName && deptName !== '--' && !deptName.startsWith('طاقم الفروع')) ? deptName : 'متدرب';
+            }
+            return title.trim();
+        };
+
         window.previewInjectionRule = async function () {
             const pharmQuota = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
             const assistQuota = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
@@ -2599,7 +2797,7 @@
                         const isNeverAttended = attended === 0;
                         const badgeClass = isNeverAttended ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200';
                         const badgeText = isNeverAttended ? '⭐ لم يحضر مسبقاً (أعلى أولوية)' : `حضر ${attended} سيشن سابقة`;
-                        const titleText = (c.jobTitle && c.jobTitle !== 'Trainee' && c.jobTitle !== '--') ? c.jobTitle : (c.departmentName && c.departmentName !== '--' ? c.departmentName : 'متدرب');
+                        const titleText = normalizeRoleTitle(c.jobTitle, c.departmentName);
                         const showDeptBadge = c.departmentName && c.departmentName !== '--' && !c.departmentName.startsWith('طاقم الفروع') && c.departmentName !== titleText;
 
                         return `
@@ -2669,7 +2867,6 @@
             }
 
             const sendNotif = document.getElementById('chkInjectionSendNotif').checked;
-            const sendN8n = document.getElementById('chkInjectionSendN8n').checked;
             const bypassApproval = document.getElementById('chkInjectionBypassApproval').checked;
             const sendRabbitMqEmail = document.getElementById('chkInjectionSendRabbitMqEmail') ? document.getElementById('chkInjectionSendRabbitMqEmail').checked : true;
 
@@ -2727,7 +2924,7 @@
                         confirmedCandidateKeys: userIds.length > 0 ? userIds.map(u => `U_${u}`) : null,
                         bypassApproval: bypassApproval,
                         sendNotification: sendNotif,
-                        sendN8nWebhook: sendN8n,
+                        sendN8nWebhook: false,
                         sendEmail: sendRabbitMqEmail
                     })
                 });

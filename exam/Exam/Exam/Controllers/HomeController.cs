@@ -175,7 +175,7 @@ namespace Exam.Controllers
                     u.Email, 
                     u.PhoneNumber, 
                     u.UserCode, 
-                    ISNULL(u.UserRoleCustom, '') AS RoleName, 
+                    ISNULL((SELECT TOP 1 r.Name FROM AspNetUserRoles ur JOIN AspNetRoles r ON ur.RoleId = r.Id WHERE ur.UserId = u.Id), '') AS RoleName, 
                     u.CertificateScore, 
                     u.CertificateCode,
                     ISNULL(b.BranchName, 'General / Not Assigned') AS BranchName, 

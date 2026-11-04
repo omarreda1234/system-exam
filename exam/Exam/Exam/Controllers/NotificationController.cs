@@ -1027,7 +1027,8 @@ namespace Exam.Controllers
                             }
 
                             var u = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                                SELECT u.Id, u.FullName, u.UserName, u.UserCode, u.Email, u.PhoneNumber, u.UserRoleCustom,
+                                SELECT u.Id, u.FullName, u.UserName, u.UserCode, u.Email, u.PhoneNumber,
+                                       (SELECT TOP 1 r.Name FROM dbo.AspNetUserRoles ur JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id WHERE ur.UserId = u.Id) AS RoleName,
                                        b.BranchName, b.Id AS BranchId
                                 FROM AspNetUsers u WITH (NOLOCK)
                                 LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
@@ -1061,7 +1062,7 @@ namespace Exam.Controllers
                                             CompanyId = compId,
                                             FullName = uFn,
                                             UserCode = uCode,
-                                            JobTitle = (string)(u.UserRoleCustom ?? "Pharmacist"),
+                                            JobTitle = (string)(u.RoleName ?? "Pharmacist"),
                                             BranchName = uBranch,
                                             Email = uEmail,
                                             Phone = uPhone

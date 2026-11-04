@@ -73,7 +73,7 @@ namespace Exam.DTOs
         public List<string>? UserIds { get; set; }
         public bool BypassApproval { get; set; } = true;
         public bool SendNotification { get; set; } = true;
-        public bool SendN8nWebhook { get; set; } = true;
+        public bool SendN8nWebhook { get; set; } = false;
         public bool SendEmail { get; set; } = true;
 
         public string? Mode { get; set; }

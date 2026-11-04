@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.SqlClient;
@@ -873,9 +873,15 @@ namespace Exam.Controllers
                 var assignedRaw = (await conn.QueryAsync<dynamic>(@"
                     SELECT CST.Id AS AssignmentId, CT.Id AS TraineeId, CT.FullName, CT.UserCode,
                            COALESCE(
-                               NULLIF(CT.JobTitle, ''),
-                               NULLIF(U.UserRoleCustom, ''),
-                               (SELECT TOP 1 
+                               CASE 
+                                   WHEN LOWER(LTRIM(RTRIM(ISNULL(CT.JobTitle, '')))) IN ('pharmacist', 'doctor') THEN N'صيدلي'
+                                   WHEN LOWER(LTRIM(RTRIM(ISNULL(CT.JobTitle, '')))) IN ('assistant', N'مساعد') THEN N'مساعد صيدلي'
+                                   WHEN LOWER(LTRIM(RTRIM(ISNULL(CT.JobTitle, '')))) = 'branch manager' THEN N'مدير فرع'
+                                   WHEN LOWER(LTRIM(RTRIM(ISNULL(CT.JobTitle, '')))) = 'branch supervisor' THEN N'مشرف فرع'
+                                   WHEN LOWER(LTRIM(RTRIM(ISNULL(CT.JobTitle, '')))) IN ('trainee', 'user') THEN NULL
+                                   ELSE NULLIF(CT.JobTitle, '')
+                               END,
+                                                              (SELECT TOP 1 
                                    CASE 
                                        WHEN LOWER(r.Name) = 'assistant' THEN N'مساعد صيدلي'
                                        WHEN LOWER(r.Name) = 'pharmacist' THEN N'صيدلي'
@@ -1033,8 +1039,13 @@ namespace Exam.Controllers
                             COALESCE(NULLIF(ct.Email, ''), NULLIF(u.Email, ''), N'--') AS Email,
                             COALESCE(NULLIF(ct.Phone, ''), NULLIF(u.PhoneNumber, ''), N'--') AS Phone,
                             COALESCE(
-                                NULLIF(ct.JobTitle, ''),
-                                NULLIF(u.UserRoleCustom, ''),
+                                CASE 
+                                    WHEN LOWER(LTRIM(RTRIM(ISNULL(ct.JobTitle, '')))) IN ('pharmacist', 'doctor') THEN N'صيدلي'
+                                    WHEN LOWER(LTRIM(RTRIM(ISNULL(ct.JobTitle, '')))) IN ('assistant', N'مساعد') THEN N'مساعد صيدلي'
+                                    WHEN LOWER(LTRIM(RTRIM(ISNULL(ct.JobTitle, '')))) = 'branch manager' THEN N'مدير فرع'
+                                    WHEN LOWER(LTRIM(RTRIM(ISNULL(ct.JobTitle, '')))) = 'branch supervisor' THEN N'مشرف فرع'
+                                    WHEN LOWER(LTRIM(RTRIM(ISNULL(ct.JobTitle, '')))) IN ('trainee', 'user') THEN NULL
+                                    ELSE NULLIF(ct.JobTitle, '')
                                 (SELECT TOP 1 
                                     CASE 
                                         WHEN LOWER(r.Name) = 'assistant' THEN N'مساعد صيدلي'
@@ -1200,8 +1211,7 @@ namespace Exam.Controllers
                         var u = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                             SELECT u.Id, u.FullName, u.UserName, u.UserCode, u.Email, u.PhoneNumber,
                                    COALESCE(
-                                       NULLIF(u.UserRoleCustom, ''),
-                                       (SELECT TOP 1 
+                                                                              (SELECT TOP 1 
                                            CASE 
                                                WHEN LOWER(r.Name) = 'assistant' THEN N'مساعد صيدلي'
                                                WHEN LOWER(r.Name) = 'pharmacist' THEN N'صيدلي'
@@ -2105,10 +2115,10 @@ namespace Exam.Controllers
 
                 var branches = (await conn.QueryAsync<dynamic>(@"
                     SELECT b.Id, b.BranchName,
-                           COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 THEN u.Id END) AS PharmacistCount,
-                           COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%' OR r.Name LIKE '%assistant%' OR r.Name LIKE N'%مساعد%') 
-                                                AND NOT (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') 
-                                                AND u.IsActive = 1 THEN u.Id END) AS AssistantCount,
+                           COUNT(DISTINCT CASE WHEN (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%طµظٹط¯ظ„%') AND u.IsActive = 1 THEN u.Id END) AS PharmacistCount,
+                           COUNT(DISTINCT CASE WHEN (r.Name LIKE '%assistant%' OR r.Name LIKE N'%ظ…ط³ط§ط¹ط¯%') 
+                                                 AND NOT (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%طµظٹط¯ظ„%') 
+                                                 AND u.IsActive = 1 THEN u.Id END) AS AssistantCount,
                            COUNT(DISTINCT CASE WHEN u.IsActive = 1 THEN u.Id END) AS TotalStaffCount
                     FROM Branches b WITH (NOLOCK)
                     LEFT JOIN AspNetUsers u WITH (NOLOCK) ON u.BranchId = b.Id
@@ -2123,10 +2133,10 @@ namespace Exam.Controllers
                            MAX(sg.Id) AS GroupId,
                            MAX(sg.GroupName) AS GroupName,
                            MAX(sg.ColorCode) AS GroupColor,
-                           COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 THEN u.Id END) AS PharmacistCount,
-                           COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%' OR r.Name LIKE '%assistant%' OR r.Name LIKE N'%مساعد%') 
-                                                AND NOT (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') 
-                                                AND u.IsActive = 1 THEN u.Id END) AS AssistantCount,
+                           COUNT(DISTINCT CASE WHEN (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%طµظٹط¯ظ„%') AND u.IsActive = 1 THEN u.Id END) AS PharmacistCount,
+                           COUNT(DISTINCT CASE WHEN (r.Name LIKE '%assistant%' OR r.Name LIKE N'%ظ…ط³ط§ط¹ط¯%') 
+                                                 AND NOT (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%طµظٹط¯ظ„%') 
+                                                 AND u.IsActive = 1 THEN u.Id END) AS AssistantCount,
                            COUNT(DISTINCT CASE WHEN u.IsActive = 1 THEN u.Id END) AS TotalStaffCount
                     FROM Shifts s WITH (NOLOCK)
                     LEFT JOIN ShiftGroupItems sgi WITH (NOLOCK) ON s.Id = sgi.ShiftId
@@ -2183,9 +2193,9 @@ namespace Exam.Controllers
 
                 var totalCounts = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                     SELECT 
-                        COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 THEN u.Id END) AS TotalPharmacists,
-                        COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%' OR r.Name LIKE '%assistant%' OR r.Name LIKE N'%مساعد%') 
-                                            AND NOT (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') 
+                        COUNT(DISTINCT CASE WHEN (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%طµظٹط¯ظ„%') AND u.IsActive = 1 THEN u.Id END) AS TotalPharmacists,
+                        COUNT(DISTINCT CASE WHEN (r.Name LIKE '%assistant%' OR r.Name LIKE N'%ظ…ط³ط§ط¹ط¯%') 
+                                            AND NOT (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%طµظٹط¯ظ„%') 
                                             AND u.IsActive = 1 THEN u.Id END) AS TotalAssistants
                     FROM AspNetUsers u WITH (NOLOCK)
                     LEFT JOIN AspNetUserRoles ur WITH (NOLOCK) ON ur.UserId = u.Id
@@ -2223,9 +2233,9 @@ namespace Exam.Controllers
 
                 string sql = $@"
                     SELECT 
-                        COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') THEN u.Id END) AS AvailablePharmacists,
-                        COUNT(DISTINCT CASE WHEN (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%' OR r.Name LIKE '%assistant%' OR r.Name LIKE N'%مساعد%') 
-                                            AND NOT (LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%' OR r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') THEN u.Id END) AS AvailableAssistants
+                        COUNT(DISTINCT CASE WHEN (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%طµظٹط¯ظ„%') THEN u.Id END) AS AvailablePharmacists,
+                        COUNT(DISTINCT CASE WHEN (r.Name LIKE '%assistant%' OR r.Name LIKE N'%ظ…ط³ط§ط¹ط¯%') 
+                                            AND NOT (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%طµظٹط¯ظ„%') THEN u.Id END) AS AvailableAssistants
                     FROM AspNetUsers u WITH (NOLOCK)
                     LEFT JOIN AspNetUserRoles ur WITH (NOLOCK) ON ur.UserId = u.Id
                     LEFT JOIN AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id
@@ -2299,9 +2309,7 @@ namespace Exam.Controllers
                         LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
                         WHERE u.IsActive = 1
                           AND (
-                              LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' 
-                              OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%'
-                              OR EXISTS (
+                              EXISTS (
                                   SELECT 1 FROM AspNetUserRoles ur 
                                   JOIN AspNetRoles r ON ur.RoleId = r.Id 
                                   WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
@@ -2349,18 +2357,14 @@ namespace Exam.Controllers
                         LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
                         WHERE u.IsActive = 1
                           AND (
-                              LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' 
-                              OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%'
-                              OR EXISTS (
+                              EXISTS (
                                   SELECT 1 FROM AspNetUserRoles ur 
                                   JOIN AspNetRoles r ON ur.RoleId = r.Id 
                                   WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
                               )
                           )
                           AND NOT (
-                              LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' 
-                              OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%'
-                              OR EXISTS (
+                              EXISTS (
                                   SELECT 1 FROM AspNetUserRoles ur 
                                   JOIN AspNetRoles r ON ur.RoleId = r.Id 
                                   WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
@@ -2398,8 +2402,7 @@ namespace Exam.Controllers
                                 ISNULL(u.FullName, u.UserName) AS FullName,
                                 ISNULL(u.UserCode, '--') AS UserCode,
                                 COALESCE(
-                                    NULLIF(u.UserRoleCustom, ''),
-                                    (SELECT TOP 1 
+                                                                        (SELECT TOP 1 
                                         CASE 
                                             WHEN LOWER(r.Name) = 'assistant' THEN N'مساعد صيدلي'
                                             WHEN LOWER(r.Name) = 'pharmacist' THEN N'صيدلي'
@@ -2517,9 +2520,7 @@ namespace Exam.Controllers
                             FROM AspNetUsers u WITH (NOLOCK)
                             WHERE u.IsActive = 1
                               AND (
-                                  LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' 
-                                  OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%'
-                                  OR EXISTS (
+                                  EXISTS (
                                       SELECT 1 FROM AspNetUserRoles ur 
                                       JOIN AspNetRoles r ON ur.RoleId = r.Id 
                                       WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
@@ -2549,18 +2550,14 @@ namespace Exam.Controllers
                             FROM AspNetUsers u WITH (NOLOCK)
                             WHERE u.IsActive = 1
                               AND (
-                                  LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%assistant%' 
-                                  OR ISNULL(u.UserRoleCustom, '') LIKE N'%مساعد%'
-                                  OR EXISTS (
+                                  EXISTS (
                                       SELECT 1 FROM AspNetUserRoles ur 
                                       JOIN AspNetRoles r ON ur.RoleId = r.Id 
                                       WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
                                   )
                               )
                               AND NOT (
-                                  LOWER(ISNULL(u.UserRoleCustom, '')) LIKE '%pharmacist%' 
-                                  OR ISNULL(u.UserRoleCustom, '') LIKE N'%صيدل%'
-                                  OR EXISTS (
+                                  EXISTS (
                                       SELECT 1 FROM AspNetUserRoles ur 
                                       JOIN AspNetRoles r ON ur.RoleId = r.Id 
                                       WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
@@ -2633,8 +2630,7 @@ namespace Exam.Controllers
                     var u = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                         SELECT u.Id, u.FullName, u.UserName, u.UserCode, u.Email, u.PhoneNumber,
                                COALESCE(
-                                   NULLIF(u.UserRoleCustom, ''),
-                                   (SELECT TOP 1 
+                                                                      (SELECT TOP 1 
                                        CASE 
                                            WHEN LOWER(r.Name) = 'assistant' THEN N'مساعد صيدلي'
                                            WHEN LOWER(r.Name) = 'pharmacist' THEN N'صيدلي'
@@ -3036,7 +3032,7 @@ namespace Exam.Controllers
         public List<int> TraineeIds { get; set; } = new List<int>();
         public List<string> CandidateKeys { get; set; } = new List<string>();
         public bool SendNotification { get; set; } = true;
-        public bool SendEmailViaN8n { get; set; } = true;
+        public bool SendEmailViaN8n { get; set; } = false;
         public bool BypassApproval { get; set; } = false;
         public bool SendRabbitMqEmail { get; set; } = true;
     }
