@@ -2364,8 +2364,102 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                 return BadRequest();
 
             var rows = await _examService.GetStudentExamReviewAsync(examId, studentId);
-            //return View("_StudentExamReview");
+            ViewBag.ExamId = examId;
+            ViewBag.StudentId = studentId;
             return PartialView("GetStudentExamReview", rows);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ExportStudentExamReviewToExcel(int examId, string studentId)
+        {
+            if (examId <= 0 || string.IsNullOrWhiteSpace(studentId))
+                return BadRequest("Invalid request.");
+
+            var rows = (await _examService.GetStudentExamReviewAsync(examId, studentId)).ToList();
+            if (!rows.Any())
+                return NotFound("No exam review records found for this student.");
+
+            var student = await _userManager.FindByIdAsync(studentId);
+            string studentName = student?.FullName ?? student?.UserName ?? "Student";
+            string studentCode = student?.UserCode ?? "--";
+
+            var exam = await _examService.GetExamByIdAsync(examId);
+            string examTitle = exam?.Title ?? $"Exam_{examId}";
+
+            using var workbook = new ClosedXML.Excel.XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Exam Review");
+
+            // Header info
+            worksheet.Cell(1, 1).Value = "Exam:";
+            worksheet.Cell(1, 2).Value = examTitle;
+            worksheet.Cell(2, 1).Value = "Student:";
+            worksheet.Cell(2, 2).Value = $"{studentName} ({studentCode})";
+
+            worksheet.Range("A1:B2").Style.Font.Bold = true;
+
+            // Table headers
+            int rowIdx = 4;
+            worksheet.Cell(rowIdx, 1).Value = "#";
+            worksheet.Cell(rowIdx, 2).Value = "Question Text";
+            worksheet.Cell(rowIdx, 3).Value = "Category";
+            worksheet.Cell(rowIdx, 4).Value = "Difficulty";
+            worksheet.Cell(rowIdx, 5).Value = "Points";
+            worksheet.Cell(rowIdx, 6).Value = "Choices / Options";
+            worksheet.Cell(rowIdx, 7).Value = "Student Answer";
+            worksheet.Cell(rowIdx, 8).Value = "Correct Answer";
+            worksheet.Cell(rowIdx, 9).Value = "Result";
+
+            var headerRange = worksheet.Range(rowIdx, 1, rowIdx, 9);
+            headerRange.Style.Font.Bold = true;
+            headerRange.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#059669");
+            headerRange.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+
+            var questions = rows
+                .GroupBy(r => new { r.QuestionId, r.QuestionText, r.Points, r.QuestionType, r.Difficulty })
+                .OrderBy(g => g.Key.QuestionId)
+                .ToList();
+
+            int qNum = 1;
+            foreach (var q in questions)
+            {
+                rowIdx++;
+                worksheet.Cell(rowIdx, 1).Value = qNum++;
+                worksheet.Cell(rowIdx, 2).Value = q.Key.QuestionText;
+                worksheet.Cell(rowIdx, 3).Value = q.Key.QuestionType;
+                worksheet.Cell(rowIdx, 4).Value = q.Key.Difficulty == 3 ? "Hard" : (q.Key.Difficulty == 2 ? "Medium" : "Easy");
+                worksheet.Cell(rowIdx, 5).Value = q.Key.Points;
+
+                // Choices
+                var choices = q.OrderBy(x => x.ChoiceId).ToList();
+                string allChoices = string.Join(" | ", choices.Select(c => c.ChoiceText));
+                worksheet.Cell(rowIdx, 6).Value = allChoices;
+
+                var studentChoice = choices.FirstOrDefault(c => c.IsStudentSelection);
+                worksheet.Cell(rowIdx, 7).Value = studentChoice?.ChoiceText ?? "(No Answer)";
+
+                var correctChoice = choices.FirstOrDefault(c => c.IsRightAnswer);
+                worksheet.Cell(rowIdx, 8).Value = correctChoice?.ChoiceText ?? "--";
+
+                bool isCorrect = studentChoice != null && studentChoice.IsRightAnswer;
+                worksheet.Cell(rowIdx, 9).Value = isCorrect ? "Correct" : "Wrong";
+                if (isCorrect)
+                {
+                    worksheet.Cell(rowIdx, 9).Style.Font.FontColor = ClosedXML.Excel.XLColor.FromHtml("#059669");
+                    worksheet.Cell(rowIdx, 9).Style.Font.Bold = true;
+                }
+                else
+                {
+                    worksheet.Cell(rowIdx, 9).Style.Font.FontColor = ClosedXML.Excel.XLColor.FromHtml("#DC2626");
+                    worksheet.Cell(rowIdx, 9).Style.Font.Bold = true;
+                }
+            }
+
+            worksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            string safeFileName = $"ExamReview_{studentCode}_{examId}_{DateTime.Now:yyyyMMdd}.xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", safeFileName);
         }
 
         [HttpGet]
