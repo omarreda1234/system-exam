@@ -87,17 +87,40 @@
                 </select>
             </div>
 
-            <div class="space-y-1">
-                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Training Wave</label>
-                <select id="waveFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[200px] shadow-sm">
-                    <option value="-1" selected="@(selectedWaveId == -1 ? "selected" : null)">All Waves (كل الويفات)</option>
-                    @foreach (var w in waves)
-                    {
-                        <option value="@w.Id" selected="@(w.Id == selectedWaveId ? "selected" : null)">
-                            @w.WaveName.ToUpper() @(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")
-                        </option>
-                    }
-                </select>
+            <!-- Multi-Select Wave Dropdown -->
+            <div class="space-y-1 relative inline-block text-left" id="multiSelectWaveWrapperWavey">
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Training Wave (الويف)</label>
+                <button type="button" id="btnMultiSelectWaveWavey" onclick="toggleWaveDropdownWavey()"
+                        class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[200px] shadow-sm flex items-center justify-between gap-2">
+                    <span id="lblWaveSelectedWavey" class="truncate">All Waves</span>
+                    <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- Dropdown Menu -->
+                <div id="dropdownWaveMenuWavey" class="hidden absolute left-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                    <div class="relative">
+                        <input type="text" id="waveSearchInputWavey" placeholder="Search wave..." oninput="filterWaveOptionsWavey(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                    </div>
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Waves</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="selectAllWavesWavey(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllWavesWavey(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                        @foreach (var w in waves)
+                        {
+                            bool isPreChecked = (selectedWaveId > 0 && w.Id == selectedWaveId);
+                            <label class="wave-option-label-wavey flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                                <input type="checkbox" value="@w.WaveName.ToUpper()" data-wave-id="@w.Id" data-wave-name="@w.WaveName" @(isPreChecked ? "checked" : "") class="chk-wave-wavey rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onWaveFilterChangeWavey()" />
+                                <span class="truncate">@w.WaveName.ToUpper() @(w.StartDate.HasValue ? $"({w.StartDate.Value.ToString("MMM yyyy")})" : "")</span>
+                            </label>
+                        }
+                    </div>
+                </div>
+                <input type="hidden" id="waveFilter" value="@selectedWaveId" />
             </div>
 
             <div class="flex items-center gap-2 mt-auto">
@@ -116,21 +139,21 @@
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
         <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Students</span>
-        <span class="text-3xl font-black text-slate-900 dark:text-white">@total</span>
+        <span class="text-3xl font-black text-slate-900 dark:text-white" id="summaryTotal">@total</span>
     </div>
     <div class="bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
         <span class="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Completed</span>
-        <span class="text-3xl font-black text-emerald-700">@completed</span>
+        <span class="text-3xl font-black text-emerald-700" id="summaryCompleted">@completed</span>
         <span class="text-[9px] font-bold text-emerald-500">Submitted attempts</span>
     </div>
     <div class="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
         <span class="text-[10px] font-black text-amber-600 uppercase tracking-widest">Incomplete</span>
-        <span class="text-3xl font-black text-amber-700">@incomplete</span>
+        <span class="text-3xl font-black text-amber-700" id="summaryIncomplete">@incomplete</span>
         <span class="text-[9px] font-bold text-amber-500">Pending attempts</span>
     </div>
     <div class="bg-indigo-50 dark:bg-indigo-950 border border-indigo-200 dark:border-indigo-800 rounded-[24px] p-5 shadow-sm flex flex-col gap-1">
         <span class="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Avg. Percentage</span>
-        <span class="text-3xl font-black text-indigo-700">@avgPct.ToString("0.0")%</span>
+        <span class="text-3xl font-black text-indigo-700" id="summaryAvg">@avgPct.ToString("0.0")%</span>
         <span class="text-[9px] font-bold text-indigo-500">Average score percentage</span>
     </div>
 </div>
@@ -394,11 +417,21 @@
             let total = $('.chk-wave-wavey').length;
             if (selected.length === 0 || selected.length === total) {
                 $('#lblWaveSelectedWavey').html('<span class="text-slate-500">All Waves</span>');
+                $('#waveFilter').val('-1');
             } else if (selected.length === 1) {
-                let waveName = $('.chk-wave-wavey:checked').attr('data-wave-name') || selected[0];
+                let $chk = $('.chk-wave-wavey:checked').first();
+                let waveName = $chk.attr('data-wave-name') || selected[0];
+                let waveId = $chk.attr('data-wave-id') || '-1';
                 $('#lblWaveSelectedWavey').html(`<span class="text-brand-600 font-extrabold">${waveName}</span>`);
+                $('#waveFilter').val(waveId);
             } else {
                 $('#lblWaveSelectedWavey').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
+                let waveIds = [];
+                $('.chk-wave-wavey:checked').each(function() {
+                    let wid = $(this).attr('data-wave-id');
+                    if (wid) waveIds.push(wid);
+                });
+                $('#waveFilter').val(waveIds.join(','));
             }
             if (window.waveyTable) window.waveyTable.draw();
         }
@@ -411,8 +444,12 @@
                 if (settings.nTable.id !== 'waveResultsTable') return true;
                 
                 const selBranches = getSelectedBranchesWavey();
+                const selWaves = getSelectedWavesWavey();
+
                 const tr = settings.aoData[dataIndex] ? settings.aoData[dataIndex].nTr : null;
                 const rowBranch = (data[1] || '') + ' ' + (data[0] || '') + ' ' + (tr ? $(tr).attr('data-branch-name') || '' : '');
+                const rowWave = tr ? ($(tr).attr('data-wave-name') || '') : '';
+                const rowWaveId = tr ? ($(tr).attr('data-wave-id') || '') : '';
 
                 let branchMatch = (selBranches.length === 0 || selBranches.length === $('.chk-branch-wavey').length);
                 if (!branchMatch) {
@@ -423,9 +460,51 @@
                     });
                 }
 
-                return branchMatch;
+                let waveMatch = (selWaves.length === 0 || selWaves.length === $('.chk-wave-wavey').length);
+                if (!waveMatch) {
+                    const nRowWave = normStrWavey(rowWave);
+                    waveMatch = selWaves.some(w => {
+                        const nw = normStrWavey(w);
+                        return nRowWave.includes(nw) || nw.includes(nRowWave) || (rowWaveId && rowWaveId === w);
+                    });
+                }
+
+                return branchMatch && waveMatch;
             }
         );
+
+        function updateSummaryCardsWavey() {
+            if (!window.waveyTable) return;
+            const rows = window.waveyTable.rows({ search: 'applied' }).nodes();
+            let total = rows.length;
+            let completed = 0;
+            let incomplete = 0;
+            let totalScore = 0;
+            let totalAvailable = 0;
+
+            $(rows).each(function() {
+                const status = $(this).find('td:nth-child(4)').text().trim().toLowerCase();
+                if (status.includes('completed')) completed++;
+                else incomplete++;
+
+                const scoreText = $(this).find('td:nth-child(8)').text().trim();
+                const parts = scoreText.split('/');
+                if (parts.length === 2) {
+                    const sc = parseFloat(parts[0]);
+                    const av = parseFloat(parts[1]);
+                    if (!isNaN(sc) && !isNaN(av) && av > 0) {
+                        totalScore += sc;
+                        totalAvailable += av;
+                    }
+                }
+            });
+
+            let avg = totalAvailable > 0 ? (totalScore / totalAvailable * 100) : 0;
+            $('#summaryTotal').text(total);
+            $('#summaryCompleted').text(completed);
+            $('#summaryIncomplete').text(incomplete);
+            $('#summaryAvg').text(avg.toFixed(1) + '%');
+        }
 
         $(document).ready(function() {
             if ($.fn.DataTable.isDataTable('#waveResultsTable')) {
@@ -437,14 +516,18 @@
                     language: { search: "", searchPlaceholder: "Search student, branch..." }
                 });
             }
+
+            window.waveyTable.on('draw', updateSummaryCardsWavey);
+
+            onWaveFilterChangeWavey();
+            onBranchFilterChangeWavey();
         });
 
-        // Wave / Year / Month change → reload page with parameters
-        $('#waveFilter, #yearFilter, #monthFilter').change(function () {
-            const waveId = $('#waveFilter').val();
+        // Year / Month change → reload page with parameters
+        $('#yearFilter, #monthFilter').change(function () {
             const year  = $('#yearFilter').val();
             const month = $('#monthFilter').val();
-            let url = '/Admin/WaveyResults?waveId=' + waveId + '&year=' + year + '&month=' + month;
+            let url = '/Admin/WaveyResults?year=' + year + '&month=' + month;
             if (window.location.search.includes('iframe=true')) url += '&iframe=true';
             window.location = url;
         });

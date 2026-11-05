@@ -581,52 +581,153 @@
 
                     <!-- Container 1: Branch Staff Quotas (الصيادلة والمساعدين) -->
                     <div id="injectionBranchStaffContainer" class="space-y-4">
-                        <!-- Quota Inputs for Pharmacist and Assistant -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <!-- Pharmacist Card -->
-                            <div class="p-4 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 rounded-2xl border-2 border-purple-200/80 shadow-2xs space-y-3">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center text-lg font-black shadow-sm">
-                                            <i class="fas fa-user-doctor"></i>
+                        <!-- Sub-Mode Switcher: Global Quota vs Custom Per-Branch Matrix -->
+                        <div class="flex items-center justify-between p-1 bg-slate-100 rounded-2xl border border-slate-200">
+                            <button type="button" id="btnSubModeGlobal" onclick="switchBranchStaffSubMode('global')"
+                                    class="flex-1 py-2 px-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5 bg-white text-purple-700 shadow-2xs border border-purple-200/60">
+                                <i class="fas fa-layer-group text-xs"></i>
+                                <span>توزيع إجمالي سريع (Global Quota)</span>
+                            </button>
+                            <button type="button" id="btnSubModeMatrix" onclick="switchBranchStaffSubMode('matrix')"
+                                    class="flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-800">
+                                <i class="fas fa-table-list text-xs"></i>
+                                <span>جدول تفصيلي مخصص للفروع (Custom Per-Branch Matrix)</span>
+                                <span id="badgeMatrixConfiguredCount" class="hidden text-[10px] font-black bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full"></span>
+                            </button>
+                        </div>
+
+                        <!-- Sub-View 1: Global Quota Cards -->
+                        <div id="viewBranchStaffGlobal" class="space-y-4">
+                            <!-- Quota Inputs for Pharmacist and Assistant -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <!-- Pharmacist Card -->
+                                <div class="p-4 bg-gradient-to-br from-purple-50/70 via-white to-purple-50/30 rounded-2xl border-2 border-purple-200/80 shadow-2xs space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center text-lg font-black shadow-sm">
+                                                <i class="fas fa-user-doctor"></i>
+                                            </div>
+                                            <div>
+                                                <h5 class="text-xs font-black text-slate-900">كوتة الصيادلة (Pharmacists)</h5>
+                                                <span id="badgeAvailablePharmacists" class="text-[10px] font-bold text-purple-700 bg-purple-100/90 px-2.5 py-0.5 rounded-full mt-1 inline-block">
+                                                    جاري التحميل...
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h5 class="text-xs font-black text-slate-900">كوتة الصيادلة (Pharmacists)</h5>
-                                            <span id="badgeAvailablePharmacists" class="text-[10px] font-bold text-purple-700 bg-purple-100/90 px-2.5 py-0.5 rounded-full mt-1 inline-block">
-                                                جاري التحميل...
-                                            </span>
+                                        <div class="flex items-center gap-2 bg-white border-2 border-purple-300 rounded-xl px-3 py-1.5 focus-within:border-purple-600 shadow-2xs">
+                                            <span class="text-[10px] font-black uppercase tracking-wider text-purple-600">المقاعد:</span>
+                                            <input type="number" id="inputQuotaPharmacist" min="0" value="0"
+                                                   oninput="onBranchStaffQuotaChanged()"
+                                                   class="w-14 text-center text-sm font-black text-purple-800 outline-none font-mono" />
                                         </div>
                                     </div>
-                                    <div class="flex items-center gap-2 bg-white border-2 border-purple-300 rounded-xl px-3 py-1.5 focus-within:border-purple-600 shadow-2xs">
-                                        <span class="text-[10px] font-black uppercase tracking-wider text-purple-600">المقاعد:</span>
-                                        <input type="number" id="inputQuotaPharmacist" min="0" value="0"
-                                               oninput="onBranchStaffQuotaChanged()"
-                                               class="w-14 text-center text-sm font-black text-purple-800 outline-none font-mono" />
+                                    <!-- Max per branch cap -->
+                                    <div class="pt-2 border-t border-purple-100/80 flex items-center justify-between text-xs">
+                                        <div class="flex items-center gap-1.5 text-slate-600 font-bold text-[11px]">
+                                            <i class="fas fa-store text-purple-600 text-xs"></i>
+                                            <span>أقصى سحب من الفرع الواحد:</span>
+                                            <span class="text-[9px] text-slate-400 font-normal">(0 = بلا سقف)</span>
+                                        </div>
+                                        <div class="flex items-center gap-1 bg-white border border-purple-200 rounded-lg px-2 py-1 focus-within:border-purple-500 shadow-2xs">
+                                            <span class="text-[9px] font-black text-purple-600">أقصى:</span>
+                                            <input type="number" id="inputMaxPharmacistPerBranch" min="0" value="0" placeholder="0"
+                                                   class="w-10 text-center text-xs font-black text-purple-800 outline-none font-mono" />
+                                            <span class="text-[9px] text-slate-500 font-bold">صيدلي</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Assistant Card -->
+                                <div class="p-4 bg-gradient-to-br from-indigo-50/70 via-white to-indigo-50/30 rounded-2xl border-2 border-indigo-200/80 shadow-2xs space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white flex items-center justify-center text-lg font-black shadow-sm">
+                                                <i class="fas fa-hand-holding-medical"></i>
+                                            </div>
+                                            <div>
+                                                <h5 class="text-xs font-black text-slate-900">كوتة المساعدين (Assistants)</h5>
+                                                <span id="badgeAvailableAssistants" class="text-[10px] font-bold text-indigo-700 bg-indigo-100/90 px-2.5 py-0.5 rounded-full mt-1 inline-block">
+                                                    جاري التحميل...
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2 bg-white border-2 border-indigo-300 rounded-xl px-3 py-1.5 focus-within:border-indigo-600 shadow-2xs">
+                                            <span class="text-[10px] font-black uppercase tracking-wider text-indigo-600">المقاعد:</span>
+                                            <input type="number" id="inputQuotaAssistant" min="0" value="0"
+                                                   oninput="onBranchStaffQuotaChanged()"
+                                                   class="w-14 text-center text-sm font-black text-indigo-800 outline-none font-mono" />
+                                        </div>
+                                    </div>
+                                    <!-- Max per branch cap -->
+                                    <div class="pt-2 border-t border-indigo-100/80 flex items-center justify-between text-xs">
+                                        <div class="flex items-center gap-1.5 text-slate-600 font-bold text-[11px]">
+                                            <i class="fas fa-store text-indigo-600 text-xs"></i>
+                                            <span>أقصى سحب من الفرع الواحد:</span>
+                                            <span class="text-[9px] text-slate-400 font-normal">(0 = بلا سقف)</span>
+                                        </div>
+                                        <div class="flex items-center gap-1 bg-white border border-indigo-200 rounded-lg px-2 py-1 focus-within:border-indigo-500 shadow-2xs">
+                                            <span class="text-[9px] font-black text-indigo-600">أقصى:</span>
+                                            <input type="number" id="inputMaxAssistantPerBranch" min="0" value="0" placeholder="0"
+                                                   class="w-10 text-center text-xs font-black text-indigo-800 outline-none font-mono" />
+                                            <span class="text-[9px] text-slate-500 font-bold">مساعد</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Assistant Card -->
-                            <div class="p-4 bg-gradient-to-br from-indigo-50/70 via-white to-indigo-50/30 rounded-2xl border-2 border-indigo-200/80 shadow-2xs space-y-3">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white flex items-center justify-center text-lg font-black shadow-sm">
-                                            <i class="fas fa-hand-holding-medical"></i>
+                        <!-- Sub-View 2: Custom Per-Branch Matrix -->
+                        <div id="viewBranchStaffMatrix" class="hidden space-y-3">
+                            <!-- Bulk Fill Action Bar -->
+                            <div class="p-3.5 bg-gradient-to-r from-purple-50/80 via-indigo-50/40 to-slate-50 rounded-2xl border border-purple-200/90 shadow-2xs space-y-2.5">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 rounded-xl bg-purple-600 text-white flex items-center justify-center text-xs shadow-2xs">
+                                            <i class="fas fa-bolt"></i>
                                         </div>
                                         <div>
-                                            <h5 class="text-xs font-black text-slate-900">كوتة المساعدين (Assistants)</h5>
-                                            <span id="badgeAvailableAssistants" class="text-[10px] font-bold text-indigo-700 bg-indigo-100/90 px-2.5 py-0.5 rounded-full mt-1 inline-block">
-                                                جاري التحميل...
-                                            </span>
+                                            <h6 class="text-xs font-black text-slate-900">تطبيق سريع على الفروع (Bulk Quick Fill)</h6>
+                                            <p class="text-[10px] text-slate-500 font-semibold">حدد كوتة موحدة واضغط تطبيق لملء كافة الفروع المعروضة بضغطة زر واحدة</p>
                                         </div>
                                     </div>
-                                    <div class="flex items-center gap-2 bg-white border-2 border-indigo-300 rounded-xl px-3 py-1.5 focus-within:border-indigo-600 shadow-2xs">
-                                        <span class="text-[10px] font-black uppercase tracking-wider text-indigo-600">المقاعد:</span>
-                                        <input type="number" id="inputQuotaAssistant" min="0" value="0"
-                                               oninput="onBranchStaffQuotaChanged()"
-                                               class="w-14 text-center text-sm font-black text-indigo-800 outline-none font-mono" />
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" onclick="clearBranchMatrixInputs()" class="px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:text-rose-600 bg-white border border-slate-200 hover:border-rose-200 rounded-lg transition-all shadow-2xs">
+                                            <i class="fas fa-rotate-left mr-1"></i> تصفير الجدول
+                                        </button>
                                     </div>
                                 </div>
+                                <div class="flex flex-wrap items-center gap-2.5 pt-1 border-t border-purple-100/80">
+                                    <div class="flex items-center gap-2 bg-white border border-purple-200 rounded-xl px-3 py-1.5 shadow-2xs">
+                                        <span class="text-[11px] font-black text-purple-700">صيادلة:</span>
+                                        <input type="number" id="inputBulkPharmQuota" min="0" value="1" class="w-14 text-center text-xs font-black text-purple-900 outline-none font-mono" />
+                                    </div>
+                                    <div class="flex items-center gap-2 bg-white border border-indigo-200 rounded-xl px-3 py-1.5 shadow-2xs">
+                                        <span class="text-[11px] font-black text-indigo-700">مساعدين:</span>
+                                        <input type="number" id="inputBulkAssistQuota" min="0" value="0" class="w-14 text-center text-xs font-black text-indigo-900 outline-none font-mono" />
+                                    </div>
+                                    <button type="button" onclick="applyBulkToBranchMatrix()" class="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
+                                        <i class="fas fa-check-double text-[10px]"></i>
+                                        <span>تطبيق على الفروع المعروضة</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Matrix Branch Search & Counter -->
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="relative flex-1">
+                                    <i class="fas fa-search absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                                    <input type="text" id="inputMatrixBranchSearch" oninput="filterBranchMatrixDisplay(this.value)"
+                                           placeholder="ابحث باسم الفرع في الجدول..."
+                                           class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 focus:bg-white shadow-2xs" />
+                                </div>
+                                <span id="matrixBranchesCountBadge" class="text-[11px] font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-xl">
+                                    0 فرع متاح
+                                </span>
+                            </div>
+
+                            <!-- Branch Matrix List -->
+                            <div id="injectionBranchMatrixContainer" class="space-y-2 max-h-80 overflow-y-auto custom-scrollbar p-1">
+                                <!-- Populated dynamically by renderBranchMatrix() -->
                             </div>
                         </div>
                     </div>
@@ -1577,6 +1678,7 @@
             loaded: false,
             branchStaffLoaded: false,
             currentMode: 'branchStaff',
+            branchStaffSubMode: 'global', // 'global' or 'matrix'
             departments: [],
             branches: [],
             shifts: [],
@@ -1649,6 +1751,7 @@
                     renderInjectionBranches();
                     renderInjectionShiftGroups();
                     renderInjectionShifts();
+                    renderBranchMatrix();
                     updateAvailableStaffBadges(data.totalPharmacists, data.totalAssistants);
                 }
             } catch (err) {
@@ -2073,6 +2176,7 @@
             }
             updateBranchFilterUI();
             fetchLiveAvailableStaffCounts();
+            renderBranchMatrix();
         };
 
         window.selectAllInjectionBranches = function (selectAll) {
@@ -2084,6 +2188,7 @@
             renderInjectionBranches();
             updateBranchFilterUI();
             fetchLiveAvailableStaffCounts();
+            renderBranchMatrix();
         };
 
         window.updateBranchFilterUI = function () {
@@ -2203,6 +2308,224 @@
             updateInjectionHeadcount();
         };
 
+        window.switchBranchStaffSubMode = function (subMode) {
+            injectionState.branchStaffSubMode = subMode;
+            const btnGlobal = document.getElementById('btnSubModeGlobal');
+            const btnMatrix = document.getElementById('btnSubModeMatrix');
+            const viewGlobal = document.getElementById('viewBranchStaffGlobal');
+            const viewMatrix = document.getElementById('viewBranchStaffMatrix');
+
+            if (subMode === 'matrix') {
+                if (btnMatrix) btnMatrix.className = 'flex-1 py-2 px-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5 bg-white text-purple-700 shadow-2xs border border-purple-200/60';
+                if (btnGlobal) btnGlobal.className = 'flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-800';
+                if (viewMatrix) viewMatrix.classList.remove('hidden');
+                if (viewGlobal) viewGlobal.classList.add('hidden');
+                renderBranchMatrix();
+            } else {
+                if (btnGlobal) btnGlobal.className = 'flex-1 py-2 px-3 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5 bg-white text-purple-700 shadow-2xs border border-purple-200/60';
+                if (btnMatrix) btnMatrix.className = 'flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-800';
+                if (viewGlobal) viewGlobal.classList.remove('hidden');
+                if (viewMatrix) viewMatrix.classList.add('hidden');
+            }
+            updateInjectionHeadcount();
+        };
+
+        window.getBranchMatrixEnteredValues = function () {
+            const map = {};
+            document.querySelectorAll('.branch-matrix-row').forEach(row => {
+                const bId = parseInt(row.dataset.branchId);
+                const p = row.querySelector('.matrix-pharm-input')?.value;
+                const a = row.querySelector('.matrix-assist-input')?.value;
+                if ((p && parseInt(p) > 0) || (a && parseInt(a) > 0)) {
+                    map[bId] = {
+                        pharmacistQuota: p ? parseInt(p) : '',
+                        assistantQuota: a ? parseInt(a) : ''
+                    };
+                }
+            });
+            return map;
+        };
+
+        window.renderBranchMatrix = function (savedQuotas = null) {
+            const container = document.getElementById('injectionBranchMatrixContainer');
+            if (!container) return;
+
+            const valuesToApply = savedQuotas || getBranchMatrixEnteredValues();
+
+            let branches = injectionState.branches || [];
+            if (injectionState.selectedBranchIds && injectionState.selectedBranchIds.length > 0) {
+                branches = branches.filter(b => injectionState.selectedBranchIds.includes(b.id ?? b.Id));
+            }
+
+            const badge = document.getElementById('matrixBranchesCountBadge');
+            if (badge) badge.textContent = `${branches.length} فرع متاح`;
+
+            if (branches.length === 0) {
+                container.innerHTML = '<div class="p-6 text-center text-xs text-slate-400 font-bold bg-white rounded-xl border border-dashed border-slate-200">لا توجد فروع مطابقة لنطاق الفروع المحددة بالأعلى.</div>';
+                return;
+            }
+
+            container.innerHTML = branches.map(b => {
+                const bId = b.id ?? b.Id;
+                const bName = b.branchName || b.BranchName || 'فرع';
+                const pAvail = b.pharmacistCount ?? b.PharmacistCount ?? 0;
+                const aAvail = b.assistantCount ?? b.AssistantCount ?? 0;
+
+                const prev = valuesToApply[bId] || {};
+                const prevPharm = prev.pharmacistQuota !== undefined && prev.pharmacistQuota !== '' ? prev.pharmacistQuota : '';
+                const prevAssist = prev.assistantQuota !== undefined && prev.assistantQuota !== '' ? prev.assistantQuota : '';
+
+                const rowTotal = (parseInt(prevPharm) || 0) + (parseInt(prevAssist) || 0);
+
+                return `
+                    <div class="branch-matrix-row p-3 bg-white rounded-2xl border border-slate-200/90 hover:border-purple-300 transition-all shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                         data-branch-id="${bId}" data-branch-name="${bName}">
+                        <!-- Branch Info -->
+                        <div class="flex items-center gap-2.5 min-w-[200px]">
+                            <div class="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-xs font-bold shrink-0 border border-purple-100 group-hover:bg-purple-600 group-hover:text-white transition-all shadow-2xs">
+                                <i class="fas fa-store"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <h6 class="text-xs font-black text-slate-800 truncate">${bName}</h6>
+                                <div class="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold mt-0.5">
+                                    <span class="text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">${pAvail} صيدلي</span>
+                                    <span>•</span>
+                                    <span class="text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">${aAvail} مساعد</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Inputs: Pharmacists and Assistants Quota -->
+                        <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                            <!-- Pharm Input -->
+                            <div class="flex items-center gap-1.5 bg-purple-50/80 border border-purple-200/90 rounded-xl px-2.5 py-1 shadow-2xs">
+                                <span class="text-[11px] font-black text-purple-700">صيدلي:</span>
+                                <input type="number" min="0" max="${pAvail}" value="${prevPharm}" placeholder="0"
+                                       oninput="onBranchMatrixQuotaChanged()"
+                                       class="matrix-pharm-input w-12 text-center text-xs font-black text-purple-900 bg-white border border-purple-200/60 rounded-lg py-0.5 outline-none focus:border-purple-500 font-mono" />
+                            </div>
+
+                            <!-- Assist Input -->
+                            <div class="flex items-center gap-1.5 bg-indigo-50/80 border border-indigo-200/90 rounded-xl px-2.5 py-1 shadow-2xs">
+                                <span class="text-[11px] font-black text-indigo-700">مساعد:</span>
+                                <input type="number" min="0" max="${aAvail}" value="${prevAssist}" placeholder="0"
+                                       oninput="onBranchMatrixQuotaChanged()"
+                                       class="matrix-assist-input w-12 text-center text-xs font-black text-indigo-900 bg-white border border-indigo-200/60 rounded-lg py-0.5 outline-none focus:border-indigo-500 font-mono" />
+                            </div>
+
+                            <!-- Branch Row Total Badge -->
+                            <span class="matrix-row-total text-[11px] font-mono font-black ${rowTotal > 0 ? 'text-purple-700 bg-purple-100 border-purple-200' : 'text-slate-400 bg-slate-100 border-slate-200'} px-3 py-1 rounded-xl border shrink-0">
+                                ${rowTotal} مقعد
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            onBranchMatrixQuotaChanged();
+        };
+
+        window.onBranchMatrixQuotaChanged = function () {
+            let configuredCount = 0;
+
+            document.querySelectorAll('.branch-matrix-row').forEach(row => {
+                const p = parseInt(row.querySelector('.matrix-pharm-input')?.value) || 0;
+                const a = parseInt(row.querySelector('.matrix-assist-input')?.value) || 0;
+                const rowTotal = p + a;
+                const badge = row.querySelector('.matrix-row-total');
+                if (badge) {
+                    badge.textContent = `${rowTotal} مقعد`;
+                    if (rowTotal > 0) {
+                        badge.className = 'matrix-row-total text-[11px] font-mono font-black text-purple-700 bg-purple-100 border-purple-200 px-3 py-1 rounded-xl border shrink-0';
+                        configuredCount++;
+                    } else {
+                        badge.className = 'matrix-row-total text-[11px] font-mono font-black text-slate-400 bg-slate-100 border-slate-200 px-3 py-1 rounded-xl border shrink-0';
+                    }
+                }
+            });
+
+            const badgeActive = document.getElementById('badgeMatrixConfiguredCount');
+            if (badgeActive) {
+                if (configuredCount > 0) {
+                    badgeActive.textContent = `${configuredCount} فرع محدد`;
+                    badgeActive.classList.remove('hidden');
+                } else {
+                    badgeActive.classList.add('hidden');
+                }
+            }
+
+            updateInjectionHeadcount();
+        };
+
+        window.applyBulkToBranchMatrix = function () {
+            const bulkPharm = parseInt(document.getElementById('inputBulkPharmQuota')?.value) || 0;
+            const bulkAssist = parseInt(document.getElementById('inputBulkAssistQuota')?.value) || 0;
+
+            const rows = document.querySelectorAll('.branch-matrix-row:not(.hidden)');
+            if (rows.length === 0) {
+                showAppToast('warning', 'Notice', 'لا توجد فروع معروضة لتطبيق الكوتة عليها.');
+                return;
+            }
+
+            rows.forEach(row => {
+                const pInput = row.querySelector('.matrix-pharm-input');
+                const aInput = row.querySelector('.matrix-assist-input');
+
+                if (pInput) pInput.value = bulkPharm;
+                if (aInput) aInput.value = bulkAssist;
+            });
+
+            onBranchMatrixQuotaChanged();
+            showAppToast('success', 'تم التطبيق', `تم تطبيق الكوتة (${bulkPharm} صيدلي + ${bulkAssist} مساعد) على ${rows.length} فرع.`);
+        };
+
+        window.clearBranchMatrixInputs = function () {
+            document.querySelectorAll('.branch-matrix-row').forEach(row => {
+                const pInput = row.querySelector('.matrix-pharm-input');
+                const aInput = row.querySelector('.matrix-assist-input');
+                if (pInput) pInput.value = '';
+                if (aInput) aInput.value = '';
+            });
+            onBranchMatrixQuotaChanged();
+        };
+
+        window.filterBranchMatrixDisplay = function (term) {
+            const q = (term || '').trim().toLowerCase();
+            let visibleCount = 0;
+            document.querySelectorAll('.branch-matrix-row').forEach(row => {
+                const name = (row.dataset.branchName || '').toLowerCase();
+                if (!q || name.includes(q)) {
+                    row.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    row.classList.add('hidden');
+                }
+            });
+            const badge = document.getElementById('matrixBranchesCountBadge');
+            if (badge) badge.textContent = `${visibleCount} فرع معروض`;
+        };
+
+        window.getBranchMatrixQuotasPayload = function () {
+            const list = [];
+            document.querySelectorAll('.branch-matrix-row').forEach(row => {
+                const bId = parseInt(row.dataset.branchId);
+                const bName = row.dataset.branchName;
+                const pQuota = parseInt(row.querySelector('.matrix-pharm-input')?.value) || 0;
+                const aQuota = parseInt(row.querySelector('.matrix-assist-input')?.value) || 0;
+                if (pQuota > 0 || aQuota > 0) {
+                    list.push({
+                        branchId: bId,
+                        branchName: bName,
+                        pharmacistQuota: pQuota,
+                        assistantQuota: aQuota,
+                        shiftId: null,
+                        shiftName: null
+                    });
+                }
+            });
+            return list;
+        };
+
         window.loadInjectionDepartments = async function (preserveValues = false) {
             const listWrapper = document.getElementById('injectionDepartmentsList');
             if (!listWrapper) return;
@@ -2295,8 +2618,19 @@
             const badgeBranch = document.getElementById('badgeTabBranchStaffCount');
             const badgeDept = document.getElementById('badgeTabDeptCount');
 
-            const pharmQuota = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
-            const assistQuota = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+            let pharmQuota = 0;
+            let assistQuota = 0;
+
+            if (injectionState.branchStaffSubMode === 'matrix') {
+                document.querySelectorAll('.branch-matrix-row').forEach(row => {
+                    pharmQuota += parseInt(row.querySelector('.matrix-pharm-input')?.value) || 0;
+                    assistQuota += parseInt(row.querySelector('.matrix-assist-input')?.value) || 0;
+                });
+            } else {
+                pharmQuota = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
+                assistQuota = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+            }
+
             const branchStaffTotal = pharmQuota + assistQuota;
 
             let deptTotal = 0;
@@ -2394,6 +2728,16 @@
             if (pharmInput) pharmInput.value = 0;
             if (assistInput) assistInput.value = 0;
 
+            const maxPharmInput = document.getElementById('inputMaxPharmacistPerBranch');
+            const maxAssistInput = document.getElementById('inputMaxAssistantPerBranch');
+            if (maxPharmInput) maxPharmInput.value = 0;
+            if (maxAssistInput) maxAssistInput.value = 0;
+
+            clearBranchMatrixInputs();
+            if (injectionState.branchStaffSubMode === 'matrix') {
+                switchBranchStaffSubMode('global');
+            }
+
             document.querySelectorAll('.dept-quota-input').forEach(input => input.value = '');
             injectionState.selectedBranchIds = [];
             injectionState.selectedShiftIds = [];
@@ -2477,6 +2821,12 @@
                 const assistInput = document.getElementById('inputQuotaAssistant');
                 if (pharmInput) pharmInput.value = 0;
                 if (assistInput) assistInput.value = 0;
+
+                const maxPharmInput = document.getElementById('inputMaxPharmacistPerBranch');
+                const maxAssistInput = document.getElementById('inputMaxAssistantPerBranch');
+                if (maxPharmInput) maxPharmInput.value = 0;
+                if (maxAssistInput) maxAssistInput.value = 0;
+
                 document.querySelectorAll('.dept-quota-input').forEach(input => input.value = '');
 
                 let hasBranchQuotas = false;
@@ -2484,12 +2834,32 @@
 
                 if (ruleData) {
                     // 1. Branch Staff Quotas
-                    if (ruleData.pharmacistQuota !== undefined || ruleData.assistantQuota !== undefined) {
-                        const pVal = ruleData.pharmacistQuota || 0;
-                        const aVal = ruleData.assistantQuota || 0;
-                        if (pharmInput) pharmInput.value = pVal;
-                        if (assistInput) assistInput.value = aVal;
-                        if (pVal > 0 || aVal > 0) hasBranchQuotas = true;
+                    if (ruleData.branchQuotas && ruleData.branchQuotas.length > 0) {
+                        switchBranchStaffSubMode('matrix');
+                        const savedMap = {};
+                        ruleData.branchQuotas.forEach(bq => {
+                            savedMap[bq.branchId || bq.BranchId] = {
+                                pharmacistQuota: bq.pharmacistQuota ?? bq.PharmacistQuota ?? 0,
+                                assistantQuota: bq.assistantQuota ?? bq.AssistantQuota ?? 0
+                            };
+                        });
+                        renderBranchMatrix(savedMap);
+                        hasBranchQuotas = true;
+                    } else {
+                        switchBranchStaffSubMode('global');
+                        if (ruleData.pharmacistQuota !== undefined || ruleData.assistantQuota !== undefined) {
+                            const pVal = ruleData.pharmacistQuota || 0;
+                            const aVal = ruleData.assistantQuota || 0;
+                            if (pharmInput) pharmInput.value = pVal;
+                            if (assistInput) assistInput.value = aVal;
+                            if (pVal > 0 || aVal > 0) hasBranchQuotas = true;
+                        }
+                        if (maxPharmInput && ruleData.maxPharmacistsPerBranch !== undefined) {
+                            maxPharmInput.value = ruleData.maxPharmacistsPerBranch;
+                        }
+                        if (maxAssistInput && ruleData.maxAssistantsPerBranch !== undefined) {
+                            maxAssistInput.value = ruleData.maxAssistantsPerBranch;
+                        }
                     }
 
                     // 2. Department Quotas
@@ -2529,8 +2899,10 @@
         };
 
         window.promptSaveCurrentInjectionRule = async function () {
-            const pharmQuota = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
-            const assistQuota = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+            const isMatrix = injectionState.branchStaffSubMode === 'matrix';
+            const matrixQuotas = isMatrix ? getBranchMatrixQuotasPayload() : [];
+            const pharmQuota = isMatrix ? 0 : (parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0);
+            const assistQuota = isMatrix ? 0 : (parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0);
 
             const quotas = [];
             document.querySelectorAll('.dept-quota-input').forEach(input => {
@@ -2544,16 +2916,24 @@
                 }
             });
 
-            if (pharmQuota === 0 && assistQuota === 0 && quotas.length === 0) {
-                showAppToast('warning', 'Notice', 'يرجى تحديد كوتة عددية للصيادلة أو المساعدين أو الأقسام الإدارية قبل الحفظ.');
+            if (matrixQuotas.length === 0 && pharmQuota === 0 && assistQuota === 0 && quotas.length === 0) {
+                showAppToast('warning', 'Notice', 'يرجى تحديد كوتة عددية للصيادلة أو المساعدين أو الفروع أو الأقسام الإدارية قبل الحفظ.');
                 return;
             }
 
-            const isCombined = (pharmQuota > 0 || assistQuota > 0) && quotas.length > 0;
+            const hasBranchQuotas = isMatrix ? (matrixQuotas.length > 0) : (pharmQuota > 0 || assistQuota > 0);
+            const isCombined = hasBranchQuotas && quotas.length > 0;
+            const maxPharmPerBranch = isMatrix ? 0 : (parseInt(document.getElementById('inputMaxPharmacistPerBranch')?.value) || 0);
+            const maxAssistPerBranch = isMatrix ? 0 : (parseInt(document.getElementById('inputMaxAssistantPerBranch')?.value) || 0);
+
             const rulePayload = {
-                ruleType: isCombined ? 'combined' : (quotas.length > 0 ? 'departments' : 'branchStaff'),
+                ruleType: isMatrix ? 'matrix' : (isCombined ? 'combined' : (quotas.length > 0 ? 'departments' : 'branchStaff')),
+                branchStaffSubMode: isMatrix ? 'matrix' : 'global',
+                branchQuotas: matrixQuotas,
                 pharmacistQuota: pharmQuota,
                 assistantQuota: assistQuota,
+                maxPharmacistsPerBranch: maxPharmPerBranch,
+                maxAssistantsPerBranch: maxAssistPerBranch,
                 departmentQuotas: quotas,
                 branchIds: injectionState.selectedBranchIds,
                 shiftIds: injectionState.selectedShiftIds
@@ -2712,8 +3092,12 @@
         };
 
         window.previewInjectionRule = async function () {
-            const pharmQuota = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
-            const assistQuota = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+            const isMatrix = injectionState.branchStaffSubMode === 'matrix';
+            const matrixQuotas = isMatrix ? getBranchMatrixQuotasPayload() : [];
+            const pharmQuota = isMatrix ? 0 : (parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0);
+            const assistQuota = isMatrix ? 0 : (parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0);
+            const maxPharmPerBranch = isMatrix ? 0 : (parseInt(document.getElementById('inputMaxPharmacistPerBranch')?.value) || 0);
+            const maxAssistPerBranch = isMatrix ? 0 : (parseInt(document.getElementById('inputMaxAssistantPerBranch')?.value) || 0);
 
             const deptQuotas = [];
             document.querySelectorAll('.dept-quota-input').forEach(input => {
@@ -2727,12 +3111,13 @@
                 }
             });
 
-            if (pharmQuota === 0 && assistQuota === 0 && deptQuotas.length === 0) {
-                showAppToast('warning', 'Notice', 'يرجى تحديد كوتة عددية للصيادلة أو المساعدين أو الأقسام الإدارية للمعاينة.');
+            if (matrixQuotas.length === 0 && pharmQuota === 0 && assistQuota === 0 && deptQuotas.length === 0) {
+                showAppToast('warning', 'Notice', 'يرجى تحديد كوتة عددية للصيادلة أو المساعدين أو الفروع أو الأقسام الإدارية للمعاينة.');
                 return;
             }
 
-            const grandTotal = pharmQuota + assistQuota + deptQuotas.reduce((a, b) => a + b.quota, 0);
+            const branchStaffTotal = isMatrix ? matrixQuotas.reduce((a, b) => a + b.pharmacistQuota + b.assistantQuota, 0) : (pharmQuota + assistQuota);
+            const grandTotal = branchStaffTotal + deptQuotas.reduce((a, b) => a + b.quota, 0);
             const totalSeats = parseInt(document.getElementById('inputSessionTotalSeats')?.value) || sessionTraineesState.totalSeats || 50;
 
             if (grandTotal > totalSeats) {
@@ -2774,9 +3159,12 @@
                     body: JSON.stringify({
                         sessionId: sessionTraineesState.sessionId,
                         companyId: sessionTraineesState.companyId || null,
-                        mode: 'combined',
+                        mode: isMatrix ? 'matrix' : 'combined',
+                        branchQuotas: matrixQuotas.length > 0 ? matrixQuotas : null,
                         pharmacistQuota: pharmQuota,
                         assistantQuota: assistQuota,
+                        maxPharmacistsPerBranch: maxPharmPerBranch,
+                        maxAssistantsPerBranch: maxAssistPerBranch,
                         branchIds: injectionState.selectedBranchIds.length > 0 ? injectionState.selectedBranchIds : null,
                         shiftIds: injectionState.selectedShiftIds.length > 0 ? injectionState.selectedShiftIds : null,
                         departmentQuotas: deptQuotas.length > 0 ? deptQuotas : null
@@ -2846,8 +3234,12 @@
                 previewCheckboxes.forEach(chk => userIds.push(chk.dataset.previewUserId));
             }
 
-            const pharmQuota = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
-            const assistQuota = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+            const isMatrix = injectionState.branchStaffSubMode === 'matrix';
+            const matrixQuotas = isMatrix ? getBranchMatrixQuotasPayload() : [];
+            const pharmQuota = isMatrix ? 0 : (parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0);
+            const assistQuota = isMatrix ? 0 : (parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0);
+            const maxPharmPerBranch = isMatrix ? 0 : (parseInt(document.getElementById('inputMaxPharmacistPerBranch')?.value) || 0);
+            const maxAssistPerBranch = isMatrix ? 0 : (parseInt(document.getElementById('inputMaxAssistantPerBranch')?.value) || 0);
 
             const deptQuotas = [];
             document.querySelectorAll('.dept-quota-input').forEach(input => {
@@ -2861,7 +3253,7 @@
                 }
             });
 
-            if (userIds.length === 0 && pharmQuota === 0 && assistQuota === 0 && deptQuotas.length === 0) {
+            if (userIds.length === 0 && matrixQuotas.length === 0 && pharmQuota === 0 && assistQuota === 0 && deptQuotas.length === 0) {
                 showAppToast('warning', 'Notice', 'يرجى تحديد الكوتة أولاً أو معاينة المرشحين.');
                 return;
             }
@@ -2870,7 +3262,8 @@
             const bypassApproval = document.getElementById('chkInjectionBypassApproval').checked;
             const sendRabbitMqEmail = document.getElementById('chkInjectionSendRabbitMqEmail') ? document.getElementById('chkInjectionSendRabbitMqEmail').checked : true;
 
-            const totalCandidateCount = userIds.length > 0 ? userIds.length : (pharmQuota + assistQuota + deptQuotas.reduce((a, b) => a + b.quota, 0));
+            const branchStaffTotal = isMatrix ? matrixQuotas.reduce((a, b) => a + b.pharmacistQuota + b.assistantQuota, 0) : (pharmQuota + assistQuota);
+            const totalCandidateCount = userIds.length > 0 ? userIds.length : (branchStaffTotal + deptQuotas.reduce((a, b) => a + b.quota, 0));
             const totalSeats = parseInt(document.getElementById('inputSessionTotalSeats')?.value) || sessionTraineesState.totalSeats || 50;
 
             if (totalCandidateCount > totalSeats) {
@@ -2914,9 +3307,12 @@
                     body: JSON.stringify({
                         sessionId: sessionTraineesState.sessionId,
                         companyId: sessionTraineesState.companyId || null,
-                        mode: 'combined',
+                        mode: isMatrix ? 'matrix' : 'combined',
+                        branchQuotas: matrixQuotas.length > 0 ? matrixQuotas : null,
                         pharmacistQuota: pharmQuota,
                         assistantQuota: assistQuota,
+                        maxPharmacistsPerBranch: maxPharmPerBranch,
+                        maxAssistantsPerBranch: maxAssistPerBranch,
                         branchIds: injectionState.selectedBranchIds.length > 0 ? injectionState.selectedBranchIds : null,
                         shiftIds: injectionState.selectedShiftIds.length > 0 ? injectionState.selectedShiftIds : null,
                         departmentQuotas: deptQuotas.length > 0 ? deptQuotas : null,

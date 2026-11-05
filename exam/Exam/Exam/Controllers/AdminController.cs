@@ -1291,25 +1291,16 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
             ViewBag.Branches = branches;
             ViewBag.SelectedBranchId = branchId;
 
-            int selectedWaveId = waveId ?? 0;
-            if (selectedWaveId == 0)
-                selectedWaveId = waves.FirstOrDefault()?.Id ?? 0;
+            int selectedWaveId = waveId ?? -1;
             ViewBag.SelectedWaveId = selectedWaveId;
 
             List<Exam.DTOs.WaveStudentResultDto> allResults = new List<Exam.DTOs.WaveStudentResultDto>();
 
-            if (selectedWaveId == -1)
+            var tasks = waves.Select(w => _examService.GetWaveAggregateResultsAsync(w.Id));
+            var resultsArray = await Task.WhenAll(tasks);
+            foreach (var res in resultsArray)
             {
-                var tasks = waves.Select(w => _examService.GetWaveAggregateResultsAsync(w.Id));
-                var resultsArray = await Task.WhenAll(tasks);
-                foreach (var res in resultsArray)
-                {
-                    allResults.AddRange(res);
-                }
-            }
-            else if (selectedWaveId > 0)
-            {
-                allResults = (await _examService.GetWaveAggregateResultsAsync(selectedWaveId)).ToList();
+                allResults.AddRange(res);
             }
 
             // Branch manager restriction

@@ -2271,10 +2271,11 @@ namespace Exam.Controllers
         {
             bool hasDeptQuotas = req?.DepartmentQuotas != null && req.DepartmentQuotas.Any(q => q.Quota > 0);
             bool hasBranchStaffQuotas = (req?.PharmacistQuota > 0) || (req?.AssistantQuota > 0);
+            bool hasCustomBranchQuotas = req?.BranchQuotas != null && req.BranchQuotas.Any(b => b.PharmacistQuota > 0 || b.AssistantQuota > 0);
 
-            if (req == null || req.SessionId <= 0 || (!hasDeptQuotas && !hasBranchStaffQuotas))
+            if (req == null || req.SessionId <= 0 || (!hasDeptQuotas && !hasBranchStaffQuotas && !hasCustomBranchQuotas))
             {
-                return Json(new { success = false, message = "يرجى تحديد حصة عددية للصيادلة أو المساعدين أو الأقسام." });
+                return Json(new { success = false, message = "يرجى تحديد حصة عددية للصيادلة أو المساعدين أو الفروع أو الأقسام." });
             }
 
             try
@@ -2288,108 +2289,272 @@ namespace Exam.Controllers
                 string shiftFilterSql = hasShifts ? "AND u.ShiftId IN @ShiftIds" : "";
                 string deptShiftFilterSql = hasShifts ? "AND (u.ShiftId IN @ShiftIds OR u.ShiftId IS NULL)" : "";
 
-                // 1. Pharmacists Quota
-                if (req.PharmacistQuota > 0)
+                // 1. Branch Staff Quotas
+                if (hasCustomBranchQuotas && req.BranchQuotas != null)
                 {
-                    string pharmSql = $@"
-                        SELECT 
-                            CONCAT('U_', u.Id) AS CandidateKey,
-                            u.Id AS UserId,
-                            ISNULL(u.FullName, u.UserName) AS FullName,
-                            ISNULL(u.UserCode, '--') AS UserCode,
-                            N'صيدلي' AS JobTitle,
-                            ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
-                            ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
-                            ISNULL(u.DepartmentId, 0) AS DepartmentId,
-                            ISNULL(d.Name, N'طاقم الفروع (صيادلة)') AS DepartmentName,
-                            (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
-                            (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
-                            1 AS IsSelected
-                        FROM AspNetUsers u WITH (NOLOCK)
-                        LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
-                        LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
-                        LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
-                        WHERE u.IsActive = 1
-                          AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
-                          AND (
-                              EXISTS (
-                                  SELECT 1 FROM AspNetUserRoles ur 
-                                  JOIN AspNetRoles r ON ur.RoleId = r.Id 
-                                  WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
-                              )
-                          )
-                          {branchFilterSql}
-                          {shiftFilterSql}
-                          AND NOT EXISTS (
-                              SELECT 1 FROM dbo.CompanySessionTrainees cur 
-                              WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
-                          )
-                        ORDER BY PreviousAttendedCount ASC, LastAttendedDate ASC, u.CreatedAt ASC";
-
-                    var pharmCandidates = (await conn.QueryAsync<InjectionCandidatePreviewDto>(pharmSql, new
+                    // 1.A Per-Branch Custom Matrix (كوتة وشيفت مخصص لكل فرع)
+                    foreach (var bq in req.BranchQuotas.Where(b => b.PharmacistQuota > 0 || b.AssistantQuota > 0))
                     {
-                        SessionId = req.SessionId,
-                        BranchIds = req.BranchIds,
-                        ShiftIds = req.ShiftIds
-                    })).Take(req.PharmacistQuota).ToList();
+                        string bqShiftSql = (bq.ShiftId.HasValue && bq.ShiftId.Value > 0)
+                            ? "AND u.ShiftId = @ShiftId"
+                            : shiftFilterSql;
 
-                    previewList.AddRange(pharmCandidates);
+                        // Pharmacists from this specific branch & shift
+                        if (bq.PharmacistQuota > 0)
+                        {
+                            var alreadySelectedUserIds = previewList.Select(p => p.UserId).ToHashSet();
+                            string bqPharmSql = $@"
+                                SELECT 
+                                    CONCAT('U_', u.Id) AS CandidateKey,
+                                    u.Id AS UserId,
+                                    ISNULL(u.FullName, u.UserName) AS FullName,
+                                    ISNULL(u.UserCode, '--') AS UserCode,
+                                    N'صيدلي' AS JobTitle,
+                                    ISNULL(u.BranchId, 0) AS BranchId,
+                                    ISNULL(b.BranchName, @BranchName) AS BranchName,
+                                    ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                                    ISNULL(u.DepartmentId, 0) AS DepartmentId,
+                                    ISNULL(d.Name, N'طاقم الفروع (صيادلة)') AS DepartmentName,
+                                    (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
+                                    (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
+                                    1 AS IsSelected
+                                FROM AspNetUsers u WITH (NOLOCK)
+                                LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                                LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                                LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
+                                WHERE u.IsActive = 1
+                                  AND u.BranchId = @BranchId
+                                  AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                                  AND (
+                                      EXISTS (
+                                          SELECT 1 FROM AspNetUserRoles ur 
+                                          JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                          WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                      )
+                                  )
+                                  {bqShiftSql}
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                      WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                                  )
+                                ORDER BY PreviousAttendedCount ASC, LastAttendedDate ASC, u.CreatedAt ASC";
+
+                            var cands = (await conn.QueryAsync<InjectionCandidatePreviewDto>(bqPharmSql, new
+                            {
+                                SessionId = req.SessionId,
+                                BranchId = bq.BranchId,
+                                BranchName = bq.BranchName,
+                                ShiftId = bq.ShiftId,
+                                ShiftIds = req.ShiftIds
+                            })).Where(c => !alreadySelectedUserIds.Contains(c.UserId)).Take(bq.PharmacistQuota).ToList();
+
+                            previewList.AddRange(cands);
+                        }
+
+                        // Assistants from this specific branch & shift
+                        if (bq.AssistantQuota > 0)
+                        {
+                            var alreadySelectedUserIds = previewList.Select(p => p.UserId).ToHashSet();
+                            string bqAssistSql = $@"
+                                SELECT 
+                                    CONCAT('U_', u.Id) AS CandidateKey,
+                                    u.Id AS UserId,
+                                    ISNULL(u.FullName, u.UserName) AS FullName,
+                                    ISNULL(u.UserCode, '--') AS UserCode,
+                                    N'مساعد صيدلي' AS JobTitle,
+                                    ISNULL(u.BranchId, 0) AS BranchId,
+                                    ISNULL(b.BranchName, @BranchName) AS BranchName,
+                                    ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                                    ISNULL(u.DepartmentId, 0) AS DepartmentId,
+                                    ISNULL(d.Name, N'طاقم الفروع (مساعدين)') AS DepartmentName,
+                                    (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
+                                    (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
+                                    1 AS IsSelected
+                                FROM AspNetUsers u WITH (NOLOCK)
+                                LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                                LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                                LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
+                                WHERE u.IsActive = 1
+                                  AND u.BranchId = @BranchId
+                                  AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                                  AND (
+                                      EXISTS (
+                                          SELECT 1 FROM AspNetUserRoles ur 
+                                          JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                          WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
+                                      )
+                                  )
+                                  AND NOT (
+                                      EXISTS (
+                                          SELECT 1 FROM AspNetUserRoles ur 
+                                          JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                          WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                      )
+                                  )
+                                  {bqShiftSql}
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                      WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                                  )
+                                ORDER BY PreviousAttendedCount ASC, LastAttendedDate ASC, u.CreatedAt ASC";
+
+                            var cands = (await conn.QueryAsync<InjectionCandidatePreviewDto>(bqAssistSql, new
+                            {
+                                SessionId = req.SessionId,
+                                BranchId = bq.BranchId,
+                                BranchName = bq.BranchName,
+                                ShiftId = bq.ShiftId,
+                                ShiftIds = req.ShiftIds
+                            })).Where(c => !alreadySelectedUserIds.Contains(c.UserId)).Take(bq.AssistantQuota).ToList();
+
+                            previewList.AddRange(cands);
+                        }
+                    }
                 }
-
-                // 2. Assistants Quota
-                if (req.AssistantQuota > 0)
+                else
                 {
-                    var alreadySelectedUserIds = previewList.Select(p => p.UserId).ToList();
-                    string assistSql = $@"
-                        SELECT 
-                            CONCAT('U_', u.Id) AS CandidateKey,
-                            u.Id AS UserId,
-                            ISNULL(u.FullName, u.UserName) AS FullName,
-                            ISNULL(u.UserCode, '--') AS UserCode,
-                            N'مساعد صيدلي' AS JobTitle,
-                            ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
-                            ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
-                            ISNULL(u.DepartmentId, 0) AS DepartmentId,
-                            ISNULL(d.Name, N'طاقم الفروع (مساعدين)') AS DepartmentName,
-                            (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
-                            (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
-                            1 AS IsSelected
-                        FROM AspNetUsers u WITH (NOLOCK)
-                        LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
-                        LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
-                        LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
-                        WHERE u.IsActive = 1
-                          AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
-                          AND (
-                              EXISTS (
-                                  SELECT 1 FROM AspNetUserRoles ur 
-                                  JOIN AspNetRoles r ON ur.RoleId = r.Id 
-                                  WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
-                              )
-                          )
-                          AND NOT (
-                              EXISTS (
-                                  SELECT 1 FROM AspNetUserRoles ur 
-                                  JOIN AspNetRoles r ON ur.RoleId = r.Id 
-                                  WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
-                              )
-                          )
-                          {branchFilterSql}
-                          {shiftFilterSql}
-                          AND NOT EXISTS (
-                              SELECT 1 FROM dbo.CompanySessionTrainees cur 
-                              WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
-                          )
-                        ORDER BY PreviousAttendedCount ASC, LastAttendedDate ASC, u.CreatedAt ASC";
-
-                    var assistCandidates = (await conn.QueryAsync<InjectionCandidatePreviewDto>(assistSql, new
+                    // 1.B Global Quotas (الصيادلة والمساعدين إجمالياً مع سقف أقصى لكل فرع)
+                    if (req.PharmacistQuota > 0)
                     {
-                        SessionId = req.SessionId,
-                        BranchIds = req.BranchIds,
-                        ShiftIds = req.ShiftIds
-                    })).Where(c => !alreadySelectedUserIds.Contains(c.UserId)).Take(req.AssistantQuota).ToList();
+                        string pharmSql = $@"
+                            SELECT 
+                                CONCAT('U_', u.Id) AS CandidateKey,
+                                u.Id AS UserId,
+                                ISNULL(u.FullName, u.UserName) AS FullName,
+                                ISNULL(u.UserCode, '--') AS UserCode,
+                                N'صيدلي' AS JobTitle,
+                                ISNULL(u.BranchId, 0) AS BranchId,
+                                ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                                ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                                ISNULL(u.DepartmentId, 0) AS DepartmentId,
+                                ISNULL(d.Name, N'طاقم الفروع (صيادلة)') AS DepartmentName,
+                                (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
+                                (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
+                                1 AS IsSelected
+                            FROM AspNetUsers u WITH (NOLOCK)
+                            LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                            LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                            LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
+                            WHERE u.IsActive = 1
+                              AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                              AND (
+                                  EXISTS (
+                                      SELECT 1 FROM AspNetUserRoles ur 
+                                      JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                      WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                  )
+                              )
+                              {branchFilterSql}
+                              {shiftFilterSql}
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                  WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                              )
+                            ORDER BY PreviousAttendedCount ASC, LastAttendedDate ASC, u.CreatedAt ASC";
 
-                    previewList.AddRange(assistCandidates);
+                        var allPharmCandidates = (await conn.QueryAsync<InjectionCandidatePreviewDto>(pharmSql, new
+                        {
+                            SessionId = req.SessionId,
+                            BranchIds = req.BranchIds,
+                            ShiftIds = req.ShiftIds
+                        })).ToList();
+
+                        List<InjectionCandidatePreviewDto> pharmCandidates;
+                        if (req.MaxPharmacistsPerBranch > 0)
+                        {
+                            var branchCount = new Dictionary<int, int>();
+                            pharmCandidates = new List<InjectionCandidatePreviewDto>();
+                            foreach (var c in allPharmCandidates)
+                            {
+                                branchCount.TryGetValue(c.BranchId, out int cnt);
+                                if (c.BranchId > 0 && cnt >= req.MaxPharmacistsPerBranch) continue;
+                                branchCount[c.BranchId] = cnt + 1;
+                                pharmCandidates.Add(c);
+                                if (pharmCandidates.Count >= req.PharmacistQuota) break;
+                            }
+                        }
+                        else
+                        {
+                            pharmCandidates = allPharmCandidates.Take(req.PharmacistQuota).ToList();
+                        }
+
+                        previewList.AddRange(pharmCandidates);
+                    }
+
+                    if (req.AssistantQuota > 0)
+                    {
+                        var alreadySelectedUserIds = previewList.Select(p => p.UserId).ToHashSet();
+                        string assistSql = $@"
+                            SELECT 
+                                CONCAT('U_', u.Id) AS CandidateKey,
+                                u.Id AS UserId,
+                                ISNULL(u.FullName, u.UserName) AS FullName,
+                                ISNULL(u.UserCode, '--') AS UserCode,
+                                N'مساعد صيدلي' AS JobTitle,
+                                ISNULL(u.BranchId, 0) AS BranchId,
+                                ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                                ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                                ISNULL(u.DepartmentId, 0) AS DepartmentId,
+                                ISNULL(d.Name, N'طاقم الفروع (مساعدين)') AS DepartmentName,
+                                (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS PreviousAttendedCount,
+                                (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) AS LastAttendedDate,
+                                1 AS IsSelected
+                            FROM AspNetUsers u WITH (NOLOCK)
+                            LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                            LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                            LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
+                            WHERE u.IsActive = 1
+                              AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                              AND (
+                                  EXISTS (
+                                      SELECT 1 FROM AspNetUserRoles ur 
+                                      JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                      WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
+                                  )
+                              )
+                              AND NOT (
+                                  EXISTS (
+                                      SELECT 1 FROM AspNetUserRoles ur 
+                                      JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                      WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                  )
+                              )
+                              {branchFilterSql}
+                              {shiftFilterSql}
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                  WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                              )
+                            ORDER BY PreviousAttendedCount ASC, LastAttendedDate ASC, u.CreatedAt ASC";
+
+                        var allAssistCandidates = (await conn.QueryAsync<InjectionCandidatePreviewDto>(assistSql, new
+                        {
+                            SessionId = req.SessionId,
+                            BranchIds = req.BranchIds,
+                            ShiftIds = req.ShiftIds
+                        })).Where(c => !alreadySelectedUserIds.Contains(c.UserId)).ToList();
+
+                        List<InjectionCandidatePreviewDto> assistCandidates;
+                        if (req.MaxAssistantsPerBranch > 0)
+                        {
+                            var branchCount = new Dictionary<int, int>();
+                            assistCandidates = new List<InjectionCandidatePreviewDto>();
+                            foreach (var c in allAssistCandidates)
+                            {
+                                branchCount.TryGetValue(c.BranchId, out int cnt);
+                                if (c.BranchId > 0 && cnt >= req.MaxAssistantsPerBranch) continue;
+                                branchCount[c.BranchId] = cnt + 1;
+                                assistCandidates.Add(c);
+                                if (assistCandidates.Count >= req.AssistantQuota) break;
+                            }
+                        }
+                        else
+                        {
+                            assistCandidates = allAssistCandidates.Take(req.AssistantQuota).ToList();
+                        }
+
+                        previewList.AddRange(assistCandidates);
+                    }
                 }
 
                 // 3. Department Quotas
@@ -2517,74 +2682,195 @@ namespace Exam.Controllers
                     string shiftFilterSql = hasShifts ? "AND u.ShiftId IN @ShiftIds" : "";
                     string deptShiftFilterSql = hasShifts ? "AND (u.ShiftId IN @ShiftIds OR u.ShiftId IS NULL)" : "";
 
-                    if (req.PharmacistQuota > 0)
-                    {
-                        var uids = (await conn.QueryAsync<string>($@"
-                            SELECT u.Id
-                            FROM AspNetUsers u WITH (NOLOCK)
-                            WHERE u.IsActive = 1
-                              AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
-                              AND (
-                                  EXISTS (
-                                      SELECT 1 FROM AspNetUserRoles ur 
-                                      JOIN AspNetRoles r ON ur.RoleId = r.Id 
-                                      WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
-                                  )
-                              )
-                              {branchFilterSql}
-                              {shiftFilterSql}
-                              AND NOT EXISTS (
-                                  SELECT 1 FROM dbo.CompanySessionTrainees cur 
-                                  WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
-                              )
-                            ORDER BY 
-                                (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
-                                (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
-                                u.CreatedAt ASC",
-                            new { SessionId = req.SessionId, BranchIds = req.BranchIds, ShiftIds = req.ShiftIds }))
-                            .Take(req.PharmacistQuota)
-                            .ToList();
+                    bool hasCustomBranchQuotas = req.BranchQuotas != null && req.BranchQuotas.Any(b => b.PharmacistQuota > 0 || b.AssistantQuota > 0);
 
-                        userIdsToInject.AddRange(uids);
+                    if (hasCustomBranchQuotas)
+                    {
+                        foreach (var bq in req.BranchQuotas.Where(b => b.PharmacistQuota > 0 || b.AssistantQuota > 0))
+                        {
+                            string bqShiftSql = (bq.ShiftId.HasValue && bq.ShiftId.Value > 0)
+                                ? "AND u.ShiftId = @ShiftId"
+                                : shiftFilterSql;
+
+                            if (bq.PharmacistQuota > 0)
+                            {
+                                var uids = (await conn.QueryAsync<string>($@"
+                                    SELECT u.Id
+                                    FROM AspNetUsers u WITH (NOLOCK)
+                                    WHERE u.IsActive = 1
+                                      AND u.BranchId = @BranchId
+                                      AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                                      AND (
+                                          EXISTS (
+                                              SELECT 1 FROM AspNetUserRoles ur 
+                                              JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                              WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                          )
+                                      )
+                                      {bqShiftSql}
+                                      AND NOT EXISTS (
+                                          SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                          WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                                      )
+                                    ORDER BY 
+                                        (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                        (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                        u.CreatedAt ASC",
+                                    new { SessionId = req.SessionId, BranchId = bq.BranchId, ShiftId = bq.ShiftId, ShiftIds = req.ShiftIds }))
+                                    .Where(id => !userIdsToInject.Contains(id))
+                                    .Take(bq.PharmacistQuota)
+                                    .ToList();
+
+                                userIdsToInject.AddRange(uids);
+                            }
+
+                            if (bq.AssistantQuota > 0)
+                            {
+                                var uids = (await conn.QueryAsync<string>($@"
+                                    SELECT u.Id
+                                    FROM AspNetUsers u WITH (NOLOCK)
+                                    WHERE u.IsActive = 1
+                                      AND u.BranchId = @BranchId
+                                      AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                                      AND (
+                                          EXISTS (
+                                              SELECT 1 FROM AspNetUserRoles ur 
+                                              JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                              WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
+                                          )
+                                      )
+                                      AND NOT (
+                                          EXISTS (
+                                              SELECT 1 FROM AspNetUserRoles ur 
+                                              JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                              WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                          )
+                                      )
+                                      {bqShiftSql}
+                                      AND NOT EXISTS (
+                                          SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                          WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                                      )
+                                    ORDER BY 
+                                        (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                        (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                        u.CreatedAt ASC",
+                                    new { SessionId = req.SessionId, BranchId = bq.BranchId, ShiftId = bq.ShiftId, ShiftIds = req.ShiftIds }))
+                                    .Where(id => !userIdsToInject.Contains(id))
+                                    .Take(bq.AssistantQuota)
+                                    .ToList();
+
+                                userIdsToInject.AddRange(uids);
+                            }
+                        }
                     }
-
-                    if (req.AssistantQuota > 0)
+                    else
                     {
-                        var uids = (await conn.QueryAsync<string>($@"
-                            SELECT u.Id
-                            FROM AspNetUsers u WITH (NOLOCK)
-                            WHERE u.IsActive = 1
-                              AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
-                              AND (
-                                  EXISTS (
-                                      SELECT 1 FROM AspNetUserRoles ur 
-                                      JOIN AspNetRoles r ON ur.RoleId = r.Id 
-                                      WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
+                        if (req.PharmacistQuota > 0)
+                        {
+                            var allPharms = (await conn.QueryAsync<StaffBranchCandidate>($@"
+                                SELECT u.Id, ISNULL(u.BranchId, 0) AS BranchId
+                                FROM AspNetUsers u WITH (NOLOCK)
+                                WHERE u.IsActive = 1
+                                  AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                                  AND (
+                                      EXISTS (
+                                          SELECT 1 FROM AspNetUserRoles ur 
+                                          JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                          WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                      )
                                   )
-                              )
-                              AND NOT (
-                                  EXISTS (
-                                      SELECT 1 FROM AspNetUserRoles ur 
-                                      JOIN AspNetRoles r ON ur.RoleId = r.Id 
-                                      WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                  {branchFilterSql}
+                                  {shiftFilterSql}
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                      WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
                                   )
-                              )
-                              {branchFilterSql}
-                              {shiftFilterSql}
-                              AND NOT EXISTS (
-                                  SELECT 1 FROM dbo.CompanySessionTrainees cur 
-                                  WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
-                              )
-                            ORDER BY 
-                                (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
-                                (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
-                                u.CreatedAt ASC",
-                            new { SessionId = req.SessionId, BranchIds = req.BranchIds, ShiftIds = req.ShiftIds }))
-                            .Where(id => !userIdsToInject.Contains(id))
-                            .Take(req.AssistantQuota)
-                            .ToList();
+                                ORDER BY 
+                                    (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                    (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                    u.CreatedAt ASC",
+                                new { SessionId = req.SessionId, BranchIds = req.BranchIds, ShiftIds = req.ShiftIds }))
+                                .ToList();
 
-                        userIdsToInject.AddRange(uids);
+                            List<string> selectedPharms;
+                            if (req.MaxPharmacistsPerBranch > 0)
+                            {
+                                var bCount = new Dictionary<int, int>();
+                                selectedPharms = new List<string>();
+                                foreach (var p in allPharms)
+                                {
+                                    bCount.TryGetValue(p.BranchId, out int cnt);
+                                    if (p.BranchId > 0 && cnt >= req.MaxPharmacistsPerBranch) continue;
+                                    bCount[p.BranchId] = cnt + 1;
+                                    selectedPharms.Add(p.Id);
+                                    if (selectedPharms.Count >= req.PharmacistQuota) break;
+                                }
+                            }
+                            else
+                            {
+                                selectedPharms = allPharms.Select(p => p.Id).Take(req.PharmacistQuota).ToList();
+                            }
+
+                            userIdsToInject.AddRange(selectedPharms);
+                        }
+
+                        if (req.AssistantQuota > 0)
+                        {
+                            var allAssists = (await conn.QueryAsync<StaffBranchCandidate>($@"
+                                SELECT u.Id, ISNULL(u.BranchId, 0) AS BranchId
+                                FROM AspNetUsers u WITH (NOLOCK)
+                                WHERE u.IsActive = 1
+                                  AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                                  AND (
+                                      EXISTS (
+                                          SELECT 1 FROM AspNetUserRoles ur 
+                                          JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                          WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
+                                      )
+                                  )
+                                  AND NOT (
+                                      EXISTS (
+                                          SELECT 1 FROM AspNetUserRoles ur 
+                                          JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                          WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                      )
+                                  )
+                                  {branchFilterSql}
+                                  {shiftFilterSql}
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM dbo.CompanySessionTrainees cur 
+                                      WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id
+                                  )
+                                ORDER BY 
+                                    (SELECT COUNT(1) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                    (SELECT MAX(cst.AssignedAt) FROM dbo.CompanySessionTrainees cst WHERE cst.UserId = u.Id) ASC,
+                                    u.CreatedAt ASC",
+                                new { SessionId = req.SessionId, BranchIds = req.BranchIds, ShiftIds = req.ShiftIds }))
+                                .Where(a => !userIdsToInject.Contains(a.Id))
+                                .ToList();
+
+                            List<string> selectedAssists;
+                            if (req.MaxAssistantsPerBranch > 0)
+                            {
+                                var bCount = new Dictionary<int, int>();
+                                selectedAssists = new List<string>();
+                                foreach (var a in allAssists)
+                                {
+                                    bCount.TryGetValue(a.BranchId, out int cnt);
+                                    if (a.BranchId > 0 && cnt >= req.MaxAssistantsPerBranch) continue;
+                                    bCount[a.BranchId] = cnt + 1;
+                                    selectedAssists.Add(a.Id);
+                                    if (selectedAssists.Count >= req.AssistantQuota) break;
+                                }
+                            }
+                            else
+                            {
+                                selectedAssists = allAssists.Select(a => a.Id).Take(req.AssistantQuota).ToList();
+                            }
+
+                            userIdsToInject.AddRange(selectedAssists);
+                        }
                     }
 
                     if (req.DepartmentQuotas != null && req.DepartmentQuotas.Any(q => q.Quota > 0))
@@ -3056,6 +3342,12 @@ namespace Exam.Controllers
     {
         public int SessionId { get; set; }
         public int? TotalSeats { get; set; }
+    }
+
+    public class StaffBranchCandidate
+    {
+        public string Id { get; set; } = "";
+        public int BranchId { get; set; }
     }
 }
 

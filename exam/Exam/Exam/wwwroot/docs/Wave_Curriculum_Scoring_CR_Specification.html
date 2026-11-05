@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>وثيقة توصيف المتطلبات الفنية (CR Specification) - نظام الويفات والتقييم التراكمي والشهادات</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #3730a3;
+            --primary-light: #e0e7ff;
+            --secondary: #0ea5e9;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #0f172a;
+            --slate-800: #1e293b;
+            --slate-600: #475569;
+            --slate-400: #94a3b8;
+            --slate-200: #e2e8f0;
+            --slate-100: #f1f5f9;
+            --slate-50: #f8fafc;
+            --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+            --border-radius: 18px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Cairo', 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            line-height: 1.8;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 28px;
+            box-shadow: 0 20px 40px -15px rgba(0,0,0,0.07);
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+        }
+
+        /* Top Bar & Print */
+        .header-actions {
+            background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
+            color: #ffffff;
+            padding: 30px 40px;
+            position: relative;
+        }
+
+        .header-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            padding: 6px 16px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255,255,255,0.25);
+        }
+
+        .header-title {
+            font-size: 28px;
+            font-weight: 900;
+            line-height: 1.4;
+            margin-bottom: 12px;
+        }
+
+        .header-subtitle {
+            font-size: 15px;
+            color: rgba(255,255,255,0.9);
+            max-width: 850px;
+            font-weight: 600;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            font-size: 13px;
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .meta-label {
+            color: rgba(255,255,255,0.7);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .meta-value {
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        .print-btn {
+            position: absolute;
+            left: 40px;
+            top: 40px;
+            background: #ffffff;
+            color: #4f46e5;
+            border: none;
+            padding: 10px 22px;
+            border-radius: 14px;
+            font-weight: 800;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .print-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+            background: #f8fafc;
+        }
+
+        /* Body Content */
+        .content {
+            padding: 45px 50px;
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 22px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #f1f5f9;
+        }
+
+        .section-num {
+            width: 38px;
+            height: 38px;
+            background: #e0e7ff;
+            color: #4f46e5;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 18px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        p {
+            font-size: 15px;
+            color: #475569;
+            margin-bottom: 16px;
+        }
+
+        /* Highlights & Callouts */
+        .alert-box {
+            background: #f0fdf4;
+            border-right: 5px solid #10b981;
+            padding: 18px 22px;
+            border-radius: 14px;
+            margin: 20px 0;
+            font-size: 14px;
+            color: #065f46;
+        }
+
+        .alert-box.info {
+            background: #f0f9ff;
+            border-right-color: #0ea5e9;
+            color: #0369a1;
+        }
+
+        .alert-box.warning {
+            background: #fffbeb;
+            border-right-color: #f59e0b;
+            color: #92400e;
+        }
+
+        /* Hierarchy Cards */
+        .hierarchy-tree {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            margin: 25px 0;
+        }
+
+        .level-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 18px;
+            padding: 22px;
+            background: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+            position: relative;
+            transition: border-color 0.2s;
+        }
+
+        .level-card:hover {
+            border-color: #cbd5e1;
+        }
+
+        .level-card.l1 { border-right: 6px solid #4f46e5; background: #faf5ff; }
+        .level-card.l2 { border-right: 6px solid #0ea5e9; margin-right: 25px; }
+        .level-card.l3 { border-right: 6px solid #f59e0b; margin-right: 50px; }
+        .level-card.l4 { border-right: 6px solid #10b981; margin-right: 75px; }
+
+        .level-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 10px;
+            border-radius: 8px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .l1 .level-badge { background: #e0e7ff; color: #4338ca; }
+        .l2 .level-badge { background: #e0f2fe; color: #0369a1; }
+        .l3 .level-badge { background: #fef3c7; color: #b45309; }
+        .l4 .level-badge { background: #d1fae5; color: #047857; }
+
+        .level-title {
+            font-size: 16px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 6px;
+        }
+
+        .level-desc {
+            font-size: 13.5px;
+            color: #64748b;
+            margin-bottom: 0;
+        }
+
+        /* Formula Box */
+        .formula-container {
+            background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+            color: #ffffff;
+            padding: 30px;
+            border-radius: 20px;
+            margin: 25px 0;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.2);
+            text-align: center;
+        }
+
+        .formula-math {
+            font-family: 'JetBrains Mono', monospace;
+            direction: ltr;
+            font-size: 20px;
+            font-weight: 700;
+            color: #38bdf8;
+            margin: 15px 0;
+            letter-spacing: 0.5px;
+            background: rgba(255,255,255,0.06);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px dashed rgba(255,255,255,0.2);
+        }
+
+        .formula-legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+            text-align: right;
+            font-size: 13px;
+        }
+
+        .legend-item {
+            background: rgba(255,255,255,0.05);
+            padding: 12px 16px;
+            border-radius: 10px;
+            border-right: 3px solid #38bdf8;
+        }
+
+        .legend-code {
+            font-family: 'JetBrains Mono', monospace;
+            color: #facc15;
+            font-weight: bold;
+            direction: ltr;
+            display: inline-block;
+        }
+
+        /* Tables */
+        .custom-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin: 25px 0;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            overflow: hidden;
+            font-size: 14px;
+        }
+
+        .custom-table th {
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 800;
+            padding: 14px 18px;
+            text-align: right;
+            border-bottom: 2px solid #e2e8f0;
+            font-size: 12.5px;
+            text-transform: uppercase;
+        }
+
+        .custom-table td {
+            padding: 14px 18px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+            vertical-align: middle;
+        }
+
+        .custom-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .custom-table tr:hover td {
+            background: #fafafa;
+        }
+
+        /* Badges */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .badge-red { background: #ffe4e6; color: #e11d48; }
+        .badge-amber { background: #fef3c7; color: #d97706; }
+        .badge-blue { background: #e0f2fe; color: #0284c7; }
+        .badge-purple { background: #f3e8ff; color: #9333ea; }
+        .badge-emerald { background: #d1fae5; color: #059669; }
+
+        /* Step by Step */
+        .steps-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin: 25px 0;
+        }
+
+        .step-row {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .step-num-circle {
+            width: 44px;
+            height: 44px;
+            background: #4f46e5;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 16px;
+            flex-shrink: 0;
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);
+        }
+
+        .step-content {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 18px 22px;
+            flex: 1;
+        }
+
+        .step-title {
+            font-size: 15px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 6px;
+        }
+
+        /* Code & Schema */
+        .code-block {
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: 'JetBrains Mono', monospace;
+            padding: 20px 24px;
+            border-radius: 16px;
+            direction: ltr;
+            text-align: left;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border: 1px solid #1e293b;
+            line-height: 1.6;
+        }
+
+        .code-block .keyword { color: #f472b6; }
+        .code-block .type { color: #38bdf8; }
+        .code-block .string { color: #a3e635; }
+        .code-block .comment { color: #64748b; font-style: italic; }
+
+        /* Questions Box */
+        .questions-box {
+            background: #faf5ff;
+            border: 2px dashed #c084fc;
+            border-radius: 20px;
+            padding: 26px;
+            margin: 30px 0;
+        }
+
+        .question-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .question-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .question-item i {
+            color: #9333ea;
+            font-size: 16px;
+            margin-top: 5px;
+        }
+
+        /* Footer */
+        .doc-footer {
+            background: #f8fafc;
+            padding: 25px 40px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        @media print {
+            body { padding: 0; background: #fff; }
+            .container { box-shadow: none; border: none; border-radius: 0; max-width: 100%; }
+            .print-btn { display: none; }
+            .section { page-break-inside: avoid; }
+            .formula-container { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .header-actions { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <div class="header-actions">
+        <button class="print-btn" onclick="window.print()">
+            <i class="fas fa-print"></i> طباعة / حفظ كـ PDF
+        </button>
+        <div class="header-badge">
+            <i class="fas fa-file-signature"></i> وثيقة طلب تعديل معماري وفني (RFC / CR Specification)
+        </div>
+        <h1 class="header-title">نظام الويف التدريبي التفاعلي: الكاتيجوريز الديناميكية، امتحانات الفاينال المتدرجة، الخلطة التراكمية، وقواعد الشهادات المخصصة</h1>
+        <p class="header-subtitle">
+            وثيقة التحليل المعماري وهندسة المتطلبات الموجهة لفريق التحليل الفني والبرمجي (Systems Analysis & Architecture Team) للمراجعة والاعتماد قبل التنفيذ البرمجي.
+        </p>
+
+        <div class="meta-grid">
+            <div class="meta-item">
+                <span class="meta-label">الجهة المطورة</span>
+                <span class="meta-value">Eltarshouby Academy - Engineering</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">رقم الإصدار (Version)</span>
+                <span class="meta-value">v1.0 (Ready for Review)</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">تاريخ التوثيق</span>
+                <span class="meta-value">5 نوفمبر 2026</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">حالة الوثيقة</span>
+                <span class="meta-value" style="color: #6ee7b7;"><i class="fas fa-check-circle"></i> جاهزة للمراجعة والتدقيق</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+        <!-- Section 1 -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-num">1</div>
+                <h2 class="section-title">الأهداف ونطاق التغيير (Executive Summary & Scope)</h2>
+            </div>
+            <p>
+                الهدف من هذا التعديل هو الانتقال بالكامل من الاعتماد على هيكل الويف الثابت أو النتيجة المعتمدة على اختبار نهائي وحيد، إلى <strong>نظام تدريبي وهيكلي ديناميكي 100%</strong> يتيح لمسؤول النظام (Admin) تصميم مسار الويف بالكامل عبر لوحة تحكم تفاعلية:
+            </p>
+            <div class="alert-box">
+                <strong>المستهدفات الرئيسية للتعديل:</strong>
+                <ul style="margin-right: 20px; margin-top: 8px;">
+                    <li><strong>تعدد الكاتيجوريز بمرونة:</strong> عدم تقييد الويف بعدد 3 تصنيفات فقط؛ بل إتاحة إضافة أي عدد من الـ Categories بحرية (مثل: Cosmo, Medical, Softskills, Customer Service, Insurance, System).</li>
+                    <li><strong>محاضرات وكويزات مخصصة:</strong> كل تصنيف يحتوي على محاضراته التدريبية، وكل محاضرة لها كويز خاص بدرجات مستقلة.</li>
+                    <li><strong>امتحان فاينال لكل كاتيجوري (Category Final):</strong> امتحان نهائي مستقل للمسار، يقوم بسحب أسئلته عشوائياً من بنك أسئلة كويزات نفس الكاتيجوري.</li>
+                    <li><strong>امتحان فاينال الويف الشامل (Wave Final):</strong> امتحان نهائي شامل يدمج كافة الكاتيجوريز المشاركة في الويف.</li>
+                    <li><strong>محرك خلطة الدرجات الموزون (Blended Scoring):</strong> احتساب النسبة المئوية النهائية للطالب كخليط موزون محدد النسب مسبقاً (كويزات + فاينال كاتيجوريز + فاينال ويف + تكليفات).</li>
+                    <li><strong>محرك شرائح التقييم والشهادات (Custom Grade Bands & Cert Engine):</strong> تحكم الأدمن في ربط النسبة المئوية بالحالات والشهادات وتحديد معايير استحقاق كود الشهادة.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Section 2 -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-num">2</div>
+                <h2 class="section-title">الهيكلية الشجرية للمنهج التدريبي (Curriculum Hierarchy)</h2>
+            </div>
+            <p>ينقسم الويف التدريبي إلى شجرة هرمية رباعية المستويات تتكامل مع الشاشات الحالية للأكاديمية (مثل شاشة Academic Hierarchy القائمة):</p>
+
+            <div class="hierarchy-tree">
+                <div class="level-card l1">
+                    <span class="level-badge">المستوى 1: الويف التدريبي الشامل (Training Wave)</span>
+                    <h3 class="level-title">Training Wave (مثال: Wave 15, Wave 16)</h3>
+                    <p class="level-desc">يمثل الدورة التدريبية ككل، وله تاريخ بداية ونهاية، وفيه يتم ضبط أوزان الخلطة، وقواعد التقييم، وامتحان فاينال الويف الشامل.</p>
+                </div>
+
+                <div class="level-card l2">
+                    <span class="level-badge">المستوى 2: مسارات الويف (Mapped Categories)</span>
+                    <h3 class="level-title">Wave Categories (Cosmo, Medical, Soft Skills, System, Insurance...)</h3>
+                    <p class="level-desc">مسارات تخصصية مستقلة تضاف للويف بدون حد أقصى. كل مسار يمتلك وزناً خاصاً وله امتحان نهائي خاص به (Category Final Exam).</p>
+                </div>
+
+                <div class="level-card l3">
+                    <span class="level-badge">المستوى 3: محاضرات المسار (Lecture Topics)</span>
+                    <h3 class="level-title">Lectures (Skincare 1, Skincare 2, Haircare, Bodycare...)</h3>
+                    <p class="level-desc">المحاضرات المنضوية تحت المسار التدريبي. كل محاضرة ترتبط بتاريخ محدد، ومحتوى تدريبي، وكويز دوري ملزم.</p>
+                </div>
+
+                <div class="level-card l4">
+                    <span class="level-badge">المستوى 4: التقييمات والاختبارات (Assessments & Quizzes)</span>
+                    <h3 class="level-title">Lecture Quizzes -> Category Final -> Wave Final</h3>
+                    <p class="level-desc">
+                        1. كويز المحاضرة (Quiz): أسئلة مباشرة على محتوى المحاضرة.<br>
+                        2. فاينال الكاتيجوري (Category Final): أسئلة عشوائية تسحب من بنك كويزات محاضرات هذا الكاتيجوري.<br>
+                        3. فاينال الويف (Wave Final): أسئلة عشوائية مجمعة تغطي كامل الكاتيجوريز في الويف.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 3 -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-num">3</div>
+                <h2 class="section-title">محرك احتساب الدرجات الموزون (Blended Weighted Scoring Engine)</h2>
+            </div>
+            <p>
+                يتم حساب النسبة النهائية للطالب بناءً على <strong>الأوزان المئوية للخلطة (Weights)</strong> التي يحددها الأدمن بحرية تامة في إعدادات الويف بحيث يكون إجمالي الأوزان = 100%:
+            </p>
+
+            <div class="formula-container">
+                <span style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #a5b4fc;">معادلة النسبة التراكمية النهائية (Final Weighted Score)</span>
+                <div class="formula-math">
+                    Final Score % = (P_Q × W_Q) + (P_CF × W_CF) + (P_WF × W_WF) + (P_A × W_A)
+                </div>
+                <div class="formula-legend">
+                    <div class="legend-item">
+                        <span class="legend-code">P_Q × W_Q</span>: متوسط كويزات المحاضرات × وزن الكويزات
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-code">P_CF × W_CF</span>: متوسط فاينال الكاتيجوريز × وزن فاينال الكاتيجوريز
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-code">P_WF × W_WF</span>: درجة فاينال الويف الشامل × وزنه
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-code">P_A × W_A</span>: متوسط التكليفات (Assignments) × وزنها
+                    </div>
+                </div>
+            </div>
+
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>بند التقييم (Component)</th>
+                        <th>الوزن الافتراضي المقترح</th>
+                        <th>طريقة الاحتساب البرمجية (Calculation Logic)</th>
+                        <th>صلاحية التحكم</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>كويزات المحاضرات (Lecture Quizzes)</strong></td>
+                        <td><span class="status-badge badge-blue">20%</span></td>
+                        <td>متوسط النسب المئوية لكافة كويزات المحاضرات التي حضرها الطالب.</td>
+                        <td>أدمن (0% - 100%)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>فاينال الكاتيجوريز (Category Finals)</strong></td>
+                        <td><span class="status-badge badge-purple">30%</span></td>
+                        <td>متوسط درجات امتحانات الفاينال الخاصة بكل كاتيجوري على حدة.</td>
+                        <td>أدمن (0% - 100%)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>فاينال الويف الشامل (Wave Final Exam)</strong></td>
+                        <td><span class="status-badge badge-amber">35%</span></td>
+                        <td>النسبة المئوية المحققة في امتحان الويف الشامل لكل الكاتيجوريز.</td>
+                        <td>أدمن (0% - 100%)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>التكليفات والواجبات (Assignments)</strong></td>
+                        <td><span class="status-badge badge-emerald">15%</span></td>
+                        <td>متوسط تقييمات الواجبات والتكليفات المعتمدة للطالب خلال الويف.</td>
+                        <td>أدمن (0% - 100%)</td>
+                    </tr>
+                    <tr style="background: #f8fafc; font-weight: 800;">
+                        <td>الإجمالي</td>
+                        <td><span class="status-badge badge-emerald">100%</span></td>
+                        <td colspan="2">يتم التحقق برمجياً أن مجموع الأوزان الأربعة = 100% بالضبط.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Section 4 -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-num">4</div>
+                <h2 class="section-title">محرك شرائح التقييم وإصدار كود الشهادة (Dynamic Grade Bands & Certification)</h2>
+            </div>
+            <p>
+                لا يتم إعطاء كود الشهادة (`Certification Code`) أو تحديد حالة الطالب (`Status`) بشكل ثابت؛ بل يمتلك الأدمن جدولاً قابلاً للضبط الكامل لتحديد الشرائح، المسميات، الألوان، ومن يستحق الشهادة:
+            </p>
+
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th>شريحة النسبة (Score Range)</th>
+                        <th>المسمى العربي (Status Ar)</th>
+                        <th>المسمى الإنجليزي (Status En)</th>
+                        <th>لون الـ Badge</th>
+                        <th>استحقاق كود الشهادة (Certification Code)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>أقل من 50% (0% - 49.9%)</td>
+                        <td>إعادة تدريب / لم يجتز</td>
+                        <td>Needs Retraining</td>
+                        <td><span class="status-badge badge-red">أحمر (Rose)</span></td>
+                        <td>❌ لا يستحق شهادة (Null)</td>
+                    </tr>
+                    <tr>
+                        <td>50% إلى 59.9%</td>
+                        <td>مقبول</td>
+                        <td>Fair / Acceptable</td>
+                        <td><span class="status-badge badge-amber">برتقالي (Amber)</span></td>
+                        <td>❌ لا يستحق شهادة (أو حسب رغبة الأدمن)</td>
+                    </tr>
+                    <tr>
+                        <td>60% إلى 74.9%</td>
+                        <td>جيد</td>
+                        <td>Good</td>
+                        <td><span class="status-badge badge-blue">أزرق (Sky)</span></td>
+                        <td>✅ <strong>يُصدر كود شهادة رسمي</strong></td>
+                    </tr>
+                    <tr>
+                        <td>75% إلى 84.9%</td>
+                        <td>جيد جداً</td>
+                        <td>Very Good</td>
+                        <td><span class="status-badge badge-purple">بنفسجي (Purple)</span></td>
+                        <td>✅ <strong>يُصدر كود شهادة رسمي</strong></td>
+                    </tr>
+                    <tr>
+                        <td>85% إلى 100%</td>
+                        <td>ممتاز مع مرتبة الشرف</td>
+                        <td>Excellent with Honors</td>
+                        <td><span class="status-badge badge-emerald">أخضر (Emerald)</span></td>
+                        <td>✅ <strong>يُصدر كود شهادة مع مرتبة الشرف</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="alert-box info">
+                <strong>💡 مرونة إضافية للأدمن:</strong> يستطيع الأدمن تغيير نسبة اجتياز الشهادة (مثلاً جعلها 65% أو 70%) بمجرد تعديل حقل `IsCertificateEligible` في الشريحة دون الحاجة لأي تعديل في الكود.
+            </div>
+        </div>
+
+        <!-- Section 5 -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-num">5</div>
+                <h2 class="section-title">آلية توليد أسئلة الفاينال العشوائية (Exam Generation Mechanics)</h2>
+            </div>
+            
+            <div class="steps-container">
+                <div class="step-row">
+                    <div class="step-num-circle">A</div>
+                    <div class="step-content">
+                        <div class="step-title">بنك أسئلة الكويزات الدورية (Quiz Question Bank)</div>
+                        <p class="level-desc">عند إعداد كل محاضرة (Topic)، يقوم المدرب بإدخال أسئلة كويز المحاضرة في جدول الأسئلة مع تحديد التصنيف وصعوبة السؤال وتحديد المحاضرة `TopicId`.</p>
+                    </div>
+                </div>
+
+                <div class="step-row">
+                    <div class="step-num-circle">B</div>
+                    <div class="step-content">
+                        <div class="step-title">توليد فاينال الكاتيجوري (Category Final Auto-Pull)</div>
+                        <p class="level-desc">
+                            يقوم النظام بسحب أسئلة عشوائية (`ORDER BY NEWID()`) من مخزن جميع كويزات المحاضرات المنضوية تحت هذه الكاتيجوري فقط، مع تطبيق قواعد الصعوبة المحددة (مثلاً: 20 سؤال سهل، 15 متوسط، 5 صلب = 40 سؤالاً)، مع منع التكرار (`DISTINCT`).
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step-row">
+                    <div class="step-num-circle">C</div>
+                    <div class="step-content">
+                        <div class="step-title">توليد فاينال الويف الشامل (Wave Final Cross-Category Pull)</div>
+                        <p class="level-desc">
+                            يتم تقسيم كوتة أسئلة فاينال الويف الشامل (مثلاً 90 سؤالاً للصيدلي) عبر سحب نسب متساوية أو موزونة من كل كاتيجوري من الكاتيجوريز المكونة للويف، لضمان اختبار الطالب في كامل المحتوى المعرفي.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 6 -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-num">6</div>
+                <h2 class="section-title">المخطط المقترح لقاعدة البيانات (Proposed Database Schema)</h2>
+            </div>
+            <p>لبناء هذه المنظومة بأعلى كفاءة مع الحفاظ على التوافق مع البيانات التاريخية في النظام، نقترح إضافة الجداول التالية:</p>
+
+            <div class="code-block">
+<span class="comment">-- 1. جدول ربط الويف بالكاتيجوريز التابعة له بدون حد أقصى</span>
+<span class="keyword">CREATE TABLE</span> dbo.WaveCategoryMappings (
+    Id <span class="type">INT IDENTITY(1,1) PRIMARY KEY</span>,
+    WaveId <span class="type">INT NOT NULL</span> <span class="keyword">REFERENCES</span> TrainingWaves(Id),
+    CategoryId <span class="type">INT NOT NULL</span> <span class="keyword">REFERENCES</span> Categories(Id),
+    CategoryFinalExamId <span class="type">INT NULL</span> <span class="keyword">REFERENCES</span> Exams(Id),
+    OrderIndex <span class="type">INT DEFAULT 1</span>,
+    CreatedAt <span class="type">DATETIME DEFAULT GETDATE()</span>
+);
+
+<span class="comment">-- 2. جدول محاضرات كل كاتيجوري في الويف</span>
+<span class="keyword">CREATE TABLE</span> dbo.WaveLectures (
+    Id <span class="type">INT IDENTITY(1,1) PRIMARY KEY</span>,
+    WaveCategoryMappingId <span class="type">INT NOT NULL</span> <span class="keyword">REFERENCES</span> WaveCategoryMappings(Id),
+    TopicId <span class="type">INT NOT NULL</span>, <span class="comment">-- ربطه بـ LectureTopics</span>
+    QuizExamId <span class="type">INT NULL</span> <span class="keyword">REFERENCES</span> Exams(Id),
+    LectureOrder <span class="type">INT DEFAULT 1</span>,
+    LectureDate <span class="type">DATETIME NULL</span>
+);
+
+<span class="comment">-- 3. جدول ضبط أوزان الخلطة لكل ويف (Scoring Weights Config)</span>
+<span class="keyword">CREATE TABLE</span> dbo.WaveScoreWeights (
+    Id <span class="type">INT IDENTITY(1,1) PRIMARY KEY</span>,
+    WaveId <span class="type">INT NOT NULL UNIQUE</span> <span class="keyword">REFERENCES</span> TrainingWaves(Id),
+    QuizzesWeight <span class="type">DECIMAL(5,2) DEFAULT 20.00</span>,        <span class="comment">-- 20%</span>
+    CategoryFinalsWeight <span class="type">DECIMAL(5,2) DEFAULT 30.00</span>, <span class="comment">-- 30%</span>
+    WaveFinalWeight <span class="type">DECIMAL(5,2) DEFAULT 35.00</span>,      <span class="comment">-- 35%</span>
+    AssignmentsWeight <span class="type">DECIMAL(5,2) DEFAULT 15.00</span>,    <span class="comment">-- 15%</span>
+    UpdatedAt <span class="type">DATETIME DEFAULT GETDATE()</span>
+);
+
+<span class="comment">-- 4. جدول شرائح الدرجات وقواعد الشهادات لكل ويف (Grade Bands)</span>
+<span class="keyword">CREATE TABLE</span> dbo.WaveGradeBands (
+    Id <span class="type">INT IDENTITY(1,1) PRIMARY KEY</span>,
+    WaveId <span class="type">INT NOT NULL</span> <span class="keyword">REFERENCES</span> TrainingWaves(Id),
+    MinPercentage <span class="type">DECIMAL(5,2) NOT NULL</span>,
+    MaxPercentage <span class="type">DECIMAL(5,2) NOT NULL</span>,
+    StatusTitleAr <span class="type">NVARCHAR(100) NOT NULL</span>,
+    StatusTitleEn <span class="type">NVARCHAR(100) NOT NULL</span>,
+    BadgeColor <span class="type">VARCHAR(50) DEFAULT 'blue'</span>,
+    IsCertificateEligible <span class="type">BIT DEFAULT 0</span>,
+    OrderIndex <span class="type">INT DEFAULT 1</span>
+);
+            </div>
+        </div>
+
+        <!-- Section 7 -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-num">7</div>
+                <h2 class="section-title">واجهات ولوحات تحكم الأدمن المطلوبة (Admin Control Panels)</h2>
+            </div>
+            
+            <div class="steps-container">
+                <div class="step-row">
+                    <div class="step-num-circle">1</div>
+                    <div class="step-content">
+                        <div class="step-title">لوحة منشئ هيكل الويف (Wave Curriculum Builder)</div>
+                        <p class="level-desc">شاشة تشبه Drag-and-drop أو شجرة هرمية يختار فيها الأدمن الويف، ثم يضيف الكاتيجوريز، وتحت كل كاتيجوري يضيف المحاضرات وكويزاتها، مع زر لتوليد فاينال الكاتيجوري بنقرة واحدة.</p>
+                    </div>
+                </div>
+
+                <div class="step-row">
+                    <div class="step-num-circle">2</div>
+                    <div class="step-content">
+                        <div class="step-title">لوحة ضبط أوزان الخلطة (Scoring Weights Slider)</div>
+                        <p class="level-desc">أشرطة ضبط بنسب مئوية تفاعلية للأربعة بنود (كويزات، فاينال كاتيجوريز، فاينال ويف، تكليفات) مع مؤشر ملون ينبه الأدمن فورياً إذا لم يكن المجموع 100%.</p>
+                    </div>
+                </div>
+
+                <div class="step-row">
+                    <div class="step-num-circle">3</div>
+                    <div class="step-content">
+                        <div class="step-title">لوحة إدارة شرائح التقييم والشهادات (Grade Bands Setup)</div>
+                        <p class="level-desc">جدول ديناميكي يضيف فيه الأدمن الشرائح (مثلاً: من 0 لـ 50 -> Needs Training بدون شهادة، من 60 فأكثر -> Good مع شهادة) مع اختيار اللون وتخصيص المسمى.</p>
+                    </div>
+                </div>
+
+                <div class="step-row">
+                    <div class="step-num-circle">4</div>
+                    <div class="step-content">
+                        <div class="step-title">سجل الدرجات الشامل (Master Gradebook & Cert Roster)</div>
+                        <p class="level-desc">جدول تحليل النتائج (مثل Wave Analytics المطور) يعرض تفصيلة درجات كل طالب في كل مرحلة، والنسبة المئوية النهائية الموزونة، والحالة، وكود الشهادة مع تصدير Excel فوري.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 8 -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-num">8</div>
+                <h2 class="section-title">نقاط فنية مطروحة للمناقشة والاعتماد مع فريق التحليل (Questions for Analysis Team)</h2>
+            </div>
+            
+            <div class="questions-box">
+                <div class="question-item">
+                    <i class="fas fa-question-circle"></i>
+                    <div>
+                        <strong>1. الغياب عن كويز المحاضرة:</strong> في حال لم يحضر الطالب كويز إحدى المحاضرات، هل يتم احتسابها كـ صفر (0%) ويقل متوسط الكويزات، أم هل هناك آلية "عذر مقبول" تستثني الكويز من المقام؟
+                    </div>
+                </div>
+                <div class="question-item">
+                    <i class="fas fa-question-circle"></i>
+                    <div>
+                        <strong>2. إعادة المحاولات (Retakes):</strong> في حال سمح النظام بمحاولتين لكويز المحاضرة أو الفاينال، هل تحتسب المحاولة الأخيرة (Latest Attempt) أم المحاولة الأعلى (Best Attempt) في الخلطة؟
+                    </div>
+                </div>
+                <div class="question-item">
+                    <i class="fas fa-question-circle"></i>
+                    <div>
+                        <strong>3. كود الشهادة (Certification Code):</strong> هل كود الشهادة يولد آلياً بصيغة مسلسلة (مثل: `CERT-W15-2026-XXXX`)، وهل ترغبون في إمكانية تخصيص الـ Prefix الخاص بالشهادة من إعدادات الويف؟
+                    </div>
+                </div>
+                <div class="question-item">
+                    <i class="fas fa-question-circle"></i>
+                    <div>
+                        <strong>4. نطاق التكليفات (Assignments Scope):</strong> هل التكليفات تكون عامة على الويف ككل، أم مرتبطة بكل كاتيجوري على حدة لتكون جزءاً من تقييم الكاتيجوري نفسها؟
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="doc-footer">
+        <div>
+            <span><i class="fas fa-shield-alt"></i> Eltarshouby Academy LMS & Exam Engine</span>
+            <span style="margin: 0 10px;">|</span>
+            <span>Architecture & Functional Specification Document</span>
+        </div>
+        <div>
+            <span>إعداد: AI & Software Architecture Specialist</span>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

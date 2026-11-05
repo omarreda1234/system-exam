@@ -25,6 +25,16 @@ namespace Exam.DTOs
         public int Quota { get; set; }
     }
 
+    public class BranchQuotaItem
+    {
+        public int BranchId { get; set; }
+        public string BranchName { get; set; } = "";
+        public int PharmacistQuota { get; set; } = 0;
+        public int AssistantQuota { get; set; } = 0;
+        public int? ShiftId { get; set; } // null or 0 = any shift
+        public string? ShiftName { get; set; }
+    }
+
     public class CompanyInjectionRuleDto
     {
         public int Id { get; set; }
@@ -40,10 +50,13 @@ namespace Exam.DTOs
         public int SessionId { get; set; }
         public int? CompanyId { get; set; }
         public List<DepartmentQuotaItem>? DepartmentQuotas { get; set; } = new();
+        public List<BranchQuotaItem>? BranchQuotas { get; set; } = new();
 
         public string? Mode { get; set; } // "branchStaff", "departments", or "combined"
         public int PharmacistQuota { get; set; } = 0;
         public int AssistantQuota { get; set; } = 0;
+        public int MaxPharmacistsPerBranch { get; set; } = 0;
+        public int MaxAssistantsPerBranch { get; set; } = 0;
         public List<int>? BranchIds { get; set; }
         public List<int>? ShiftIds { get; set; }
     }
@@ -55,6 +68,7 @@ namespace Exam.DTOs
         public string FullName { get; set; } = "";
         public string UserCode { get; set; } = "--";
         public string JobTitle { get; set; } = "--";
+        public int BranchId { get; set; }
         public string BranchName { get; set; } = "بدون فرع";
         public string ShiftName { get; set; } = "غير محدد";
         public int DepartmentId { get; set; }
@@ -69,6 +83,7 @@ namespace Exam.DTOs
         public int SessionId { get; set; }
         public int? CompanyId { get; set; }
         public List<DepartmentQuotaItem>? DepartmentQuotas { get; set; }
+        public List<BranchQuotaItem>? BranchQuotas { get; set; }
         public List<string>? ConfirmedCandidateKeys { get; set; } // Specific candidate keys from preview (e.g. U_...)
         public List<string>? UserIds { get; set; }
         public bool BypassApproval { get; set; } = true;
@@ -79,6 +94,8 @@ namespace Exam.DTOs
         public string? Mode { get; set; }
         public int PharmacistQuota { get; set; } = 0;
         public int AssistantQuota { get; set; } = 0;
+        public int MaxPharmacistsPerBranch { get; set; } = 0;
+        public int MaxAssistantsPerBranch { get; set; } = 0;
         public List<int>? BranchIds { get; set; }
         public List<int>? ShiftIds { get; set; }
     }
