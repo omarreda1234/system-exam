@@ -211,6 +211,13 @@ namespace Exam.DTOs
         public DateTime? ActualEndTime { get; set; }
         public string UserCode { get; set; }
         public string RoleName { get; set; }
+        public int? WaveId { get; set; }
+        public bool CertificateUploaded { get; set; }
+        public DateTime? UploadedAt { get; set; }
+        public string? UploadedFileName { get; set; }
+        public bool IsDownloaded { get; set; }
+        public DateTime? DownloadedAt { get; set; }
+        public int DownloadCount { get; set; }
     }
 
     // For Live Monitor / cross-dimensional reporting

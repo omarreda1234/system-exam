@@ -216,6 +216,14 @@
                             <div class="flex items-center gap-2 sm:self-center">
                                 @if (cert.HasFileOnDisk && !string.IsNullOrEmpty(cert.DownloadUrl))
                                 {
+                                    @if (cert.IsDownloaded)
+                                    {
+                                        <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1"
+                                              title="@(cert.DownloadedAt.HasValue ? $"تم التحميل بتاريخ {cert.DownloadedAt.Value:dd/MM/yyyy hh:mm tt}" : "تم التحميل")">
+                                            <i class="fas fa-check-circle text-emerald-500"></i>
+                                            <span>تم التحميل</span>
+                                        </span>
+                                    }
                                     <a href="@cert.DownloadUrl" download 
                                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-all shadow-sm">
                                         <i class="fas fa-download"></i>
@@ -225,7 +233,7 @@
                                 else
                                 {
                                     <span class="text-xs text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                                        معتمدة بالنظام
+                                        معتمدة بالنظام (بانتظار رفع ملف الـ PDF)
                                     </span>
                                 }
                             </div>

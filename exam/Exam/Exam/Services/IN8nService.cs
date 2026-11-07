@@ -8,3 +8,5 @@ namespace Exam.Services
         Task<bool> TriggerWaveNominationNotificationAsync(object payload);
     }
 }
+
+//

@@ -81,14 +81,18 @@
 
             <div class="space-y-2">
                 <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Status Filter (تصفية بالحالة)</label>
-                <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[210px] transition-colors focus:border-brand-500 outline-none">
+                <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[230px] transition-colors focus:border-brand-500 outline-none">
                     <option value="all">All Statuses (الكل)</option>
+                    <option value="cert_uploaded">Uploaded on Server (تم رفع الشهادة ع السيرفر 📄)</option>
+                    <option value="cert_not_uploaded">Not Uploaded Yet (لم ترفع الشهادة بعد ⏳)</option>
+                    <option value="cert_downloaded">Downloaded by User (قام المتدرب بتحميلها 📥)</option>
+                    <option value="cert_not_downloaded">Uploaded - Not Downloaded (مرفوعة ولم تحمل بعد 🔔)</option>
                     <option value="passed_cert">Passed with Cert (ناجح بشهادة > 75%)</option>
                     <option value="passed_no_cert">Passed without Cert (ناجح بدون شهادة 70-75%)</option>
                     <option value="failed">Failed (ساقط < 70%)</option>
                     <option value="not_examined">Not Examined (لم يمتحن بعد ⚪)</option>
                     <option value="email_sent">Email Sent (تم إرسال الإيميل ✉️)</option>
-                    <option value="email_failed">Email Failed (فشل إرسال الإيميل ⚠️)</option>
+                    <option value="email_failed">Email Failed / Not Sent (لم يرسل الإيميل ⚠️)</option>
                 </select>
             </div>
         </div>
@@ -113,15 +117,24 @@
             <tbody>
                 @foreach (var s in Model) {
                     bool hasCertCode = !string.IsNullOrEmpty(s.CertificateCode) && s.CertificateCode.Trim() != "/";
+                    int rowWaveId = s.WaveId ?? selectedWaveId;
                     string certStatus = "not_examined";
                     string certStatusText = "لم يمتحن بعد";
                     string statusBadgeClass = "bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:text-slate-400 border border-slate-200 dark:border-slate-700";
                     string emailStatusAttr = hasCertCode ? (s.EmailSent ? "email_sent" : "email_failed") : "no_email";
+                    string uploadStatusAttr = s.CertificateUploaded ? "uploaded" : "not_uploaded";
+                    string downloadStatusAttr = s.IsDownloaded ? "downloaded" : "not_downloaded";
                     
-                    if (s.Status == "PassedWithCert" || s.Score > 75m)
+                    if (s.Score > 75m)
                     {
                         certStatus = "passed_cert";
                         certStatusText = "ناجح بشهادة";
+                        statusBadgeClass = "bg-emerald-500 text-emerald-700 bg-opacity-10 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800";
+                    }
+                    else if (s.Status == "CertUploaded" || s.CertificateUploaded || hasCertCode)
+                    {
+                        certStatus = "passed_cert";
+                        certStatusText = "شهادة معتمدة بالنظام";
                         statusBadgeClass = "bg-emerald-500 text-emerald-700 bg-opacity-10 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800";
                     }
                     else if (s.Status == "PassedNoCert" || (s.Score >= 70m && s.Score <= 75m))
@@ -137,7 +150,11 @@
                         statusBadgeClass = "bg-rose-500 text-rose-700 bg-opacity-10 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800";
                     }
 
-                    <tr class="student-row" data-cert-status="@certStatus" data-email-status="@emailStatusAttr">
+                    <tr class="student-row" 
+                        data-cert-status="@certStatus" 
+                        data-email-status="@emailStatusAttr"
+                        data-upload-status="@uploadStatusAttr"
+                        data-download-status="@downloadStatusAttr">
                         <td>
                             <div class="flex items-center gap-3 px-4 py-3 flex-nowrap">
                                 <div class="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold uppercase transition-transform hover:scale-105">@(string.IsNullOrEmpty(s.StudentName) ? "?" : s.StudentName.Substring(0,1))</div>
@@ -155,21 +172,54 @@
                         <td><span class="text-[10px] font-black text-slate-400 uppercase">@(string.IsNullOrEmpty(s.BranchName) ? "--" : s.BranchName)</span></td>
                         <td>
                             <div class="flex flex-col gap-1.5 w-fit">
-                                <div class="flex items-center gap-1.5 px-3 py-1 rounded-lg @statusBadgeClass shadow-sm">
+                                <div class="flex items-center gap-1.5 px-3 py-1 rounded-lg @statusBadgeClass shadow-sm w-fit">
                                     <span class="text-[10px] font-black tracking-wide">@certStatusText</span>
                                 </div>
+
+                                @if (s.CertificateUploaded)
+                                {
+                                    <div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 text-[9px] font-black border border-indigo-200 dark:border-indigo-800 w-fit"
+                                         title="@(s.UploadedAt.HasValue ? $"تاريخ رفع الشهادة: {s.UploadedAt.Value:dd/MM/yyyy hh:mm tt}" : "تم التأكد من وجود الشهادة على السيرفر")">
+                                        <i class="fas fa-file-circle-check text-indigo-600"></i>
+                                        <span>تم رفع الشهادة ع السيرفر @(s.UploadedAt.HasValue ? $"({s.UploadedAt.Value:dd/MM})" : "")</span>
+                                    </div>
+                                }
+                                else if (hasCertCode)
+                                {
+                                    <div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 text-[9px] font-black border border-amber-200 dark:border-amber-800 w-fit">
+                                        <i class="fas fa-file-circle-exclamation text-amber-500"></i>
+                                        <span>لم يُرفع ملف PDF بالسيرفر</span>
+                                    </div>
+                                }
+
+                                @if (s.IsDownloaded)
+                                {
+                                    <div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 text-[9px] font-black border border-sky-200 dark:border-sky-800 w-fit"
+                                         title="@(s.DownloadedAt.HasValue ? $"تاريخ تحميل المتدرب للشهادة: {s.DownloadedAt.Value:dd/MM/yyyy hh:mm tt}" : "قام المتدرب بتحميل الشهادة")">
+                                        <i class="fas fa-cloud-arrow-down text-sky-600"></i>
+                                        <span>تم التحميل بواسطة المتدرب @(s.DownloadCount > 1 ? $"({s.DownloadCount} مرات)" : "") @(s.DownloadedAt.HasValue ? $"• {s.DownloadedAt.Value:dd/MM hh:mm tt}" : "")</span>
+                                    </div>
+                                }
+                                else if (s.CertificateUploaded)
+                                {
+                                    <div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-50 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 text-[9px] font-bold border border-slate-200 dark:border-slate-700 w-fit">
+                                        <i class="fas fa-clock text-slate-400"></i>
+                                        <span>لم يقم المتدرب بتحميلها بعد</span>
+                                    </div>
+                                }
+
                                 @if (hasCertCode)
                                 {
                                     if (s.EmailSent)
                                     {
-                                        <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 text-[9px] font-black border border-emerald-200 dark:border-emerald-800">
+                                        <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 text-[9px] font-black border border-emerald-200 dark:border-emerald-800 w-fit">
                                             <i class="fas fa-envelope-circle-check text-emerald-500"></i> تم إرسال الإيميل
                                         </div>
                                     }
                                     else
                                     {
-                                        <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 text-[9px] font-black border border-rose-200 dark:border-rose-800">
-                                            <i class="fas fa-envelope-circle-xmark text-rose-500"></i> فشل إرسال الإيميل
+                                        <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 text-[9px] font-black border border-rose-200 dark:border-rose-800 w-fit">
+                                            <i class="fas fa-envelope-circle-xmark text-rose-500"></i> لم يُرسل الإيميل
                                         </div>
                                     }
                                 }
@@ -198,22 +248,28 @@
                         </td>
                         <td class="text-right px-8">
                             <div class="flex items-center justify-end gap-2">
-                                @if (hasCertCode)
+                                @if (s.CertificateUploaded)
                                 {
-                                    <button class="p-2 text-slate-400 hover:text-emerald-600 bg-slate-50 dark:bg-slate-800 rounded-xl resend-email-btn" 
-                                            data-user-id="@s.Id" 
-                                            data-username="@s.StudentName" 
-                                            data-wave-id="@selectedWaveId" 
-                                            title="إعادة إرسال الإيميل">
-                                        <i class="fas fa-paper-plane"></i>
-                                    </button>
+                                    <a href="@Url.Action("DownloadCertificate", "Home", new { fileName = s.UploadedFileName ?? $"{s.UserCode}.pdf", waveId = rowWaveId, adminPreview = true })" 
+                                       target="_blank"
+                                       class="p-2 text-indigo-600 hover:text-white hover:bg-indigo-600 bg-indigo-50 dark:bg-indigo-950/50 rounded-xl transition-colors" 
+                                       title="معاينة / تحميل ملف الشهادة المرفوع على السيرفر">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
                                 }
-                                else
+                                <button class="p-2 text-slate-400 hover:text-emerald-600 bg-slate-50 dark:bg-slate-800 rounded-xl resend-email-btn" 
+                                        data-user-id="@s.Id" 
+                                        data-username="@s.StudentName" 
+                                        data-wave-id="@rowWaveId" 
+                                        title="رفع شهادة / إرسال الإيميل لهذا المتدرب">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                                @if (!hasCertCode && !s.CertificateUploaded)
                                 {
                                     <button class="p-2.5 text-slate-400 hover:text-amber-600 bg-slate-50 dark:bg-slate-800 rounded-xl reassign-wave" 
                                             data-user-id="@s.Id" 
                                             data-username="@s.StudentName" 
-                                            data-old-wave-id="@selectedWaveId" 
+                                            data-old-wave-id="@rowWaveId" 
                                             title="Move to another Wave">
                                         <i class="fas fa-exchange-alt"></i>
                                     </button>
@@ -592,7 +648,21 @@
 
                 const rowCertStatus = $(tr).attr('data-cert-status') || '';
                 const rowEmailStatus = $(tr).attr('data-email-status') || '';
+                const rowUploadStatus = $(tr).attr('data-upload-status') || '';
+                const rowDownloadStatus = $(tr).attr('data-download-status') || '';
 
+                if (selectedFilter === 'cert_uploaded') {
+                    return rowUploadStatus === 'uploaded';
+                }
+                if (selectedFilter === 'cert_not_uploaded') {
+                    return rowUploadStatus === 'not_uploaded';
+                }
+                if (selectedFilter === 'cert_downloaded') {
+                    return rowDownloadStatus === 'downloaded';
+                }
+                if (selectedFilter === 'cert_not_downloaded') {
+                    return rowUploadStatus === 'uploaded' && rowDownloadStatus === 'not_downloaded';
+                }
                 if (selectedFilter === 'passed_cert' || selectedFilter === 'certified') {
                     return rowCertStatus === 'passed_cert' || rowCertStatus === 'certified';
                 }

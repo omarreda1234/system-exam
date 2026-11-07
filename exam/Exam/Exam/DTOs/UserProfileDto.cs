@@ -73,6 +73,12 @@ namespace Exam.DTOs
         public long FileSizeBytes { get; set; }
         public bool HasFileOnDisk { get; set; }
         public string SourceFolder { get; set; } = string.Empty;
+        public bool FileUploaded { get; set; }
+        public DateTime? UploadedAt { get; set; }
+        public bool IsDownloaded { get; set; }
+        public DateTime? DownloadedAt { get; set; }
+        public int DownloadCount { get; set; }
+        public bool HasDbFileData { get; set; }
     }
 }
 

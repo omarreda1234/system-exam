@@ -208,6 +208,28 @@ namespace Exam.Controllers
                 }
             }
 
+            // Ensure certificate upload/download tracking columns exist
+            try
+            {
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.UserWaveCertificates') AND name = 'FileUploaded')
+                        ALTER TABLE dbo.UserWaveCertificates ADD FileUploaded BIT NOT NULL CONSTRAINT DF_UWC_FileUploaded DEFAULT 0;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.UserWaveCertificates') AND name = 'UploadedAt')
+                        ALTER TABLE dbo.UserWaveCertificates ADD UploadedAt DATETIME NULL;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.UserWaveCertificates') AND name = 'FileName')
+                        ALTER TABLE dbo.UserWaveCertificates ADD FileName NVARCHAR(260) NULL;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.UserWaveCertificates') AND name = 'FileData')
+                        ALTER TABLE dbo.UserWaveCertificates ADD FileData VARBINARY(MAX) NULL;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.UserWaveCertificates') AND name = 'IsDownloaded')
+                        ALTER TABLE dbo.UserWaveCertificates ADD IsDownloaded BIT NOT NULL CONSTRAINT DF_UWC_IsDownloaded DEFAULT 0;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.UserWaveCertificates') AND name = 'DownloadedAt')
+                        ALTER TABLE dbo.UserWaveCertificates ADD DownloadedAt DATETIME NULL;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.UserWaveCertificates') AND name = 'DownloadCount')
+                        ALTER TABLE dbo.UserWaveCertificates ADD DownloadCount INT NOT NULL CONSTRAINT DF_UWC_DownloadCount DEFAULT 0;
+                ");
+            }
+            catch { }
+
             // Fetch DB wave certificates
             var certsQuery = @"
                 SELECT 
@@ -215,7 +237,14 @@ namespace Exam.Controllers
                     ISNULL(w.WaveName, CONCAT('Wave #', uwc.WaveId)) AS WaveName,
                     uwc.CertificateCode,
                     uwc.Score,
-                    uwc.CreatedAt
+                    uwc.CreatedAt,
+                    ISNULL(uwc.FileUploaded, 0) AS FileUploaded,
+                    uwc.UploadedAt,
+                    uwc.FileName,
+                    CASE WHEN uwc.FileData IS NOT NULL AND DATALENGTH(uwc.FileData) > 0 THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS HasDbFileData,
+                    ISNULL(uwc.IsDownloaded, 0) AS IsDownloaded,
+                    uwc.DownloadedAt,
+                    ISNULL(uwc.DownloadCount, 0) AS DownloadCount
                 FROM dbo.UserWaveCertificates uwc
                 LEFT JOIN TrainingWaves w ON uwc.WaveId = w.Id
                 WHERE uwc.UserId = @UserId
@@ -231,6 +260,17 @@ namespace Exam.Controllers
             var matchedFiles = new List<(string FullPath, string RelPath, string FileName, int? WaveId, long Size)>();
 
             string userCode = (profile.UserCode ?? "").Trim();
+            bool hasNumericUserCode = long.TryParse(userCode, out long numericUserCode);
+
+            bool IsMatchingUserCodeFile(string fileNameWithoutExt)
+            {
+                if (string.IsNullOrEmpty(userCode) || string.IsNullOrEmpty(fileNameWithoutExt)) return false;
+                if (fileNameWithoutExt.Equals(userCode, StringComparison.OrdinalIgnoreCase)) return true;
+                if (hasNumericUserCode && long.TryParse(fileNameWithoutExt, out long fileNum) && fileNum == numericUserCode) return true;
+                if (fileNameWithoutExt.Contains(userCode, StringComparison.OrdinalIgnoreCase)) return true;
+                return false;
+            }
+
             if (!string.IsNullOrEmpty(userCode))
             {
                 // Scan certsBaseDir and subfolders
@@ -243,10 +283,10 @@ namespace Exam.Controllers
                         string ext = Path.GetExtension(f).ToLowerInvariant();
                         if (ext != ".pdf" && ext != ".png" && ext != ".jpg" && ext != ".jpeg") continue;
 
-                        if (fn.Equals(userCode, StringComparison.OrdinalIgnoreCase) || 
-                            fn.Contains(userCode, StringComparison.OrdinalIgnoreCase))
+                        if (IsMatchingUserCodeFile(fn))
                         {
                             var fi = new FileInfo(f);
+                            if (fi.Length == 0) continue;
                             int? waveId = null;
                             var parentName = Directory.GetParent(f)?.Name;
                             if (int.TryParse(parentName, out int parsedWId))
@@ -270,10 +310,10 @@ namespace Exam.Controllers
                         string ext = Path.GetExtension(f).ToLowerInvariant();
                         if (ext != ".pdf" && ext != ".png" && ext != ".jpg" && ext != ".jpeg") continue;
 
-                        if (fn.Equals(userCode, StringComparison.OrdinalIgnoreCase) || 
-                            fn.Contains(userCode, StringComparison.OrdinalIgnoreCase))
+                        if (IsMatchingUserCodeFile(fn))
                         {
                             var fi = new FileInfo(f);
+                            if (fi.Length == 0) continue;
                             string rel = Path.GetRelativePath(webRoot, f).Replace('\\', '/');
                             matchedFiles.Add((f, rel, fi.Name, null, fi.Length));
                         }
@@ -284,7 +324,7 @@ namespace Exam.Controllers
             var finalCerts = new List<UserCertificateItemViewModel>();
             var usedFilePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // 1. Match DB wave certificates with files
+            // 1. Match DB wave certificates with files (or DB stored PDF data)
             foreach (var cert in dbCerts)
             {
                 var match = matchedFiles.FirstOrDefault(m => 
@@ -294,7 +334,7 @@ namespace Exam.Controllers
                         (!string.IsNullOrEmpty(cert.CertificateCode) && m.FileName.Contains(cert.CertificateCode, StringComparison.OrdinalIgnoreCase))
                     ));
 
-                if (match.FullPath == null)
+                if (match.FullPath == null && !cert.WaveId.HasValue)
                 {
                     match = matchedFiles.FirstOrDefault(m => !usedFilePaths.Contains(m.FullPath));
                 }
@@ -308,6 +348,14 @@ namespace Exam.Controllers
                     cert.FileExtension = Path.GetExtension(match.FileName).TrimStart('.').ToUpperInvariant();
                     cert.DownloadUrl = Url.Action("DownloadCertificate", "Home", new { fileName = match.FileName, waveId = cert.WaveId });
                 }
+                else if (cert.HasDbFileData)
+                {
+                    string fallbackFileName = !string.IsNullOrWhiteSpace(cert.FileName) ? cert.FileName : $"{(string.IsNullOrEmpty(userCode) ? "Certificate" : userCode)}.pdf";
+                    cert.HasFileOnDisk = true;
+                    cert.FileName = fallbackFileName;
+                    cert.FileExtension = Path.GetExtension(fallbackFileName).TrimStart('.').ToUpperInvariant();
+                    cert.DownloadUrl = Url.Action("DownloadCertificate", "Home", new { fileName = fallbackFileName, waveId = cert.WaveId });
+                }
                 else
                 {
                     cert.HasFileOnDisk = false;
@@ -316,17 +364,31 @@ namespace Exam.Controllers
                 finalCerts.Add(cert);
             }
 
-            // 2. Add any remaining disk files matching user code
+            // 2. Add any remaining disk files matching user code (and sync them to DB so WaveName & Serial are accurate)
+            var allWaveNames = (await conn.QueryAsync<(int Id, string WaveName)>("SELECT Id, WaveName FROM dbo.TrainingWaves")).ToDictionary(x => x.Id, x => x.WaveName);
             foreach (var mf in matchedFiles.Where(m => !usedFilePaths.Contains(m.FullPath)))
             {
+                string resolvedWaveName = "Official Academy Certificate / شهادة معتمدة";
+                if (mf.WaveId.HasValue && allWaveNames.TryGetValue(mf.WaveId.Value, out string? dbWaveName) && !string.IsNullOrWhiteSpace(dbWaveName))
+                {
+                    resolvedWaveName = dbWaveName;
+                }
+                else if (mf.WaveId.HasValue)
+                {
+                    resolvedWaveName = $"Wave #{mf.WaveId.Value}";
+                }
+
+                string resolvedCertCode = profile.CertificateCode ?? $"WTTA-{DateTime.Now.Year}-{(mf.WaveId ?? 1).ToString().PadLeft(3, '0')}-PB-Off-{userCode}";
+
                 finalCerts.Add(new UserCertificateItemViewModel
                 {
                     WaveId = mf.WaveId,
-                    WaveName = mf.WaveId.HasValue ? $"Wave #{mf.WaveId.Value}" : "Official Academy Certificate / شهادة معتمدة",
-                    CertificateCode = profile.CertificateCode ?? $"CERT-{userCode}",
+                    WaveName = resolvedWaveName,
+                    CertificateCode = resolvedCertCode,
                     Score = profile.CertificateScore,
-                    CreatedAt = System.IO.File.GetCreationTime(mf.FullPath),
+                    CreatedAt = System.IO.File.GetLastWriteTime(mf.FullPath),
                     HasFileOnDisk = true,
+                    FileUploaded = true,
                     FileName = mf.FileName,
                     FileSizeBytes = mf.Size,
                     FileExtension = Path.GetExtension(mf.FileName).TrimStart('.').ToUpperInvariant(),
@@ -417,7 +479,7 @@ namespace Exam.Controllers
 
         [Authorize]
         [HttpGet("/Home/DownloadCertificate")]
-        public async Task<IActionResult> DownloadCertificate(string fileName, int? waveId = null)
+        public async Task<IActionResult> DownloadCertificate(string fileName, int? waveId = null, bool adminPreview = false)
         {
             if (string.IsNullOrWhiteSpace(fileName))
             {
@@ -425,6 +487,7 @@ namespace Exam.Controllers
             }
 
             fileName = Path.GetFileName(fileName); // Prevent directory traversal
+            string fileNameNoExt = Path.GetFileNameWithoutExtension(fileName).Trim();
 
             var userId = User?.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId))
@@ -432,21 +495,38 @@ namespace Exam.Controllers
                 return Challenge();
             }
 
-            // Security: Current user must own this UserCode OR be Admin/HR
-            bool isAdminOrHr = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources");
+            string connStr = _configuration.GetConnectionString("DefaultConnection") 
+                ?? "Server=192.168.1.111;Database=Eltarshouby-Exam;User Id=sa;Password=sa@123456;MultipleActiveResultSets=true;TrustServerCertificate=True";
+            using var conn = new SqlConnection(connStr);
+            await conn.OpenAsync();
 
-            if (!isAdminOrHr)
+            bool isPrivileged = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources") || User.IsInRole("Branch Manager") || User.IsInRole("Branch Supervisor");
+
+            string currentUserCode = (await conn.QueryFirstOrDefaultAsync<string>(
+                "SELECT UserCode FROM AspNetUsers WHERE Id = @UserId", new { UserId = userId }) ?? "").Trim();
+
+            bool isOwner = false;
+            if (!string.IsNullOrEmpty(currentUserCode))
             {
-                string connStr = _configuration.GetConnectionString("DefaultConnection") 
-                    ?? "Server=192.168.1.111;Database=Eltarshouby-Exam;User Id=sa;Password=sa@123456;MultipleActiveResultSets=true;TrustServerCertificate=True";
-                using var conn = new SqlConnection(connStr);
-                string userCode = await conn.QueryFirstOrDefaultAsync<string>(
-                    "SELECT UserCode FROM AspNetUsers WHERE Id = @UserId", new { UserId = userId });
-
-                if (string.IsNullOrEmpty(userCode) || !fileName.Contains(userCode, StringComparison.OrdinalIgnoreCase))
+                if (fileNameNoExt.Equals(currentUserCode, StringComparison.OrdinalIgnoreCase) ||
+                    fileName.Contains(currentUserCode, StringComparison.OrdinalIgnoreCase) ||
+                    (long.TryParse(fileNameNoExt, out long fnNum) && long.TryParse(currentUserCode, out long ucNum) && fnNum == ucNum))
                 {
-                    return Forbid();
+                    isOwner = true;
                 }
+            }
+
+            if (!isOwner && waveId.HasValue && waveId.Value > 0)
+            {
+                var hasCertRow = await conn.QueryFirstOrDefaultAsync<int?>(
+                    "SELECT 1 FROM dbo.UserWaveCertificates WHERE UserId = @UserId AND WaveId = @WaveId",
+                    new { UserId = userId, WaveId = waveId.Value });
+                if (hasCertRow.HasValue) isOwner = true;
+            }
+
+            if (!isOwner && !isPrivileged)
+            {
+                return Forbid();
             }
 
             string webRoot = _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
@@ -476,12 +556,80 @@ namespace Exam.Controllers
                 if (allFound.Any()) filePath = allFound.First();
             }
 
+            byte[]? dbBytes = null;
             if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
+            {
+                // Fallback to DB FileData if stored in UserWaveCertificates
+                try
+                {
+                    if (isOwner)
+                    {
+                        dbBytes = await conn.QueryFirstOrDefaultAsync<byte[]>(@"
+                            SELECT TOP 1 FileData 
+                            FROM dbo.UserWaveCertificates 
+                            WHERE UserId = @UserId 
+                              AND (@WaveId IS NULL OR WaveId = @WaveId) 
+                              AND FileData IS NOT NULL
+                            ORDER BY CreatedAt DESC",
+                            new { UserId = userId, WaveId = waveId });
+                    }
+                    else if (!string.IsNullOrEmpty(fileNameNoExt))
+                    {
+                        dbBytes = await conn.QueryFirstOrDefaultAsync<byte[]>(@"
+                            SELECT TOP 1 UWC.FileData 
+                            FROM dbo.UserWaveCertificates UWC
+                            INNER JOIN AspNetUsers U ON UWC.UserId = U.Id
+                            WHERE (LTRIM(RTRIM(U.UserCode)) = @Code OR UWC.FileName = @FileName)
+                              AND (@WaveId IS NULL OR UWC.WaveId = @WaveId)
+                              AND UWC.FileData IS NOT NULL
+                            ORDER BY UWC.CreatedAt DESC",
+                            new { Code = fileNameNoExt, FileName = fileName, WaveId = waveId });
+                    }
+
+                    if (dbBytes != null && dbBytes.Length > 0)
+                    {
+                        string targetDir = waveId.HasValue && waveId.Value > 0
+                            ? Path.Combine(webRoot, "uploads", "certificates", waveId.Value.ToString())
+                            : Path.Combine(webRoot, "uploads", "certificates");
+                        Directory.CreateDirectory(targetDir);
+                        filePath = Path.Combine(targetDir, fileName);
+                        await System.IO.File.WriteAllBytesAsync(filePath, dbBytes);
+                    }
+                }
+                catch { }
+            }
+
+            if ((string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath)) && (dbBytes == null || dbBytes.Length == 0))
             {
                 return NotFound("الملف غير متوفر على السيرفر حالياً.");
             }
 
-            string ext = Path.GetExtension(filePath).ToLowerInvariant();
+            // Track student download in dbo.UserWaveCertificates when downloaded by the trainee (not admin preview)
+            if (isOwner && !adminPreview)
+            {
+                try
+                {
+                    int updatedRows = await conn.ExecuteAsync(@"
+                        UPDATE dbo.UserWaveCertificates
+                        SET IsDownloaded = 1,
+                            DownloadedAt = GETDATE(),
+                            DownloadCount = ISNULL(DownloadCount, 0) + 1,
+                            FileUploaded = 1
+                        WHERE UserId = @UserId AND (@WaveId IS NULL OR WaveId = @WaveId)",
+                        new { UserId = userId, WaveId = waveId });
+
+                    if (updatedRows == 0 && waveId.HasValue && waveId.Value > 0)
+                    {
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, EmailSent, Score, CreatedAt, FileUploaded, UploadedAt, FileName, IsDownloaded, DownloadedAt, DownloadCount)
+                            VALUES (@UserId, @WaveId, @CertCode, 0, NULL, GETDATE(), 1, GETDATE(), @FileName, 1, GETDATE(), 1)",
+                            new { UserId = userId, WaveId = waveId.Value, CertCode = $"WTTA-{DateTime.Now.Year}-{waveId.Value.ToString().PadLeft(3, '0')}-PB-Off-{currentUserCode}", FileName = fileName });
+                    }
+                }
+                catch { }
+            }
+
+            string ext = Path.GetExtension(fileName).ToLowerInvariant();
             string contentType = ext switch
             {
                 ".pdf" => "application/pdf",
@@ -491,7 +639,12 @@ namespace Exam.Controllers
                 _ => "application/octet-stream"
             };
 
-            return PhysicalFile(filePath, contentType, fileName);
+            if (!string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
+            {
+                return PhysicalFile(filePath, contentType, fileName);
+            }
+
+            return File(dbBytes!, contentType, fileName);
         }
 
         [HttpGet]
