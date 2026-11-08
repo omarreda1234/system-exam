@@ -1658,22 +1658,22 @@ namespace Exam.Controllers
                     {
                         row.CertificateCode = $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{uCode}";
                     }
-                    row.Status = row.Score > 75 ? "ناجح بشهادة" : "شهادة مرفوعة / معتمدة";
+                    row.Status = row.Score > 75 ? "Passed with Cert" : "Certified in System";
                 }
                 else if (row.Score >= 70 && row.Score <= 75)
                 {
                     row.CertificateCode = "--";
-                    row.Status = "ناجح بدون شهادة";
+                    row.Status = "Passed without Cert";
                 }
                 else if (row.Score > 0 && row.Score < 70)
                 {
                     row.CertificateCode = "--";
-                    row.Status = "ساقط";
+                    row.Status = "Failed";
                 }
                 else
                 {
                     row.CertificateCode = "--";
-                    row.Status = "لم تصدر شهادة";
+                    row.Status = "Not Certified";
                 }
             }
 
@@ -1705,10 +1705,10 @@ namespace Exam.Controllers
                     worksheet.Cell(rowIdx, 7).Value = item.Status ?? "--";
                     worksheet.Cell(rowIdx, 8).Value = item.Score > 0 ? $"{item.Score:0.0}%" : "--";
                     worksheet.Cell(rowIdx, 9).Value = item.CertificateCode ?? "--";
-                    worksheet.Cell(rowIdx, 10).Value = item.CertificateUploaded ? "تم رفع الشهادة ع السيرفر" : "لم ترفع بعد";
-                    worksheet.Cell(rowIdx, 11).Value = item.IsDownloaded ? $"تم التحميل ({item.DownloadCount})" : "لم يتم التحميل بعد";
+                    worksheet.Cell(rowIdx, 10).Value = item.CertificateUploaded ? "Uploaded on Server" : "Not Uploaded Yet";
+                    worksheet.Cell(rowIdx, 11).Value = item.IsDownloaded ? $"Downloaded ({item.DownloadCount}x)" : "Not Downloaded Yet";
                     worksheet.Cell(rowIdx, 12).Value = item.DownloadedAt.HasValue ? item.DownloadedAt.Value.ToString("yyyy-MM-dd hh:mm tt") : "--";
-                    worksheet.Cell(rowIdx, 13).Value = item.EmailSent ? "تم إرسال البريد" : "لم يرسل البريد";
+                    worksheet.Cell(rowIdx, 13).Value = item.EmailSent ? "Email Sent" : "Email Not Sent";
 
                     rowIdx++;
                 }

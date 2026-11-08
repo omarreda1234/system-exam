@@ -80,19 +80,19 @@
             </div>
 
             <div class="space-y-2">
-                <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Status Filter (تصفية بالحالة)</label>
-                <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[230px] transition-colors focus:border-brand-500 outline-none">
-                    <option value="all">All Statuses (الكل)</option>
-                    <option value="cert_uploaded">Uploaded on Server (تم رفع الشهادة ع السيرفر 📄)</option>
-                    <option value="cert_not_uploaded">Not Uploaded Yet (لم ترفع الشهادة بعد ⏳)</option>
-                    <option value="cert_downloaded">Downloaded by User (قام المتدرب بتحميلها 📥)</option>
-                    <option value="cert_not_downloaded">Uploaded - Not Downloaded (مرفوعة ولم تحمل بعد 🔔)</option>
-                    <option value="passed_cert">Passed with Cert (ناجح بشهادة > 75%)</option>
-                    <option value="passed_no_cert">Passed without Cert (ناجح بدون شهادة 70-75%)</option>
-                    <option value="failed">Failed (ساقط < 70%)</option>
-                    <option value="not_examined">Not Examined (لم يمتحن بعد ⚪)</option>
-                    <option value="email_sent">Email Sent (تم إرسال الإيميل ✉️)</option>
-                    <option value="email_failed">Email Failed / Not Sent (لم يرسل الإيميل ⚠️)</option>
+                <label class="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">Status Filter</label>
+                <select id="certStatusFilter" class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3.5 text-xs font-bold min-w-[240px] transition-colors focus:border-brand-500 outline-none">
+                    <option value="all">All Statuses</option>
+                    <option value="cert_uploaded">Uploaded on Server 📄</option>
+                    <option value="cert_not_uploaded">Not Uploaded Yet ⏳</option>
+                    <option value="cert_downloaded">Downloaded by Trainee 📥</option>
+                    <option value="cert_not_downloaded">Uploaded - Not Downloaded 🔔</option>
+                    <option value="passed_cert">Passed with Cert (> 75%)</option>
+                    <option value="passed_no_cert">Passed without Cert (70-75%)</option>
+                    <option value="failed">Failed (< 70%)</option>
+                    <option value="not_examined">Not Examined ⚪</option>
+                    <option value="email_sent">Email Sent ✉️</option>
+                    <option value="email_failed">Email Failed / Not Sent ⚠️</option>
                 </select>
             </div>
         </div>
@@ -119,7 +119,7 @@
                     bool hasCertCode = !string.IsNullOrEmpty(s.CertificateCode) && s.CertificateCode.Trim() != "/";
                     int rowWaveId = s.WaveId ?? selectedWaveId;
                     string certStatus = "not_examined";
-                    string certStatusText = "لم يمتحن بعد";
+                    string certStatusText = "Not Examined";
                     string statusBadgeClass = "bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:text-slate-400 border border-slate-200 dark:border-slate-700";
                     string emailStatusAttr = hasCertCode ? (s.EmailSent ? "email_sent" : "email_failed") : "no_email";
                     string uploadStatusAttr = s.CertificateUploaded ? "uploaded" : "not_uploaded";
@@ -128,25 +128,25 @@
                     if (s.Score > 75m)
                     {
                         certStatus = "passed_cert";
-                        certStatusText = "ناجح بشهادة";
+                        certStatusText = "Passed with Cert";
                         statusBadgeClass = "bg-emerald-500 text-emerald-700 bg-opacity-10 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800";
                     }
                     else if (s.Status == "CertUploaded" || s.CertificateUploaded || hasCertCode)
                     {
                         certStatus = "passed_cert";
-                        certStatusText = "شهادة معتمدة بالنظام";
+                        certStatusText = "Certified in System";
                         statusBadgeClass = "bg-emerald-500 text-emerald-700 bg-opacity-10 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800";
                     }
                     else if (s.Status == "PassedNoCert" || (s.Score >= 70m && s.Score <= 75m))
                     {
                         certStatus = "passed_no_cert";
-                        certStatusText = "ناجح بدون شهادة";
+                        certStatusText = "Passed without Cert";
                         statusBadgeClass = "bg-amber-500 text-amber-700 bg-opacity-10 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800";
                     }
                     else if (s.Status == "Failed" || (s.Score < 70m && s.Score > 0m))
                     {
                         certStatus = "failed";
-                        certStatusText = "ساقط";
+                        certStatusText = "Failed";
                         statusBadgeClass = "bg-rose-500 text-rose-700 bg-opacity-10 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800";
                     }
 
@@ -179,32 +179,32 @@
                                 @if (s.CertificateUploaded)
                                 {
                                     <div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 text-[9px] font-black border border-indigo-200 dark:border-indigo-800 w-fit"
-                                         title="@(s.UploadedAt.HasValue ? $"تاريخ رفع الشهادة: {s.UploadedAt.Value:dd/MM/yyyy hh:mm tt}" : "تم التأكد من وجود الشهادة على السيرفر")">
+                                         title="@(s.UploadedAt.HasValue ? $"Uploaded on Server: {s.UploadedAt.Value:yyyy-MM-dd hh:mm tt}" : "Certificate file verified on server")">
                                         <i class="fas fa-file-circle-check text-indigo-600"></i>
-                                        <span>تم رفع الشهادة ع السيرفر @(s.UploadedAt.HasValue ? $"({s.UploadedAt.Value:dd/MM})" : "")</span>
+                                        <span>Uploaded on Server @(s.UploadedAt.HasValue ? $"({s.UploadedAt.Value:dd/MM})" : "")</span>
                                     </div>
                                 }
                                 else if (hasCertCode)
                                 {
                                     <div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 text-[9px] font-black border border-amber-200 dark:border-amber-800 w-fit">
                                         <i class="fas fa-file-circle-exclamation text-amber-500"></i>
-                                        <span>لم يُرفع ملف PDF بالسيرفر</span>
+                                        <span>PDF Not Uploaded</span>
                                     </div>
                                 }
 
                                 @if (s.IsDownloaded)
                                 {
                                     <div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 text-[9px] font-black border border-sky-200 dark:border-sky-800 w-fit"
-                                         title="@(s.DownloadedAt.HasValue ? $"تاريخ تحميل المتدرب للشهادة: {s.DownloadedAt.Value:dd/MM/yyyy hh:mm tt}" : "قام المتدرب بتحميل الشهادة")">
+                                         title="@(s.DownloadedAt.HasValue ? $"Downloaded at: {s.DownloadedAt.Value:yyyy-MM-dd hh:mm tt}" : "Downloaded by trainee")">
                                         <i class="fas fa-cloud-arrow-down text-sky-600"></i>
-                                        <span>تم التحميل بواسطة المتدرب @(s.DownloadCount > 1 ? $"({s.DownloadCount} مرات)" : "") @(s.DownloadedAt.HasValue ? $"• {s.DownloadedAt.Value:dd/MM hh:mm tt}" : "")</span>
+                                        <span>Downloaded by Trainee @(s.DownloadCount > 1 ? $"({s.DownloadCount}x)" : "") @(s.DownloadedAt.HasValue ? $"• {s.DownloadedAt.Value:dd/MM hh:mm tt}" : "")</span>
                                     </div>
                                 }
                                 else if (s.CertificateUploaded)
                                 {
                                     <div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-50 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400 text-[9px] font-bold border border-slate-200 dark:border-slate-700 w-fit">
                                         <i class="fas fa-clock text-slate-400"></i>
-                                        <span>لم يقم المتدرب بتحميلها بعد</span>
+                                        <span>Not Downloaded Yet</span>
                                     </div>
                                 }
 
@@ -213,13 +213,13 @@
                                     if (s.EmailSent)
                                     {
                                         <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 text-[9px] font-black border border-emerald-200 dark:border-emerald-800 w-fit">
-                                            <i class="fas fa-envelope-circle-check text-emerald-500"></i> تم إرسال الإيميل
+                                            <i class="fas fa-envelope-circle-check text-emerald-500"></i> Email Sent
                                         </div>
                                     }
                                     else
                                     {
                                         <div class="flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 text-[9px] font-black border border-rose-200 dark:border-rose-800 w-fit">
-                                            <i class="fas fa-envelope-circle-xmark text-rose-500"></i> لم يُرسل الإيميل
+                                            <i class="fas fa-envelope-circle-xmark text-rose-500"></i> Email Not Sent
                                         </div>
                                     }
                                 }
@@ -288,6 +288,86 @@
 @section Scripts {
     <script>
         const allWaves = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(waves.Select(w => new { id = w.Id, name = w.WaveName })));
+
+        function notifyToast(type, title, message) {
+            if (typeof window.showAppToast === 'function') {
+                window.showAppToast(type, title, message);
+                return;
+            }
+            if (window.parent && typeof window.parent.showAppToast === 'function') {
+                try {
+                    window.parent.showAppToast(type, title, message);
+                    return;
+                } catch(e) {}
+            }
+            let container = document.getElementById('appGlobalToastContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'appGlobalToastContainer';
+                container.className = 'fixed top-5 left-1/2 -translate-x-1/2 sm:left-auto sm:right-6 sm:translate-x-0 z-[999999] flex flex-col gap-2.5 pointer-events-none max-w-sm w-full px-4 sm:px-0';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = 'pointer-events-auto transform translate-y-[-16px] opacity-0 transition-all duration-300 ease-out flex items-start gap-3 p-4 rounded-2xl shadow-2xl backdrop-blur-xl border text-xs select-none';
+
+            let iconHtml = '';
+            let bgBorder = '';
+            let progressBg = '';
+
+            const t = (type || 'info').toLowerCase();
+            if (t === 'success') {
+                bgBorder = 'bg-slate-900/95 text-emerald-100 border-emerald-500/40 shadow-emerald-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-check-circle"></i></div>';
+                progressBg = 'bg-emerald-400';
+            } else if (t === 'error' || t === 'danger') {
+                bgBorder = 'bg-slate-900/95 text-rose-100 border-rose-500/40 shadow-rose-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-exclamation-circle"></i></div>';
+                progressBg = 'bg-rose-400';
+            } else if (t === 'warning') {
+                bgBorder = 'bg-slate-900/95 text-amber-100 border-amber-500/40 shadow-amber-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-exclamation-triangle"></i></div>';
+                progressBg = 'bg-amber-400';
+            } else {
+                bgBorder = 'bg-slate-900/95 text-indigo-100 border-indigo-500/40 shadow-indigo-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-info-circle"></i></div>';
+                progressBg = 'bg-indigo-400';
+            }
+
+            toast.className += ' ' + bgBorder;
+            toast.innerHTML = `
+                ${iconHtml}
+                <div class="flex-1 min-w-0 pr-1">
+                    <h5 class="font-black text-xs text-white leading-snug">${title || ''}</h5>
+                    ${message ? `<p class="text-[11px] opacity-80 mt-0.5 leading-normal break-words">${message}</p>` : ''}
+                </div>
+                <button type="button" class="text-white/40 hover:text-white transition-colors text-xs p-1 shrink-0" onclick="this.parentElement.remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="absolute bottom-0 left-0 right-0 h-1 rounded-b-2xl overflow-hidden bg-white/10">
+                    <div class="h-full ${progressBg} transition-all ease-linear" style="width: 100%; transition-duration: 3500ms;"></div>
+                </div>
+            `;
+
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-[-16px]', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+                const progressBar = toast.querySelector(`.${progressBg}`);
+                if (progressBar) {
+                    requestAnimationFrame(() => {
+                        progressBar.style.width = '0%';
+                    });
+                }
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-[-8px]', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
         function updateExamList() {
             const type = 0;
             const year = $('#yearFilter').val();
@@ -432,38 +512,28 @@
             .then(r => r.json())
             .then(res => {
                 $('#certExcelInput').val('');
+                Swal.close();
                 if (res.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Import Successful',
-                        text: res.message,
-                        confirmButtonText: 'Reload Page'
-                    }).then(() => {
+                    notifyToast('success', 'Import Successful', res.message);
+                    setTimeout(() => {
                         location.reload();
-                    });
+                    }, 2000);
                 } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Import Failed',
-                        text: res.message
-                    });
+                    notifyToast('error', 'Import Failed', res.message);
                 }
             })
             .catch(err => {
                 $('#certExcelInput').val('');
                 console.error(err);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: 'An error occurred during upload.'
-                });
+                Swal.close();
+                notifyToast('error', 'Error', 'An error occurred during upload.');
             });
         }
 
         function triggerPdfUpload() {
             const selectedWaveId = $('#examFilter').val();
             if (!selectedWaveId || selectedWaveId == "-1" || selectedWaveId == "0") {
-                Swal.fire('تنبيـه', 'يرجى اختيار الـ Wave المطلوبة أولاً من القائمة قبل رفع الشهادات.', 'warning');
+                notifyToast('warning', 'تنبيـه', 'يرجى اختيار الـ Wave المطلوبة أولاً من القائمة قبل رفع الشهادات.');
                 return;
             }
 
@@ -513,7 +583,7 @@
 
             const selectedWaveId = $('#examFilter').val();
             if (!selectedWaveId || selectedWaveId == "-1" || selectedWaveId == "0") {
-                Swal.fire('تنبيـه', 'يرجى اختيار الـ Wave المطلوبة أولاً من القائمة قبل رفع الشهادات.', 'warning');
+                notifyToast('warning', 'تنبيـه', 'يرجى اختيار الـ Wave المطلوبة أولاً من القائمة قبل رفع الشهادات.');
                 return;
             }
 
@@ -596,38 +666,25 @@
                         $('#certPdfInput').val('');
                         try {
                             const res = JSON.parse(xhr.responseText);
+                            Swal.close();
                             if (xhr.status === 200 && res.success) {
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'تم الرفع والتجهيز بنجاح',
-                                    text: res.message,
-                                    confirmButtonText: 'تحديث الجدول'
-                                }).then(() => {
+                                notifyToast('success', 'تم الرفع والتجهيز بنجاح', res.message);
+                                setTimeout(() => {
                                     location.reload();
-                                });
+                                }, 2000);
                             } else {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'فشل الرفع',
-                                    text: res.message || 'حدث خطأ أثناء معالجة الشهادات على السيرفر.'
-                                });
+                                notifyToast('error', 'فشل الرفع', res.message || 'حدث خطأ أثناء معالجة الشهادات على السيرفر.');
                             }
                         } catch(err) {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'خطأ',
-                                text: 'استجابة غير متوقعة من السيرفر.'
-                            });
+                            Swal.close();
+                            notifyToast('error', 'خطأ', 'استجابة غير متوقعة من السيرفر.');
                         }
                     };
 
                     xhr.onerror = function() {
                         $('#certPdfInput').val('');
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'فشل الاتصال',
-                            text: 'حدث خطأ في الاتصال بالسيرفر أثناء رفع الملفات.'
-                        });
+                        Swal.close();
+                        notifyToast('error', 'فشل الاتصال', 'حدث خطأ في الاتصال بالسيرفر أثناء رفع الملفات.');
                     };
 
                     xhr.send(formData);
@@ -722,7 +779,7 @@
                 }
 
                 if (!optionsHtml) {
-                    Swal.fire('Warning', 'No other waves available for reassignment.', 'warning');
+                    notifyToast('warning', 'Notice', 'No other waves available for reassignment.');
                     return;
                 }
 
@@ -766,15 +823,18 @@
                         })
                         .then(r => r.json())
                         .then(res => {
+                            Swal.close();
                             if (res.success) {
-                                Swal.fire('Success', res.message, 'success').then(() => location.reload());
+                                notifyToast('success', 'Success', res.message);
+                                setTimeout(() => location.reload(), 2000);
                             } else {
-                                Swal.fire('Error', res.message, 'error');
+                                notifyToast('error', 'Error', res.message);
                             }
                         })
                         .catch(err => {
                             console.error(err);
-                            Swal.fire('Error', 'An error occurred.', 'error');
+                            Swal.close();
+                            notifyToast('error', 'Error', 'An error occurred.');
                         });
                     }
                 });
@@ -824,23 +884,18 @@
                         })
                         .then(r => r.json())
                         .then(res => {
+                            Swal.close();
                             if (res.success) {
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'تم الإرسال بنجاح',
-                                    text: res.message
-                                }).then(() => location.reload());
+                                notifyToast('success', 'تم الإرسال بنجاح', res.message);
+                                setTimeout(() => location.reload(), 2000);
                             } else {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'فشل الإرسال',
-                                    text: res.message
-                                });
+                                notifyToast('error', 'فشل الإرسال', res.message);
                             }
                         })
                         .catch(err => {
                             console.error(err);
-                            Swal.fire('خطأ', 'حدث خطأ أثناء التواصل مع السيرفر.', 'error');
+                            Swal.close();
+                            notifyToast('error', 'خطأ', 'حدث خطأ أثناء التواصل مع السيرفر.');
                         });
                     }
                 });
