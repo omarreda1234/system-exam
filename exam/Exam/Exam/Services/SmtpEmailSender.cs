@@ -63,8 +63,14 @@ namespace Exam.Services
             }
             email.To.Add(targetAddress);
             email.Subject = cleanSubject;
+            email.Headers.Add("X-Mailer", "Eltarshoubi Academy LMS Portal");
+            email.Priority = MessagePriority.Normal;
 
-            var builder = new BodyBuilder { HtmlBody = htmlMessage };
+            var builder = new BodyBuilder
+            {
+                HtmlBody = htmlMessage,
+                TextBody = System.Text.RegularExpressions.Regex.Replace(htmlMessage, "<.*?>", string.Empty).Trim()
+            };
             email.Body = builder.ToMessageBody();
 
             using var client = new SmtpClient();
@@ -74,10 +80,23 @@ namespace Exam.Services
                 await client.AuthenticateAsync(_settings.Username.Trim(), _settings.Password.Trim());
                 await client.SendAsync(email);
                 await client.DisconnectAsync(true);
+
+                try
+                {
+                    File.AppendAllText(@"c:\exam final\exam\Exam\Exam\wwwroot\reset_log.txt",
+                        $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] SmtpEmailSender SUCCESS: Delivered to {cleanTo}, Subject='{cleanSubject}'{Environment.NewLine}");
+                }
+                catch { }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"MailKit Error: {ex.Message}");
+                try
+                {
+                    File.AppendAllText(@"c:\exam final\exam\Exam\Exam\wwwroot\reset_log.txt",
+                        $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] SmtpEmailSender ERROR: Failed delivering to {cleanTo}. Error: {ex.Message}{Environment.NewLine}");
+                }
+                catch { }
                 throw;
             }
         }

@@ -220,6 +220,14 @@
             #sessionTraineesModal .custom-scrollbar::-webkit-scrollbar-thumb:hover {
                 background: #94a3b8;
             }
+            @@keyframes quotaShake {
+                0%, 100% { transform: translateX(0); }
+                20%, 60% { transform: translateX(-4px); }
+                40%, 80% { transform: translateX(4px); }
+            }
+            .quota-shake {
+                animation: quotaShake 0.35s ease-in-out;
+            }
         </style>
 
         <div class="bg-white rounded-[28px] sm:rounded-[32px] shadow-[0_25px_70px_rgba(15,23,42,0.22)] border border-slate-200/90 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden text-slate-800">
@@ -678,6 +686,74 @@
 
                         <!-- Sub-View 2: Custom Per-Branch Matrix -->
                         <div id="viewBranchStaffMatrix" class="hidden space-y-3">
+                            <!-- Matrix Quota Live Tracker Bar -->
+                            <div class="p-3 bg-gradient-to-r from-purple-50/90 via-indigo-50/50 to-white rounded-2xl border-2 border-purple-200/80 shadow-2xs space-y-2.5">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center text-[10px] shadow-2xs">
+                                            <i class="fas fa-chart-pie"></i>
+                                        </div>
+                                        <span class="text-xs font-black text-slate-800">متابعة توزيع كوتة الفروع مقابل الكوتة الإجمالية المحددة:</span>
+                                    </div>
+                                    <span class="text-[10px] text-slate-400 font-bold hidden sm:inline"><i class="fas fa-shield-halved text-purple-600 mr-1"></i>تحقق تلقائي لمنع تجاوز الكوتة</span>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    <!-- Pharmacists Quota Tracker -->
+                                    <div id="matrixPharmTrackerCard" class="p-2.5 bg-white rounded-xl border border-purple-200 flex items-center justify-between gap-3 shadow-2xs transition-all">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center text-xs shrink-0 font-bold">
+                                                <i class="fas fa-user-doctor"></i>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <div class="text-[11px] font-black text-slate-800 flex items-center gap-1.5 flex-wrap">
+                                                    <span>الصيادلة (Pharmacists)</span>
+                                                    <span class="flex items-center gap-1 text-[10px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200">
+                                                        <span>الكوتة:</span>
+                                                        <input type="number" id="inputMatrixTargetPharmSync" min="0" value="0" placeholder="0"
+                                                               class="w-10 text-center font-black outline-none bg-transparent font-mono"
+                                                               oninput="syncMatrixTargetQuota('pharm', this.value)"
+                                                               title="اضغط لتعديل الكوتة الإجمالية للصيادلة مباشرة" />
+                                                    </span>
+                                                </div>
+                                                <div id="matrixPharmTrackerStatus" class="text-[10px] font-bold text-slate-500 truncate mt-0.5">
+                                                    تم توزيع 0 صيدلي
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <span id="matrixPharmTrackerBadge" class="text-xs font-black font-mono px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
+                                            0 / 0
+                                        </span>
+                                    </div>
+
+                                    <!-- Assistants Quota Tracker -->
+                                    <div id="matrixAssistTrackerCard" class="p-2.5 bg-white rounded-xl border border-indigo-200 flex items-center justify-between gap-3 shadow-2xs transition-all">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs shrink-0 font-bold">
+                                                <i class="fas fa-hand-holding-medical"></i>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <div class="text-[11px] font-black text-slate-800 flex items-center gap-1.5 flex-wrap">
+                                                    <span>المساعدين (Assistants)</span>
+                                                    <span class="flex items-center gap-1 text-[10px] text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-200">
+                                                        <span>الكوتة:</span>
+                                                        <input type="number" id="inputMatrixTargetAssistSync" min="0" value="0" placeholder="0"
+                                                               class="w-10 text-center font-black outline-none bg-transparent font-mono"
+                                                               oninput="syncMatrixTargetQuota('assist', this.value)"
+                                                               title="اضغط لتعديل الكوتة الإجمالية للمساعدين مباشرة" />
+                                                    </span>
+                                                </div>
+                                                <div id="matrixAssistTrackerStatus" class="text-[10px] font-bold text-slate-500 truncate mt-0.5">
+                                                    تم توزيع 0 مساعد
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <span id="matrixAssistTrackerBadge" class="text-xs font-black font-mono px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
+                                            0 / 0
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Bulk Fill Action Bar -->
                             <div class="p-3.5 bg-gradient-to-r from-purple-50/80 via-indigo-50/40 to-slate-50 rounded-2xl border border-purple-200/90 shadow-2xs space-y-2.5">
                                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -800,12 +876,17 @@
                     <!-- Preview Results Area -->
                     <div id="injectionPreviewResultsCard" class="hidden p-4 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-xs font-black text-slate-800 flex items-center gap-2">
                                     <i class="fas fa-users text-purple-600"></i>
                                     <span>Rotation Preview Results: <span id="injectionPreviewCountBadge" class="font-mono text-purple-600">0</span> Candidates</span>
                                 </span>
                                 <span class="text-[11px] font-bold text-slate-400 hidden sm:inline">• الأقل حضوراً أولاً</span>
+                                <!-- Shortage Alert Pill Button -->
+                                <button type="button" id="btnShortageAuditPill" onclick="openShortageAuditModal()" class="hidden px-2.5 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 border border-amber-300 text-[11px] font-black items-center gap-1.5 cursor-pointer shadow-2xs transition-all active:scale-95 animate-pulse" title="اضغط لعرض تفاصيل وأسباب استبعاد الموظفين">
+                                    <i class="fas fa-exclamation-triangle text-amber-500"></i>
+                                    <span id="shortageAuditPillText">عجز في المقاعد</span>
+                                </button>
                             </div>
                             <div class="flex items-center gap-2">
                                 <button type="button" onclick="exportPreviewToExcel()" id="btnExportPreviewExcel" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer" title="تصدير كشف التحضير والمتابعة كشيت إكسيل ملون ومنظم">
@@ -814,11 +895,89 @@
                                 </button>
                             </div>
                         </div>
+
+                        <!-- Shortage Alert Banner Inside Preview Card -->
+                        <div id="injectionShortageBanner" class="hidden p-3.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0 text-sm shadow-2xs">
+                                    <i class="fas fa-user-slash"></i>
+                                </div>
+                                <div>
+                                    <h6 class="text-xs font-black text-amber-950 flex items-center gap-1.5" id="shortageBannerTitle">
+                                        <span>تم رصد نقص في عدد المرشحين عن المقاعد المطلوبة</span>
+                                    </h6>
+                                    <p class="text-[11px] text-amber-700 font-medium" id="shortageBannerDesc">
+                                        تم استبعاد بعض الموظفين لأنهم مسجلون بالفعل في السيشن لمنع التكرار أو لعدم توفر كوادر كافية بالقسم/الفرع.
+                                    </p>
+                                </div>
+                            </div>
+                            <button type="button" onclick="openShortageAuditModal()" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0">
+                                <i class="fas fa-search-plus"></i>
+                                <span>أسباب استبعاد كل موظف بالتفصيل</span>
+                            </button>
+                        </div>
+
                         <div id="injectionPreviewCandidatesList" class="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
                             <!-- Rendered by JS -->
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Quota Shortage & Candidate Exclusion Audit Dialog -->
+    <div id="shortageAuditModal" onclick="if (event.target === this) closeShortageAuditModal()" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in overflow-hidden">
+        <div class="bg-white rounded-[28px] sm:rounded-[32px] shadow-[0_25px_70px_rgba(15,23,42,0.25)] border border-slate-200/90 w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden text-slate-800">
+            <!-- Modal Header -->
+            <div class="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-700 flex items-center justify-center text-lg shadow-2xs border border-amber-300/50">
+                        <i class="fas fa-user-slash"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-base sm:text-lg font-black text-slate-900 tracking-tight">تقرير تشخيص عجز المقاعد واستبعاد الموظفين</h3>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-50 text-amber-700 uppercase border border-amber-200 font-mono tracking-wider">Shortage Audit</span>
+                        </div>
+                        <p class="text-xs text-slate-500 font-medium mt-0.5">يوضح بدقة أسباب استبعاد كل موظف وعدم اكتمال الكوتة المطلوبة في محرك التدوير العادل</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeShortageAuditModal()" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-all cursor-pointer">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="p-4 sm:px-6 bg-amber-50/40 border-b border-amber-100/80 flex items-center justify-around gap-2 text-center shrink-0">
+                <div class="p-2 sm:px-4 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex-1">
+                    <span class="text-[10px] font-bold text-slate-400 block uppercase">المقاعد المطلوبة</span>
+                    <span id="auditStatsRequested" class="text-base sm:text-lg font-black font-mono text-purple-700">0</span>
+                </div>
+                <div class="p-2 sm:px-4 rounded-xl bg-white border border-slate-200/80 shadow-2xs flex-1">
+                    <span class="text-[10px] font-bold text-slate-400 block uppercase">تم جلبهم بالمعاينة</span>
+                    <span id="auditStatsFulfilled" class="text-base sm:text-lg font-black font-mono text-emerald-600">0</span>
+                </div>
+                <div class="p-2 sm:px-4 rounded-xl bg-white border border-rose-200/80 shadow-2xs flex-1">
+                    <span class="text-[10px] font-bold text-rose-500 block uppercase">العجز الإجمالي</span>
+                    <span id="auditStatsShortage" class="text-base sm:text-lg font-black font-mono text-rose-600">0</span>
+                </div>
+            </div>
+
+            <!-- Body: Scrollable Breakdown -->
+            <div id="shortageAuditModalContent" class="p-5 sm:p-6 space-y-4 overflow-y-auto max-h-[60vh] custom-scrollbar">
+                <!-- Dynamically populated by JS -->
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/60 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div class="text-[11px] text-slate-500 font-medium flex items-center gap-2">
+                    <i class="fas fa-lightbulb text-amber-500 text-sm"></i>
+                    <span>لتغطية المقاعد الناقصة، يمكنك زيادة كوتة أقسام أخرى بها موظفون متاحون أو توسيع نطاق الفروع والشيفتات.</span>
+                </div>
+                <button type="button" onclick="closeShortageAuditModal()" class="w-full sm:w-auto px-6 py-2.5 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer">
+                    إغلاق التقرير
+                </button>
             </div>
         </div>
     </div>
@@ -2305,7 +2464,182 @@
         };
 
         window.onBranchStaffQuotaChanged = function () {
+            if (typeof updateMatrixQuotaTracker === 'function') updateMatrixQuotaTracker();
             updateInjectionHeadcount();
+        };
+
+        window.syncMatrixTargetQuota = function (type, val) {
+            const num = Math.max(0, parseInt(val) || 0);
+            if (type === 'pharm') {
+                const globalInput = document.getElementById('inputQuotaPharmacist');
+                if (globalInput) globalInput.value = num;
+            } else {
+                const globalInput = document.getElementById('inputQuotaAssistant');
+                if (globalInput) globalInput.value = num;
+            }
+            onBranchStaffQuotaChanged();
+        };
+
+        window.updateMatrixQuotaTracker = function () {
+            const targetPharm = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
+            const targetAssist = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+
+            let totalPharm = 0;
+            let totalAssist = 0;
+            document.querySelectorAll('.branch-matrix-row').forEach(row => {
+                totalPharm += parseInt(row.querySelector('.matrix-pharm-input')?.value) || 0;
+                totalAssist += parseInt(row.querySelector('.matrix-assist-input')?.value) || 0;
+            });
+
+            // Update Pharmacist Tracker
+            const pSyncInput = document.getElementById('inputMatrixTargetPharmSync');
+            if (pSyncInput && document.activeElement !== pSyncInput) {
+                pSyncInput.value = targetPharm;
+            }
+
+            const pStatus = document.getElementById('matrixPharmTrackerStatus');
+            const pBadge = document.getElementById('matrixPharmTrackerBadge');
+            const pCard = document.getElementById('matrixPharmTrackerCard');
+
+            if (pStatus && pBadge && pCard) {
+                if (targetPharm > 0) {
+                    pBadge.textContent = `${totalPharm} / ${targetPharm}`;
+                    if (totalPharm > targetPharm) {
+                        const diff = totalPharm - targetPharm;
+                        pStatus.innerHTML = `<span class="text-rose-600 font-black">⚠️ تجاوز الكوتة بمقدار ${diff} صيدلي!</span>`;
+                        pBadge.className = 'text-xs font-black font-mono px-2.5 py-1 rounded-lg bg-rose-100 text-rose-700 border border-rose-300 animate-pulse shrink-0';
+                        pCard.className = 'p-2.5 bg-rose-50/40 rounded-xl border-2 border-rose-400 flex items-center justify-between gap-3 shadow-2xs transition-all';
+                    } else if (totalPharm === targetPharm) {
+                        pStatus.innerHTML = `<span class="text-emerald-600 font-black">✅ تم استيفاء كامل كوتة الصيادلة (${targetPharm}/${targetPharm})</span>`;
+                        pBadge.className = 'text-xs font-black font-mono px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0';
+                        pCard.className = 'p-2.5 bg-emerald-50/30 rounded-xl border border-emerald-300 flex items-center justify-between gap-3 shadow-2xs transition-all';
+                    } else {
+                        const rem = targetPharm - totalPharm;
+                        pStatus.innerHTML = `<span class="text-purple-700 font-bold">تم توزيع ${totalPharm} صيدلي • <span class="font-black text-purple-900">متبقي ${rem} مقعد</span></span>`;
+                        pBadge.className = 'text-xs font-black font-mono px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 shrink-0';
+                        pCard.className = 'p-2.5 bg-white rounded-xl border border-purple-200 flex items-center justify-between gap-3 shadow-2xs transition-all';
+                    }
+                } else {
+                    pBadge.textContent = `${totalPharm}`;
+                    pStatus.textContent = totalPharm > 0 ? `تم توزيع ${totalPharm} صيدلي (الكوتة غير محددة)` : `لم يتم توزيع صيادلة بعد`;
+                    pBadge.className = 'text-xs font-black font-mono px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 shrink-0';
+                    pCard.className = 'p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-3 shadow-2xs transition-all';
+                }
+            }
+
+            // Update Assistant Tracker
+            const aSyncInput = document.getElementById('inputMatrixTargetAssistSync');
+            if (aSyncInput && document.activeElement !== aSyncInput) {
+                aSyncInput.value = targetAssist;
+            }
+
+            const aStatus = document.getElementById('matrixAssistTrackerStatus');
+            const aBadge = document.getElementById('matrixAssistTrackerBadge');
+            const aCard = document.getElementById('matrixAssistTrackerCard');
+
+            if (aStatus && aBadge && aCard) {
+                if (targetAssist > 0) {
+                    aBadge.textContent = `${totalAssist} / ${targetAssist}`;
+                    if (totalAssist > targetAssist) {
+                        const diff = totalAssist - targetAssist;
+                        aStatus.innerHTML = `<span class="text-rose-600 font-black">⚠️ تجاوز الكوتة بمقدار ${diff} مساعد!</span>`;
+                        aBadge.className = 'text-xs font-black font-mono px-2.5 py-1 rounded-lg bg-rose-100 text-rose-700 border border-rose-300 animate-pulse shrink-0';
+                        aCard.className = 'p-2.5 bg-rose-50/40 rounded-xl border-2 border-rose-400 flex items-center justify-between gap-3 shadow-2xs transition-all';
+                    } else if (totalAssist === targetAssist) {
+                        aStatus.innerHTML = `<span class="text-emerald-600 font-black">✅ تم استيفاء كامل كوتة المساعدين (${targetAssist}/${targetAssist})</span>`;
+                        aBadge.className = 'text-xs font-black font-mono px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0';
+                        aCard.className = 'p-2.5 bg-emerald-50/30 rounded-xl border border-emerald-300 flex items-center justify-between gap-3 shadow-2xs transition-all';
+                    } else {
+                        const rem = targetAssist - totalAssist;
+                        aStatus.innerHTML = `<span class="text-indigo-700 font-bold">تم توزيع ${totalAssist} مساعد • <span class="font-black text-indigo-900">متبقي ${rem} مقعد</span></span>`;
+                        aBadge.className = 'text-xs font-black font-mono px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0';
+                        aCard.className = 'p-2.5 bg-white rounded-xl border border-indigo-200 flex items-center justify-between gap-3 shadow-2xs transition-all';
+                    }
+                } else {
+                    aBadge.textContent = `${totalAssist}`;
+                    aStatus.textContent = totalAssist > 0 ? `تم توزيع ${totalAssist} مساعد (الكوتة غير محددة)` : `لم يتم توزيع مساعدين بعد`;
+                    aBadge.className = 'text-xs font-black font-mono px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 shrink-0';
+                    aCard.className = 'p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-3 shadow-2xs transition-all';
+                }
+            }
+        };
+
+        window.onBranchMatrixInputChanged = function (input, type) {
+            if (!input) return;
+            let val = parseInt(input.value);
+            if (isNaN(val) || val < 0) {
+                if (input.value !== '') input.value = 0;
+                val = 0;
+            }
+
+            const targetPharm = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
+            const targetAssist = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+            const maxPharmPerBranch = parseInt(document.getElementById('inputMaxPharmacistPerBranch')?.value) || 0;
+            const maxAssistPerBranch = parseInt(document.getElementById('inputMaxAssistantPerBranch')?.value) || 0;
+
+            const isPharm = (type === 'pharm');
+            const targetQuota = isPharm ? targetPharm : targetAssist;
+            const maxPerBranch = isPharm ? maxPharmPerBranch : maxAssistPerBranch;
+            const roleLabel = isPharm ? 'صيدلي' : 'مساعد';
+            const roleLabelPlural = isPharm ? 'الصيادلة' : 'المساعدين';
+
+            // Available staff in this branch
+            const avail = parseInt(input.getAttribute('max')) || 9999;
+
+            // Calculate sum of other branches
+            let otherSum = 0;
+            const selector = isPharm ? '.matrix-pharm-input' : '.matrix-assist-input';
+            document.querySelectorAll(selector).forEach(other => {
+                if (other !== input) {
+                    otherSum += parseInt(other.value) || 0;
+                }
+            });
+
+            // Calculate max allowed for this input
+            let maxAllowed = avail;
+            if (maxPerBranch > 0) {
+                maxAllowed = Math.min(maxAllowed, maxPerBranch);
+            }
+
+            let quotaCapped = false;
+            let branchCapCapped = false;
+            let availCapped = false;
+
+            if (targetQuota > 0) {
+                const remainingAllowed = Math.max(0, targetQuota - otherSum);
+                if (val > remainingAllowed) {
+                    quotaCapped = true;
+                }
+                maxAllowed = Math.min(maxAllowed, remainingAllowed);
+            }
+
+            if (val > maxAllowed) {
+                if (maxPerBranch > 0 && val > maxPerBranch && maxAllowed === maxPerBranch) {
+                    branchCapCapped = true;
+                } else if (val > avail && maxAllowed === avail) {
+                    availCapped = true;
+                }
+
+                input.value = maxAllowed;
+                input.classList.add('border-rose-500', 'bg-rose-50', 'text-rose-700');
+                setTimeout(() => {
+                    input.classList.remove('border-rose-500', 'bg-rose-50', 'text-rose-700');
+                }, 1200);
+
+                if (branchCapCapped) {
+                    showAppToast('warning', 'الحد الأقصى للفرع', `تم ضبط القيمة إلى (${maxAllowed})، فالحد الأقصى المسموح بسحبه من الفرع الواحد هو ${maxPerBranch} ${roleLabel}.`);
+                } else if (quotaCapped) {
+                    if (maxAllowed === 0) {
+                        showAppToast('warning', 'اكتملت الكوتة!', `تم استيفاء كامل كوتة ${roleLabelPlural} المحددة (${targetQuota} مقعد) بالفروع الأخرى بالفعل.`);
+                    } else {
+                        showAppToast('warning', 'تجاوز الكوتة المحددة!', `المتبقي المتاح من كوتة ${roleLabelPlural} هو (${maxAllowed}) مقعد فقط (الحد الأقصى الإجمالي: ${targetQuota}). تم ضبط القيمة تلقائياً لتفادي تجاوز الكوتة.`);
+                    }
+                } else if (availCapped) {
+                    showAppToast('warning', 'العدد المتاح بالفرع', `العدد المطلوب أكبر من المتاح بهذا الفرع (${avail} ${roleLabel}). تم ضبط القيمة للحد الأقصى المتاح.`);
+                }
+            }
+
+            onBranchMatrixQuotaChanged();
         };
 
         window.switchBranchStaffSubMode = function (subMode) {
@@ -2401,7 +2735,7 @@
                             <div class="flex items-center gap-1.5 bg-purple-50/80 border border-purple-200/90 rounded-xl px-2.5 py-1 shadow-2xs">
                                 <span class="text-[11px] font-black text-purple-700">صيدلي:</span>
                                 <input type="number" min="0" max="${pAvail}" value="${prevPharm}" placeholder="0"
-                                       oninput="onBranchMatrixQuotaChanged()"
+                                       oninput="onBranchMatrixInputChanged(this, 'pharm')"
                                        class="matrix-pharm-input w-12 text-center text-xs font-black text-purple-900 bg-white border border-purple-200/60 rounded-lg py-0.5 outline-none focus:border-purple-500 font-mono" />
                             </div>
 
@@ -2409,7 +2743,7 @@
                             <div class="flex items-center gap-1.5 bg-indigo-50/80 border border-indigo-200/90 rounded-xl px-2.5 py-1 shadow-2xs">
                                 <span class="text-[11px] font-black text-indigo-700">مساعد:</span>
                                 <input type="number" min="0" max="${aAvail}" value="${prevAssist}" placeholder="0"
-                                       oninput="onBranchMatrixQuotaChanged()"
+                                       oninput="onBranchMatrixInputChanged(this, 'assist')"
                                        class="matrix-assist-input w-12 text-center text-xs font-black text-indigo-900 bg-white border border-indigo-200/60 rounded-lg py-0.5 outline-none focus:border-indigo-500 font-mono" />
                             </div>
 
@@ -2454,6 +2788,7 @@
                 }
             }
 
+            updateMatrixQuotaTracker();
             updateInjectionHeadcount();
         };
 
@@ -2467,16 +2802,48 @@
                 return;
             }
 
+            const targetPharm = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
+            const targetAssist = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+            const maxPharm = parseInt(document.getElementById('inputMaxPharmacistPerBranch')?.value) || 0;
+            const maxAssist = parseInt(document.getElementById('inputMaxAssistantPerBranch')?.value) || 0;
+
+            if (maxPharm > 0 && bulkPharm > maxPharm) {
+                showAppToast('error', 'تجاوز الحد الأقصى للفرع', `كوتة الصيادلة المطلوبة (${bulkPharm}) تتجاوز الحد الأقصى للسحب من الفرع الواحد (${maxPharm} صيدلي).`);
+                return;
+            }
+            if (maxAssist > 0 && bulkAssist > maxAssist) {
+                showAppToast('error', 'تجاوز الحد الأقصى للفرع', `كوتة المساعدين المطلوبة (${bulkAssist}) تتجاوز الحد الأقصى للسحب من الفرع الواحد (${maxAssist} مساعد).`);
+                return;
+            }
+
+            const totalPharmNeeded = bulkPharm * rows.length;
+            const totalAssistNeeded = bulkAssist * rows.length;
+
+            if (targetPharm > 0 && totalPharmNeeded > targetPharm) {
+                showAppToast('error', 'تجاوز كوتة الصيادلة!', `تطبيق ${bulkPharm} صيدلي على ${rows.length} فرع يتطلب (${totalPharmNeeded}) مقعد، وهو أكبر من كوتة الصيادلة المحددة (${targetPharm} صيدلي). يرجى تقليل العدد أو تحديد عدد فروع أقل.`);
+                return;
+            }
+            if (targetAssist > 0 && totalAssistNeeded > targetAssist) {
+                showAppToast('error', 'تجاوز كوتة المساعدين!', `تطبيق ${bulkAssist} مساعد على ${rows.length} فرع يتطلب (${totalAssistNeeded}) مقعد، وهو أكبر من كوتة المساعدين المحددة (${targetAssist} مساعد). يرجى تقليل العدد أو تحديد عدد فروع أقل.`);
+                return;
+            }
+
             rows.forEach(row => {
                 const pInput = row.querySelector('.matrix-pharm-input');
                 const aInput = row.querySelector('.matrix-assist-input');
 
-                if (pInput) pInput.value = bulkPharm;
-                if (aInput) aInput.value = bulkAssist;
+                if (pInput) {
+                    const pMax = parseInt(pInput.getAttribute('max')) || 9999;
+                    pInput.value = Math.min(bulkPharm, pMax);
+                }
+                if (aInput) {
+                    const aMax = parseInt(aInput.getAttribute('max')) || 9999;
+                    aInput.value = Math.min(bulkAssist, aMax);
+                }
             });
 
             onBranchMatrixQuotaChanged();
-            showAppToast('success', 'تم التطبيق', `تم تطبيق الكوتة (${bulkPharm} صيدلي + ${bulkAssist} مساعد) على ${rows.length} فرع.`);
+            showAppToast('success', 'تم التطبيق', `تم تطبيق الكوتة (${bulkPharm} صيدلي + ${bulkAssist} مساعد) على ${rows.length} فرع بنجاح.`);
         };
 
         window.clearBranchMatrixInputs = function () {
@@ -2534,8 +2901,9 @@
             const savedQuotas = {};
             if (preserveValues) {
                 document.querySelectorAll('.dept-quota-input').forEach(input => {
+                    const avail = parseInt(input.getAttribute('data-available-staff')) || 0;
                     const val = parseInt(input.value) || 0;
-                    if (val > 0) savedQuotas[input.dataset.deptId] = val;
+                    if (avail > 0 && val > 0) savedQuotas[input.dataset.deptId] = Math.min(val, avail);
                 });
             } else if (!injectionState.departments || injectionState.departments.length === 0) {
                 listWrapper.innerHTML = `
@@ -2572,6 +2940,86 @@
             }
         };
 
+        window._lastDeptToastTime = window._lastDeptToastTime || {};
+
+        window.showDeptZeroStaffToast = function (deptName, deptId) {
+            const now = Date.now();
+            const key = deptId || deptName || 'default';
+            const lastTime = window._lastDeptToastTime[key] || 0;
+            if (now - lastTime < 1800) {
+                return;
+            }
+            window._lastDeptToastTime[key] = now;
+            showAppToast('warning', 'لا توجد كوادر متاحة', `قسم "${deptName}" لا يحتوي على أي موظفين متاحين للتسكين حالياً (0 Available Staff). لا يمكن إدخال كوتة لهذا القسم.`);
+        };
+
+        window.flashDeptQuotaError = function (input) {
+            if (!input) return;
+            const box = input.closest('.dept-quota-box') || input.parentElement || input;
+            box.classList.add('border-rose-400', 'bg-rose-50', 'ring-2', 'ring-rose-200', 'quota-shake');
+            input.classList.add('text-rose-700');
+            setTimeout(() => {
+                box.classList.remove('border-rose-400', 'bg-rose-50', 'ring-2', 'ring-rose-200', 'quota-shake');
+                input.classList.remove('text-rose-700');
+            }, 1000);
+        };
+
+        window.checkDeptQuotaKey = function (event, input) {
+            const avail = parseInt(input.getAttribute('data-available-staff')) || 0;
+            const deptName = input.getAttribute('data-dept-name') || 'القسم';
+            const deptId = input.getAttribute('data-dept-id') || '';
+
+            if (avail <= 0) {
+                if (['Tab', 'Escape'].includes(event.key)) {
+                    return;
+                }
+                event.preventDefault();
+                input.value = 0;
+                flashDeptQuotaError(input);
+                showDeptZeroStaffToast(deptName, deptId);
+                updateInjectionHeadcount();
+                return false;
+            }
+        };
+
+        window.checkDeptQuotaFocus = function (input) {
+            const avail = parseInt(input.getAttribute('data-available-staff')) || 0;
+            const deptName = input.getAttribute('data-dept-name') || 'القسم';
+            const deptId = input.getAttribute('data-dept-id') || '';
+
+            if (avail <= 0) {
+                input.value = 0;
+                flashDeptQuotaError(input);
+                showDeptZeroStaffToast(deptName, deptId);
+                updateInjectionHeadcount();
+            }
+        };
+
+        window.validateDeptQuotaInput = function (input) {
+            const avail = parseInt(input.getAttribute('data-available-staff')) || 0;
+            const deptName = input.getAttribute('data-dept-name') || 'القسم';
+            const deptId = input.getAttribute('data-dept-id') || '';
+
+            if (avail <= 0) {
+                input.value = 0;
+                flashDeptQuotaError(input);
+                showDeptZeroStaffToast(deptName, deptId);
+                updateInjectionHeadcount();
+                return;
+            }
+
+            let val = parseInt(input.value);
+            if (isNaN(val) || val < 0) {
+                input.value = '';
+            } else if (val > avail) {
+                input.value = avail;
+                flashDeptQuotaError(input);
+                showAppToast('warning', 'تجاوز الكوادر المتاحة', `العدد المطلوب في قسم (${deptName}) يتجاوز الكوادر المتاحة (${avail}). تم ضبط القيمة تلقائياً للحد الأقصى المتاح.`);
+            }
+
+            updateInjectionHeadcount();
+        };
+
         window.renderInjectionDepartments = function (savedQuotas = {}) {
             const listWrapper = document.getElementById('injectionDepartmentsList');
             if (!listWrapper) return;
@@ -2584,29 +3032,38 @@
                 const deptId = d.id ?? d.Id;
                 const deptName = d.name || d.Name || 'Department';
                 const staffCount = d.staffCount ?? d.ActiveStaffCount ?? 0;
-                const prevVal = savedQuotas[deptId] !== undefined ? savedQuotas[deptId] : '';
+                const isZero = (staffCount <= 0);
+                let prevVal = savedQuotas[deptId] !== undefined ? savedQuotas[deptId] : '';
+                if (isZero) {
+                    prevVal = 0;
+                }
 
                 return `
-                <div class="p-3.5 bg-white rounded-2xl border border-slate-200/90 hover:border-purple-300 flex items-center justify-between gap-3 shadow-2xs hover:shadow-xs transition-all group">
+                <div class="dept-card p-3.5 bg-white rounded-2xl border border-slate-200/90 hover:border-purple-300 flex items-center justify-between gap-3 shadow-2xs hover:shadow-xs transition-all group ${isZero ? 'bg-slate-50/60 opacity-80' : ''}">
                     <div class="flex items-center gap-3 min-w-0">
-                        <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-sm shrink-0 font-bold border border-purple-100 group-hover:bg-purple-600 group-hover:text-white transition-all shadow-2xs">
+                        <div class="w-10 h-10 rounded-xl ${isZero ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-purple-50 text-purple-600 border-purple-100 group-hover:bg-purple-600 group-hover:text-white'} flex items-center justify-center text-sm shrink-0 font-bold border transition-all shadow-2xs">
                             <i class="fas fa-users-gear"></i>
                         </div>
                         <div class="min-w-0">
-                            <h5 class="text-xs font-black text-slate-800 truncate">${deptName}</h5>
+                            <h5 class="text-xs font-black ${isZero ? 'text-slate-600' : 'text-slate-800'} truncate">${deptName}</h5>
                             <div class="flex items-center gap-1.5 mt-0.5">
-                                <span class="w-1.5 h-1.5 rounded-full ${staffCount > 0 ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
-                                <span class="text-[10px] text-slate-400 font-bold">${staffCount} Available Staff</span>
+                                <span class="w-1.5 h-1.5 rounded-full ${!isZero ? 'bg-emerald-500' : 'bg-rose-400'}"></span>
+                                <span class="text-[10px] ${!isZero ? 'text-slate-400 font-bold' : 'text-rose-500 font-black'}">${staffCount} Available Staff</span>
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 shrink-0 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-purple-500 focus-within:bg-white transition-all shadow-2xs">
+                    <div class="dept-quota-box flex items-center gap-2 shrink-0 ${isZero ? 'bg-slate-100/90 border-slate-200' : 'bg-slate-50 border-slate-200'} border rounded-xl px-2.5 py-1.5 focus-within:border-purple-500 focus-within:bg-white transition-all shadow-2xs">
                         <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Quota:</span>
-                        <input type="number" min="0" max="${staffCount}" data-dept-id="${deptId}" data-dept-name="${deptName}"
-                               oninput="updateInjectionHeadcount()"
-                               value="${prevVal}"
+                        <input type="number" min="0" max="${staffCount}" data-dept-id="${deptId}" data-dept-name="${deptName}" data-available-staff="${staffCount}"
+                               onkeydown="checkDeptQuotaKey(event, this)"
+                               oninput="validateDeptQuotaInput(this)"
+                               onchange="validateDeptQuotaInput(this)"
+                               onfocus="checkDeptQuotaFocus(this)"
+                               onclick="checkDeptQuotaFocus(this)"
+                               onpaste="setTimeout(() => validateDeptQuotaInput(this), 0)"
+                               value="${isZero ? 0 : prevVal}"
                                placeholder="0"
-                               class="dept-quota-input w-14 px-1 py-0.5 bg-transparent text-xs font-black text-center text-purple-700 outline-none font-mono" />
+                               class="dept-quota-input w-14 px-1 py-0.5 bg-transparent text-xs font-black text-center ${isZero ? 'text-slate-400 cursor-not-allowed' : 'text-purple-700'} outline-none font-mono transition-colors" />
                     </div>
                 </div>`;
             }).join('');
@@ -2635,6 +3092,10 @@
 
             let deptTotal = 0;
             document.querySelectorAll('.dept-quota-input').forEach(input => {
+                const avail = parseInt(input.getAttribute('data-available-staff')) || 0;
+                if (avail <= 0 && input.value !== '0' && input.value !== '') {
+                    input.value = 0;
+                }
                 deptTotal += parseInt(input.value) || 0;
             });
 
@@ -2662,21 +3123,36 @@
             const btnExecute = document.getElementById('btnExecuteInjection');
             const previewCard = document.getElementById('injectionPreviewResultsCard');
 
-            if (grandTotal > totalSeats) {
+            const isMatrix = injectionState.branchStaffSubMode === 'matrix';
+            const targetPharm = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
+            const targetAssist = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+            const hasPharmExceeded = isMatrix && (targetPharm > 0 && pharmQuota > targetPharm);
+            const hasAssistExceeded = isMatrix && (targetAssist > 0 && assistQuota > targetAssist);
+
+            if (grandTotal > totalSeats || hasPharmExceeded || hasAssistExceeded) {
                 // If count exceeds total seats, immediately hide and reset preview
                 if (previewCard && !previewCard.classList.contains('hidden')) {
                     previewCard.classList.add('hidden');
                     injectionState.previewCandidates = [];
                 }
 
+                let reason = '';
+                if (hasPharmExceeded) {
+                    reason = `تجاوز كوتة الصيادلة (${pharmQuota} / ${targetPharm} صيدلي)`;
+                } else if (hasAssistExceeded) {
+                    reason = `تجاوز كوتة المساعدين (${assistQuota} / ${targetAssist} مساعد)`;
+                } else {
+                    reason = `تجاوزت سعة المقاعد المحددة (${grandTotal} / ${totalSeats} مقعد)`;
+                }
+
                 // Visually disable preview and confirm buttons
                 if (btnPreview) {
                     btnPreview.classList.add('opacity-50', 'cursor-not-allowed');
-                    btnPreview.title = `تجاوزت سعة المقاعد المحددة (${grandTotal} / ${totalSeats} مقعد)`;
+                    btnPreview.title = reason;
                 }
                 if (btnExecute) {
                     btnExecute.classList.add('opacity-50', 'cursor-not-allowed');
-                    btnExecute.title = `تجاوزت سعة المقاعد المحددة (${grandTotal} / ${totalSeats} مقعد)`;
+                    btnExecute.title = reason;
                 }
 
                 if (badge) {
@@ -2688,10 +3164,10 @@
                     const detailsStr = details.length > 0 ? ` (${details.join(' + ')})` : '';
 
                     badge.className = 'text-xs font-black font-mono text-rose-700 bg-rose-50 px-3.5 py-1.5 rounded-xl border-2 border-rose-400 shadow-sm animate-pulse';
-                    badge.innerHTML = `<i class="fas fa-exclamation-triangle text-rose-600 mr-1.5"></i> تجاوز سعة المقاعد: ${grandTotal} / ${totalSeats} مقعد${detailsStr}`;
+                    badge.innerHTML = `<i class="fas fa-exclamation-triangle text-rose-600 mr-1.5"></i> ${reason}${detailsStr}`;
 
                     // Trigger toast error if count newly exceeds total seats
-                    if (injectionState._lastExceededCount !== grandTotal) {
+                    if (grandTotal > totalSeats && injectionState._lastExceededCount !== grandTotal) {
                         injectionState._lastExceededCount = grandTotal;
                         showAppToast('error', 'تم تجاوز سعة المقاعد!', `العدد المطلوب (${grandTotal} مقعد) أكبر من سعة الجلسة المتاحة (${totalSeats} مقعد)! تم إيقاف المعاينة والتسكين.`);
                     }
@@ -2720,6 +3196,7 @@
                     badge.innerHTML = `المقاعد المطلوبة: ${grandTotal} / ${totalSeats} مقعد${detailsStr}`;
                 }
             }
+            if (typeof updateMatrixQuotaTracker === 'function') updateMatrixQuotaTracker();
         };
 
         window.clearInjectionQuotas = function () {
@@ -2738,7 +3215,10 @@
                 switchBranchStaffSubMode('global');
             }
 
-            document.querySelectorAll('.dept-quota-input').forEach(input => input.value = '');
+            document.querySelectorAll('.dept-quota-input').forEach(input => {
+                const avail = parseInt(input.getAttribute('data-available-staff')) || 0;
+                input.value = (avail <= 0) ? 0 : '';
+            });
             injectionState.selectedBranchIds = [];
             injectionState.selectedShiftIds = [];
             injectionState._lastExceededCount = null;
@@ -2827,7 +3307,10 @@
                 if (maxPharmInput) maxPharmInput.value = 0;
                 if (maxAssistInput) maxAssistInput.value = 0;
 
-                document.querySelectorAll('.dept-quota-input').forEach(input => input.value = '');
+                document.querySelectorAll('.dept-quota-input').forEach(input => {
+                const avail = parseInt(input.getAttribute('data-available-staff')) || 0;
+                input.value = (avail <= 0) ? 0 : '';
+            });
 
                 let hasBranchQuotas = false;
                 let hasDeptQuotas = false;
@@ -2867,9 +3350,14 @@
                     quotas.forEach(q => {
                         const input = document.querySelector(`.dept-quota-input[data-dept-id="${q.departmentId || q.DepartmentId}"]`);
                         if (input) {
+                            const avail = parseInt(input.getAttribute('data-available-staff')) || 0;
                             const val = q.quota || q.Quota || 0;
-                            input.value = val;
-                            if (val > 0) hasDeptQuotas = true;
+                            if (avail <= 0) {
+                                input.value = 0;
+                            } else {
+                                input.value = Math.min(val, avail);
+                                if (val > 0) hasDeptQuotas = true;
+                            }
                         }
                     });
 
@@ -3116,6 +3604,22 @@
                 return;
             }
 
+            if (isMatrix) {
+                const targetPharm = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
+                const targetAssist = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+                const totalPharm = matrixQuotas.reduce((a, b) => a + (b.pharmacistQuota || 0), 0);
+                const totalAssist = matrixQuotas.reduce((a, b) => a + (b.assistantQuota || 0), 0);
+
+                if (targetPharm > 0 && totalPharm > targetPharm) {
+                    showAppToast('error', 'تجاوز كوتة الصيادلة!', `إجمالي الصيادلة المحددين بالفروع (${totalPharm}) يتجاوز كوتة الصيادلة المحددة (${targetPharm} صيدلي). يرجى تقليل أعداد الفروع أولاً.`);
+                    return;
+                }
+                if (targetAssist > 0 && totalAssist > targetAssist) {
+                    showAppToast('error', 'تجاوز كوتة المساعدين!', `إجمالي المساعدين المحددين بالفروع (${totalAssist}) يتجاوز كوتة المساعدين المحددة (${targetAssist} مساعد). يرجى تقليل أعداد الفروع أولاً.`);
+                    return;
+                }
+            }
+
             const branchStaffTotal = isMatrix ? matrixQuotas.reduce((a, b) => a + b.pharmacistQuota + b.assistantQuota, 0) : (pharmQuota + assistQuota);
             const grandTotal = branchStaffTotal + deptQuotas.reduce((a, b) => a + b.quota, 0);
             const totalSeats = parseInt(document.getElementById('inputSessionTotalSeats')?.value) || sessionTraineesState.totalSeats || 50;
@@ -3175,6 +3679,41 @@
                     injectionState.previewCandidates = data.candidates;
                     countBadge.textContent = data.candidates.length;
 
+                    // Shortage Audit Handling
+                    injectionState.shortageAudit = data.shortageAudit || null;
+                    const shortagePill = document.getElementById('btnShortageAuditPill');
+                    const shortagePillText = document.getElementById('shortageAuditPillText');
+                    const shortageBanner = document.getElementById('injectionShortageBanner');
+
+                    if (data.shortageAudit && data.shortageAudit.hasShortage) {
+                        if (shortagePill) {
+                            shortagePill.classList.remove('hidden');
+                            shortagePill.classList.add('inline-flex');
+                            if (shortagePillText) {
+                                shortagePillText.textContent = `عجز ${data.shortageAudit.totalShortage} مقعد (المطلوب: ${data.shortageAudit.totalRequested}) - اضغط للتفاصيل`;
+                            }
+                        }
+                        if (shortageBanner) {
+                            shortageBanner.classList.remove('hidden');
+                            const bannerTitle = document.getElementById('shortageBannerTitle');
+                            const bannerDesc = document.getElementById('shortageBannerDesc');
+                            if (bannerTitle) {
+                                bannerTitle.innerHTML = `<span>تم رصد نقص في عدد المرشحين (${data.candidates.length} متاح من أصل ${data.shortageAudit.totalRequested} مقعد مطلوب)</span>`;
+                            }
+                            if (bannerDesc) {
+                                bannerDesc.textContent = `تم استبعاد بعض الموظفين لأنهم مسجلون بالفعل في السيشن لمنع التكرار، أو لعدم توفر كوادر كافية بالقسم/الفرع. اضغط لمعرفة أسباب استبعاد كل موظف.`;
+                            }
+                        }
+                        showAppToast('warning', `رصد عجز ${data.shortageAudit.totalShortage} مقعد`, `تم ترشيح ${data.candidates.length} من أصل ${data.shortageAudit.totalRequested} مطلوب. اضغط على شارة التنبيه لمعرفة أسباب الاستبعاد لكل موظف.`);
+                    } else {
+                        if (shortagePill) {
+                            shortagePill.classList.add('hidden');
+                            shortagePill.classList.remove('inline-flex');
+                        }
+                        if (shortageBanner) shortageBanner.classList.add('hidden');
+                        showAppToast('success', 'Preview Ready', `تم ترشيح ${data.candidates.length} موظف مجمعين (صيادلة + مساعدين + أقسام إدارية).`);
+                    }
+
                     if (data.candidates.length === 0) {
                         listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-amber-600 font-bold">لم يتم العثور على موظفين متاحين وفق الشروط المحددة (أو جميعهم مسجلون بالفعل في هذه السيشن).</div>`;
                         return;
@@ -3217,14 +3756,115 @@
                             </div>
                         `;
                     }).join('');
-
-                    showAppToast('success', 'Preview Ready', `تم ترشيح ${data.candidates.length} موظف مجمعين (صيادلة + مساعدين + أقسام إدارية).`);
                 } else {
                     listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-rose-500 font-bold">${data.message || 'تعذر حساب المعاينة'}</div>`;
                 }
             } catch (err) {
                 listWrapper.innerHTML = `<div class="p-4 text-center text-xs text-rose-500 font-bold">خطأ في الاتصال: ${err.message}</div>`;
             }
+        };
+
+        window.openShortageAuditModal = function () {
+            const audit = injectionState.shortageAudit;
+            const modal = document.getElementById('shortageAuditModal');
+            if (!modal) return;
+
+            if (!audit || !audit.categories || audit.categories.length === 0) {
+                showAppToast('info', 'المقاعد مكتملة', 'لا يوجد أي عجز تم رصده في هذه المعاينة.');
+                return;
+            }
+
+            document.getElementById('auditStatsRequested').textContent = audit.totalRequested || 0;
+            document.getElementById('auditStatsFulfilled').textContent = audit.totalFulfilled || 0;
+            document.getElementById('auditStatsShortage').textContent = audit.totalShortage || 0;
+
+            const content = document.getElementById('shortageAuditModalContent');
+            if (content) {
+                content.innerHTML = audit.categories.map((cat, catIdx) => {
+                    const hasExcluded = cat.excludedUsers && cat.excludedUsers.length > 0;
+                    return `
+                        <div class="p-4 bg-slate-50/90 rounded-2xl border border-slate-200/90 space-y-3">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></span>
+                                    <h5 class="text-xs font-black text-slate-900">${cat.categoryName}</h5>
+                                    <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 font-mono">
+                                        مطلوب: ${cat.requestedQuota} | تم جلب: ${cat.fulfilledCount}
+                                    </span>
+                                </div>
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-50 text-rose-700 border border-rose-200 font-mono self-start sm:self-auto">
+                                    عجز: ${cat.shortageCount} مقعد
+                                </span>
+                            </div>
+
+                            ${cat.explanation ? `<p class="text-xs text-slate-600 font-medium leading-relaxed">${cat.explanation}</p>` : ''}
+
+                            ${hasExcluded ? `
+                                <div class="space-y-2 mt-2">
+                                    <div class="text-[11px] font-black text-slate-700 flex items-center gap-1.5">
+                                        <i class="fas fa-users-slash text-rose-500"></i>
+                                        <span>الموظفون المستبعدون وأسباب استبعاد كل موظف:</span>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        ${cat.excludedUsers.map((u, uIdx) => {
+                                            let badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+                                            let icon = 'fa-ban text-rose-500';
+                                            if (u.reasonCategory === 'shift_mismatch') {
+                                                badgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                                                icon = 'fa-clock text-amber-500';
+                                            } else if (u.reasonCategory === 'branch_mismatch') {
+                                                badgeColor = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                                                icon = 'fa-code-branch text-indigo-500';
+                                            } else if (u.reasonCategory === 'quota_cap') {
+                                                badgeColor = 'bg-purple-50 text-purple-700 border-purple-200';
+                                                icon = 'fa-layer-group text-purple-500';
+                                            } else if (u.reasonCategory === 'inactive') {
+                                                badgeColor = 'bg-slate-100 text-slate-700 border-slate-300';
+                                                icon = 'fa-user-slash text-slate-500';
+                                            }
+                                            return `
+                                                <div class="p-3 bg-white rounded-xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs hover:border-slate-300 transition-all">
+                                                    <div class="flex items-center gap-2.5">
+                                                        <div class="w-6 h-6 rounded-lg bg-slate-100 text-slate-600 font-black flex items-center justify-center text-[10px] shrink-0 font-mono">
+                                                            ${uIdx + 1}
+                                                        </div>
+                                                        <div>
+                                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                                <span class="text-xs font-black text-slate-900">${u.fullName}</span>
+                                                                <span class="font-mono text-[10px] text-slate-400">(${u.userCode})</span>
+                                                            </div>
+                                                            <div class="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5 flex-wrap">
+                                                                <span><i class="fas fa-id-badge text-purple-400 mr-0.5"></i> ${u.jobTitle}</span>
+                                                                <span>•</span>
+                                                                <span><i class="fas fa-building text-slate-400 mr-0.5"></i> ${u.branchName}</span>
+                                                                <span>•</span>
+                                                                <span><i class="fas fa-clock text-indigo-400 mr-0.5"></i> ${u.shiftName}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="shrink-0">
+                                                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border ${badgeColor}">
+                                                            <i class="fas ${icon}"></i>
+                                                            <span>${u.reason}</span>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            modal.classList.remove('hidden');
+        };
+
+        window.closeShortageAuditModal = function () {
+            const modal = document.getElementById('shortageAuditModal');
+            if (modal) modal.classList.add('hidden');
         };
 
         window.executeInjectionRule = async function () {
@@ -3256,6 +3896,22 @@
             if (userIds.length === 0 && matrixQuotas.length === 0 && pharmQuota === 0 && assistQuota === 0 && deptQuotas.length === 0) {
                 showAppToast('warning', 'Notice', 'يرجى تحديد الكوتة أولاً أو معاينة المرشحين.');
                 return;
+            }
+
+            if (isMatrix) {
+                const targetPharm = parseInt(document.getElementById('inputQuotaPharmacist')?.value) || 0;
+                const targetAssist = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
+                const totalPharm = matrixQuotas.reduce((a, b) => a + (b.pharmacistQuota || 0), 0);
+                const totalAssist = matrixQuotas.reduce((a, b) => a + (b.assistantQuota || 0), 0);
+
+                if (targetPharm > 0 && totalPharm > targetPharm) {
+                    showAppToast('error', 'تجاوز كوتة الصيادلة!', `إجمالي الصيادلة المحددين بالفروع (${totalPharm}) يتجاوز كوتة الصيادلة المحددة (${targetPharm} صيدلي). يرجى تقليل أعداد الفروع أولاً.`);
+                    return;
+                }
+                if (targetAssist > 0 && totalAssist > targetAssist) {
+                    showAppToast('error', 'تجاوز كوتة المساعدين!', `إجمالي المساعدين المحددين بالفروع (${totalAssist}) يتجاوز كوتة المساعدين المحددة (${targetAssist} مساعد). يرجى تقليل أعداد الفروع أولاً.`);
+                    return;
+                }
             }
 
             const sendNotif = document.getElementById('chkInjectionSendNotif').checked;

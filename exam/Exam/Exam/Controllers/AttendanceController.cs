@@ -2282,6 +2282,7 @@ namespace Exam.Controllers
             {
                 using var conn = new SqlConnection(_connectionString);
                 var previewList = new List<InjectionCandidatePreviewDto>();
+                var shortageCategories = new List<InjectionShortageCategoryDto>();
 
                 bool hasBranches = req.BranchIds != null && req.BranchIds.Any();
                 bool hasShifts = req.ShiftIds != null && req.ShiftIds.Any();
@@ -2349,6 +2350,98 @@ namespace Exam.Controllers
                             })).Where(c => !alreadySelectedUserIds.Contains(c.UserId)).Take(bq.PharmacistQuota).ToList();
 
                             previewList.AddRange(cands);
+
+                            if (cands.Count < bq.PharmacistQuota)
+                            {
+                                var bqCategory = new InjectionShortageCategoryDto
+                                {
+                                    CategoryName = $"فرع {bq.BranchName} - كوتة الصيادلة",
+                                    CategoryType = "branch_matrix",
+                                    RequestedQuota = bq.PharmacistQuota,
+                                    FulfilledCount = cands.Count
+                                };
+                                var auditStaff = (await conn.QueryAsync(@"
+                                    SELECT 
+                                        u.Id AS UserId,
+                                        ISNULL(u.FullName, u.UserName) AS FullName,
+                                        ISNULL(u.UserCode, '--') AS UserCode,
+                                        N'صيدلي' AS JobTitle,
+                                        ISNULL(b.BranchName, @BranchName) AS BranchName,
+                                        ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                                        u.ShiftId,
+                                        u.IsActive,
+                                        cst.ApprovalStatus AS SessionApprovalStatus
+                                    FROM AspNetUsers u WITH (NOLOCK)
+                                    LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                                    LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                                    LEFT JOIN dbo.CompanySessionTrainees cst WITH (NOLOCK) ON cst.SessionId = @SessionId AND cst.UserId = u.Id
+                                    WHERE u.BranchId = @BranchId
+                                      AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                                      AND EXISTS (
+                                          SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                          WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                      )", new { SessionId = req.SessionId, BranchId = bq.BranchId, BranchName = bq.BranchName })).ToList();
+
+                                var chosenIds = cands.Select(c => c.UserId).ToHashSet();
+                                foreach (var st in auditStaff)
+                                {
+                                    string uid = st.UserId.ToString();
+                                    if (chosenIds.Contains(uid)) continue;
+
+                                    string reason = "";
+                                    string cat = "";
+                                    if (st.SessionApprovalStatus != null)
+                                    {
+                                        string statusAr = (string)st.SessionApprovalStatus switch
+                                        {
+                                            "Approved" => "معتمد (Approved)",
+                                            "Pending" => "قيد الانتظار (Pending)",
+                                            "Replaced" => "مستبدل (Replaced)",
+                                            _ => (string)st.SessionApprovalStatus
+                                        };
+                                        reason = $"مسجل بالفعل في هذه السيشن - الحالة: ({statusAr})";
+                                        cat = "already_enrolled";
+                                    }
+                                    else if (!(bool)st.IsActive)
+                                    {
+                                        reason = "الحساب غير مفعّل بالنظام (غير نشط)";
+                                        cat = "inactive";
+                                    }
+                                    else if (bq.ShiftId.HasValue && bq.ShiftId.Value > 0 && st.ShiftId != bq.ShiftId.Value)
+                                    {
+                                        reason = $"شيفت الموظف ({st.ShiftName}) لا يطابق الشيفت المخصص للفرع";
+                                        cat = "shift_mismatch";
+                                    }
+                                    else
+                                    {
+                                        reason = "غير مطابق لقيود التسكين";
+                                        cat = "other";
+                                    }
+
+                                    bqCategory.ExcludedUsers.Add(new InjectionExcludedUserDto
+                                    {
+                                        UserId = uid,
+                                        FullName = (string)st.FullName,
+                                        UserCode = (string)st.UserCode,
+                                        JobTitle = (string)st.JobTitle,
+                                        BranchName = (string)st.BranchName,
+                                        ShiftName = (string)st.ShiftName,
+                                        DepartmentName = "طاقم الفروع (صيادلة)",
+                                        Reason = reason,
+                                        ReasonCategory = cat
+                                    });
+                                }
+
+                                if (!bqCategory.ExcludedUsers.Any())
+                                {
+                                    bqCategory.Explanation = $"لا توجد كوادر صيادلة أخرى مسجلة بالنظام في فرع {bq.BranchName}.";
+                                }
+                                else
+                                {
+                                    bqCategory.Explanation = $"تم ترشيح {cands.Count} من أصل {bq.PharmacistQuota} صيدلي مطلوبين بهذا الفرع، وتم استبعاد {bqCategory.ExcludedUsers.Count} صيدلي للأسباب الموضحة.";
+                                }
+                                shortageCategories.Add(bqCategory);
+                            }
                         }
 
                         // Assistants from this specific branch & shift
@@ -2408,6 +2501,104 @@ namespace Exam.Controllers
                             })).Where(c => !alreadySelectedUserIds.Contains(c.UserId)).Take(bq.AssistantQuota).ToList();
 
                             previewList.AddRange(cands);
+
+                            if (cands.Count < bq.AssistantQuota)
+                            {
+                                var bqCategory = new InjectionShortageCategoryDto
+                                {
+                                    CategoryName = $"فرع {bq.BranchName} - كوتة المساعدين",
+                                    CategoryType = "branch_matrix",
+                                    RequestedQuota = bq.AssistantQuota,
+                                    FulfilledCount = cands.Count
+                                };
+                                var auditStaff = (await conn.QueryAsync(@"
+                                    SELECT 
+                                        u.Id AS UserId,
+                                        ISNULL(u.FullName, u.UserName) AS FullName,
+                                        ISNULL(u.UserCode, '--') AS UserCode,
+                                        N'مساعد صيدلي' AS JobTitle,
+                                        ISNULL(b.BranchName, @BranchName) AS BranchName,
+                                        ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                                        u.ShiftId,
+                                        u.IsActive,
+                                        cst.ApprovalStatus AS SessionApprovalStatus
+                                    FROM AspNetUsers u WITH (NOLOCK)
+                                    LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                                    LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                                    LEFT JOIN dbo.CompanySessionTrainees cst WITH (NOLOCK) ON cst.SessionId = @SessionId AND cst.UserId = u.Id
+                                    WHERE u.BranchId = @BranchId
+                                      AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                                      AND EXISTS (
+                                          SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                          WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
+                                      )
+                                      AND NOT (
+                                          EXISTS (
+                                              SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                              WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                          )
+                                      )", new { SessionId = req.SessionId, BranchId = bq.BranchId, BranchName = bq.BranchName })).ToList();
+
+                                var chosenIds = cands.Select(c => c.UserId).ToHashSet();
+                                foreach (var st in auditStaff)
+                                {
+                                    string uid = st.UserId.ToString();
+                                    if (chosenIds.Contains(uid)) continue;
+
+                                    string reason = "";
+                                    string cat = "";
+                                    if (st.SessionApprovalStatus != null)
+                                    {
+                                        string statusAr = (string)st.SessionApprovalStatus switch
+                                        {
+                                            "Approved" => "معتمد (Approved)",
+                                            "Pending" => "قيد الانتظار (Pending)",
+                                            "Replaced" => "مستبدل (Replaced)",
+                                            _ => (string)st.SessionApprovalStatus
+                                        };
+                                        reason = $"مسجل بالفعل في هذه السيشن - الحالة: ({statusAr})";
+                                        cat = "already_enrolled";
+                                    }
+                                    else if (!(bool)st.IsActive)
+                                    {
+                                        reason = "الحساب غير مفعّل بالنظام (غير نشط)";
+                                        cat = "inactive";
+                                    }
+                                    else if (bq.ShiftId.HasValue && bq.ShiftId.Value > 0 && st.ShiftId != bq.ShiftId.Value)
+                                    {
+                                        reason = $"شيفت الموظف ({st.ShiftName}) لا يطابق الشيفت المخصص للفرع";
+                                        cat = "shift_mismatch";
+                                    }
+                                    else
+                                    {
+                                        reason = "غير مطابق لقيود التسكين";
+                                        cat = "other";
+                                    }
+
+                                    bqCategory.ExcludedUsers.Add(new InjectionExcludedUserDto
+                                    {
+                                        UserId = uid,
+                                        FullName = (string)st.FullName,
+                                        UserCode = (string)st.UserCode,
+                                        JobTitle = (string)st.JobTitle,
+                                        BranchName = (string)st.BranchName,
+                                        ShiftName = (string)st.ShiftName,
+                                        DepartmentName = "طاقم الفروع (مساعدين)",
+                                        Reason = reason,
+                                        ReasonCategory = cat
+                                    });
+                                }
+
+                                if (!bqCategory.ExcludedUsers.Any())
+                                {
+                                    bqCategory.Explanation = $"لا توجد كوادر مساعدين أخرى مسجلة بالنظام في فرع {bq.BranchName}.";
+                                }
+                                else
+                                {
+                                    bqCategory.Explanation = $"تم ترشيح {cands.Count} من أصل {bq.AssistantQuota} مساعد مطلوبين بهذا الفرع، وتم استبعاد {bqCategory.ExcludedUsers.Count} مساعد للأسباب الموضحة.";
+                                }
+                                shortageCategories.Add(bqCategory);
+                            }
                         }
                     }
                 }
@@ -2479,6 +2670,93 @@ namespace Exam.Controllers
                         }
 
                         previewList.AddRange(pharmCandidates);
+
+                        if (pharmCandidates.Count < req.PharmacistQuota)
+                        {
+                            var pharmCategory = new InjectionShortageCategoryDto
+                            {
+                                CategoryName = "كوتة الصيادلة بالفروع (Pharmacists)",
+                                CategoryType = "pharmacists",
+                                RequestedQuota = req.PharmacistQuota,
+                                FulfilledCount = pharmCandidates.Count
+                            };
+
+                            string enrolledPharmSql = $@"
+                                SELECT 
+                                    u.Id AS UserId,
+                                    ISNULL(u.FullName, u.UserName) AS FullName,
+                                    ISNULL(u.UserCode, '--') AS UserCode,
+                                    N'صيدلي' AS JobTitle,
+                                    ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                                    ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                                    cst.ApprovalStatus AS SessionApprovalStatus
+                                FROM AspNetUsers u WITH (NOLOCK)
+                                LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                                LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                                JOIN dbo.CompanySessionTrainees cst WITH (NOLOCK) ON cst.SessionId = @SessionId AND cst.UserId = u.Id
+                                WHERE u.IsActive = 1
+                                  AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                                  AND EXISTS (
+                                      SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                      WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                  )
+                                  {branchFilterSql}
+                                  {shiftFilterSql}";
+
+                            var enrolledPharms = (await conn.QueryAsync(enrolledPharmSql, new { SessionId = req.SessionId, BranchIds = req.BranchIds, ShiftIds = req.ShiftIds })).ToList();
+                            foreach (var p in enrolledPharms)
+                            {
+                                string statusAr = p.SessionApprovalStatus != null ? (string)p.SessionApprovalStatus switch
+                                {
+                                    "Approved" => "معتمد (Approved)",
+                                    "Pending" => "قيد الانتظار (Pending)",
+                                    "Replaced" => "مستبدل (Replaced)",
+                                    _ => (string)p.SessionApprovalStatus
+                                } : "مسجل بالسيشن";
+                                pharmCategory.ExcludedUsers.Add(new InjectionExcludedUserDto
+                                {
+                                    UserId = p.UserId.ToString(),
+                                    FullName = (string)p.FullName,
+                                    UserCode = (string)p.UserCode,
+                                    JobTitle = (string)p.JobTitle,
+                                    BranchName = (string)p.BranchName,
+                                    ShiftName = (string)p.ShiftName,
+                                    DepartmentName = "طاقم الفروع (صيادلة)",
+                                    Reason = $"مسجل بالفعل في هذه السيشن - الحالة: ({statusAr})",
+                                    ReasonCategory = "already_enrolled"
+                                });
+                            }
+
+                            if (req.MaxPharmacistsPerBranch > 0 && allPharmCandidates.Count > pharmCandidates.Count)
+                            {
+                                var chosenIds = pharmCandidates.Select(c => c.UserId).ToHashSet();
+                                foreach (var c in allPharmCandidates.Where(c => !chosenIds.Contains(c.UserId)).Take(req.PharmacistQuota - pharmCandidates.Count))
+                                {
+                                    pharmCategory.ExcludedUsers.Add(new InjectionExcludedUserDto
+                                    {
+                                        UserId = c.UserId,
+                                        FullName = c.FullName,
+                                        UserCode = c.UserCode,
+                                        JobTitle = c.JobTitle,
+                                        BranchName = c.BranchName,
+                                        ShiftName = c.ShiftName,
+                                        DepartmentName = c.DepartmentName,
+                                        Reason = $"تم تجاوز الحد الأقصى لسحب الصيادلة من هذا الفرع (السقف: {req.MaxPharmacistsPerBranch} صيدلي)",
+                                        ReasonCategory = "quota_cap"
+                                    });
+                                }
+                            }
+
+                            if (!pharmCategory.ExcludedUsers.Any())
+                            {
+                                pharmCategory.Explanation = $"لا يوجد المزيد من الصيادلة المتاحين المطابقين للفروع والشيفتات المحددة (تم استهلاك جميع الكوادر المتاحة).";
+                            }
+                            else
+                            {
+                                pharmCategory.Explanation = $"تم ترشيح {pharmCandidates.Count} من أصل {req.PharmacistQuota} صيدلي مطلوبين (عجز {pharmCategory.ShortageCount} مقعد)، وتم رصد {pharmCategory.ExcludedUsers.Count} صيدلي مستبعد للأسباب الموضحة.";
+                            }
+                            shortageCategories.Add(pharmCategory);
+                        }
                     }
 
                     if (req.AssistantQuota > 0)
@@ -2554,6 +2832,99 @@ namespace Exam.Controllers
                         }
 
                         previewList.AddRange(assistCandidates);
+
+                        if (assistCandidates.Count < req.AssistantQuota)
+                        {
+                            var assistCategory = new InjectionShortageCategoryDto
+                            {
+                                CategoryName = "كوتة المساعدين بالفروع (Assistants)",
+                                CategoryType = "assistants",
+                                RequestedQuota = req.AssistantQuota,
+                                FulfilledCount = assistCandidates.Count
+                            };
+
+                            string enrolledAssistSql = $@"
+                                SELECT 
+                                    u.Id AS UserId,
+                                    ISNULL(u.FullName, u.UserName) AS FullName,
+                                    ISNULL(u.UserCode, '--') AS UserCode,
+                                    N'مساعد صيدلي' AS JobTitle,
+                                    ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                                    ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                                    cst.ApprovalStatus AS SessionApprovalStatus
+                                FROM AspNetUsers u WITH (NOLOCK)
+                                LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                                LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                                JOIN dbo.CompanySessionTrainees cst WITH (NOLOCK) ON cst.SessionId = @SessionId AND cst.UserId = u.Id
+                                WHERE u.IsActive = 1
+                                  AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
+                                  AND EXISTS (
+                                      SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                      WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
+                                  )
+                                  AND NOT (
+                                      EXISTS (
+                                          SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON ur.RoleId = r.Id 
+                                          WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
+                                      )
+                                  )
+                                  {branchFilterSql}
+                                  {shiftFilterSql}";
+
+                            var enrolledAssists = (await conn.QueryAsync(enrolledAssistSql, new { SessionId = req.SessionId, BranchIds = req.BranchIds, ShiftIds = req.ShiftIds })).ToList();
+                            foreach (var a in enrolledAssists)
+                            {
+                                string statusAr = a.SessionApprovalStatus != null ? (string)a.SessionApprovalStatus switch
+                                {
+                                    "Approved" => "معتمد (Approved)",
+                                    "Pending" => "قيد الانتظار (Pending)",
+                                    "Replaced" => "مستبدل (Replaced)",
+                                    _ => (string)a.SessionApprovalStatus
+                                } : "مسجل بالسيشن";
+                                assistCategory.ExcludedUsers.Add(new InjectionExcludedUserDto
+                                {
+                                    UserId = a.UserId.ToString(),
+                                    FullName = (string)a.FullName,
+                                    UserCode = (string)a.UserCode,
+                                    JobTitle = (string)a.JobTitle,
+                                    BranchName = (string)a.BranchName,
+                                    ShiftName = (string)a.ShiftName,
+                                    DepartmentName = "طاقم الفروع (مساعدين)",
+                                    Reason = $"مسجل بالفعل في هذه السيشن - الحالة: ({statusAr})",
+                                    ReasonCategory = "already_enrolled"
+                                });
+                            }
+
+                            if (req.MaxAssistantsPerBranch > 0 && allAssistCandidates.Count > assistCandidates.Count)
+                            {
+                                var chosenIds = assistCandidates.Select(c => c.UserId).ToHashSet();
+                                foreach (var c in allAssistCandidates.Where(c => !chosenIds.Contains(c.UserId)).Take(req.AssistantQuota - assistCandidates.Count))
+                                {
+                                    assistCategory.ExcludedUsers.Add(new InjectionExcludedUserDto
+                                    {
+                                        UserId = c.UserId,
+                                        FullName = c.FullName,
+                                        UserCode = c.UserCode,
+                                        JobTitle = c.JobTitle,
+                                        BranchName = c.BranchName,
+                                        ShiftName = c.ShiftName,
+                                        DepartmentName = c.DepartmentName,
+                                        Reason = $"تم تجاوز الحد الأقصى لسحب المساعدين من هذا الفرع (السقف: {req.MaxAssistantsPerBranch} مساعد)",
+                                        ReasonCategory = "quota_cap"
+                                    });
+                                }
+                            }
+
+                            if (!assistCategory.ExcludedUsers.Any())
+                            {
+                                assistCategory.Explanation = $"لا يوجد المزيد من المساعدين المتاحين المطابقين للفروع والشيفتات المحددة (تم استهلاك جميع الكوادر المتاحة).";
+                            }
+                            else
+                            {
+                                assistCategory.Explanation = $"تم ترشيح {assistCandidates.Count} من أصل {req.AssistantQuota} مساعد مطلوبين (عجز {assistCategory.ShortageCount} مقعد)، وتم رصد {assistCategory.ExcludedUsers.Count} مساعد مستبعد للأسباب الموضحة.";
+                            }
+                            shortageCategories.Add(assistCategory);
+                        }
                     }
                 }
 
@@ -2618,14 +2989,157 @@ namespace Exam.Controllers
                             .ToList();
 
                         previewList.AddRange(candidates);
+
+                        if (candidates.Count < dq.Quota)
+                        {
+                            var deptCategory = new InjectionShortageCategoryDto
+                            {
+                                CategoryName = $"قسم {dq.DepartmentName}",
+                                CategoryType = "department",
+                                RequestedQuota = dq.Quota,
+                                FulfilledCount = candidates.Count
+                            };
+
+                            var allStaff = (await conn.QueryAsync(@"
+                                SELECT 
+                                    u.Id AS UserId,
+                                    ISNULL(u.FullName, u.UserName) AS FullName,
+                                    ISNULL(u.UserCode, '--') AS UserCode,
+                                    COALESCE(
+                                        (SELECT TOP 1 
+                                            CASE 
+                                                WHEN LOWER(r.Name) = 'assistant' THEN N'مساعد صيدلي'
+                                                WHEN LOWER(r.Name) = 'pharmacist' THEN N'صيدلي'
+                                                WHEN LOWER(r.Name) = 'branch manager' THEN N'مدير فرع'
+                                                WHEN LOWER(r.Name) = 'branch supervisor' THEN N'مشرف فرع'
+                                                WHEN LOWER(r.Name) IN ('user', 'trainee') THEN NULL
+                                                ELSE r.Name 
+                                            END
+                                         FROM dbo.AspNetUserRoles ur 
+                                         JOIN dbo.AspNetRoles r ON ur.RoleId = r.Id 
+                                         WHERE ur.UserId = u.Id AND r.Name NOT IN ('User', 'Trainee')),
+                                        @DeptName,
+                                        N'موظف'
+                                    ) AS JobTitle,
+                                    ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                                    u.BranchId,
+                                    ISNULL(s.ShiftName, N'غير محدد') AS ShiftName,
+                                    u.ShiftId,
+                                    u.IsActive,
+                                    cst.ApprovalStatus AS SessionApprovalStatus
+                                FROM AspNetUsers u WITH (NOLOCK)
+                                LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                                LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                                LEFT JOIN dbo.CompanySessionTrainees cst WITH (NOLOCK) ON cst.SessionId = @SessionId AND cst.UserId = u.Id
+                                WHERE u.DepartmentId = @DeptId
+                                ORDER BY u.FullName ASC", new { DeptId = dq.DepartmentId, DeptName = dq.DepartmentName, SessionId = req.SessionId })).ToList();
+
+                            var chosenUserIds = candidates.Select(c => c.UserId).ToHashSet();
+                            var prevIds = alreadySelectedUserIds.ToHashSet();
+
+                            foreach (var staff in allStaff)
+                            {
+                                string uid = staff.UserId.ToString();
+                                if (chosenUserIds.Contains(uid)) continue;
+
+                                string reason = "";
+                                string cat = "";
+
+                                if (prevIds.Contains(uid))
+                                {
+                                    reason = "تم ترشيحه بالفعل ضمن كوتة أخرى في نفس الجلسة";
+                                    cat = "already_selected";
+                                }
+                                else if (staff.SessionApprovalStatus != null)
+                                {
+                                    string statusAr = (string)staff.SessionApprovalStatus switch
+                                    {
+                                        "Approved" => "معتمد (Approved)",
+                                        "Pending" => "قيد الانتظار (Pending)",
+                                        "Replaced" => "مستبدل (Replaced)",
+                                        _ => (string)staff.SessionApprovalStatus
+                                    };
+                                    reason = $"مسجل بالفعل في هذه السيشن - الحالة: ({statusAr})";
+                                    cat = "already_enrolled";
+                                }
+                                else if (!(bool)staff.IsActive)
+                                {
+                                    reason = "الحساب غير مفعّل بالنظام (غير نشط)";
+                                    cat = "inactive";
+                                }
+                                else if (hasBranches && (staff.BranchId == null || !req.BranchIds.Contains((int)staff.BranchId)))
+                                {
+                                    reason = $"فرع الموظف ({staff.BranchName}) غير مشمول في فلاتر الفروع المحددة";
+                                    cat = "branch_mismatch";
+                                }
+                                else if (hasShifts && staff.ShiftId != null && !req.ShiftIds.Contains((int)staff.ShiftId))
+                                {
+                                    reason = $"شيفت الموظف ({staff.ShiftName}) غير مشمول في فلاتر الشيفتات المحددة";
+                                    cat = "shift_mismatch";
+                                }
+                                else
+                                {
+                                    reason = "تم استبعاده وفق قيود التسكين المحددة";
+                                    cat = "other";
+                                }
+
+                                deptCategory.ExcludedUsers.Add(new InjectionExcludedUserDto
+                                {
+                                    UserId = uid,
+                                    FullName = (string)staff.FullName,
+                                    UserCode = (string)staff.UserCode,
+                                    JobTitle = (string)staff.JobTitle,
+                                    BranchName = (string)staff.BranchName,
+                                    ShiftName = (string)staff.ShiftName,
+                                    DepartmentName = dq.DepartmentName,
+                                    Reason = reason,
+                                    ReasonCategory = cat
+                                });
+                            }
+
+                            if (!deptCategory.ExcludedUsers.Any())
+                            {
+                                deptCategory.Explanation = $"إجمالي عدد الموظفين في هذا القسم بالشركة هو {allStaff.Count} موظف فقط، وتم ترشيحهم جميعاً بالفعل (الكوتة المطلوبة {dq.Quota} أكبر من إجمالي عدد الموظفين المتاحين بالقسم).";
+                            }
+                            else
+                            {
+                                deptCategory.Explanation = $"تم ترشيح {candidates.Count} من أصل {allStaff.Count} موظف بالقسم، وتم استبعاد {deptCategory.ExcludedUsers.Count} موظف للأسباب الموضحة.";
+                            }
+
+                            shortageCategories.Add(deptCategory);
+                        }
                     }
                 }
+
+                int totalRequested = 0;
+                if (hasCustomBranchQuotas && req.BranchQuotas != null)
+                {
+                    totalRequested += req.BranchQuotas.Sum(b => b.PharmacistQuota + b.AssistantQuota);
+                }
+                else
+                {
+                    totalRequested += (req?.PharmacistQuota ?? 0) + (req?.AssistantQuota ?? 0);
+                }
+                if (hasDeptQuotas && req.DepartmentQuotas != null)
+                {
+                    totalRequested += req.DepartmentQuotas.Where(q => q.Quota > 0).Sum(q => q.Quota);
+                }
+
+                var shortageAudit = new InjectionShortageAuditDto
+                {
+                    TotalRequested = totalRequested,
+                    TotalFulfilled = previewList.Count,
+                    TotalShortage = Math.Max(0, totalRequested - previewList.Count),
+                    HasShortage = totalRequested > previewList.Count,
+                    Categories = shortageCategories
+                };
 
                 return Json(new
                 {
                     success = true,
                     totalCount = previewList.Count,
-                    candidates = previewList
+                    candidates = previewList,
+                    shortageAudit = shortageAudit
                 });
             }
             catch (Exception ex)

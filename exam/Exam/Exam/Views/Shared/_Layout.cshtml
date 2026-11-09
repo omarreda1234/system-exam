@@ -479,10 +479,30 @@
     <script src="~/lib/signalr/signalr.min.js"></script>
         <script>
             (function () {
-                var successMsg = "@(TempData["SuccessMessage"]?.ToString())";
-                var errorMsg = "@(TempData["ErrorMessage"]?.ToString())";
-                if (successMsg) { Swal.fire({ icon: 'success', title: 'Synchronized', text: successMsg, timer: 3000, background: '#fff' }); }
-                if (errorMsg) { Swal.fire({ icon: 'error', title: 'Protocol Alert', text: errorMsg, background: '#fff' }); }
+                var successMsg = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["SuccessMessage"]?.ToString() ?? ""));
+                var errorMsg = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["ErrorMessage"]?.ToString() ?? ""));
+                
+                // Do not show duplicate popup on ForgotPassword page as it already renders a dedicated success screen
+                var isForgotPassword = window.location.pathname.toLowerCase().indexOf('forgotpassword') !== -1;
+
+                if (successMsg && !isForgotPassword) { 
+                    Swal.fire({ 
+                        icon: 'success', 
+                        title: 'تمت العملية بنجاح', 
+                        text: successMsg, 
+                        timer: 3500, 
+                        showConfirmButton: false,
+                        background: '#fff' 
+                    }); 
+                }
+                if (errorMsg) { 
+                    Swal.fire({ 
+                        icon: 'error', 
+                        title: 'تنبيه', 
+                        text: errorMsg, 
+                        background: '#fff' 
+                    }); 
+                }
  
                 // Mobile Menu Toggle
                 $('#mobileMenuBtn').on('click', function() {

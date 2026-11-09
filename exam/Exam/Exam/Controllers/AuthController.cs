@@ -226,17 +226,24 @@ namespace Exam.Controllers
                 var publicIp = "41.33.149.186:8090";
                 var relativeUrl = Url.Action("ResetPassword", "Auth", new { token = encodedToken, email = dto.Email });
                 var callbackUrl = $"{Request.Scheme}://{publicIp}{relativeUrl}";
-                var subject = "Reset Your Password - Eltarshoubi Academy";
+                var subject = "استعادة كلمة المرور - أكاديمية الطرشوبي (Password Reset)";
                 var body = $@"
-                    <div style='font-family: sans-serif; line-height: 1.5; color: #333;'>
-                        <h2 style='color: #4f46e5;'>Password Reset Request</h2>
-                        <p>We received a request to reset your password. Click the link below to proceed:</p>
-                        <p style='margin: 30px 0;'>
-                            <a href='{callbackUrl}' style='background: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;'>Reset Password</a>
-                        </p>
-                        <p>If you didn't request this, you can ignore this email.</p>
-                        <hr style='border: none; border-top: 1px solid #eee;' />
-                        <p style='font-size: 11px; color: #999;'>Eltarshoubi Academy LMS Portal</p>
+                    <div dir='rtl' style='font-family: Arial, Tahoma, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;'>
+                        <div style='text-align: center; margin-bottom: 24px; border-bottom: 2px solid #f1f5f9; padding-bottom: 16px;'>
+                            <h2 style='color: #4f46e5; margin: 0; font-size: 22px; font-weight: 800;'>أكاديمية الطرشوبي</h2>
+                            <p style='color: #64748b; font-size: 13px; margin: 4px 0 0 0;'>منظومة التدريب والاختبارات الذكية (LMS Portal)</p>
+                        </div>
+                        <div style='background: #f8fafc; border-radius: 12px; padding: 20px; border: 1px solid #f1f5f9; text-align: right;'>
+                            <p style='margin: 0 0 10px 0; font-size: 15px; font-weight: bold; color: #0f172a;'>مرحباً بك،</p>
+                            <p style='margin: 0 0 16px 0; font-size: 13px; color: #334155;'>لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك. يمكنك تعيين كلمة مرور جديدة من خلال الضغط على الزر التالي:</p>
+                            <div style='text-align: center; margin: 26px 0;'>
+                                <a href='{callbackUrl}' style='background: #4f46e5; color: #ffffff; padding: 13px 30px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);'>إعادة تعيين كلمة المرور (Reset Password)</a>
+                            </div>
+                            <p style='font-size: 11px; color: #64748b; margin: 0; border-top: 1px dashed #cbd5e1; padding-top: 12px;'>إذا لم تكن قد قمت بهذا الطلب بنفسك، يمكنك تجاهل هذه الرسالة بأمان وستظل كلمة المرور الحالية صالحة تماماً دون أي تغيير.</p>
+                        </div>
+                        <div style='margin-top: 20px; text-align: center; font-size: 11px; color: #94a3b8;'>
+                            <p style='margin: 0;'>أكاديمية الطرشوبي &copy; {DateTime.Now.Year} - جميع الحقوق محفوظة</p>
+                        </div>
                     </div>";
                 
                 try

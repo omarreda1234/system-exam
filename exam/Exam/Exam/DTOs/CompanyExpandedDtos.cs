@@ -112,4 +112,37 @@ namespace Exam.DTOs
         public int SessionId { get; set; }
         public List<InjectionCandidatePreviewDto>? Candidates { get; set; }
     }
+
+    public class InjectionExcludedUserDto
+    {
+        public string UserId { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public string UserCode { get; set; } = "--";
+        public string JobTitle { get; set; } = "--";
+        public string BranchName { get; set; } = "بدون فرع";
+        public string ShiftName { get; set; } = "غير محدد";
+        public string DepartmentName { get; set; } = "--";
+        public string Reason { get; set; } = "";
+        public string ReasonCategory { get; set; } = ""; // "already_enrolled", "shift_mismatch", "branch_mismatch", "inactive", "quota_cap", "exhausted"
+    }
+
+    public class InjectionShortageCategoryDto
+    {
+        public string CategoryName { get; set; } = "";
+        public string CategoryType { get; set; } = ""; // "department", "pharmacists", "assistants", "branch_matrix"
+        public int RequestedQuota { get; set; }
+        public int FulfilledCount { get; set; }
+        public int ShortageCount => Math.Max(0, RequestedQuota - FulfilledCount);
+        public string Explanation { get; set; } = "";
+        public List<InjectionExcludedUserDto> ExcludedUsers { get; set; } = new();
+    }
+
+    public class InjectionShortageAuditDto
+    {
+        public bool HasShortage { get; set; }
+        public int TotalRequested { get; set; }
+        public int TotalFulfilled { get; set; }
+        public int TotalShortage { get; set; }
+        public List<InjectionShortageCategoryDto> Categories { get; set; } = new();
+    }
 }
