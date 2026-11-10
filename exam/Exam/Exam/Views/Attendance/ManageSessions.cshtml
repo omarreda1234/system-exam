@@ -2272,6 +2272,36 @@
                         injectionState.availablePharmacists = data.availablePharmacists || 0;
                         injectionState.availableAssistants = data.availableAssistants || 0;
                         updateAvailableStaffBadges(data.availablePharmacists, data.availableAssistants);
+
+                        if (data.branchCounts && injectionState.branches) {
+                            const bMap = {};
+                            data.branchCounts.forEach(bc => {
+                                const id = bc.branchId ?? bc.BranchId;
+                                bMap[id] = {
+                                    p: bc.availablePharmacists ?? bc.AvailablePharmacists ?? 0,
+                                    a: bc.availableAssistants ?? bc.AvailableAssistants ?? 0
+                                };
+                            });
+                            injectionState.branches.forEach(b => {
+                                const bId = b.id ?? b.Id;
+                                const live = bMap[bId];
+                                b.pharmacistCount = live ? live.p : 0;
+                                b.assistantCount = live ? live.a : 0;
+                            });
+                            renderInjectionBranches();
+                            renderBranchMatrix();
+                        }
+
+                        // Validate global quota inputs against updated totals
+                        const pharmInput = document.getElementById('inputQuotaPharmacist');
+                        const assistInput = document.getElementById('inputQuotaAssistant');
+                        if (pharmInput && parseInt(pharmInput.value) > injectionState.availablePharmacists) {
+                            pharmInput.value = injectionState.availablePharmacists;
+                        }
+                        if (assistInput && parseInt(assistInput.value) > injectionState.availableAssistants) {
+                            assistInput.value = injectionState.availableAssistants;
+                        }
+                        updateInjectionHeadcount();
                     }
 
                     // 2. Also refresh Department personnel live counts based on chosen branches and shifts!
@@ -2464,6 +2494,38 @@
         };
 
         window.onBranchStaffQuotaChanged = function () {
+            // Validate global quota against available staff if loaded
+            const pharmInput = document.getElementById('inputQuotaPharmacist');
+            const assistInput = document.getElementById('inputQuotaAssistant');
+
+            if (pharmInput && injectionState.availablePharmacists !== undefined) {
+                const maxP = injectionState.availablePharmacists;
+                let valP = parseInt(pharmInput.value);
+                if (!isNaN(valP) && valP > 0) {
+                    if (maxP <= 0) {
+                        pharmInput.value = 0;
+                        showAppToast('warning', 'لا يوجد صيادلة متاحين', 'لا يوجد صيادلة متاحين في النطاق المحدد حالياً (المتاح: 0). تم ضبط المقاعد إلى 0.');
+                    } else if (valP > maxP) {
+                        pharmInput.value = maxP;
+                        showAppToast('warning', 'تجاوز العدد المتاح', `العدد المطلوب للصيادلة (${valP}) أكبر من الإجمالي المتاح (${maxP}). تم ضبط القيمة للحد الأقصى المتاح.`);
+                    }
+                }
+            }
+
+            if (assistInput && injectionState.availableAssistants !== undefined) {
+                const maxA = injectionState.availableAssistants;
+                let valA = parseInt(assistInput.value);
+                if (!isNaN(valA) && valA > 0) {
+                    if (maxA <= 0) {
+                        assistInput.value = 0;
+                        showAppToast('warning', 'لا يوجد مساعدين متاحين', 'لا يوجد مساعدين متاحين في النطاق المحدد حالياً (المتاح: 0). تم ضبط المقاعد إلى 0.');
+                    } else if (valA > maxA) {
+                        assistInput.value = maxA;
+                        showAppToast('warning', 'تجاوز العدد المتاح', `العدد المطلوب للمساعدين (${valA}) أكبر من الإجمالي المتاح (${maxA}). تم ضبط القيمة للحد الأقصى المتاح.`);
+                    }
+                }
+            }
+
             if (typeof updateMatrixQuotaTracker === 'function') updateMatrixQuotaTracker();
             updateInjectionHeadcount();
         };
@@ -2564,6 +2626,30 @@
             }
         };
 
+        window.checkBranchMatrixFocus = function (input, type) {
+            const maxAttr = input.getAttribute('max');
+            const avail = (maxAttr !== null && maxAttr !== '') ? (parseInt(maxAttr) || 0) : 9999;
+            if (avail <= 0) {
+                input.value = 0;
+                const roleLabelPlural = (type === 'pharm') ? 'الصيادلة' : 'المساعدين';
+                showAppToast('warning', 'لا يوجد موظفين متاحين', `لا يوجد ${roleLabelPlural} متاحين بهذا الفرع في النطاق المحدد (المتاح: 0).`);
+                input.blur();
+            }
+        };
+
+        window.checkBranchMatrixKey = function (event, input, type) {
+            const maxAttr = input.getAttribute('max');
+            const avail = (maxAttr !== null && maxAttr !== '') ? (parseInt(maxAttr) || 0) : 9999;
+            if (avail <= 0) {
+                if (event.key !== 'Tab') {
+                    event.preventDefault();
+                    input.value = 0;
+                    const roleLabelPlural = (type === 'pharm') ? 'الصيادلة' : 'المساعدين';
+                    showAppToast('warning', 'لا يوجد موظفين متاحين', `لا يوجد ${roleLabelPlural} متاحين بهذا الفرع في النطاق المحدد (المتاح: 0).`);
+                }
+            }
+        };
+
         window.onBranchMatrixInputChanged = function (input, type) {
             if (!input) return;
             let val = parseInt(input.value);
@@ -2584,7 +2670,21 @@
             const roleLabelPlural = isPharm ? 'الصيادلة' : 'المساعدين';
 
             // Available staff in this branch
-            const avail = parseInt(input.getAttribute('max')) || 9999;
+            const maxAttr = input.getAttribute('max');
+            const avail = (maxAttr !== null && maxAttr !== '') ? (parseInt(maxAttr) || 0) : 9999;
+
+            if (avail <= 0) {
+                if (val > 0 || input.value !== '0') {
+                    input.value = 0;
+                    input.classList.add('border-rose-500', 'bg-rose-50', 'text-rose-700');
+                    setTimeout(() => {
+                        input.classList.remove('border-rose-500', 'bg-rose-50', 'text-rose-700');
+                    }, 1200);
+                    showAppToast('warning', 'لا يوجد موظفين متاحين', `لا يوجد ${roleLabelPlural} متاحين بهذا الفرع في النطاق المحدد (المتاح: 0). تم ضبط القيمة إلى 0.`);
+                }
+                onBranchMatrixQuotaChanged();
+                return;
+            }
 
             // Calculate sum of other branches
             let otherSum = 0;
@@ -2706,8 +2806,20 @@
                 const aAvail = b.assistantCount ?? b.AssistantCount ?? 0;
 
                 const prev = valuesToApply[bId] || {};
-                const prevPharm = prev.pharmacistQuota !== undefined && prev.pharmacistQuota !== '' ? prev.pharmacistQuota : '';
-                const prevAssist = prev.assistantQuota !== undefined && prev.assistantQuota !== '' ? prev.assistantQuota : '';
+                let prevPharm = prev.pharmacistQuota !== undefined && prev.pharmacistQuota !== '' ? prev.pharmacistQuota : '';
+                let prevAssist = prev.assistantQuota !== undefined && prev.assistantQuota !== '' ? prev.assistantQuota : '';
+
+                if (pAvail <= 0) {
+                    prevPharm = 0;
+                } else if (prevPharm !== '' && parseInt(prevPharm) > pAvail) {
+                    prevPharm = pAvail;
+                }
+
+                if (aAvail <= 0) {
+                    prevAssist = 0;
+                } else if (prevAssist !== '' && parseInt(prevAssist) > aAvail) {
+                    prevAssist = aAvail;
+                }
 
                 const rowTotal = (parseInt(prevPharm) || 0) + (parseInt(prevAssist) || 0);
 
@@ -2732,19 +2844,27 @@
                         <!-- Inputs: Pharmacists and Assistants Quota -->
                         <div class="flex items-center gap-2 sm:gap-3 shrink-0">
                             <!-- Pharm Input -->
-                            <div class="flex items-center gap-1.5 bg-purple-50/80 border border-purple-200/90 rounded-xl px-2.5 py-1 shadow-2xs">
-                                <span class="text-[11px] font-black text-purple-700">صيدلي:</span>
+                            <div class="flex items-center gap-1.5 ${pAvail <= 0 ? 'bg-slate-100/80 border-slate-200 opacity-70' : 'bg-purple-50/80 border-purple-200/90'} border rounded-xl px-2.5 py-1 shadow-2xs">
+                                <span class="text-[11px] font-black ${pAvail <= 0 ? 'text-slate-400' : 'text-purple-700'}">صيدلي:</span>
                                 <input type="number" min="0" max="${pAvail}" value="${prevPharm}" placeholder="0"
+                                       ${pAvail <= 0 ? 'title="لا يوجد صيادلة متاحين"' : ''}
+                                       onkeydown="checkBranchMatrixKey(event, this, 'pharm')"
+                                       onfocus="checkBranchMatrixFocus(this, 'pharm')"
+                                       onclick="checkBranchMatrixFocus(this, 'pharm')"
                                        oninput="onBranchMatrixInputChanged(this, 'pharm')"
-                                       class="matrix-pharm-input w-12 text-center text-xs font-black text-purple-900 bg-white border border-purple-200/60 rounded-lg py-0.5 outline-none focus:border-purple-500 font-mono" />
+                                       class="matrix-pharm-input w-12 text-center text-xs font-black ${pAvail <= 0 ? 'text-slate-400 bg-slate-100 cursor-not-allowed' : 'text-purple-900 bg-white'} border border-purple-200/60 rounded-lg py-0.5 outline-none focus:border-purple-500 font-mono" />
                             </div>
 
                             <!-- Assist Input -->
-                            <div class="flex items-center gap-1.5 bg-indigo-50/80 border border-indigo-200/90 rounded-xl px-2.5 py-1 shadow-2xs">
-                                <span class="text-[11px] font-black text-indigo-700">مساعد:</span>
+                            <div class="flex items-center gap-1.5 ${aAvail <= 0 ? 'bg-slate-100/80 border-slate-200 opacity-70' : 'bg-indigo-50/80 border-indigo-200/90'} border rounded-xl px-2.5 py-1 shadow-2xs">
+                                <span class="text-[11px] font-black ${aAvail <= 0 ? 'text-slate-400' : 'text-indigo-700'}">مساعد:</span>
                                 <input type="number" min="0" max="${aAvail}" value="${prevAssist}" placeholder="0"
+                                       ${aAvail <= 0 ? 'title="لا يوجد مساعدين متاحين"' : ''}
+                                       onkeydown="checkBranchMatrixKey(event, this, 'assist')"
+                                       onfocus="checkBranchMatrixFocus(this, 'assist')"
+                                       onclick="checkBranchMatrixFocus(this, 'assist')"
                                        oninput="onBranchMatrixInputChanged(this, 'assist')"
-                                       class="matrix-assist-input w-12 text-center text-xs font-black text-indigo-900 bg-white border border-indigo-200/60 rounded-lg py-0.5 outline-none focus:border-indigo-500 font-mono" />
+                                       class="matrix-assist-input w-12 text-center text-xs font-black ${aAvail <= 0 ? 'text-slate-400 bg-slate-100 cursor-not-allowed' : 'text-indigo-900 bg-white'} border border-indigo-200/60 rounded-lg py-0.5 outline-none focus:border-indigo-500 font-mono" />
                             </div>
 
                             <!-- Branch Row Total Badge -->
@@ -2833,12 +2953,14 @@
                 const aInput = row.querySelector('.matrix-assist-input');
 
                 if (pInput) {
-                    const pMax = parseInt(pInput.getAttribute('max')) || 9999;
-                    pInput.value = Math.min(bulkPharm, pMax);
+                    const pMaxAttr = pInput.getAttribute('max');
+                    const pMax = (pMaxAttr !== null && pMaxAttr !== '') ? (parseInt(pMaxAttr) || 0) : 9999;
+                    pInput.value = (pMax <= 0) ? 0 : Math.min(bulkPharm, pMax);
                 }
                 if (aInput) {
-                    const aMax = parseInt(aInput.getAttribute('max')) || 9999;
-                    aInput.value = Math.min(bulkAssist, aMax);
+                    const aMaxAttr = aInput.getAttribute('max');
+                    const aMax = (aMaxAttr !== null && aMaxAttr !== '') ? (parseInt(aMaxAttr) || 0) : 9999;
+                    aInput.value = (aMax <= 0) ? 0 : Math.min(bulkAssist, aMax);
                 }
             });
 
@@ -3610,6 +3732,11 @@
                 const totalPharm = matrixQuotas.reduce((a, b) => a + (b.pharmacistQuota || 0), 0);
                 const totalAssist = matrixQuotas.reduce((a, b) => a + (b.assistantQuota || 0), 0);
 
+                if (matrixQuotas.length === 0 && (targetPharm > 0 || targetAssist > 0)) {
+                    showAppToast('warning', 'الجدول التفصيلي للفروع فارغ', 'لقد حددت كوتة إجمالية بالأعلى ولكنك في وضع (جدول الفروع التفصيلي Matrix) ولم تدخل أي أعداد في جدول الفروع! يرجى إدخال الحصص أمام الفروع أو الضغط على (تطبيق سريع Bulk Fill) أو التبديل لوضع (Global Quota) للتوزيع التلقائي.');
+                    return;
+                }
+
                 if (targetPharm > 0 && totalPharm > targetPharm) {
                     showAppToast('error', 'تجاوز كوتة الصيادلة!', `إجمالي الصيادلة المحددين بالفروع (${totalPharm}) يتجاوز كوتة الصيادلة المحددة (${targetPharm} صيدلي). يرجى تقليل أعداد الفروع أولاً.`);
                     return;
@@ -3903,6 +4030,11 @@
                 const targetAssist = parseInt(document.getElementById('inputQuotaAssistant')?.value) || 0;
                 const totalPharm = matrixQuotas.reduce((a, b) => a + (b.pharmacistQuota || 0), 0);
                 const totalAssist = matrixQuotas.reduce((a, b) => a + (b.assistantQuota || 0), 0);
+
+                if (matrixQuotas.length === 0 && (targetPharm > 0 || targetAssist > 0)) {
+                    showAppToast('warning', 'الجدول التفصيلي للفروع فارغ', 'لقد حددت كوتة إجمالية بالأعلى ولكنك في وضع (جدول الفروع التفصيلي Matrix) ولم تدخل أي أعداد في جدول الفروع! يرجى إدخال الحصص أمام الفروع أو الضغط على (تطبيق سريع Bulk Fill) أو التبديل لوضع (Global Quota) للتوزيع التلقائي.');
+                    return;
+                }
 
                 if (targetPharm > 0 && totalPharm > targetPharm) {
                     showAppToast('error', 'تجاوز كوتة الصيادلة!', `إجمالي الصيادلة المحددين بالفروع (${totalPharm}) يتجاوز كوتة الصيادلة المحددة (${targetPharm} صيدلي). يرجى تقليل أعداد الفروع أولاً.`);

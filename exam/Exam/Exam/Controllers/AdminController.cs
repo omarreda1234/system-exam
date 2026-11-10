@@ -2913,7 +2913,33 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
             var allRoles = await _examService.GetAllRolesAsync();
             // English-only Role Filter
             ViewBag.Roles = allRoles.Where(r => !System.Text.RegularExpressions.Regex.IsMatch(r.RoleName, @"\p{IsArabic}") && !r.RoleName.Contains("صيدلي") && !r.RoleName.Contains("مساعد")).ToList();
-            ViewBag.Shifts = await _examService.GetAllShiftsAsync();
+
+            using var conn = new SqlConnection(_connectionString);
+            var shiftsSql = @"
+                SELECT 
+                    s.Id, 
+                    s.ShiftName, 
+                    s.StartTime, 
+                    s.EndTime,
+                    (SELECT COUNT(1) FROM AspNetUsers u WITH (NOLOCK) WHERE u.ShiftId = s.Id) AS AssignedUsersCount,
+                    sg.Id AS GroupId,
+                    sg.GroupName,
+                    sg.ColorCode AS GroupColor
+                FROM Shifts s WITH (NOLOCK)
+                LEFT JOIN ShiftGroupItems sgi WITH (NOLOCK) ON s.Id = sgi.ShiftId
+                LEFT JOIN ShiftGroups sg WITH (NOLOCK) ON sgi.GroupId = sg.Id
+                ORDER BY s.StartTime ASC";
+            ViewBag.Shifts = (await conn.QueryAsync<ShiftDto>(shiftsSql)).ToList();
+
+            var groupsSql = @"
+                SELECT sg.Id, sg.GroupName, sg.Description, sg.ColorCode,
+                       COUNT(sgi.ShiftId) AS ShiftsCount
+                FROM ShiftGroups sg WITH (NOLOCK)
+                LEFT JOIN ShiftGroupItems sgi WITH (NOLOCK) ON sg.Id = sgi.GroupId
+                GROUP BY sg.Id, sg.GroupName, sg.Description, sg.ColorCode
+                ORDER BY sg.Id";
+            ViewBag.ShiftGroups = (await conn.QueryAsync<ShiftGroupDto>(groupsSql)).ToList();
+
             ViewBag.Branches = await _examService.GetAllBranchesAsync();
             ViewBag.Departments = await _examService.GetAllDepartmentsAsync();
 
@@ -2950,6 +2976,8 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
             var classification = Request.Form["classification"].FirstOrDefault();
             var branchName = Request.Form["branchName"].FirstOrDefault();
             var department = Request.Form["department"].FirstOrDefault();
+            var shift = Request.Form["shift"].FirstOrDefault();
+            var shiftGroup = Request.Form["shiftGroup"].FirstOrDefault();
 
             int start = string.IsNullOrEmpty(startStr) ? 0 : int.Parse(startStr);
             int length = string.IsNullOrEmpty(lengthStr) ? 10 : int.Parse(lengthStr);
@@ -3057,6 +3085,86 @@ WHERE 1 = 1";
                     {
                         sqlBase += " AND (UPPER(D.Name) IN @DeptList OR UPPER(D.Code) IN @DeptList)";
                         parameters.Add("DeptList", namedDepts);
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(shiftGroup))
+            {
+                var groupList = shiftGroup.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                          .Select(g => g.Trim())
+                                          .Where(g => !string.Equals(g, "ALL", StringComparison.OrdinalIgnoreCase))
+                                          .ToList();
+                if (groupList.Any())
+                {
+                    bool hasUnassignedGroup = groupList.Any(g => g.Equals("UNASSIGNED", StringComparison.OrdinalIgnoreCase) || g.Equals("NONE", StringComparison.OrdinalIgnoreCase) || g.Contains("بدون"));
+                    var namedOrIdGroups = groupList.Where(g => !g.Equals("UNASSIGNED", StringComparison.OrdinalIgnoreCase) && !g.Equals("NONE", StringComparison.OrdinalIgnoreCase) && !g.Contains("بدون")).ToList();
+
+                    var groupIds = namedOrIdGroups.Where(g => int.TryParse(g, out _)).Select(int.Parse).ToList();
+                    var groupNames = namedOrIdGroups.Where(g => !int.TryParse(g, out _)).Select(g => g.ToUpper()).ToList();
+
+                    var groupConditions = new List<string>();
+                    if (groupIds.Any() || groupNames.Any())
+                    {
+                        var conds = new List<string>();
+                        if (groupIds.Any()) conds.Add("sg.Id IN @ShiftGroupIds");
+                        if (groupNames.Any()) conds.Add("UPPER(sg.GroupName) IN @ShiftGroupNames");
+
+                        groupConditions.Add($@"EXISTS (
+                            SELECT 1 FROM dbo.ShiftGroupItems sgi WITH (NOLOCK)
+                            JOIN dbo.ShiftGroups sg WITH (NOLOCK) ON sgi.GroupId = sg.Id
+                            WHERE sgi.ShiftId = U.ShiftId AND ({string.Join(" OR ", conds)})
+                        )");
+                        if (groupIds.Any()) parameters.Add("ShiftGroupIds", groupIds);
+                        if (groupNames.Any()) parameters.Add("ShiftGroupNames", groupNames);
+                    }
+
+                    if (hasUnassignedGroup)
+                    {
+                        groupConditions.Add("(U.ShiftId IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.ShiftGroupItems sgi WITH (NOLOCK) WHERE sgi.ShiftId = U.ShiftId))");
+                    }
+
+                    if (groupConditions.Any())
+                    {
+                        sqlBase += $" AND ({string.Join(" OR ", groupConditions)})";
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(shift))
+            {
+                var shiftList = shift.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                     .Select(s => s.Trim())
+                                     .Where(s => !string.Equals(s, "ALL", StringComparison.OrdinalIgnoreCase))
+                                     .ToList();
+                if (shiftList.Any())
+                {
+                    bool hasUnassignedShift = shiftList.Any(s => s.Equals("UNASSIGNED", StringComparison.OrdinalIgnoreCase) || s.Equals("NONE", StringComparison.OrdinalIgnoreCase) || s.Equals("0") || s.Contains("بدون"));
+                    var namedOrIdShifts = shiftList.Where(s => !s.Equals("UNASSIGNED", StringComparison.OrdinalIgnoreCase) && !s.Equals("NONE", StringComparison.OrdinalIgnoreCase) && !s.Equals("0") && !s.Contains("بدون")).ToList();
+
+                    var shiftIds = namedOrIdShifts.Where(s => int.TryParse(s, out _)).Select(int.Parse).ToList();
+                    var shiftNames = namedOrIdShifts.Where(s => !int.TryParse(s, out _)).Select(s => s.ToUpper()).ToList();
+
+                    var shiftConditions = new List<string>();
+                    if (shiftIds.Any() || shiftNames.Any())
+                    {
+                        var conds = new List<string>();
+                        if (shiftIds.Any()) conds.Add("U.ShiftId IN @ShiftIds");
+                        if (shiftNames.Any()) conds.Add("UPPER(S.ShiftName) IN @ShiftNames");
+                        shiftConditions.Add($"({string.Join(" OR ", conds)})");
+
+                        if (shiftIds.Any()) parameters.Add("ShiftIds", shiftIds);
+                        if (shiftNames.Any()) parameters.Add("ShiftNames", shiftNames);
+                    }
+
+                    if (hasUnassignedShift)
+                    {
+                        shiftConditions.Add("(U.ShiftId IS NULL OR U.ShiftId = 0)");
+                    }
+
+                    if (shiftConditions.Any())
+                    {
+                        sqlBase += $" AND ({string.Join(" OR ", shiftConditions)})";
                     }
                 }
             }
@@ -3457,7 +3565,7 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
         }
 
         [HttpGet]
-        public async Task<IActionResult> ExportFilteredUsersToExcel(string? search, string? classification, string? branchName, string? department)
+        public async Task<IActionResult> ExportFilteredUsersToExcel(string? search, string? classification, string? branchName, string? department, string? shift, string? shiftGroup)
         {
             using var conn = new SqlConnection(_connectionString);
             var currentUser = await _userManager.GetUserAsync(User);
@@ -3559,6 +3667,86 @@ WHERE 1 = 1";
                     {
                         sqlBase += " AND (UPPER(D.Name) IN @DeptList OR UPPER(D.Code) IN @DeptList)";
                         parameters.Add("DeptList", namedDepts);
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(shiftGroup))
+            {
+                var groupList = shiftGroup.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                          .Select(g => g.Trim())
+                                          .Where(g => !string.Equals(g, "ALL", StringComparison.OrdinalIgnoreCase))
+                                          .ToList();
+                if (groupList.Any())
+                {
+                    bool hasUnassignedGroup = groupList.Any(g => g.Equals("UNASSIGNED", StringComparison.OrdinalIgnoreCase) || g.Equals("NONE", StringComparison.OrdinalIgnoreCase) || g.Contains("بدون"));
+                    var namedOrIdGroups = groupList.Where(g => !g.Equals("UNASSIGNED", StringComparison.OrdinalIgnoreCase) && !g.Equals("NONE", StringComparison.OrdinalIgnoreCase) && !g.Contains("بدون")).ToList();
+
+                    var groupIds = namedOrIdGroups.Where(g => int.TryParse(g, out _)).Select(int.Parse).ToList();
+                    var groupNames = namedOrIdGroups.Where(g => !int.TryParse(g, out _)).Select(g => g.ToUpper()).ToList();
+
+                    var groupConditions = new List<string>();
+                    if (groupIds.Any() || groupNames.Any())
+                    {
+                        var conds = new List<string>();
+                        if (groupIds.Any()) conds.Add("sg.Id IN @ShiftGroupIds");
+                        if (groupNames.Any()) conds.Add("UPPER(sg.GroupName) IN @ShiftGroupNames");
+
+                        groupConditions.Add($@"EXISTS (
+                            SELECT 1 FROM dbo.ShiftGroupItems sgi WITH (NOLOCK)
+                            JOIN dbo.ShiftGroups sg WITH (NOLOCK) ON sgi.GroupId = sg.Id
+                            WHERE sgi.ShiftId = U.ShiftId AND ({string.Join(" OR ", conds)})
+                        )");
+                        if (groupIds.Any()) parameters.Add("ShiftGroupIds", groupIds);
+                        if (groupNames.Any()) parameters.Add("ShiftGroupNames", groupNames);
+                    }
+
+                    if (hasUnassignedGroup)
+                    {
+                        groupConditions.Add("(U.ShiftId IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.ShiftGroupItems sgi WITH (NOLOCK) WHERE sgi.ShiftId = U.ShiftId))");
+                    }
+
+                    if (groupConditions.Any())
+                    {
+                        sqlBase += $" AND ({string.Join(" OR ", groupConditions)})";
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(shift))
+            {
+                var shiftList = shift.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                     .Select(s => s.Trim())
+                                     .Where(s => !string.Equals(s, "ALL", StringComparison.OrdinalIgnoreCase))
+                                     .ToList();
+                if (shiftList.Any())
+                {
+                    bool hasUnassignedShift = shiftList.Any(s => s.Equals("UNASSIGNED", StringComparison.OrdinalIgnoreCase) || s.Equals("NONE", StringComparison.OrdinalIgnoreCase) || s.Equals("0") || s.Contains("بدون"));
+                    var namedOrIdShifts = shiftList.Where(s => !s.Equals("UNASSIGNED", StringComparison.OrdinalIgnoreCase) && !s.Equals("NONE", StringComparison.OrdinalIgnoreCase) && !s.Equals("0") && !s.Contains("بدون")).ToList();
+
+                    var shiftIds = namedOrIdShifts.Where(s => int.TryParse(s, out _)).Select(int.Parse).ToList();
+                    var shiftNames = namedOrIdShifts.Where(s => !int.TryParse(s, out _)).Select(s => s.ToUpper()).ToList();
+
+                    var shiftConditions = new List<string>();
+                    if (shiftIds.Any() || shiftNames.Any())
+                    {
+                        var conds = new List<string>();
+                        if (shiftIds.Any()) conds.Add("U.ShiftId IN @ShiftIds");
+                        if (shiftNames.Any()) conds.Add("UPPER(S.ShiftName) IN @ShiftNames");
+                        shiftConditions.Add($"({string.Join(" OR ", conds)})");
+
+                        if (shiftIds.Any()) parameters.Add("ShiftIds", shiftIds);
+                        if (shiftNames.Any()) parameters.Add("ShiftNames", shiftNames);
+                    }
+
+                    if (hasUnassignedShift)
+                    {
+                        shiftConditions.Add("(U.ShiftId IS NULL OR U.ShiftId = 0)");
+                    }
+
+                    if (shiftConditions.Any())
+                    {
+                        sqlBase += $" AND ({string.Join(" OR ", shiftConditions)})";
                     }
                 }
             }

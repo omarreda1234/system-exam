@@ -173,7 +173,7 @@
 </div>
 
 <!-- Users Table -->
-<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm mb-20">
     <!-- Filters -->
     <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-end justify-between gap-4 bg-slate-50/50 dark:bg-slate-800/20">
         <div class="flex flex-wrap items-end gap-4">
@@ -293,6 +293,99 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Multi-Select Shift Group Dropdown -->
+            <div class="relative inline-block text-left" id="multiSelectShiftGroupWrapper">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
+                    <i class="fas fa-layer-group mr-1"></i> Shift Group / مجموعة الشيفت
+                </label>
+                <button type="button" id="btnMultiSelectShiftGroup" onclick="toggleShiftGroupDropdown()"
+                        class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[200px] shadow-sm flex items-center justify-between gap-2">
+                    <span id="lblShiftGroupSelected" class="truncate">All Shift Groups</span>
+                    <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- Dropdown Menu -->
+                <div id="dropdownShiftGroupMenu" class="hidden absolute left-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                    <div class="relative">
+                        <input type="text" id="shiftGroupSearchInput" placeholder="Search shift group..." oninput="filterShiftGroupOptions(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                    </div>
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Shift Groups</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="selectAllShiftGroups(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllShiftGroups(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar" id="shiftGroupOptionsContainer">
+                        <label class="shift-group-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" value="UNASSIGNED" class="chk-shift-group rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onShiftGroupFilterChange()" />
+                            <span class="w-2.5 h-2.5 rounded-full bg-slate-300 shrink-0"></span>
+                            <span class="truncate italic text-rose-500 font-semibold">بدون مجموعة (Unassigned)</span>
+                        </label>
+                        @if (ViewBag.ShiftGroups != null) {
+                            foreach (var g in ViewBag.ShiftGroups as IEnumerable<Exam.DTOs.ShiftGroupDto>) {
+                                <label class="shift-group-option-label flex items-center justify-between gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300" data-group-id="@g.Id">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <input type="checkbox" value="@g.Id" data-group-name="@g.GroupName" class="chk-shift-group rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onShiftGroupFilterChange()" />
+                                        <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: @(string.IsNullOrWhiteSpace(g.ColorCode) ? "#7C3AED" : g.ColorCode)"></span>
+                                        <span class="truncate">@g.GroupName</span>
+                                    </div>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 shrink-0 font-mono font-bold">@g.ShiftsCount شيفت</span>
+                                </label>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Multi-Select Shift Dropdown -->
+            <div class="relative inline-block text-left" id="multiSelectShiftWrapper">
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
+                    <i class="fas fa-clock mr-1"></i> Shift Window / الشيفت
+                </label>
+                <button type="button" id="btnMultiSelectShift" onclick="toggleShiftDropdown()"
+                        class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-brand-500 transition-all min-w-[200px] shadow-sm flex items-center justify-between gap-2">
+                    <span id="lblShiftSelected" class="truncate">All Shifts</span>
+                    <i class="fas fa-chevron-down text-[10px] text-slate-400"></i>
+                </button>
+
+                <!-- Dropdown Menu -->
+                <div id="dropdownShiftMenu" class="hidden absolute left-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                    <div class="relative">
+                        <input type="text" id="shiftSearchInput" placeholder="Search shift..." oninput="filterShiftOptions(this.value)" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200" />
+                    </div>
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Filter Shifts</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="selectAllShifts(true)" class="text-[10px] font-extrabold text-brand-600 hover:underline">All</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllShifts(false)" class="text-[10px] font-extrabold text-rose-500 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar" id="shiftOptionsContainer">
+                        <label class="shift-option-label flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" value="UNASSIGNED" class="chk-shift rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onShiftFilterChange()" />
+                            <span class="truncate italic text-rose-500 font-semibold">بدون شيفت (No Shift)</span>
+                        </label>
+                        @if (ViewBag.Shifts != null) {
+                            foreach (var s in ViewBag.Shifts as IEnumerable<Exam.DTOs.ShiftDto>) {
+                                <label class="shift-option-label flex items-center justify-between gap-2 p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300" data-shift-id="@s.Id" data-group-id="@(s.GroupId ?? 0)">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <input type="checkbox" value="@s.Id" data-shift-name="@s.ShiftName" class="chk-shift rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onShiftFilterChange()" />
+                                        <span class="truncate font-black">@s.ShiftName</span>
+                                        <span class="text-[10px] text-slate-400 font-normal">(@s.StartTime.ToString(@"hh\:mm") - @s.EndTime.ToString(@"hh\:mm"))</span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(s.GroupName)) {
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded-md font-bold truncate shrink-0 max-w-[85px]" style="background-color: @(s.GroupColor ?? "#7C3AED")1A; color: @(s.GroupColor ?? "#7C3AED");">@s.GroupName</span>
+                                    }
+                                </label>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Export Filtered Excel Button -->
@@ -304,7 +397,7 @@
         </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <div class="overflow-x-auto min-h-[380px] pb-6">
         <style>
             #personnelTable {
                 min-width: unset !important;
@@ -317,6 +410,10 @@
                 padding-right: 0.625rem !important;
                 padding-top: 0.625rem !important;
                 padding-bottom: 0.625rem !important;
+            }
+            #personnelTable th.actions-col, #personnelTable td.actions-col {
+                padding-right: 6rem !important; /* 96px clearance from right edge to avoid overlap with floating chat/AI widgets */
+                min-width: 260px !important;
             }
         </style>
         <table class="saas-table" id="personnelTable">
@@ -333,7 +430,7 @@
                     {
                         <th class="hidden lg:table-cell">Audit / السجل</th>
                     }
-                    <th class="text-right pr-3">Actions</th>
+                    <th class="text-right actions-col">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -346,7 +443,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
     <script>
         const rolesData = @Html.Raw(Json.Serialize(roles));
-        const shiftsData = @Html.Raw(Json.Serialize(shifts));
+        const shiftsData = @Html.Raw(Json.Serialize(ViewBag.Shifts ?? shifts));
+        const shiftGroupsData = @Html.Raw(Json.Serialize(ViewBag.ShiftGroups ?? new List<Exam.DTOs.ShiftGroupDto>()));
         const departmentsData = @Html.Raw(Json.Serialize(ViewBag.Departments ?? new List<Exam.DTOs.DepartmentDto>()));
         const branchesData = @Html.Raw(Json.Serialize(ViewBag.Branches ?? new List<Exam.DTOs.BranchDto>()));
         const canEditProfile = @((ViewBag.CanEditProfile ?? false).ToString().ToLower());
@@ -358,18 +456,40 @@
             $('#dropdownClassificationMenu').toggleClass('hidden');
             $('#dropdownBranchMenu').addClass('hidden');
             $('#dropdownDepartmentMenu').addClass('hidden');
+            $('#dropdownShiftGroupMenu').addClass('hidden');
+            $('#dropdownShiftMenu').addClass('hidden');
         }
 
         function toggleBranchDropdown() {
             $('#dropdownBranchMenu').toggleClass('hidden');
             $('#dropdownClassificationMenu').addClass('hidden');
             $('#dropdownDepartmentMenu').addClass('hidden');
+            $('#dropdownShiftGroupMenu').addClass('hidden');
+            $('#dropdownShiftMenu').addClass('hidden');
         }
 
         function toggleDepartmentDropdown() {
             $('#dropdownDepartmentMenu').toggleClass('hidden');
             $('#dropdownClassificationMenu').addClass('hidden');
             $('#dropdownBranchMenu').addClass('hidden');
+            $('#dropdownShiftGroupMenu').addClass('hidden');
+            $('#dropdownShiftMenu').addClass('hidden');
+        }
+
+        function toggleShiftGroupDropdown() {
+            $('#dropdownShiftGroupMenu').toggleClass('hidden');
+            $('#dropdownClassificationMenu').addClass('hidden');
+            $('#dropdownBranchMenu').addClass('hidden');
+            $('#dropdownDepartmentMenu').addClass('hidden');
+            $('#dropdownShiftMenu').addClass('hidden');
+        }
+
+        function toggleShiftDropdown() {
+            $('#dropdownShiftMenu').toggleClass('hidden');
+            $('#dropdownClassificationMenu').addClass('hidden');
+            $('#dropdownBranchMenu').addClass('hidden');
+            $('#dropdownDepartmentMenu').addClass('hidden');
+            $('#dropdownShiftGroupMenu').addClass('hidden');
         }
 
         $(document).click(function(e) {
@@ -381,6 +501,12 @@
             }
             if (!$(e.target).closest('#multiSelectDepartmentWrapper').length) {
                 $('#dropdownDepartmentMenu').addClass('hidden');
+            }
+            if (!$(e.target).closest('#multiSelectShiftGroupWrapper').length) {
+                $('#dropdownShiftGroupMenu').addClass('hidden');
+            }
+            if (!$(e.target).closest('#multiSelectShiftWrapper').length) {
+                $('#dropdownShiftMenu').addClass('hidden');
             }
         });
 
@@ -408,6 +534,22 @@
             });
         }
 
+        function filterShiftGroupOptions(query) {
+            const q = (query || '').toLowerCase().trim();
+            $('.shift-group-option-label').each(function() {
+                const text = $(this).text().toLowerCase();
+                $(this).toggle(!q || text.includes(q));
+            });
+        }
+
+        function filterShiftOptions(query) {
+            const q = (query || '').toLowerCase().trim();
+            $('.shift-option-label').each(function() {
+                const text = $(this).text().toLowerCase();
+                $(this).toggle(!q || text.includes(q));
+            });
+        }
+
         function selectAllClassifications(checkAll) {
             $('.classification-option-label:visible .chk-classification').prop('checked', checkAll);
             onClassificationFilterChange();
@@ -421,6 +563,16 @@
         function selectAllDepartments(checkAll) {
             $('.department-option-label:visible .chk-department').prop('checked', checkAll);
             onDepartmentFilterChange();
+        }
+
+        function selectAllShiftGroups(checkAll) {
+            $('.shift-group-option-label:visible .chk-shift-group').prop('checked', checkAll);
+            onShiftGroupFilterChange();
+        }
+
+        function selectAllShifts(checkAll) {
+            $('.shift-option-label:visible .chk-shift').prop('checked', checkAll);
+            onShiftFilterChange();
         }
 
         function getSelectedClassifications() {
@@ -442,6 +594,22 @@
         function getSelectedDepartments() {
             let checked = [];
             $('.chk-department:checked').each(function() {
+                checked.push($(this).val());
+            });
+            return checked;
+        }
+
+        function getSelectedShiftGroups() {
+            let checked = [];
+            $('.chk-shift-group:checked').each(function() {
+                checked.push($(this).val());
+            });
+            return checked;
+        }
+
+        function getSelectedShifts() {
+            let checked = [];
+            $('.chk-shift:checked').each(function() {
                 checked.push($(this).val());
             });
             return checked;
@@ -486,13 +654,45 @@
             if (table) table.draw();
         }
 
+        function onShiftGroupFilterChange() {
+            let selected = getSelectedShiftGroups();
+            let total = $('.chk-shift-group').length;
+            if (selected.length === 0 || selected.length === total) {
+                $('#lblShiftGroupSelected').html('<span class="text-slate-500">All Shift Groups</span>');
+            } else if (selected.length === 1) {
+                let name = $('.chk-shift-group:checked').first().data('group-name') || selected[0];
+                if (selected[0] === 'UNASSIGNED') name = 'بدون مجموعة';
+                $('#lblShiftGroupSelected').html(`<span class="text-brand-600 font-extrabold truncate">${name}</span>`);
+            } else {
+                $('#lblShiftGroupSelected').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
+            }
+            if (table) table.draw();
+        }
+
+        function onShiftFilterChange() {
+            let selected = getSelectedShifts();
+            let total = $('.chk-shift').length;
+            if (selected.length === 0 || selected.length === total) {
+                $('#lblShiftSelected').html('<span class="text-slate-500">All Shifts</span>');
+            } else if (selected.length === 1) {
+                let name = $('.chk-shift:checked').first().data('shift-name') || selected[0];
+                if (selected[0] === 'UNASSIGNED') name = 'بدون شيفت';
+                $('#lblShiftSelected').html(`<span class="text-brand-600 font-extrabold truncate">${name}</span>`);
+            } else {
+                $('#lblShiftSelected').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
+            }
+            if (table) table.draw();
+        }
+
         function exportFilteredUsersExcel() {
             let searchValue = table ? table.search() : '';
             let classification = getSelectedClassifications().join(',');
             let branchName = getSelectedBranches().join(',');
             let department = getSelectedDepartments().join(',');
+            let shift = getSelectedShifts().join(',');
+            let shiftGroup = getSelectedShiftGroups().join(',');
 
-            let url = `/Admin/ExportFilteredUsersToExcel?search=${encodeURIComponent(searchValue)}&classification=${encodeURIComponent(classification)}&branchName=${encodeURIComponent(branchName)}&department=${encodeURIComponent(department)}`;
+            let url = `/Admin/ExportFilteredUsersToExcel?search=${encodeURIComponent(searchValue)}&classification=${encodeURIComponent(classification)}&branchName=${encodeURIComponent(branchName)}&department=${encodeURIComponent(department)}&shift=${encodeURIComponent(shift)}&shiftGroup=${encodeURIComponent(shiftGroup)}`;
             window.location.href = url;
         }
 
@@ -508,6 +708,8 @@
                         d.classification = getSelectedClassifications().join(',');
                         d.branchName = getSelectedBranches().join(',');
                         d.department = getSelectedDepartments().join(',');
+                        d.shift = getSelectedShifts().join(',');
+                        d.shiftGroup = getSelectedShiftGroups().join(',');
                     },
                     headers: {
                         'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
@@ -553,7 +755,7 @@
                     { data: 'shift', className: 'hidden xl:table-cell', orderable: false },
                     { data: 'department', className: 'text-center hidden md:table-cell', orderable: true },
                     @(isAdmin ? Html.Raw("{ data: 'audit', className: 'hidden lg:table-cell', orderable: true },") : Html.Raw(""))
-                    { data: 'actions', className: 'text-right pr-3', orderable: false }
+                    { data: 'actions', className: 'text-right actions-col', orderable: false }
                 ],
                 deferRender: true,
                 autoWidth: false,
@@ -561,7 +763,7 @@
                 stateSave: false,
                 pageLength: 10,
                 lengthMenu: [[10, 25, 50], [10, 25, 50]],
-                dom: '<"flex flex-col sm:flex-row justify-between items-center mb-4"lf>rt<"flex flex-col sm:flex-row justify-between items-center mt-4"ip>',
+                dom: '<"flex flex-col sm:flex-row justify-between items-center mb-4 px-4"lf>rt<"flex flex-col sm:flex-row justify-between items-center mt-6 mb-6 px-4 pr-24"ip>',
                 language: {
                     search: "",
                     searchPlaceholder: "Search records...",
