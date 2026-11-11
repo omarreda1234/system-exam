@@ -511,12 +511,17 @@
                                     </div>
                                 </div>
 
-                                <div class="relative">
-                                    <i class="fas fa-search absolute left-3 top-2.5 text-slate-400 text-xs"></i>
-                                    <input type="text" id="injectionBranchSearchInput" oninput="filterInjectionBranchesList(this.value)" placeholder="ابحث باسم الفرع..." class="w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 focus:bg-white shadow-2xs" />
+                                <!-- Branch Cities / Groups Quick Filter Dropdown -->
+                                <div id="injectionBranchCitiesBar" class="w-full relative z-40">
+                                    <!-- Rendered dynamically by JS -->
                                 </div>
 
-                                <div id="injectionBranchesContainer" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto custom-scrollbar p-1">
+                                <div class="relative">
+                                    <i class="fas fa-search absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                                    <input type="text" id="injectionBranchSearchInput" oninput="filterInjectionBranchesList(this.value)" placeholder="ابحث باسم الفرع أو المدينة..." class="w-full bg-slate-50/80 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-purple-500 focus:bg-white shadow-2xs" />
+                                </div>
+
+                                <div id="injectionBranchesContainer" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto custom-scrollbar p-1">
                                     <!-- Populated dynamically by JS -->
                                 </div>
                             </div>
@@ -1908,6 +1913,7 @@
                     injectionState.branchStaffLoaded = true;
 
                     renderInjectionBranches();
+                    renderInjectionBranchCities();
                     renderInjectionShiftGroups();
                     renderInjectionShifts();
                     renderBranchMatrix();
@@ -2212,13 +2218,21 @@
             toggleInjectionShiftGroupSelection(groupId, true);
         };
 
-        // Close shift group dropdown when clicking outside
+        // Close dropdowns when clicking outside
         document.addEventListener('click', function (e) {
-            if (!injectionState || !injectionState._shiftGroupDropdownOpen) return;
-            const bar = document.getElementById('injectionShiftGroupsBar');
-            if (bar && !bar.contains(e.target)) {
-                injectionState._shiftGroupDropdownOpen = false;
-                renderInjectionShiftGroups();
+            if (injectionState && injectionState._branchCityDropdownOpen) {
+                const bar = document.getElementById('injectionBranchCitiesBar');
+                if (bar && !bar.contains(e.target)) {
+                    injectionState._branchCityDropdownOpen = false;
+                    renderInjectionBranchCities();
+                }
+            }
+            if (injectionState && injectionState._shiftGroupDropdownOpen) {
+                const bar = document.getElementById('injectionShiftGroupsBar');
+                if (bar && !bar.contains(e.target)) {
+                    injectionState._shiftGroupDropdownOpen = false;
+                    renderInjectionShiftGroups();
+                }
             }
         });
 
@@ -2324,19 +2338,29 @@
             container.innerHTML = list.map(b => {
                 const bId = b.id ?? b.Id;
                 const bName = b.branchName || b.BranchName || 'Branch';
+                const rawCity = (b.city || b.City || '').trim();
+                const bCity = rawCity && rawCity !== 'بدون مدينة' ? rawCity : '';
                 const isChecked = injectionState.selectedBranchIds.includes(bId);
                 const pCount = b.pharmacistCount ?? b.PharmacistCount ?? 0;
                 const aCount = b.assistantCount ?? b.AssistantCount ?? 0;
 
                 return `
-                    <label class="flex items-center justify-between p-2 rounded-xl border ${isChecked ? 'bg-purple-50/90 border-purple-300 text-purple-900 shadow-2xs font-bold' : 'bg-white border-slate-200/90 text-slate-700 hover:border-purple-200'} cursor-pointer transition-all select-none text-xs">
-                        <div class="flex items-center gap-2 truncate min-w-0">
-                            <input type="checkbox" value="${bId}" ${isChecked ? 'checked' : ''} onchange="toggleInjectionBranch(${bId}, this.checked)" class="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 border-slate-300" />
-                            <span class="truncate">${bName}</span>
+                    <label class="flex items-start gap-2 p-2 rounded-xl border ${isChecked ? 'bg-purple-50/90 border-purple-300 text-purple-900 shadow-2xs font-bold' : 'bg-white border-slate-200/90 text-slate-700 hover:border-purple-200'} cursor-pointer transition-all select-none text-xs group">
+                        <input type="checkbox" value="${bId}" ${isChecked ? 'checked' : ''} onchange="toggleInjectionBranch(${bId}, this.checked)" class="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 border-slate-300 shrink-0 mt-0.5" />
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-1.5">
+                                <span class="font-black text-xs truncate ${isChecked ? 'text-purple-950' : 'text-slate-800'}" title="${bName}">${bName}</span>
+                                <span class="text-[9px] font-mono text-slate-400 shrink-0 font-normal" title="الصيادلة: ${pCount} | المساعدين: ${aCount}">
+                                    ${pCount}ص / ${aCount}م
+                                </span>
+                            </div>
+                            ${bCity ? `
+                                <div class="flex items-center gap-1 text-[10px] text-purple-600 font-bold truncate mt-0.5">
+                                    <i class="fas fa-map-marker-alt text-[8px] text-purple-400 shrink-0"></i>
+                                    <span class="truncate">${bCity}</span>
+                                </div>
+                            ` : ''}
                         </div>
-                        <span class="text-[9px] font-mono text-slate-400 shrink-0 ml-1" title="الصيادلة: ${pCount} | المساعدين: ${aCount}">
-                            ${pCount}ص / ${aCount}م
-                        </span>
                     </label>
                 `;
             }).join('');
@@ -2350,7 +2374,8 @@
             const q = term.trim().toLowerCase();
             const filtered = injectionState.branches.filter(b => {
                 const name = (b.branchName || b.BranchName || '').toLowerCase();
-                return name.includes(q);
+                const city = (b.city || b.City || '').toLowerCase();
+                return name.includes(q) || city.includes(q);
             });
             renderInjectionBranches(filtered);
         };
@@ -2394,7 +2419,230 @@
                     badge.className = 'text-[10px] font-black bg-brand-100 text-brand-700 px-2.5 py-0.5 rounded-full';
                 }
             }
+            renderInjectionBranchCities();
             updateScopeBadge();
+        };
+
+        // ==================== BRANCH CITY / REGIONAL GROUPS FILTER ====================
+        window.renderInjectionBranchCities = function () {
+            const container = document.getElementById('injectionBranchCitiesBar');
+            if (!container) return;
+            const branches = injectionState.branches || [];
+            if (branches.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            // Group branches by City
+            const cityMap = new Map();
+            branches.forEach(b => {
+                const rawCity = (b.city || b.City || '').trim();
+                const city = rawCity || 'بدون مدينة';
+                if (!cityMap.has(city)) {
+                    cityMap.set(city, []);
+                }
+                cityMap.get(city).push(b);
+            });
+
+            // Convert map to sorted array of city objects (sort by branch count DESC, then name)
+            const cityList = Array.from(cityMap.entries()).map(([cityName, bList]) => {
+                const totalInCity = bList.length;
+                const bIds = bList.map(b => b.id ?? b.Id);
+                const selectedInCity = bIds.filter(id => injectionState.selectedBranchIds.includes(id)).length;
+                const isAll = (totalInCity > 0 && selectedInCity === totalInCity);
+                const isPartial = (selectedInCity > 0 && selectedInCity < totalInCity);
+                return {
+                    cityName,
+                    branches: bList,
+                    branchIds: bIds,
+                    total: totalInCity,
+                    selected: selectedInCity,
+                    isAll,
+                    isPartial
+                };
+            }).sort((a, b) => b.total - a.total || a.cityName.localeCompare(b.cityName, 'ar'));
+
+            const totalBranches = branches.length;
+            const selectedCount = injectionState.selectedBranchIds.length;
+            const isOpen = !!injectionState._branchCityDropdownOpen;
+
+            const fullySelectedCities = cityList.filter(c => c.isAll);
+            const partialSelectedCities = cityList.filter(c => c.isPartial);
+
+            // Dynamic summary title for button
+            let summaryTitle = '';
+            if (selectedCount === 0) {
+                summaryTitle = 'لم يتم تحديد أي فرع (0 فرع)';
+            } else if (selectedCount === totalBranches) {
+                summaryTitle = `جميع المدن / الفروع (${totalBranches} فرع محدد)`;
+            } else if (fullySelectedCities.length > 0 && partialSelectedCities.length === 0) {
+                if (fullySelectedCities.length === 1) {
+                    summaryTitle = `فروع ${fullySelectedCities[0].cityName} (${fullySelectedCities[0].total} فرع)`;
+                } else if (fullySelectedCities.length === 2) {
+                    summaryTitle = `${fullySelectedCities[0].cityName} + ${fullySelectedCities[1].cityName} (${selectedCount} فرع)`;
+                } else {
+                    summaryTitle = `تم تحديد ${fullySelectedCities.length} مدن (${selectedCount} فرع)`;
+                }
+            } else if (fullySelectedCities.length > 0) {
+                const cNames = fullySelectedCities.slice(0, 2).map(c => c.cityName).join(' + ');
+                summaryTitle = `${cNames} + مخصص (${selectedCount} فرع)`;
+            } else {
+                summaryTitle = `تحديد مخصص حسب المدينة (${selectedCount} فرع محدد)`;
+            }
+
+            // Build cities list HTML
+            const citiesHtml = cityList.map(c => {
+                const escapedCity = c.cityName.replace(/"/g, '&quot;');
+                return `
+                    <div class="flex items-center justify-between p-2 rounded-xl border transition-all select-none text-xs ${c.isAll ? 'bg-purple-50/90 border-purple-300 text-purple-950 font-bold' : (c.isPartial ? 'bg-amber-50/70 border-amber-300 text-slate-800 font-semibold' : 'bg-white hover:bg-slate-50 border-slate-100 text-slate-700')}">
+                        <label class="flex items-center gap-2 truncate min-w-0 cursor-pointer flex-1">
+                            <input type="checkbox" 
+                                   ${c.isAll ? 'checked' : ''} 
+                                   data-city-name="${escapedCity}"
+                                   onchange="toggleInjectionCitySelection(this.dataset.cityName, this.checked, event)" 
+                                   class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 city-group-chk cursor-pointer shrink-0" />
+                            <div class="flex items-center gap-1.5 truncate">
+                                <i class="fas fa-map-marker-alt text-[11px] ${c.isAll ? 'text-purple-600' : 'text-slate-400'} shrink-0"></i>
+                                <span class="truncate text-xs font-black">${c.cityName}</span>
+                            </div>
+                        </label>
+                        <div class="flex items-center gap-2 shrink-0 text-[10px]">
+                            ${c.isPartial ? `<span class="px-1.5 py-0.5 rounded text-[9px] bg-amber-100 text-amber-800 font-black">محدد ${c.selected}/${c.total}</span>` : ''}
+                            <span class="font-mono text-slate-400 font-bold">(${c.total} فرع)</span>
+                            <button type="button" 
+                                    data-city-name="${escapedCity}"
+                                    onclick="selectOnlyInjectionCity(this.dataset.cityName, event)" 
+                                    class="text-[9px] font-bold text-purple-600 hover:text-purple-800 hover:bg-purple-100/70 px-2 py-0.5 rounded transition-colors cursor-pointer" 
+                                    title="تحديد فروع مدينة ${c.cityName} فقط واستبعاد باقي المدن">
+                                فقط
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="relative w-full">
+                    <button type="button" 
+                            id="btnInjectionBranchCityToggle" 
+                            onclick="toggleInjectionBranchCityDropdown(event)"
+                            class="w-full flex items-center justify-between gap-2 bg-slate-50 hover:bg-slate-100/90 border ${isOpen ? 'border-purple-500 ring-2 ring-purple-100 bg-white' : 'border-slate-200'} rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800 shadow-2xs transition-all cursor-pointer select-none">
+                        <div class="flex items-center gap-2 truncate min-w-0">
+                            <i class="fas fa-city text-purple-600 text-xs shrink-0"></i>
+                            <span class="truncate text-xs font-black text-slate-800">${summaryTitle}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <span class="text-[10px] font-mono font-black ${selectedCount > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-600'} px-2 py-0.5 rounded-full">
+                                ${selectedCount}/${totalBranches}
+                            </span>
+                            <i class="fas fa-chevron-down text-slate-400 text-[10px] transition-transform duration-200 ${isOpen ? 'rotate-180 text-purple-600' : ''}"></i>
+                        </div>
+                    </button>
+
+                    <!-- Dropdown Panel -->
+                    <div id="injectionBranchCityDropdown" 
+                         class="${isOpen ? '' : 'hidden'} absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-2.5 space-y-1.5 max-h-72 overflow-y-auto custom-scrollbar">
+                        <!-- Header with select all / deselect all -->
+                        <div class="flex items-center justify-between px-2.5 py-1.5 bg-slate-50 rounded-xl text-[11px] font-bold text-slate-600 border border-slate-100">
+                            <button type="button" onclick="selectAllInjectionCitiesFromDropdown(true, event)" class="text-purple-600 hover:text-purple-800 hover:underline flex items-center gap-1 cursor-pointer">
+                                <i class="fas fa-check-double text-[10px]"></i> تحديد كل المدن (${cityList.length})
+                            </button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllInjectionCitiesFromDropdown(false, event)" class="text-rose-500 hover:text-rose-700 hover:underline flex items-center gap-1 cursor-pointer">
+                                <i class="fas fa-times text-[10px]"></i> إلغاء التحديد
+                            </button>
+                        </div>
+
+                        <!-- Cities Items -->
+                        <div class="space-y-1">
+                            ${citiesHtml}
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-100 px-1 text-[11px]">
+                            <span class="text-slate-500 font-bold">المحدد: <span class="text-purple-600 font-black">${selectedCount}</span> من <span class="font-black">${totalBranches}</span> فرع</span>
+                            <button type="button" onclick="closeInjectionBranchCityDropdown(event)" class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer">
+                                تم / إغلاق
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        window.toggleInjectionBranchCityDropdown = function (event) {
+            if (event) event.stopPropagation();
+            injectionState._branchCityDropdownOpen = !injectionState._branchCityDropdownOpen;
+            renderInjectionBranchCities();
+        };
+
+        window.closeInjectionBranchCityDropdown = function (event) {
+            if (event) event.stopPropagation();
+            injectionState._branchCityDropdownOpen = false;
+            renderInjectionBranchCities();
+        };
+
+        window.toggleInjectionCitySelection = function (cityName, isChecked, event) {
+            if (event) event.stopPropagation();
+
+            const targetBranchIds = injectionState.branches
+                .filter(b => ((b.city || b.City || '').trim() || 'بدون مدينة') === cityName)
+                .map(b => b.id ?? b.Id);
+
+            if (targetBranchIds.length === 0) return;
+
+            if (isChecked) {
+                targetBranchIds.forEach(id => {
+                    if (!injectionState.selectedBranchIds.includes(id)) {
+                        injectionState.selectedBranchIds.push(id);
+                    }
+                });
+            } else {
+                injectionState.selectedBranchIds = injectionState.selectedBranchIds.filter(id => !targetBranchIds.includes(id));
+            }
+
+            injectionState._branchCityDropdownOpen = true;
+            renderInjectionBranches();
+            renderInjectionBranchCities();
+            updateBranchFilterUI();
+            fetchLiveAvailableStaffCounts();
+            renderBranchMatrix();
+
+            showAppToast('info', isChecked ? 'تم تحديد المدينة' : 'تم استبعاد المدينة',
+                `${isChecked ? 'تم إضافة' : 'تم استبعاد'} ${targetBranchIds.length} فرع تابع لمدينة "${cityName}".`);
+        };
+
+        window.selectOnlyInjectionCity = function (cityName, event) {
+            if (event) event.stopPropagation();
+
+            const targetBranchIds = injectionState.branches
+                .filter(b => ((b.city || b.City || '').trim() || 'بدون مدينة') === cityName)
+                .map(b => b.id ?? b.Id);
+
+            injectionState.selectedBranchIds = [...targetBranchIds];
+            injectionState._branchCityDropdownOpen = true;
+            renderInjectionBranches();
+            renderInjectionBranchCities();
+            updateBranchFilterUI();
+            fetchLiveAvailableStaffCounts();
+            renderBranchMatrix();
+
+            showAppToast('info', 'تم تحديد المدينة فقط', `تم حصر التحديد على ${targetBranchIds.length} فرع لمدينة "${cityName}" فقط.`);
+        };
+
+        window.selectAllInjectionCitiesFromDropdown = function (selectAll, event) {
+            if (event) event.stopPropagation();
+            if (selectAll) {
+                injectionState.selectedBranchIds = injectionState.branches.map(b => b.id ?? b.Id);
+            } else {
+                injectionState.selectedBranchIds = [];
+            }
+            injectionState._branchCityDropdownOpen = true;
+            renderInjectionBranches();
+            renderInjectionBranchCities();
+            updateBranchFilterUI();
+            fetchLiveAvailableStaffCounts();
+            renderBranchMatrix();
         };
 
         window.renderInjectionShifts = function (filteredList) {
@@ -2802,6 +3050,8 @@
             container.innerHTML = branches.map(b => {
                 const bId = b.id ?? b.Id;
                 const bName = b.branchName || b.BranchName || 'فرع';
+                const rawCity = (b.city || b.City || '').trim();
+                const bCity = rawCity && rawCity !== 'بدون مدينة' ? rawCity : '';
                 const pAvail = b.pharmacistCount ?? b.PharmacistCount ?? 0;
                 const aAvail = b.assistantCount ?? b.AssistantCount ?? 0;
 
@@ -2834,6 +3084,7 @@
                             <div class="min-w-0">
                                 <h6 class="text-xs font-black text-slate-800 truncate">${bName}</h6>
                                 <div class="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold mt-0.5">
+                                    ${bCity ? `<span class="text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded font-bold">📍 ${bCity}</span><span>•</span>` : ''}
                                     <span class="text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">${pAvail} صيدلي</span>
                                     <span>•</span>
                                     <span class="text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">${aAvail} مساعد</span>
@@ -4160,18 +4411,28 @@
                     throw new Error(errJson?.message || 'تعذر استخراج ملف الإكسيل.');
                 }
 
-                const buffer = await res.arrayBuffer();
-                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const blob = await res.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
+                a.style.display = 'none';
                 a.href = url;
-                a.download = `Trainees_Roster_Session_${sessionTraineesState.sessionId || 'Preview'}.xlsx`;
+
+                // Extract real filename from response header if available
+                let downloadFileName = `Trainees_Roster_Session_${sessionTraineesState.sessionId || 'Preview'}.xlsx`;
+                const disposition = res.headers.get('content-disposition');
+                if (disposition) {
+                    const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                    if (match && match[1]) {
+                        downloadFileName = match[1].replace(/['"]/g, '').trim();
+                    }
+                }
+                a.download = downloadFileName;
                 document.body.appendChild(a);
                 a.click();
                 setTimeout(() => {
                     a.remove();
                     window.URL.revokeObjectURL(url);
-                }, 3000);
+                }, 60000);
 
                 showAppToast('success', 'تم التصدير بنجاح', `تم تحميل شيت الإكسيل بنجاح (${candidatesToExport.length} متدرب).`);
             } catch (err) {

@@ -2016,6 +2016,43 @@
                     }
                 });
             }
+
+            // Floating Chat & AI Widgets Collapse Toggle Logic
+            window.toggleFloatingWidgetsCollapse = function() {
+                const isCurrentlyCollapsed = localStorage.getItem('floatingWidgetsCollapsed') === '1';
+                setFloatingWidgetsCollapsedState(!isCurrentlyCollapsed);
+            };
+
+            window.setFloatingWidgetsCollapsedState = function(collapsed) {
+                const aiBtn = document.getElementById('aiChatBtnWrapper');
+                const adminBtn = document.getElementById('adminChatBtnWrapper');
+                const toggleWrapper = document.getElementById('floatingWidgetsToggleWrapper');
+                const icon = document.getElementById('iconFloatingWidgetsToggle');
+                const btn = document.getElementById('btnToggleFloatingWidgets');
+
+                if (collapsed) {
+                    if (typeof adminChatOpen !== 'undefined' && adminChatOpen) toggleAdminChat();
+                    if (typeof isChatOpen !== 'undefined' && isChatOpen) toggleAIChat();
+
+                    if (aiBtn) aiBtn.style.transform = 'translateX(96px)';
+                    if (adminBtn) adminBtn.style.transform = 'translateX(96px)';
+                    if (toggleWrapper) toggleWrapper.style.transform = 'translateX(14px)';
+                    if (icon) icon.className = 'fas fa-comments text-[10px] text-brand-600 dark:text-brand-400';
+                    if (btn) btn.title = 'إظهار أزرار الشات والذكاء الاصطناعي';
+                    localStorage.setItem('floatingWidgetsCollapsed', '1');
+                } else {
+                    if (aiBtn) aiBtn.style.transform = 'translateX(0)';
+                    if (adminBtn) adminBtn.style.transform = 'translateX(0)';
+                    if (toggleWrapper) toggleWrapper.style.transform = 'translateX(0)';
+                    if (icon) icon.className = 'fas fa-chevron-right text-[10px]';
+                    if (btn) btn.title = 'إخفاء أزرار الشات مؤقتاً';
+                    localStorage.setItem('floatingWidgetsCollapsed', '0');
+                }
+            };
+
+            if (localStorage.getItem('floatingWidgetsCollapsed') === '1') {
+                setFloatingWidgetsCollapsedState(true);
+            }
         </script>
     }
 }

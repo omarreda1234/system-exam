@@ -2116,10 +2116,11 @@ namespace Exam.Controllers
 
                 var branches = (await conn.QueryAsync<dynamic>(@"
                     SELECT b.Id, b.BranchName,
-                           COUNT(DISTINCT CASE WHEN (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 THEN u.Id END) AS PharmacistCount,
+                           ISNULL(NULLIF(LTRIM(RTRIM(b.City)), ''), N'بدون مدينة') AS City,
+                           COUNT(DISTINCT CASE WHEN (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 AND (u.DepartmentId IS NULL OR u.DepartmentId = 0) THEN u.Id END) AS PharmacistCount,
                            COUNT(DISTINCT CASE WHEN (r.Name LIKE '%assistant%' OR r.Name LIKE N'%مساعد%') 
                                                  AND NOT (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') 
-                                                 AND u.IsActive = 1 THEN u.Id END) AS AssistantCount,
+                                                 AND u.IsActive = 1 AND (u.DepartmentId IS NULL OR u.DepartmentId = 0) THEN u.Id END) AS AssistantCount,
                            COUNT(DISTINCT CASE WHEN u.IsActive = 1 THEN u.Id END) AS TotalStaffCount
                     FROM Branches b WITH (NOLOCK)
                     LEFT JOIN AspNetUsers u WITH (NOLOCK) ON u.BranchId = b.Id
@@ -2127,7 +2128,7 @@ namespace Exam.Controllers
                     LEFT JOIN AspNetUserRoles ur WITH (NOLOCK) ON ur.UserId = u.Id
                     LEFT JOIN AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id
                     WHERE b.IsActive = 1 OR b.IsActive IS NULL
-                    GROUP BY b.Id, b.BranchName
+                    GROUP BY b.Id, b.BranchName, b.City
                     ORDER BY b.BranchName", new { SessionId = targetSessionId })).ToList();
 
                 var shiftsData = (await conn.QueryAsync<dynamic>(@"
@@ -2135,10 +2136,10 @@ namespace Exam.Controllers
                            MAX(sg.Id) AS GroupId,
                            MAX(sg.GroupName) AS GroupName,
                            MAX(sg.ColorCode) AS GroupColor,
-                           COUNT(DISTINCT CASE WHEN (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 THEN u.Id END) AS PharmacistCount,
+                           COUNT(DISTINCT CASE WHEN (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 AND (u.DepartmentId IS NULL OR u.DepartmentId = 0) THEN u.Id END) AS PharmacistCount,
                            COUNT(DISTINCT CASE WHEN (r.Name LIKE '%assistant%' OR r.Name LIKE N'%مساعد%') 
                                                  AND NOT (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') 
-                                                 AND u.IsActive = 1 THEN u.Id END) AS AssistantCount,
+                                                 AND u.IsActive = 1 AND (u.DepartmentId IS NULL OR u.DepartmentId = 0) THEN u.Id END) AS AssistantCount,
                            COUNT(DISTINCT CASE WHEN u.IsActive = 1 THEN u.Id END) AS TotalStaffCount
                     FROM Shifts s WITH (NOLOCK)
                     LEFT JOIN ShiftGroupItems sgi WITH (NOLOCK) ON s.Id = sgi.ShiftId
@@ -2196,10 +2197,10 @@ namespace Exam.Controllers
 
                 var totalCounts = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                     SELECT 
-                        COUNT(DISTINCT CASE WHEN (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 THEN u.Id END) AS TotalPharmacists,
+                        COUNT(DISTINCT CASE WHEN (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') AND u.IsActive = 1 AND (u.DepartmentId IS NULL OR u.DepartmentId = 0) THEN u.Id END) AS TotalPharmacists,
                         COUNT(DISTINCT CASE WHEN (r.Name LIKE '%assistant%' OR r.Name LIKE N'%مساعد%') 
                                             AND NOT (r.Name LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%') 
-                                            AND u.IsActive = 1 THEN u.Id END) AS TotalAssistants
+                                            AND u.IsActive = 1 AND (u.DepartmentId IS NULL OR u.DepartmentId = 0) THEN u.Id END) AS TotalAssistants
                     FROM AspNetUsers u WITH (NOLOCK)
                     LEFT JOIN AspNetUserRoles ur WITH (NOLOCK) ON ur.UserId = u.Id
                     LEFT JOIN AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id
@@ -2245,6 +2246,7 @@ namespace Exam.Controllers
                     LEFT JOIN AspNetUserRoles ur WITH (NOLOCK) ON ur.UserId = u.Id
                     LEFT JOIN AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id
                     WHERE u.IsActive = 1
+                      AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
                       {branchFilterSql}
                       {shiftFilterSql}
                       AND (@SessionId = 0 OR NOT EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees cur WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id))";
@@ -2267,6 +2269,7 @@ namespace Exam.Controllers
                     LEFT JOIN AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id
                     WHERE u.IsActive = 1
                       AND u.BranchId IS NOT NULL
+                      AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
                       {shiftFilterSql}
                       AND (@SessionId = 0 OR NOT EXISTS (SELECT 1 FROM dbo.CompanySessionTrainees cur WHERE cur.SessionId = @SessionId AND cur.UserId = u.Id))
                     GROUP BY u.BranchId";
@@ -2354,6 +2357,7 @@ namespace Exam.Controllers
                                 LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
                                 LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
                                 WHERE u.IsActive = 1
+                                  AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
                                   AND u.BranchId = @BranchId
                                   AND (
                                       EXISTS (
@@ -2405,6 +2409,7 @@ namespace Exam.Controllers
                                     LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
                                     LEFT JOIN dbo.CompanySessionTrainees cst WITH (NOLOCK) ON cst.SessionId = @SessionId AND cst.UserId = u.Id
                                     WHERE u.BranchId = @BranchId
+                                      AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
                                       AND EXISTS (
                                           SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON ur.RoleId = r.Id 
                                           WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
@@ -2496,6 +2501,7 @@ namespace Exam.Controllers
                                 LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
                                 LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
                                 WHERE u.IsActive = 1
+                                  AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
                                   AND u.BranchId = @BranchId
                                   AND (
                                       EXISTS (
@@ -2554,6 +2560,7 @@ namespace Exam.Controllers
                                     LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
                                     LEFT JOIN dbo.CompanySessionTrainees cst WITH (NOLOCK) ON cst.SessionId = @SessionId AND cst.UserId = u.Id
                                     WHERE u.BranchId = @BranchId
+                                      AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
                                       AND EXISTS (
                                           SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON ur.RoleId = r.Id 
                                           WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%assistant%' OR r.Name LIKE N'%مساعد%')
@@ -2653,6 +2660,7 @@ namespace Exam.Controllers
                             LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
                             LEFT JOIN Departments d WITH (NOLOCK) ON u.DepartmentId = d.Id
                             WHERE u.IsActive = 1
+                              AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
                               AND (
                                   EXISTS (
                                       SELECT 1 FROM AspNetUserRoles ur 
@@ -2720,6 +2728,7 @@ namespace Exam.Controllers
                                 LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
                                 JOIN dbo.CompanySessionTrainees cst WITH (NOLOCK) ON cst.SessionId = @SessionId AND cst.UserId = u.Id
                                 WHERE u.IsActive = 1
+                                  AND (u.DepartmentId IS NULL OR u.DepartmentId = 0)
                                   AND EXISTS (
                                       SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON ur.RoleId = r.Id 
                                       WHERE ur.UserId = u.Id AND (LOWER(r.Name) LIKE '%pharmacist%' OR r.Name LIKE N'%صيدل%')
@@ -3836,12 +3845,14 @@ namespace Exam.Controllers
 
                 using var memoryStream = new MemoryStream();
                 workbook.SaveAs(memoryStream);
-                memoryStream.Position = 0;
+                memoryStream.Flush();
+                var fileBytes = memoryStream.ToArray();
 
                 string cleanSessionName = string.Join("_", sessionName.Split(Path.GetInvalidFileNameChars()));
                 string fileName = $"Trainees_Roster_{cleanSessionName}_{sessionDate:yyyyMMdd}.xlsx";
 
-                return File(memoryStream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+                Response.Headers["Access-Control-Expose-Headers"] = "Content-Disposition";
+                return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
             }
             catch (Exception ex)
             {
