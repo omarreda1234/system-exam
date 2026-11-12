@@ -264,6 +264,18 @@
                                         title="رفع شهادة / إرسال الإيميل لهذا المتدرب">
                                     <i class="fas fa-paper-plane"></i>
                                 </button>
+                                @if (s.CertificateUploaded || hasCertCode || s.EmailSent)
+                                {
+                                    <button class="p-2 text-rose-500 hover:text-white hover:bg-rose-600 bg-rose-50 dark:bg-rose-950/50 rounded-xl transition-all shadow-xs delete-cert-btn" 
+                                            data-user-id="@s.Id" 
+                                            data-username="@s.StudentName" 
+                                            data-wave-id="@rowWaveId" 
+                                            data-usercode="@s.UserCode"
+                                            data-cert-code="@s.CertificateCode"
+                                            title="حذف الشهادة وإلغاء الإرسال">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                }
                                 @if (!hasCertCode && !s.CertificateUploaded)
                                 {
                                     <button class="p-2.5 text-slate-400 hover:text-amber-600 bg-slate-50 dark:bg-slate-800 rounded-xl reassign-wave" 
@@ -896,6 +908,79 @@
                             console.error(err);
                             Swal.close();
                             notifyToast('error', 'خطأ', 'حدث خطأ أثناء التواصل مع السيرفر.');
+                        });
+                    }
+                });
+            });
+
+            $(document).on('click', '.delete-cert-btn', function() {
+                const userId = $(this).data('user-id');
+                const waveId = $(this).data('wave-id');
+                const username = $(this).data('username') || '';
+
+                Swal.fire({
+                    title: '<div class="text-rose-600 dark:text-rose-400 font-black text-lg">حذف الشهادة وإلغاء الإرسال</div>',
+                    html: `
+                        <div class="text-right space-y-3 p-2 font-sans" dir="rtl">
+                            <p class="text-xs text-slate-700 dark:text-slate-300 font-bold">
+                                هل أنت متأكد من رغبتك في حذف الشهادة للمتدرب <span class="text-rose-600 font-black">(${username})</span>؟
+                            </p>
+                            <div class="bg-rose-50 dark:bg-rose-950/40 p-3.5 rounded-2xl border border-rose-200 dark:border-rose-900/60 text-xs text-rose-800 dark:text-rose-300 space-y-2">
+                                <div class="flex items-center gap-2 font-bold text-[11px]">
+                                    <i class="fas fa-exclamation-triangle text-rose-500"></i>
+                                    <span>النتائج المترتبة على هذا الإجراء:</span>
+                                </div>
+                                <ul class="list-disc pr-4 space-y-1 text-[10px] text-rose-700 dark:text-rose-400">
+                                    <li>حذف ملف الـ PDF نهائياً من السيرفر.</li>
+                                    <li>إلغاء حالة الإرسال للبريد الإلكتروني (Email Sent).</li>
+                                    <li>منع المتدرب من تحميلها أو رؤيتها في حسابه الشخصي.</li>
+                                    <li>تصفير كود الشهادة وسجل التحميلات.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    `,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'نعم، احذف الشهادة والغي الإرسال',
+                    cancelButtonText: 'تراجع',
+                    confirmButtonColor: '#ef4444',
+                    cancelButtonColor: '#64748b',
+                    customClass: {
+                        confirmButton: 'bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs',
+                        cancelButton: 'text-slate-500 font-bold text-xs px-5 py-2.5'
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Swal.fire({
+                            title: 'جاري حذف الشهادة...',
+                            text: 'يرجى الانتظار...',
+                            allowOutsideClick: false,
+                            didOpen: () => Swal.showLoading()
+                        });
+
+                        $.ajax({
+                            url: '/Admin/DeleteCertificate',
+                            type: 'POST',
+                            data: {
+                                userId: userId,
+                                waveId: waveId
+                            },
+                            headers: {
+                                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+                            },
+                            success: function(res) {
+                                Swal.close();
+                                if (res.success) {
+                                    notifyToast('success', 'تم حذف الشهادة بنجاح', res.message || 'تم حذف ملف الشهادة وإلغاء إرسالها.');
+                                    setTimeout(() => location.reload(), 1200);
+                                } else {
+                                    notifyToast('error', 'فشل الحذف', res.message || 'تعذر حذف الشهادة.');
+                                }
+                            },
+                            error: function(xhr) {
+                                Swal.close();
+                                notifyToast('error', 'خطأ في النظام', 'حدث خطأ أثناء محاولة حذف الشهادة.');
+                            }
                         });
                     }
                 });

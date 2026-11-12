@@ -1426,6 +1426,130 @@ namespace Exam.Controllers
         }
 
         [HttpPost]
+        public async Task<IActionResult> DeleteCertificate(string userId, int waveId)
+        {
+            if (string.IsNullOrEmpty(userId) || waveId <= 0)
+            {
+                return Json(new { success = false, message = "بيانات المستخدم أو الويف غير صحيحة." });
+            }
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+                await EnsureCertificateTrackingColumnsAsync(conn);
+
+                // 1. Fetch user & cert details before clearing
+                var certInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT U.Id, U.UserCode, ISNULL(U.FullName, U.UserName) AS StudentName,
+                           UWC.CertificateCode, UWC.FileName, UWC.Score, UWC.FileUploaded, UWC.EmailSent
+                    FROM AspNetUsers U
+                    LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = @WaveId
+                    WHERE U.Id = @UserId",
+                    new { UserId = userId, WaveId = waveId });
+
+                if (certInfo == null)
+                {
+                    return Json(new { success = false, message = "لم يتم العثور على بيانات المستخدم." });
+                }
+
+                string userCode = ((string)certInfo.UserCode ?? "").Trim();
+                string fileName = ((string)certInfo.FileName ?? "").Trim();
+                string certCode = ((string)certInfo.CertificateCode ?? "").Trim();
+                string studentName = ((string)certInfo.StudentName ?? "المتدرب").Trim();
+
+                // 2. Delete physical PDF files from server disk if present
+                string webRoot = _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                string certsBaseDir = Path.Combine(webRoot, "uploads", "certificates");
+
+                var candidatesToDelete = new List<string>();
+                if (!string.IsNullOrEmpty(userCode))
+                {
+                    candidatesToDelete.Add(Path.Combine(certsBaseDir, waveId.ToString(), $"{userCode}.pdf"));
+                    candidatesToDelete.Add(Path.Combine(certsBaseDir, $"{userCode}.pdf"));
+                    string cleanedCode = userCode.Replace(" ", "");
+                    candidatesToDelete.Add(Path.Combine(certsBaseDir, waveId.ToString(), $"{cleanedCode}.pdf"));
+                    candidatesToDelete.Add(Path.Combine(certsBaseDir, $"{cleanedCode}.pdf"));
+                }
+                if (!string.IsNullOrEmpty(fileName))
+                {
+                    candidatesToDelete.Add(Path.Combine(certsBaseDir, waveId.ToString(), fileName));
+                    candidatesToDelete.Add(Path.Combine(certsBaseDir, fileName));
+                }
+
+                foreach (var path in candidatesToDelete.Distinct())
+                {
+                    try
+                    {
+                        if (System.IO.File.Exists(path))
+                        {
+                            System.IO.File.Delete(path);
+                        }
+                    }
+                    catch { }
+                }
+
+                // 3. Update or clear dbo.UserWaveCertificates
+                decimal score = 0;
+                if (certInfo.Score != null)
+                {
+                    decimal.TryParse(certInfo.Score.ToString(), out score);
+                }
+
+                if (score > 0)
+                {
+                    await conn.ExecuteAsync(@"
+                        UPDATE dbo.UserWaveCertificates
+                        SET FileUploaded = 0,
+                            FileName = NULL,
+                            FileData = NULL,
+                            UploadedAt = NULL,
+                            CertificateCode = NULL,
+                            EmailSent = 0,
+                            IsDownloaded = 0,
+                            DownloadedAt = NULL,
+                            DownloadCount = 0
+                        WHERE UserId = @UserId AND WaveId = @WaveId",
+                        new { UserId = userId, WaveId = waveId });
+                }
+                else
+                {
+                    await conn.ExecuteAsync(@"
+                        DELETE FROM dbo.UserWaveCertificates 
+                        WHERE UserId = @UserId AND WaveId = @WaveId",
+                        new { UserId = userId, WaveId = waveId });
+                }
+
+                // 4. Also clear AspNetUsers.CertificateCode if it was set
+                if (!string.IsNullOrEmpty(certCode))
+                {
+                    await conn.ExecuteAsync(@"
+                        UPDATE AspNetUsers
+                        SET CertificateCode = NULL
+                        WHERE Id = @UserId AND (CertificateCode = @CertCode OR CertificateCode IS NULL)",
+                        new { UserId = userId, CertCode = certCode });
+                }
+                else
+                {
+                    await conn.ExecuteAsync(@"
+                        UPDATE AspNetUsers
+                        SET CertificateCode = NULL
+                        WHERE Id = @UserId",
+                        new { UserId = userId });
+                }
+
+                return Json(new { 
+                    success = true, 
+                    message = $"تم حذف شهادة ({studentName}) من السيرفر وإلغاء حالة الإرسال بنجاح." 
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ أثناء حذف الشهادة: " + ex.Message });
+            }
+        }
+
+        [HttpPost]
         public async Task<IActionResult> UpdateCertificateCode(string userId, int waveId, string certificateCode)
         {
             if (string.IsNullOrEmpty(userId) || waveId <= 0)

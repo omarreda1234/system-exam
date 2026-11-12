@@ -31,7 +31,8 @@ namespace Exam.Controllers
                 EndTime = System.DateTime.Now.AddHours(1),
                 Duration = 60,
                 PassPercentage = 50,
-                IsActive = true
+                IsActive = true,
+                ShowQuestionOverview = false
             };
 
             ViewBag.ExamTypes = await _examService.GetAllExamTypesAsync();

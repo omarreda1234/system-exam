@@ -375,7 +375,7 @@
                                     <div class="flex items-center gap-2 min-w-0">
                                         <input type="checkbox" value="@s.Id" data-shift-name="@s.ShiftName" class="chk-shift rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="onShiftFilterChange()" />
                                         <span class="truncate font-black">@s.ShiftName</span>
-                                        <span class="text-[10px] text-slate-400 font-normal">(@s.StartTime.ToString(@"hh\:mm") - @s.EndTime.ToString(@"hh\:mm"))</span>
+                                        <span class="text-[10px] text-slate-400 font-normal">(@DateTime.Today.Add(s.StartTime).ToString("hh:mm tt") - @DateTime.Today.Add(s.EndTime).ToString("hh:mm tt"))</span>
                                     </div>
                                     @if (!string.IsNullOrEmpty(s.GroupName)) {
                                         <span class="text-[9px] px-1.5 py-0.5 rounded-md font-bold truncate shrink-0 max-w-[85px]" style="background-color: @(s.GroupColor ?? "#7C3AED")1A; color: @(s.GroupColor ?? "#7C3AED");">@s.GroupName</span>
@@ -785,13 +785,28 @@
                 
                 const formatTime = (t) => {
                     if (!t) return "";
+                    let hours = 0;
+                    let minutes = 0;
                     if (typeof t === 'string') {
                         const parts = t.split(':');
-                        if (parts.length >= 2) return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
-                        return t.substring(0, 5);
+                        if (parts.length >= 2) {
+                            hours = parseInt(parts[0], 10) || 0;
+                            minutes = parseInt(parts[1], 10) || 0;
+                        } else {
+                            return t;
+                        }
+                    } else if (typeof t === 'object' && t.hours !== undefined) {
+                        hours = parseInt(t.hours, 10) || 0;
+                        minutes = parseInt(t.minutes, 10) || 0;
+                    } else {
+                        return "";
                     }
-                    if (typeof t === 'object' && t.hours !== undefined) return `${String(t.hours).padStart(2,'0')}:${String(t.minutes).padStart(2,'0')}`;
-                    return "";
+                    const ampm = hours >= 12 ? 'PM' : 'AM';
+                    let h12 = hours % 12;
+                    if (h12 === 0) h12 = 12;
+                    const hStr = String(h12).padStart(2, '0');
+                    const mStr = String(minutes).padStart(2, '0');
+                    return `${hStr}:${mStr} ${ampm}`;
                 };
                 const formatShiftRange = (start, end) => {
                     const s = formatTime(start);
@@ -1407,13 +1422,28 @@
 
             const formatTime = (t) => {
                 if (!t) return "";
+                let hours = 0;
+                let minutes = 0;
                 if (typeof t === 'string') {
                     const parts = t.split(':');
-                    if (parts.length >= 2) return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
-                    return t.substring(0, 5);
+                    if (parts.length >= 2) {
+                        hours = parseInt(parts[0], 10) || 0;
+                        minutes = parseInt(parts[1], 10) || 0;
+                    } else {
+                        return t;
+                    }
+                } else if (typeof t === 'object' && t.hours !== undefined) {
+                    hours = parseInt(t.hours, 10) || 0;
+                    minutes = parseInt(t.minutes, 10) || 0;
+                } else {
+                    return "";
                 }
-                if (typeof t === 'object' && t.hours !== undefined) return `${String(t.hours).padStart(2,'0')}:${String(t.minutes).padStart(2,'0')}`;
-                return "";
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                let h12 = hours % 12;
+                if (h12 === 0) h12 = 12;
+                const hStr = String(h12).padStart(2, '0');
+                const mStr = String(minutes).padStart(2, '0');
+                return `${hStr}:${mStr} ${ampm}`;
             };
             const formatShiftRange = (start, end) => {
                 const s = formatTime(start);

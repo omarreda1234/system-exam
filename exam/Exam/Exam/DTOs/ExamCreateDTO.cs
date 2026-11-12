@@ -29,7 +29,7 @@ namespace Exam.DTOs
         public bool IsActive { get; set; }
         public bool IsGraded { get; set; } = true;
         public int? TotalQuestionsToShow { get; set; }
-        public bool ShowQuestionOverview { get; set; } = true;
+        public bool ShowQuestionOverview { get; set; } = false;
         public bool IsFinalExam { get; set; }
 
         public List<ExamGenerationRuleDto> GenerationRules { get; set; } = new();
@@ -75,7 +75,7 @@ namespace Exam.DTOs
         public decimal PassPercentage { get; set; }
         public bool IsActive { get; set; }
         public bool IsGraded { get; set; } = true;
-        public bool ShowQuestionOverview { get; set; } = true;
+        public bool ShowQuestionOverview { get; set; } = false;
         public bool IsFinalExam { get; set; }
         public int AssignmentCount { get; set; }
     }
@@ -126,7 +126,7 @@ namespace Exam.DTOs
         public int? ExamTypeId { get; set; }
         public decimal PassPercentage { get; set; }
         public decimal TotalPoints { get; set; }
-        public bool ShowQuestionOverview { get; set; } = true;
+        public bool ShowQuestionOverview { get; set; } = false;
         public List<QuestionDetailDto> Questions { get; set; } = new();
     }
 

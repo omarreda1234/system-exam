@@ -77,7 +77,7 @@ namespace Exam.Controllers
             "EditWave", "DeleteWave", "CreateWave", "CloneWave", "AssignUsersToWave", "WaveDetails", "GetWaveUserIds", "GetUsersByWaveId", "RemoveUserFromWave",
             "GetWaveEmailTemplate", "SaveWaveEmailTemplate", "SendCustomEmailToWavePersonnel", "GetQuestionBankAnalytics",
             "UpdateWaveSerialFormat", "UploadCertificatesPdfs", "UploadCertificatesOnlyExcel",
-            "ResendCertificateEmail", "UpdateCertificateCode", "RenameWaveMode", "DeleteWaveMode",
+            "ResendCertificateEmail", "UpdateCertificateCode", "DeleteCertificate", "RenameWaveMode", "DeleteWaveMode",
             "SearchTrainees", "GetTrainee360Data", "Shifts", "AddShift", "EditShift", "DeleteShift", "GetShiftDetails",
             "DownloadBranchUpdateTemplate", "ImportBranchUpdatesFromExcel", "DownloadBranchesTemplate", "ImportBranchesFromExcel",
             "DownloadShiftUpdateTemplate", "ImportShiftUpdatesFromExcel", "DownloadShiftsTemplate", "ImportShiftsFromExcel",
@@ -446,43 +446,34 @@ namespace Exam.Controllers
                     WHERE (Email = @Email) OR (UserCode IS NOT NULL AND LTRIM(RTRIM(UserCode)) <> '' AND UserCode = @Code)", 
                     new { By = adminName, Email = req.Email.Trim(), Code = req.UserCode?.Trim() });
 
-                // 5. Auto-assign new user to any currently active Weekly Exam if user is Pharmacist or Assistant
+                // 5. Auto-assign new user to any currently active Weekly Exam
                 int assignedExamsCount = 0;
-                bool isEligibleRole = targetRole.Equals("Pharmacist", StringComparison.OrdinalIgnoreCase) 
-                                   || targetRole.Equals("Assistant", StringComparison.OrdinalIgnoreCase)
-                                   || (!string.IsNullOrEmpty(req.JobTitle) && (
-                                       req.JobTitle.Contains("صيدل") || req.JobTitle.ToLower().Contains("pharmacist") ||
-                                       req.JobTitle.Contains("مساعد") || req.JobTitle.ToLower().Contains("assistant")));
+                var newUserId = await conn.QueryFirstOrDefaultAsync<string>(@"
+                    SELECT TOP 1 Id 
+                    FROM AspNetUsers WITH(NOLOCK)
+                    WHERE Email = @Email 
+                       OR (UserCode IS NOT NULL AND LTRIM(RTRIM(UserCode)) <> '' AND UserCode = @Code)
+                    ORDER BY CASE WHEN Email = @Email THEN 0 ELSE 1 END",
+                    new { Email = req.Email.Trim(), Code = req.UserCode?.Trim() });
 
-                if (isEligibleRole)
+                if (!string.IsNullOrEmpty(newUserId))
                 {
-                    var newUserId = await conn.QueryFirstOrDefaultAsync<string>(@"
-                        SELECT TOP 1 Id 
-                        FROM AspNetUsers WITH(NOLOCK)
-                        WHERE Email = @Email 
-                           OR (UserCode IS NOT NULL AND LTRIM(RTRIM(UserCode)) <> '' AND UserCode = @Code)
-                        ORDER BY CASE WHEN Email = @Email THEN 0 ELSE 1 END",
-                        new { Email = req.Email.Trim(), Code = req.UserCode?.Trim() });
+                    // Find all active weekly exams (IsActive = 1, (EndTime IS NULL OR EndTime >= GETDATE()), not wave-specific)
+                    string assignWeeklySql = @"
+                        INSERT INTO ExamAssignments (ExamId, StudentId, ScheduledStartTime, ScheduledEndTime, IsEmailSent)
+                        SELECT E.Id, @UserId, ISNULL(E.StartTime, GETDATE()), ISNULL(E.EndTime, DATEADD(day, 7, GETDATE())), 0
+                        FROM Exams E WITH(NOLOCK)
+                        LEFT JOIN ExamTypes ET WITH(NOLOCK) ON E.ExamTypeId = ET.Id
+                        WHERE E.IsActive = 1
+                          AND (E.EndTime IS NULL OR E.EndTime >= GETDATE())
+                          AND (E.WaveId IS NULL OR E.WaveId <= 0)
+                          AND (ET.TypeName IS NULL OR LOWER(ET.TypeName) NOT LIKE '%wave%')
+                          AND NOT EXISTS (
+                              SELECT 1 FROM ExamAssignments EA WITH(NOLOCK)
+                              WHERE EA.ExamId = E.Id AND EA.StudentId = @UserId
+                          );";
 
-                    if (!string.IsNullOrEmpty(newUserId))
-                    {
-                        // Find all active weekly exams (IsActive = 1, EndTime >= GETDATE(), not wave-specific)
-                        string assignWeeklySql = @"
-                            INSERT INTO ExamAssignments (ExamId, StudentId, ScheduledStartTime, ScheduledEndTime, IsEmailSent)
-                            SELECT E.Id, @UserId, E.StartTime, E.EndTime, 0
-                            FROM Exams E WITH(NOLOCK)
-                            LEFT JOIN ExamTypes ET WITH(NOLOCK) ON E.ExamTypeId = ET.Id
-                            WHERE E.IsActive = 1
-                              AND E.EndTime >= GETDATE()
-                              AND (E.WaveId IS NULL OR E.WaveId <= 0)
-                              AND (ET.TypeName IS NULL OR LOWER(ET.TypeName) NOT LIKE '%wave%')
-                              AND NOT EXISTS (
-                                  SELECT 1 FROM ExamAssignments EA WITH(NOLOCK)
-                                  WHERE EA.ExamId = E.Id AND EA.StudentId = @UserId
-                              );";
-
-                        assignedExamsCount = await conn.ExecuteAsync(assignWeeklySql, new { UserId = newUserId });
-                    }
+                    assignedExamsCount = await conn.ExecuteAsync(assignWeeklySql, new { UserId = newUserId });
                 }
 
                 string successMsg = assignedExamsCount > 0 
@@ -3318,8 +3309,8 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 foreach (var s in allShifts)
                 {
                     string sel = string.Equals(shiftName, s.ShiftName, StringComparison.OrdinalIgnoreCase) ? "selected" : "";
-                    string startTimeStr = s.StartTime.ToString(@"hh\:mm");
-                    string endTimeStr = s.EndTime.ToString(@"hh\:mm");
+                    string startTimeStr = DateTime.Today.Add(s.StartTime).ToString("hh:mm tt");
+                    string endTimeStr = DateTime.Today.Add(s.EndTime).ToString("hh:mm tt");
                     string durationStr = s.DurationHours > 0 ? $" • {s.DurationHours}h" : "";
                     shiftSelectOptions += $"<option value='{s.Id}' data-name='{s.ShiftName.ToUpper()}' data-time='{startTimeStr} — {endTimeStr}' {sel}>{s.ShiftName.ToUpper()} ({startTimeStr} - {endTimeStr}{durationStr})</option>";
                 }
@@ -3338,8 +3329,8 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                 }
                 else if (!string.IsNullOrWhiteSpace(shiftName))
                 {
-                    string startTimeStr = u.StartTime is TimeSpan st ? st.ToString(@"hh\:mm") : "00:00";
-                    string endTimeStr = u.EndTime is TimeSpan et ? et.ToString(@"hh\:mm") : "00:00";
+                    string startTimeStr = u.StartTime is TimeSpan st ? DateTime.Today.Add(st).ToString("hh:mm tt") : "";
+                    string endTimeStr = u.EndTime is TimeSpan et ? DateTime.Today.Add(et).ToString("hh:mm tt") : "";
                     shiftHtml = $@"
                         <div class='flex flex-col'>
                             <span class='text-[9px] font-bold italic uppercase'>{shiftName}</span>
@@ -5103,7 +5094,7 @@ ORDER BY U.UserName ASC";
             ("WaveAnalytics", "Wave Analytics", "Admin", "WaveyResults", new string[] { }),
             ("GeneralAnalytics", "General Analytics", "Admin", "Students", new[] { "ExportStudentsToExcel", "GetStudentExamReview" }),
             ("LiveMonitor", "Live Monitor", "Admin", "LiveMonitor", new[] { "GetLiveMonitorData", "GetLiveMonitorPaged", "ExportLiveMonitorToExcel", "GetExamsByWaveId" }),
-            ("Certificates", "Certificates Management", "Admin", "Certificates", new[] { "ExportWaveResultsToExcel", "UploadCertificatesOnlyExcel", "SendCertificates", "MoveUserToWave", "UploadCertificatesPdfs", "GetStudentWaveDetails" }),
+            ("Certificates", "Certificates Management", "Admin", "Certificates", new[] { "ExportWaveResultsToExcel", "UploadCertificatesOnlyExcel", "SendCertificates", "MoveUserToWave", "UploadCertificatesPdfs", "GetStudentWaveDetails", "DeleteCertificate" }),
             ("TraineeProfile", "Trainee 360° Profile", "Admin", "TraineeProfile", new[] { "GetTraineeDetailsByCode", "GetUnassignedUsersList", "ExportUnassignedUsersToExcel", "SearchTrainees", "GetTrainee360Data" }),
             ("NewCome", "New Come Requests (Pending)", "Admin", "PendingRequests", new[] { "ApproveRequest", "RejectRequest" }),
             ("PersonnelRegistry", "Personnel Registry (Main Access)", "Admin", "AllUsers", new[] { "GetUsersPaged", "AddUser", "DownloadPersonnelTemplate", "CheckExistence", "DownloadBranchUpdateTemplate", "ImportBranchUpdatesFromExcel", "DownloadShiftUpdateTemplate", "ImportShiftUpdatesFromExcel", "UpdateUserDepartment", "DownloadDepartmentUpdateTemplate", "ImportDepartmentUpdatesFromExcel" }),
