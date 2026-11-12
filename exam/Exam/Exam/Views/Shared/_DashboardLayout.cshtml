@@ -288,6 +288,108 @@
                 opacity: 0;
             }
         }
+
+        /* =========================================================
+           MODERN HIGH-END FORM SELECTS & DROPDOWNS (GLOBAL SYSTEM)
+           ========================================================= */
+        select, .form-select, .saas-select, .dataTables_length select {
+            appearance: none !important;
+            -webkit-appearance: none !important;
+            -moz-appearance: none !important;
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 0.75rem !important; /* rounded-xl */
+            padding: 0.45rem 2.25rem 0.45rem 0.85rem !important;
+            font-size: 0.8125rem !important;
+            font-weight: 700 !important;
+            line-height: 1.25rem !important;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%230284c7' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+            background-position: right 0.75rem center !important;
+            background-repeat: no-repeat !important;
+            background-size: 1.15em 1.15em !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04) !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            cursor: pointer !important;
+        }
+
+        [dir="rtl"] select, html[dir="rtl"] select {
+            background-position: left 0.75rem center !important;
+            padding-right: 0.85rem !important;
+            padding-left: 2.25rem !important;
+        }
+
+        select:hover, .dataTables_length select:hover {
+            border-color: #cbd5e1 !important;
+            box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.08) !important;
+        }
+
+        select:focus, .dataTables_length select:focus {
+            outline: none !important;
+            border-color: #0284c7 !important;
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.18) !important;
+        }
+
+        .dark select, .dark .form-select, .dark .saas-select, .dark .dataTables_length select {
+            background-color: #0f172a !important;
+            color: #f1f5f9 !important;
+            border-color: #334155 !important;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2338bdf8' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+        }
+
+        .dark select:hover, .dark .dataTables_length select:hover {
+            border-color: #475569 !important;
+        }
+
+        .dark select:focus, .dark .dataTables_length select:focus {
+            border-color: #38bdf8 !important;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
+        }
+
+        select option {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            font-weight: 600 !important;
+            padding: 8px 12px !important;
+        }
+
+        .dark select option {
+            background-color: #0f172a !important;
+            color: #f1f5f9 !important;
+        }
+
+        /* Modern DataTables Controls */
+        .dataTables_length label {
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748b;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .dark .dataTables_length label {
+            color: #94a3b8;
+        }
+        .dataTables_filter input {
+            border-radius: 0.75rem !important;
+            border: 1px solid #e2e8f0;
+            padding: 0.45rem 1rem !important;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        .dark .dataTables_filter input {
+            background-color: #0f172a !important;
+            border-color: #334155 !important;
+            color: #f1f5f9 !important;
+        }
+        .dataTables_filter input:focus {
+            border-color: #0284c7 !important;
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.18) !important;
+        }
         /* Dynamic Premium Preloader CSS Animations */
         @@keyframes spin-reverse {
             0% { transform: rotate(0deg); }
@@ -994,6 +1096,178 @@
     <script src="~/lib/jquery-3.7.1/jquery.min.js"></script>
     <script src="~/lib/datatables/js/jquery.dataTables.min.js"></script>
     <script src="~/lib/sweetalert2/sweetalert2.all.min.js"></script>
+    <script>
+        // =========================================================================
+        // GLOBAL APPLICATION TOAST SYSTEM (SLEEK MODERN PILL NOTIFICATION)
+        // =========================================================================
+        window.showAppToast = function (type, title, message) {
+            // Support (type, message) 2-argument signature or (message) 1-argument signature
+            if (arguments.length === 1) {
+                message = type;
+                title = 'إشعار';
+                type = 'info';
+            } else if (arguments.length === 2 && !message) {
+                message = title;
+                const t = (type || 'info').toLowerCase();
+                if (t === 'success') title = 'تم بنجاح';
+                else if (t === 'error' || t === 'danger') title = 'خطأ';
+                else if (t === 'warning') title = 'تنبيه';
+                else title = 'إشعار';
+            } else if (!title) {
+                const t = (type || 'info').toLowerCase();
+                if (t === 'success') title = 'تم بنجاح';
+                else if (t === 'error' || t === 'danger') title = 'خطأ';
+                else if (t === 'warning') title = 'تنبيه';
+                else title = 'إشعار';
+            }
+
+            // Also mirror to parent window if in an iframe and parent has container or showAppToast
+            try {
+                if (window.parent && window.parent !== window && typeof window.parent.showAppToast === 'function') {
+                    window.parent.showAppToast(type, title, message);
+                    return;
+                }
+            } catch (e) { }
+
+            let container = document.getElementById('appGlobalToastContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'appGlobalToastContainer';
+                container.className = 'fixed top-5 left-1/2 -translate-x-1/2 sm:left-auto sm:right-6 sm:translate-x-0 z-[999999] flex flex-col gap-2.5 pointer-events-none max-w-sm w-full px-4 sm:px-0';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = 'pointer-events-auto transform translate-y-[-16px] opacity-0 transition-all duration-300 ease-out flex items-start gap-3 p-4 rounded-2xl shadow-2xl backdrop-blur-xl border text-xs select-none relative overflow-hidden';
+
+            let iconHtml = '';
+            let bgBorder = '';
+            let progressBg = '';
+
+            const t = (type || 'info').toLowerCase();
+            if (t === 'success') {
+                bgBorder = 'bg-slate-900/95 text-emerald-100 border-emerald-500/40 shadow-emerald-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-check-circle"></i></div>';
+                progressBg = 'bg-emerald-400';
+            } else if (t === 'error' || t === 'danger') {
+                bgBorder = 'bg-slate-900/95 text-rose-100 border-rose-500/40 shadow-rose-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-exclamation-circle"></i></div>';
+                progressBg = 'bg-rose-400';
+            } else if (t === 'warning') {
+                bgBorder = 'bg-slate-900/95 text-amber-100 border-amber-500/40 shadow-amber-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-exclamation-triangle"></i></div>';
+                progressBg = 'bg-amber-400';
+            } else {
+                bgBorder = 'bg-slate-900/95 text-indigo-100 border-indigo-500/40 shadow-indigo-950/40';
+                iconHtml = '<div class="w-7 h-7 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 text-sm shadow-sm"><i class="fas fa-info-circle"></i></div>';
+                progressBg = 'bg-indigo-400';
+            }
+
+            toast.className += ' ' + bgBorder;
+            toast.innerHTML = `
+                ${iconHtml}
+                <div class="flex-1 min-w-0 pr-1">
+                    <h5 class="font-black text-xs text-white leading-snug">${title || ''}</h5>
+                    ${message ? `<p class="text-[11px] opacity-80 mt-0.5 leading-normal break-words">${message}</p>` : ''}
+                </div>
+                <button type="button" class="text-white/40 hover:text-white transition-colors text-xs p-1 shrink-0" onclick="this.closest('.pointer-events-auto').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="absolute bottom-0 left-0 right-0 h-1 rounded-b-2xl overflow-hidden bg-white/10">
+                    <div class="h-full ${progressBg} transition-all ease-linear" style="width: 100%; transition-duration: 3500ms;"></div>
+                </div>
+            `;
+
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-[-16px]', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+                const progressBar = toast.querySelector(`.${progressBg}`);
+                if (progressBar) {
+                    requestAnimationFrame(() => {
+                        progressBar.style.width = '0%';
+                    });
+                }
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-[-8px]', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        };
+
+        window.showToast = function (icon, title, message) {
+            window.showAppToast(icon, title, message);
+        };
+
+        window.showAppToast.later = function (type, title, message) {
+            try {
+                sessionStorage.setItem('__app_pending_toast', JSON.stringify({ type, title, message }));
+            } catch (e) { }
+        };
+
+        // =========================================================================
+        // GLOBAL SWEETALERT INTERCEPTOR: CONVERT NON-INTERACTIVE ALERTS TO TOAST
+        // =========================================================================
+        if (window.Swal && typeof window.Swal.fire === 'function') {
+            const _origSwalFire = window.Swal.fire.bind(window.Swal);
+            window.Swal.fire = function (...args) {
+                let isInteractive = false;
+                let type = 'info';
+                let title = '';
+                let message = '';
+
+                if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+                    const opts = args[0];
+                    if (opts.showCancelButton || opts.showDenyButton || opts.input || opts.preConfirm || opts.didOpen ||
+                        (opts.html && (opts.html.includes('<input') || opts.html.includes('<select') || opts.html.includes('<form') || opts.html.includes('<textarea')))) {
+                        isInteractive = true;
+                    }
+                    type = opts.icon || 'info';
+                    title = opts.title || '';
+                    message = opts.text || (typeof opts.html === 'string' && !opts.html.includes('<') ? opts.html : (opts.html || ''));
+                } else if (typeof args[0] === 'string') {
+                    title = args[0] || '';
+                    message = args[1] || '';
+                    type = args[2] || 'info';
+                    isInteractive = false;
+                }
+
+                // If non-interactive alert or notification, display as modern App Toast
+                if (!isInteractive && (type || args.length <= 3)) {
+                    if (typeof title === 'string' && title.includes('<')) {
+                        const tmp = document.createElement('div');
+                        tmp.innerHTML = title;
+                        title = tmp.textContent || tmp.innerText || title;
+                    }
+                    if (typeof message === 'string' && message.includes('<') && !message.includes('<table') && !message.includes('<ul')) {
+                        const tmp = document.createElement('div');
+                        tmp.innerHTML = message;
+                        message = tmp.textContent || tmp.innerText || message;
+                    }
+
+                    window.showAppToast(type, title, message);
+
+                    return new Promise((resolve) => {
+                        setTimeout(() => {
+                            resolve({ isConfirmed: true, isDenied: false, isDismissed: false, value: true });
+                        }, 1100);
+                    });
+                }
+
+                return _origSwalFire(...args);
+            };
+
+            // Copy static properties if any
+            for (let prop in _origSwalFire) {
+                if (_origSwalFire.hasOwnProperty(prop)) {
+                    window.Swal.fire[prop] = _origSwalFire[prop];
+                }
+            }
+        }
+    </script>
     <script src="~/lib/font-awesome/js/all.min.js"></script>
     <script src="~/lib/chartjs/chart.umd.js"></script>
     <script src="~/lib/signalr/signalr.min.js"></script>
@@ -1033,11 +1307,25 @@
                 });
             });
 
-            // Notifications
+            // Check Pending Toast from previous reload/redirect
+            try {
+                const pending = sessionStorage.getItem('__app_pending_toast');
+                if (pending) {
+                    sessionStorage.removeItem('__app_pending_toast');
+                    const parsed = JSON.parse(pending);
+                    if (parsed && (parsed.title || parsed.message)) {
+                        setTimeout(() => {
+                            window.showAppToast(parsed.type || 'success', parsed.title, parsed.message);
+                        }, 250);
+                    }
+                }
+            } catch (e) { }
+
+            // TempData Notifications
             var msg = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["SuccessMessage"] ?? ""));
             var err = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["ErrorMessage"] ?? ""));
-            if (msg) Swal.fire({ icon: 'success', title: msg, timer: 2000, showConfirmButton: false, background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff', color: document.documentElement.classList.contains('dark') ? '#fff' : '#000' });
-            if (err) Swal.fire({ icon: 'error', title: 'System Error', html: err.replace(/\n/g, '<br/>'), background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff', color: document.documentElement.classList.contains('dark') ? '#fff' : '#000' });
+            if (msg) window.showAppToast('success', 'تم بنجاح', msg);
+            if (err) window.showAppToast('error', 'خطأ في النظام', err);
             if (typeof loadGlobalAIChat === 'function') loadGlobalAIChat();
 
             // If we are inside an iframe, automatically append iframe=true to all links and forms
@@ -1050,15 +1338,12 @@
                         if (paneId && paneId.startsWith('tab-pane-')) {
                             const tabId = paneId.replace('tab-pane-', '');
                             var successMsg = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["SuccessMessage"] ?? ""));
-                            if (successMsg && window.parent.Swal) {
-                                window.parent.Swal.fire({
-                                    icon: 'success',
-                                    title: successMsg,
-                                    timer: 2000,
-                                    showConfirmButton: false,
-                                    background: window.parent.document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
-                                    color: window.parent.document.documentElement.classList.contains('dark') ? '#fff' : '#000'
-                                });
+                            if (successMsg) {
+                                if (window.parent && typeof window.parent.showAppToast === 'function') {
+                                    window.parent.showAppToast('success', 'تم بنجاح', successMsg);
+                                } else {
+                                    window.showAppToast('success', 'تم بنجاح', successMsg);
+                                }
                             }
                             window.parent.closeTab(new Event('click'), tabId);
                             const activeTabId = window.parent.$('.tab-btn.active').attr('id')?.replace('tab-btn-', '');

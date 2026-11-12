@@ -21,10 +21,28 @@
         "بورفؤاد", "السنبلاوين", "ميت غمر", "القاهرة", "الإسكندرية", 
         "دكرنس", "أجا", "كفر الشيخ", "الإدارة المركزية"
     };
+    var cityCounts = Model
+        .GroupBy(b => string.IsNullOrWhiteSpace(b.City) ? "غير محدد" : b.City.Trim())
+        .ToDictionary(g => g.Key, g => g.Count());
+
     var allSystemCities = defaultCities
         .Union(Model.Where(b => !string.IsNullOrWhiteSpace(b.City)).Select(b => b.City!.Trim()))
         .Distinct()
         .OrderBy(c => c)
+        .ToList();
+
+    if (Model.Any(b => string.IsNullOrWhiteSpace(b.City)) && !allSystemCities.Contains("غير محدد"))
+    {
+        allSystemCities.Add("غير محدد");
+    }
+
+    var sortedCities = allSystemCities
+        .Select(c => new {
+            Name = c,
+            Count = cityCounts.ContainsKey(c) ? cityCounts[c] : 0
+        })
+        .OrderByDescending(c => c.Count)
+        .ThenBy(c => c.Name)
         .ToList();
 }
 
@@ -64,23 +82,91 @@
 
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-6 mt-8">
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] shadow-sm">
+            <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 rounded-t-[32px]">
                 <div class="flex items-center gap-3">
                     <span class="text-xs font-black text-slate-400 uppercase tracking-widest">Active Branches (@Model.Count())</span>
                 </div>
                 
-                <!-- Quick City Filter on Branches Table -->
-                <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <i class="fas fa-map-marker-alt text-xs text-sky-500"></i>
-                    <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400">تصفية حسب المدينة:</span>
-                    <select id="branchTableCityFilter" class="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 outline-none cursor-pointer">
-                        <option value="">جميع المدن / All Cities</option>
-                        @foreach (var city in allSystemCities)
-                        {
-                            <option value="@city">@city</option>
-                        }
-                    </select>
+                <!-- Modern Multi-City Quick Filter Dropdown -->
+                <div id="branchCityFilterContainer" class="relative z-30">
+                    <button type="button"
+                            id="btnBranchCityFilterToggle"
+                            onclick="toggleBranchCityFilterDropdown(event)"
+                            class="flex items-center justify-between gap-3 bg-slate-50 hover:bg-slate-100/90 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 shadow-2xs transition-all cursor-pointer select-none min-w-[240px]">
+                        <div class="flex items-center gap-2 truncate min-w-0">
+                            <i class="fas fa-city text-sky-500 text-xs shrink-0"></i>
+                            <span class="text-[11px] font-bold text-slate-400 dark:text-slate-400 shrink-0">المدينة:</span>
+                            <span id="branchCityFilterSummary" class="truncate text-xs font-black text-slate-800 dark:text-white">جميع المدن (@Model.Count() فرع)</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <span id="branchCityFilterCountBadge" class="text-[10px] font-mono font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 px-2 py-0.5 rounded-full">
+                                الكل (@sortedCities.Count)
+                            </span>
+                            <i id="branchCityFilterChevron" class="fas fa-chevron-down text-slate-400 text-[10px] transition-transform duration-200"></i>
+                        </div>
+                    </button>
+
+                    <!-- Dropdown Panel -->
+                    <div id="branchCityFilterDropdown"
+                         class="hidden absolute left-0 top-full mt-1.5 w-76 sm:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-2.5 space-y-2">
+                        
+                        <!-- Header with select all / deselect all -->
+                        <div class="flex items-center justify-between px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-[11px] font-bold text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-800">
+                            <button type="button" onclick="selectAllBranchCities(true, event)" class="text-sky-600 hover:text-sky-700 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer">
+                                <i class="fas fa-check-double text-[10px]"></i> تحديد كل المدن (@sortedCities.Count)
+                            </button>
+                            <span class="text-slate-300 dark:text-slate-700">|</span>
+                            <button type="button" onclick="selectAllBranchCities(false, event)" class="text-rose-500 hover:text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer">
+                                <i class="fas fa-times text-[10px]"></i> إلغاء التحديد
+                            </button>
+                        </div>
+
+                        <!-- Search input inside dropdown -->
+                        <div class="relative">
+                            <i class="fas fa-search absolute left-2.5 top-2 text-slate-400 text-xs"></i>
+                            <input type="text" id="branchCitySearchInput" oninput="filterCityDropdownItems(this.value)" placeholder="ابحث عن مدينة..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-7 pr-3 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500" />
+                        </div>
+
+                        <!-- Cities list -->
+                        <div id="branchCityItemsList" class="space-y-1 max-h-60 overflow-y-auto custom-scrollbar p-0.5">
+                            @foreach (var c in sortedCities)
+                            {
+                                <div class="city-filter-item flex items-center justify-between p-2 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all select-none text-xs"
+                                     data-city-name="@c.Name" data-branch-count="@c.Count">
+                                    <label class="flex items-center gap-2 truncate min-w-0 cursor-pointer flex-1">
+                                        <input type="checkbox"
+                                               value="@c.Name"
+                                               checked
+                                               data-count="@c.Count"
+                                               onchange="onBranchCityCheckboxChange(event)"
+                                               class="branch-city-checkbox w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 dark:border-slate-600 cursor-pointer shrink-0" />
+                                        <div class="flex items-center gap-1.5 truncate">
+                                            <i class="fas fa-map-marker-alt text-[11px] text-sky-500 shrink-0"></i>
+                                            <span class="truncate text-xs font-black text-slate-800 dark:text-slate-200">@c.Name</span>
+                                        </div>
+                                    </label>
+                                    <div class="flex items-center gap-2 shrink-0 text-[10px]">
+                                        <span class="font-mono text-slate-400 font-bold">(@c.Count فرع)</span>
+                                        <button type="button"
+                                                onclick="selectOnlyBranchCity('@c.Name', event)"
+                                                class="text-[9px] font-bold text-sky-600 hover:text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/50 px-2 py-0.5 rounded transition-colors cursor-pointer"
+                                                title="عرض فروع @c.Name فقط">
+                                            فقط
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 px-1 text-[11px]">
+                            <span id="branchCityFilterFooterText" class="text-slate-500 font-bold">المحدد: <span class="text-sky-600 font-black">@sortedCities.Count</span> مدينة</span>
+                            <button type="button" onclick="closeBranchCityFilterDropdown(event)" class="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer">
+                                تم / إغلاق
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -247,13 +333,14 @@
                         },
                         success: function(res) {
                             if (res.success) {
-                                Swal.fire({ icon: 'success', title: 'Success', text: res.message }).then(() => location.reload());
+                                showAppToast('success', isEdit ? 'تم تحديث الفرع' : 'تم إضافة الفرع', res.message || 'تم حفظ بيانات الفرع بنجاح');
+                                setTimeout(() => location.reload(), 1200);
                             } else {
-                                Swal.fire({ icon: 'error', title: 'Failed', text: res.message });
+                                showAppToast('error', 'فشل الحفظ', res.message || 'تعذر حفظ بيانات الفرع');
                             }
                         },
                         error: function() {
-                            Swal.fire({ icon: 'error', title: 'Error', text: 'Something went wrong.' });
+                            showAppToast('error', 'خطأ في النظام', 'حدث خطأ غير متوقع أثناء الحفظ.');
                         }
                     });
                 }
@@ -287,21 +374,13 @@
                                 } else {
                                     $tr.remove();
                                 }
-                                Swal.fire({ 
-                                    icon: 'success', 
-                                    title: 'Deleted Successfully', 
-                                    toast: true, 
-                                    position: 'top-end', 
-                                    showConfirmButton: false, 
-                                    timer: 3000,
-                                    background: '#f8fafc'
-                                });
+                                showAppToast('success', 'تم حذف الفرع', res.message || 'تم حذف الفرع بنجاح');
                             } else {
-                                Swal.fire('Error!', res.message, 'error');
+                                showAppToast('error', 'فشل الحذف', res.message || 'تعذر حذف الفرع');
                             }
                         },
                         error: function () {
-                            Swal.fire('Error!', 'An error occurred while deleting the branch.', 'error');
+                            showAppToast('error', 'خطأ في النظام', 'حدث خطأ أثناء محاولة حذف الفرع.');
                         }
                     });
                 }
@@ -358,20 +437,12 @@
                                 } else {
                                     $tr.remove();
                                 }
-                                Swal.fire({ 
-                                    icon: 'success', 
-                                    title: 'Merged Successfully', 
-                                    toast: true, 
-                                    position: 'top-end', 
-                                    showConfirmButton: false, 
-                                    timer: 3000,
-                                    background: '#f8fafc'
-                                });
+                                showAppToast('success', 'تم الدمج بنجاح', res.message || 'تم دمج الفرع بنجاح');
                             } else {
-                                Swal.fire('Error!', res.message, 'error');
+                                showAppToast('error', 'فشل الدمج', res.message || 'تعذر دمج الفرع');
                             }
                         },
-                        error: function () { Swal.fire('Error!', 'An error occurred during merge.', 'error'); }
+                        error: function () { showAppToast('error', 'خطأ في النظام', 'حدث خطأ غير متوقع أثناء الدمج.'); }
                     });
                 }
             });
@@ -462,26 +533,173 @@
                             confirmButtonText: 'حسناً'
                         }).then(() => location.reload());
                     } else {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'تم بنجاح',
-                            text: res.message,
-                            timer: 2500,
-                            showConfirmButton: false
-                        }).then(() => location.reload());
+                        showAppToast('success', 'اكتمل الاستيراد بنجاح', res.message || 'تم تحديث بيانات الفروع بنجاح');
+                        setTimeout(() => location.reload(), 1200);
                     }
                 }
             });
         }
 
-        $(function() {
-            $('#branchTableCityFilter').on('change', function() {
-                const val = ($(this).val() || '').trim();
-                const tbl = $('table.datatable');
-                if (tbl.length && $.fn.DataTable.isDataTable(tbl[0])) {
-                    tbl.DataTable().column(1).search(val ? val : '', false, false).draw();
+        // ==================== MODERN MULTI-CITY FILTER SCRIPT ====================
+        let _branchCityDropdownOpen = false;
+
+        window.toggleBranchCityFilterDropdown = function(event) {
+            if (event) event.stopPropagation();
+            _branchCityDropdownOpen = !_branchCityDropdownOpen;
+            const dropdown = document.getElementById('branchCityFilterDropdown');
+            const chevron = document.getElementById('branchCityFilterChevron');
+            const btn = document.getElementById('btnBranchCityFilterToggle');
+            if (dropdown) dropdown.classList.toggle('hidden', !_branchCityDropdownOpen);
+            if (chevron) chevron.classList.toggle('rotate-180', _branchCityDropdownOpen);
+            if (btn) {
+                if (_branchCityDropdownOpen) {
+                    btn.classList.add('border-sky-500', 'ring-2', 'ring-sky-100', 'dark:ring-sky-900/40', 'bg-white', 'dark:bg-slate-800');
+                } else {
+                    btn.classList.remove('border-sky-500', 'ring-2', 'ring-sky-100', 'dark:ring-sky-900/40');
+                }
+            }
+        };
+
+        window.closeBranchCityFilterDropdown = function(event) {
+            if (event) event.stopPropagation();
+            _branchCityDropdownOpen = false;
+            const dropdown = document.getElementById('branchCityFilterDropdown');
+            const chevron = document.getElementById('branchCityFilterChevron');
+            const btn = document.getElementById('btnBranchCityFilterToggle');
+            if (dropdown) dropdown.classList.add('hidden');
+            if (chevron) chevron.classList.remove('rotate-180');
+            if (btn) btn.classList.remove('border-sky-500', 'ring-2', 'ring-sky-100', 'dark:ring-sky-900/40');
+        };
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!_branchCityDropdownOpen) return;
+            const container = document.getElementById('branchCityFilterContainer');
+            if (container && !container.contains(e.target)) {
+                closeBranchCityFilterDropdown();
+            }
+        });
+
+        window.filterCityDropdownItems = function(term) {
+            const q = (term || '').trim().toLowerCase();
+            const items = document.querySelectorAll('.city-filter-item');
+            items.forEach(item => {
+                const name = (item.dataset.cityName || '').toLowerCase();
+                item.style.display = (!q || name.includes(q)) ? 'flex' : 'none';
+            });
+        };
+
+        window.onBranchCityCheckboxChange = function(event) {
+            if (event) event.stopPropagation();
+            applyBranchCityFilter();
+        };
+
+        window.selectOnlyBranchCity = function(cityName, event) {
+            if (event) event.stopPropagation();
+            const checkboxes = document.querySelectorAll('.branch-city-checkbox');
+            checkboxes.forEach(chk => {
+                chk.checked = (chk.value === cityName);
+            });
+            applyBranchCityFilter();
+        };
+
+        window.selectAllBranchCities = function(selectAll, event) {
+            if (event) event.stopPropagation();
+            const checkboxes = document.querySelectorAll('.branch-city-checkbox');
+            checkboxes.forEach(chk => {
+                chk.checked = selectAll;
+            });
+            applyBranchCityFilter();
+        };
+
+        window.applyBranchCityFilter = function() {
+            const allCheckboxes = Array.from(document.querySelectorAll('.branch-city-checkbox'));
+            const checkedCheckboxes = allCheckboxes.filter(chk => chk.checked);
+            const totalCities = allCheckboxes.length;
+            const selectedCities = checkedCheckboxes.map(chk => chk.value);
+            const selectedCount = selectedCities.length;
+
+            // Compute total branches selected
+            let totalBranchesSelected = 0;
+            checkedCheckboxes.forEach(chk => {
+                totalBranchesSelected += parseInt(chk.dataset.count) || 0;
+            });
+
+            // Update item container styles (highlight checked ones)
+            allCheckboxes.forEach(chk => {
+                const parent = chk.closest('.city-filter-item');
+                if (parent) {
+                    if (chk.checked) {
+                        parent.classList.add('bg-sky-50/80', 'dark:bg-sky-950/30', 'border-sky-300', 'dark:border-sky-800');
+                    } else {
+                        parent.classList.remove('bg-sky-50/80', 'dark:bg-sky-950/30', 'border-sky-300', 'dark:border-sky-800');
+                    }
                 }
             });
+
+            // Update summary button text
+            const summaryElem = document.getElementById('branchCityFilterSummary');
+            const badgeElem = document.getElementById('branchCityFilterCountBadge');
+            const footerElem = document.getElementById('branchCityFilterFooterText');
+
+            if (selectedCount === 0) {
+                if (summaryElem) summaryElem.textContent = 'لم يتم تحديد أي مدينة (0 فرع)';
+                if (badgeElem) {
+                    badgeElem.textContent = '0 فرع';
+                    badgeElem.className = 'text-[10px] font-mono font-black bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 px-2 py-0.5 rounded-full';
+                }
+            } else if (selectedCount === totalCities) {
+                if (summaryElem) summaryElem.textContent = `جميع المدن (${totalBranchesSelected} فرع)`;
+                if (badgeElem) {
+                    badgeElem.textContent = `الكل (${totalCities})`;
+                    badgeElem.className = 'text-[10px] font-mono font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 px-2 py-0.5 rounded-full';
+                }
+            } else if (selectedCount === 1) {
+                if (summaryElem) summaryElem.textContent = `فروع ${selectedCities[0]} (${totalBranchesSelected} فرع)`;
+                if (badgeElem) {
+                    badgeElem.textContent = `${totalBranchesSelected} فرع`;
+                    badgeElem.className = 'text-[10px] font-mono font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 px-2 py-0.5 rounded-full';
+                }
+            } else if (selectedCount === 2) {
+                if (summaryElem) summaryElem.textContent = `${selectedCities[0]} + ${selectedCities[1]} (${totalBranchesSelected} فرع)`;
+                if (badgeElem) {
+                    badgeElem.textContent = `${totalBranchesSelected} فرع`;
+                    badgeElem.className = 'text-[10px] font-mono font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 px-2 py-0.5 rounded-full';
+                }
+            } else {
+                if (summaryElem) summaryElem.textContent = `تم تحديد ${selectedCount} مدن (${totalBranchesSelected} فرع)`;
+                if (badgeElem) {
+                    badgeElem.textContent = `${totalBranchesSelected} فرع`;
+                    badgeElem.className = 'text-[10px] font-mono font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 px-2 py-0.5 rounded-full';
+                }
+            }
+
+            if (footerElem) {
+                footerElem.innerHTML = `المحدد: <span class="text-sky-600 font-black">${selectedCount}</span> من <span class="font-black">${totalCities}</span> مدينة (${totalBranchesSelected} فرع)`;
+            }
+
+            // Apply filter to DataTable
+            const tbl = $('table.datatable');
+            if (tbl.length && $.fn.DataTable.isDataTable(tbl[0])) {
+                const dt = tbl.DataTable();
+                if (selectedCount === 0) {
+                    // Match nothing
+                    dt.column(1).search('__NO_MATCHING_CITY__', false, false).draw();
+                } else if (selectedCount === totalCities) {
+                    // Show all
+                    dt.column(1).search('', false, false).draw();
+                } else {
+                    // Build regex pattern of selected cities
+                    const escaped = selectedCities.map(c => $.fn.dataTable.util.escapeRegex(c)).join('|');
+                    dt.column(1).search(escaped, true, false).draw();
+                }
+            }
+        };
+
+        $(function() {
+            setTimeout(() => {
+                applyBranchCityFilter();
+            }, 100);
         });
     </script>
 }
