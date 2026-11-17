@@ -76,27 +76,83 @@
         </div>
 
         <!-- Form 1: Personnel Registration Ingestion -->
-        <form id="importForm" asp-action="ImportUsersFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="ingress-tab-pane flex flex-wrap items-end gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
+        <form id="importForm" asp-action="ImportUsersFromExcel" asp-controller="Admin" method="post" enctype="multipart/form-data" class="ingress-tab-pane flex flex-col gap-4 p-6 bg-slate-50/50 dark:bg-slate-800/20 rounded-2xl border border-slate-100 dark:border-slate-800">
             @Html.AntiForgeryToken()
-            <div class="flex-1 min-w-[300px] space-y-2">
-                <div class="flex justify-between items-center px-1">
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personnel Payload (.xlsx)</label>
-                    <a href="/Admin/DownloadPersonnelTemplate" class="text-[10px] font-extrabold text-brand-600 hover:text-brand-700 uppercase tracking-wider flex items-center gap-1">
-                        <i class="fas fa-download"></i> Download Template / تحميل النموذج
-                    </a>
+
+            <!-- Top Row: File Input + Actions -->
+            <div class="flex flex-wrap items-end gap-4 w-full">
+                <div class="flex-1 min-w-[300px] space-y-2">
+                    <div class="flex justify-between items-center px-1">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Personnel Payload (.xlsx)</label>
+                        <a href="/Admin/DownloadPersonnelTemplate" class="text-[10px] font-extrabold text-brand-600 hover:text-brand-700 uppercase tracking-wider flex items-center gap-1">
+                            <i class="fas fa-download"></i> Download Template / تحميل النموذج
+                        </a>
+                    </div>
+                    <input id="excelFile" type="file" name="excelFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-slate-900 dark:file:bg-brand-500 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-white dark:bg-slate-950 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
                 </div>
-                <input id="excelFile" type="file" name="excelFile" accept=".xlsx,.xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-slate-900 dark:file:bg-brand-500 file:text-white hover:file:opacity-90 transition-all cursor-pointer bg-white dark:bg-slate-950 p-2 rounded-xl border border-slate-200 dark:border-slate-700" />
+                <label class="flex items-center gap-2 cursor-pointer select-none text-[10px] font-bold text-slate-500 uppercase tracking-widest pb-3">
+                    <input type="checkbox" name="sendWelcomeEmails" value="true" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                    Send welcome emails
+                </label>
+                <button type="submit" id="btnImport" class="bg-slate-900 dark:bg-brand-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg flex items-center gap-3 hover:opacity-90" style="min-width:180px;justify-content:center;">
+                    <span id="btnImportInner" style="display:flex;align-items:center;gap:10px;">
+                        <i class="fas fa-file-import"></i>
+                        Execute Ingestion
+                    </span>
+                </button>
             </div>
-            <label class="flex items-center gap-2 cursor-pointer select-none text-[10px] font-bold text-slate-500 uppercase tracking-widest pb-3">
-                <input type="checkbox" name="sendWelcomeEmails" value="true" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
-                Send welcome emails
-            </label>
-            <button type="submit" id="btnImport" class="bg-slate-900 dark:bg-brand-600 text-white px-8 py-3 rounded-2xl transition-all text-xs font-bold uppercase shadow-lg flex items-center gap-3 hover:opacity-90" style="min-width:180px;justify-content:center;">
-                <span id="btnImportInner" style="display:flex;align-items:center;gap:10px;">
-                    <i class="fas fa-file-import"></i>
-                    Execute Ingestion
+
+            <!-- Ingestion Mode Selector (Add Only / Edit Only / Add & Edit) -->
+            <div class="w-full pt-1">
+                <span class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">اختر وضع المعالجة / Ingestion Mode:</span>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <label class="relative flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 cursor-pointer transition-all hover:border-emerald-500 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50/40 dark:has-[:checked]:bg-emerald-900/10 has-[:checked]:ring-2 has-[:checked]:ring-emerald-500/20">
+                        <input type="radio" name="importMode" value="add" checked class="text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer" />
+                        <div class="flex flex-col min-w-0">
+                            <span class="text-xs font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                                <i class="fas fa-user-plus text-emerald-600"></i> Add Only (إضافة فقط)
+                            </span>
+                            <span class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">يضيف الموظفين الجدد فقط، ويتخطى أي كود موجود مسبقاً مع تنبيه بالاسم.</span>
+                        </div>
+                    </label>
+
+                    <label class="relative flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 cursor-pointer transition-all hover:border-amber-500 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/40 dark:has-[:checked]:bg-amber-900/10 has-[:checked]:ring-2 has-[:checked]:ring-amber-500/20">
+                        <input type="radio" name="importMode" value="edit" class="text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer" />
+                        <div class="flex flex-col min-w-0">
+                            <span class="text-xs font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                                <i class="fas fa-user-pen text-amber-600"></i> Edit Only (تعديل فقط)
+                            </span>
+                            <span class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">يعدل بيانات الأكواد المسجلة فقط، ويتخطى أي كود غير موجود مع تنبيه لإضافته.</span>
+                        </div>
+                    </label>
+
+                    <label class="relative flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 cursor-pointer transition-all hover:border-indigo-500 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/40 dark:has-[:checked]:bg-indigo-900/10 has-[:checked]:ring-2 has-[:checked]:ring-indigo-500/20">
+                        <input type="radio" name="importMode" value="add_edit" class="text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+                        <div class="flex flex-col min-w-0">
+                            <span class="text-xs font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                                <i class="fas fa-users-gear text-indigo-600"></i> Add & Edit (إضافة وتعديل)
+                            </span>
+                            <span class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">يجمع بين الاثنين: يضيف الأكواد الجديدة ويحدّث بيانات الأكواد الموجودة تلقائياً.</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Helpful Field Instructions -->
+            <div class="w-full flex flex-wrap items-center gap-2 p-3 bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-xl text-[11px] text-indigo-950 dark:text-indigo-200">
+                <span class="font-bold flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
+                    <i class="fas fa-circle-info"></i> إرشادات كتابة البيانات بالإكسل:
                 </span>
-            </button>
+                <span class="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-indigo-200/60 dark:border-indigo-800">
+                    <strong>Branch / الفرع:</strong> يمكنك كتابة كود الفرع <code>BranchCode</code> (مثل <b>GESH-01</b> أو <b>AGA</b>) أو اسم الفرع بالعربي.
+                </span>
+                <span class="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-indigo-200/60 dark:border-indigo-800">
+                    <strong>Shift / الشفت:</strong> يمكنك كتابة كود/اسم الشفت <code>ShiftIdentity</code> (مثل <b>M12</b> أو <b>MO3</b>) أو رقم الشفت (ID).
+                </span>
+                <span class="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-indigo-200/60 dark:border-indigo-800">
+                    <strong>Role / الوظيفة:</strong> اكتب المسمى بالإنجليزية (مثل <b>Pharmacist</b> أو <b>Assistant</b> أو <b>HR</b>).
+                </span>
+            </div>
         </form>
 
         <!-- Form 2: Branch Bulk Update -->
@@ -1062,22 +1118,33 @@
 
                 if(res.success) {
                     if (res.errors && res.errors.length > 0) {
-                        let errHtml = '<ul class="text-left text-xs text-rose-500 overflow-y-auto max-h-48 mt-4 list-disc pl-4">';
+                        let errHtml = '<ul class="text-right text-xs text-rose-500 overflow-y-auto max-h-48 mt-4 list-disc pr-4" dir="rtl">';
                         res.errors.forEach(e => { errHtml += `<li>${String(e).replace(/</g,'&lt;')}</li>`; });
                         errHtml += '</ul>';
 
                         Swal.fire({
-                            icon: 'warning',
-                            title: 'Imported with Errors',
+                            icon: (res.count > 0 ? 'warning' : 'info'),
+                            title: res.count > 0 ? 'اكتملت المعالجة مع تنبيهات' : 'تنبيه استيراد البيانات',
                             width: '640px',
-                            html: `<p class="text-sm font-bold">${res.message}</p>${errHtml}`
+                            html: `<p class="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">${res.message || ''}</p>${errHtml}`,
+                            confirmButtonText: 'حسناً'
                         }).then(() => location.reload());
                     } else {
-                        Swal.fire({ icon: 'success', title: 'Ingestion Complete', timer: 2000 })
-                            .then(() => location.reload());
+                        Swal.fire({ 
+                            icon: 'success', 
+                            title: 'تم بنجاح', 
+                            text: res.message || 'Ingestion Complete',
+                            timer: 2500, 
+                            showConfirmButton: false 
+                        }).then(() => location.reload());
                     }
                 } else {
-                    Swal.fire('Error', res.message || 'Import failed', 'error');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'خطأ في الاستيراد',
+                        text: res.message || 'Import failed',
+                        confirmButtonText: 'حسناً'
+                    });
                 }
 
             } catch(err) {

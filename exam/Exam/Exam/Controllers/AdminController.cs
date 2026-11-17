@@ -82,7 +82,7 @@ namespace Exam.Controllers
             "DownloadBranchUpdateTemplate", "ImportBranchUpdatesFromExcel", "DownloadBranchesTemplate", "ImportBranchesFromExcel",
             "DownloadShiftUpdateTemplate", "ImportShiftUpdatesFromExcel", "DownloadShiftsTemplate", "ImportShiftsFromExcel",
             "UpdateUserDepartment", "DownloadDepartmentUpdateTemplate", "ImportDepartmentUpdatesFromExcel", "Departments", "SaveDepartment", "DeleteDepartment",
-            "GetDepartmentPersonnel", "ExportDepartmentPersonnelToExcel"
+            "GetDepartmentPersonnel", "ExportDepartmentPersonnelToExcel", "ImportUsersFromExcel", "DownloadPersonnelTemplate"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
@@ -3952,16 +3952,22 @@ ORDER BY U.UserName ASC";
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ImportUsersFromExcel(IFormFile excelFile, string connectionId, bool sendWelcomeEmails = false)
+        public async Task<IActionResult> ImportUsersFromExcel(IFormFile excelFile, string connectionId, bool sendWelcomeEmails = false, string importMode = "add")
         {
             if (excelFile == null || excelFile.Length == 0)
             {
                 return Json(new { success = false, message = "Please upload an Excel file." });
             }
 
-            var successCount = 0;
+            var successAddCount = 0;
+            var successEditCount = 0;
             var errorLines = new List<string>();
             const string fallbackRoleName = "User";
+
+            string mode = (importMode ?? "add").Trim().ToLowerInvariant();
+            bool isAddOnly = mode == "add" || mode == "addonly";
+            bool isEditOnly = mode == "edit" || mode == "editonly";
+            bool isAddAndEdit = mode == "add_edit" || mode == "addedit" || mode == "upsert" || mode == "all";
 
             try
             {
@@ -4028,37 +4034,27 @@ ORDER BY U.UserName ASC";
                 var colPhone = GetCol("Phone", "PhoneNumber", "Phone Number", "Mobile", "الهاتف", "التليفون", "الموبايل", "رقم الهاتف", "رقم الموبايل");
                 var colRoleName = GetCol("RoleName", "Role", "الوظيفة", "الدور", "المسمى الوظيفي", "الوظيفه", "التصنيف");
                 var colUserCode = GetCol("UserCode", "User Code", "Code", "الكود", "كود", "كود المستخدم", "كود الموظف", "كود المتدرب");
-                var colBranchName = GetCol("BranchName", "Branch Name", "Branch", "BranchCode", "Location", "الفرع", "اسم الفرع", "فرع", "المنطقة");
+                var colBranchName = GetCol("BranchCode", "BranchName", "Branch Name", "Branch Code", "Branch", "Location", "الفرع", "كود الفرع", "اسم الفرع", "فرع", "المنطقة");
                 var colCertificateCode = GetCol("CertificateCode", "Certificate Code", "Certificate", "كود الشهادة", "الشهادة");
-                var colshiftid = GetCol("ShiftId", "Shift Id", "Shift", "ShieftId", "Shift Window", "الشفت", "الوردية", "فترة العمل");
+                var colshiftid = GetCol("ShiftIdentity", "ShiftId", "Shift Id", "Shift Identity", "Shift Name", "ShiftName", "Shift", "ShieftId", "Shift Window", "الشفت", "اسم الشفت", "كود الشفت", "الوردية", "فترة العمل");
                 var colDepartment = GetCol("Department", "DepartmentName", "Dept", "القسم", "اسم القسم", "التخصص");
 
                 var missingColumns = new List<string>();
-                if (colUserName == null) missingColumns.Add("UserName (أو Name)");
-                if (colEmail == null) missingColumns.Add("Email");
-                if (colPassword == null) missingColumns.Add("Password (أو Pass)");
-                if (colPhone == null) missingColumns.Add("Phone (أو PhoneNumber أو Mobile)");
-                if (colRoleName == null) missingColumns.Add("RoleName (أو Role)");
-                if (colUserCode == null) missingColumns.Add("UserCode (أو Code)");
-                if (colBranchName == null) missingColumns.Add("BranchName (أو Branch أو Location أو الفرع)");
-                if (colshiftid == null) missingColumns.Add("ShiftId (أو Shift Window)");
+                if (colUserCode == null) missingColumns.Add("UserCode (كود الموظف)");
+                if (colBranchName == null) missingColumns.Add("BranchCode / BranchName (كود الفرع أو اسم الفرع)");
+                if (colshiftid == null) missingColumns.Add("ShiftIdentity / ShiftId (كود الشفت أو رقم الشفت)");
 
                 if (missingColumns.Any())
                 {
                     var missingStr = string.Join(", ", missingColumns);
                     return Json(new { 
                         success = false, 
-                        message = $"الملف المرفوع تنقصه الأعمدة التالية أو لم يتم التعرف عليها: <br/><strong class='text-rose-600'>{missingStr}</strong>.<br/><br/>" +
-                                  "الأعمدة المطلوبة والمسميات المقبولة هي:<br/>" +
-                                  "1. <b>UserName</b> (أو Name)<br/>" +
-                                  "2. <b>Email</b> (أو Mail)<br/>" +
-                                  "3. <b>Password</b> (أو Pass)<br/>" +
-                                  "4. <b>Phone</b> (أو Mobile)<br/>" +
-                                  "5. <b>RoleName</b> (أو Role)<br/>" +
-                                  "6. <b>UserCode</b> (أو Code)<br/>" +
-                                  "7. <b>BranchName</b> (أو Branch أو الفرع)<br/>" +
-                                  "8. <b>ShiftId</b> (أو Shift Window)<br/>" +
-                                  "ملاحظة: عمود <b>Department</b> (القسم) وعمود <b>CertificateCode</b> اختياريان بالكامل."
+                        message = $"الملف المرفوع تنقصه الأعمدة الأساسية التالية أو لم يتم التعرف عليها: <br/><strong class='text-rose-600'>{missingStr}</strong>.<br/><br/>" +
+                                  "يرجى التأكد من احتواء الملف على الأعمدة المطلوبة بالاسم الإنجليزي أو العربي:<br/>" +
+                                  "• <b>UserCode</b> (كود الموظف - إلزامي)<br/>" +
+                                  "• <b>BranchCode</b> أو <b>BranchName</b> (كود الفرع مثل GESH-01 أو اسم الفرع)<br/>" +
+                                  "• <b>ShiftIdentity</b> أو <b>ShiftId</b> (اسم/كود الشفت مثل M12 أو رقم الشفت)<br/>" +
+                                  "• <b>UserName</b> و <b>Email</b> و <b>RoleName</b> (إلزامية في حالة إضافة موظفين جدد)"
                     });
                 }
 
@@ -4072,41 +4068,33 @@ ORDER BY U.UserName ASC";
                     .Where(b => b.Id > 0 && (!string.IsNullOrEmpty(b.Name) || !string.IsNullOrEmpty(b.Code)))
                     .ToList();
 
+                var allShifts = (await _examService.GetAllShiftsAsync()).ToList();
+
                 using var conn = new SqlConnection(_connectionString);
                 await conn.OpenAsync();
                 var branchIdByExcelValue = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
+                var shiftIdByExcelValue = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
                 var seenUserCodesInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var seenEmailsInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? headerRow;
+                string adminName = User.Identity?.Name ?? "Admin";
 
                 // --- Loop Rows ---
                 for (int row = headerRow + 1; row <= lastRow; row++)
                 {
-                    var email = worksheet.Cell(row, colEmail.Value).Value.ToString()?.Trim();
-                    if (string.IsNullOrWhiteSpace(email)) continue;
+                    var rawUserCode = colUserCode != null ? worksheet.Cell(row, colUserCode.Value).Value.ToString()?.Trim() : null;
+                    var email = colEmail != null ? worksheet.Cell(row, colEmail.Value).Value.ToString()?.Trim() : null;
+                    var rawUserName = colUserName != null ? worksheet.Cell(row, colUserName.Value).Value.ToString()?.Trim() : null;
+
+                    if (string.IsNullOrWhiteSpace(rawUserCode) && string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(rawUserName))
+                    {
+                        continue; // Skip blank row
+                    }
 
                     try
                     {
-                        var rawUserName = colUserName != null ? worksheet.Cell(row, colUserName.Value).Value.ToString()?.Trim() : null;
-                        var userName = !string.IsNullOrWhiteSpace(rawUserName) ? rawUserName.Replace(" ", "_") : email;
-                        var password = colPassword != null ? worksheet.Cell(row, colPassword.Value).Value.ToString()?.Trim() : "TempPass@123";
-                        if (string.IsNullOrWhiteSpace(password)) password = "TempPass@123";
-                        
-                        var phone = colPhone != null ? worksheet.Cell(row, colPhone.Value).Value.ToString()?.Trim() : null;
-                        var roleName = colRoleName != null ? worksheet.Cell(row, colRoleName.Value).Value.ToString()?.Trim() : fallbackRoleName;
-                        if (string.IsNullOrWhiteSpace(roleName)) roleName = fallbackRoleName;
-
-                        // --- Role Validation (English Only) ---
-                        bool hasArabic = System.Text.RegularExpressions.Regex.IsMatch(roleName, @"\p{IsArabic}");
-                        if (hasArabic || roleName.Contains("صيدلي") || roleName.Contains("مساعد"))
-                        {
-                            errorLines.Add($"Row {row}: Role '{roleName}' must be in English (e.g., Pharmacist, Assistant). Arabic roles are no longer supported.");
-                            continue;
-                        }
-
-                        // --- UserCode Processing & Restrictions ---
-                        var rawUserCode = colUserCode != null ? worksheet.Cell(row, colUserCode.Value).Value.ToString()?.Trim() : null;
+                        // 1. UserCode Processing & Validation (Mandatory for all modes)
                         string cleanUserCode = null;
                         if (!string.IsNullOrWhiteSpace(rawUserCode))
                         {
@@ -4117,23 +4105,22 @@ ORDER BY U.UserName ASC";
                             }
                         }
 
-                        // RESTRICTION 1: UserCode is required (لا يضاف الموظف إذا لم يكن له كود)
                         if (string.IsNullOrWhiteSpace(cleanUserCode))
                         {
-                            errorLines.Add($"Row {row}: كود الموظف (UserCode) غير موجود للموظف '{userName ?? email}'. كود الموظف إلزامي ولا يمكن الإضافة بدونه. تم تخطي الصف.");
+                            errorLines.Add($"Row {row}: كود الموظف (UserCode) غير موجود للموظف '{rawUserName ?? email}'. كود الموظف إلزامي لجميع العمليات. تم تخطي الصف.");
                             continue;
                         }
 
-                        // RESTRICTION 2: UserCode must not be duplicated in the uploaded file
                         if (seenUserCodesInFile.Contains(cleanUserCode))
                         {
                             errorLines.Add($"Row {row}: كود الموظف '{cleanUserCode}' مكرر أكثر من مرة داخل نفس ملف الإكسل المرفوع. تم تخطي الصف.");
                             continue;
                         }
+                        seenUserCodesInFile.Add(cleanUserCode);
 
-                        // RESTRICTION 3: Do not upload or add if UserCode already exists in database (لما الكود يبقي موجود ميضافش)
+                        // 2. Check Database Existence by UserCode
                         var existingByCode = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                            SELECT TOP 1 Id, UserName, FullName, Email, UserCode 
+                            SELECT TOP 1 Id, UserName, FullName, Email, PhoneNumber, UserCode, BranchId, ShiftId, DepartmentId 
                             FROM AspNetUsers 
                             WHERE LTRIM(RTRIM(UserCode)) = @Code 
                                OR (TRY_CAST(UserCode AS BIGINT) IS NOT NULL 
@@ -4141,14 +4128,181 @@ ORDER BY U.UserName ASC";
                                    AND TRY_CAST(UserCode AS BIGINT) = TRY_CAST(@Code AS BIGINT))",
                             new { Code = cleanUserCode });
 
-                        if (existingByCode != null)
+                        // 3. Mode Evaluation
+                        if (isAddOnly && existingByCode != null)
                         {
                             string existingName = existingByCode.FullName ?? existingByCode.UserName ?? "";
-                            errorLines.Add($"Row {row}: كود الموظف '{cleanUserCode}' موجود مسبقاً في النظام ومسجل باسم ({existingName}). تم تخطي الصف.");
+                            errorLines.Add($"Row {row}: كود الموظف '{cleanUserCode}' موجود مسبقاً في النظام ومسجل باسم ({existingName}). تم تخطي الصف (وضع الإضافة فقط).");
                             continue;
                         }
 
-                        // --- Email Processing & Restrictions ---
+                        if (isEditOnly && existingByCode == null)
+                        {
+                            errorLines.Add($"Row {row}: كود الموظف '{cleanUserCode}' غير موجود في النظام. تم تخطي الصف (وضع التعديل فقط - يرجى إضافته أولاً).");
+                            continue;
+                        }
+
+                        bool isEditingThisRow = existingByCode != null;
+
+                        // 4. Resolve Fields
+                        var userName = !string.IsNullOrWhiteSpace(rawUserName) ? rawUserName.Replace(" ", "_") : email;
+                        var password = colPassword != null ? worksheet.Cell(row, colPassword.Value).Value.ToString()?.Trim() : null;
+                        var phone = colPhone != null ? worksheet.Cell(row, colPhone.Value).Value.ToString()?.Trim() : null;
+                        var roleName = colRoleName != null ? worksheet.Cell(row, colRoleName.Value).Value.ToString()?.Trim() : (isEditingThisRow ? null : fallbackRoleName);
+
+                        // Role validation (English only if provided)
+                        if (!string.IsNullOrWhiteSpace(roleName))
+                        {
+                            bool hasArabic = System.Text.RegularExpressions.Regex.IsMatch(roleName, @"\p{IsArabic}");
+                            if (hasArabic || roleName.Contains("صيدلي") || roleName.Contains("مساعد"))
+                            {
+                                errorLines.Add($"Row {row}: الوظيفة '{roleName}' يجب أن تكون بالإنجليزية (مثل Pharmacist أو Assistant). تم تخطي الصف.");
+                                continue;
+                            }
+                        }
+
+                        // Resolve Branch (by Code or by Name)
+                        var branchRaw = colBranchName != null ? worksheet.Cell(row, colBranchName.Value).Value.ToString()?.Trim() : null;
+                        int? bId = null;
+                        if (!string.IsNullOrWhiteSpace(branchRaw))
+                        {
+                            if (!branchIdByExcelValue.TryGetValue(branchRaw, out bId))
+                            {
+                                bId = BranchNameResolver.ResolveBranchId(branchRaw, branchList);
+                                branchIdByExcelValue[branchRaw] = bId;
+                            }
+                        }
+
+                        // Resolve Shift (by Identity/Name or by numeric ID)
+                        var shiftRaw = colshiftid != null ? worksheet.Cell(row, colshiftid.Value).Value.ToString()?.Trim() : null;
+                        int? sId = null;
+                        if (!string.IsNullOrWhiteSpace(shiftRaw))
+                        {
+                            if (!shiftIdByExcelValue.TryGetValue(shiftRaw, out sId))
+                            {
+                                sId = ShiftNameResolver.ResolveShiftId(shiftRaw, allShifts);
+                                shiftIdByExcelValue[shiftRaw] = sId;
+                            }
+                        }
+
+                        // Resolve Department
+                        var rawDept = colDepartment != null ? worksheet.Cell(row, colDepartment.Value).Value.ToString()?.Trim() : null;
+                        int? deptId = null;
+                        if (!string.IsNullOrWhiteSpace(rawDept))
+                        {
+                            var matchedDept = deptList.FirstOrDefault(d => 
+                                string.Equals(d.Name, rawDept, StringComparison.OrdinalIgnoreCase) ||
+                                (d.Code != null && string.Equals(d.Code, rawDept, StringComparison.OrdinalIgnoreCase)) ||
+                                (int.TryParse(rawDept, out var parsedDid) && d.Id == parsedDid));
+                            if (matchedDept != null)
+                            {
+                                deptId = matchedDept.Id;
+                            }
+                        }
+
+                        var certCode = colCertificateCode != null ? worksheet.Cell(row, colCertificateCode.Value).Value.ToString()?.Trim() : null;
+
+                        // =========================================================================
+                        // --- CASE A: EDIT EXISTING USER ---
+                        // =========================================================================
+                        if (isEditingThisRow)
+                        {
+                            string existingUserId = (string)existingByCode.Id;
+
+                            // Check email uniqueness if email provided and changing
+                            bool canUpdateEmail = false;
+                            if (!string.IsNullOrWhiteSpace(email))
+                            {
+                                string curEmail = (string)(existingByCode.Email ?? "");
+                                if (!curEmail.Equals(email, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var emailTaken = await conn.QueryFirstOrDefaultAsync<string>(@"
+                                        SELECT TOP 1 Id FROM AspNetUsers 
+                                        WHERE LOWER(LTRIM(RTRIM(Email))) = LOWER(@Email) AND Id <> @Id",
+                                        new { Email = email, Id = existingUserId });
+                                    if (emailTaken != null)
+                                    {
+                                        errorLines.Add($"Row {row}: تنبيه لكود '{cleanUserCode}': الإيميل '{email}' مستخدم لحساب آخر في النظام، تم الإبقاء على الإيميل السابق وتحديث باقي البيانات.");
+                                    }
+                                    else
+                                    {
+                                        canUpdateEmail = true;
+                                    }
+                                }
+                            }
+
+                            // Update user in AspNetUsers
+                            await conn.ExecuteAsync(@"
+                                UPDATE AspNetUsers 
+                                SET FullName = CASE WHEN @FullName IS NOT NULL AND LTRIM(RTRIM(@FullName)) <> '' THEN @FullName ELSE FullName END,
+                                    UserName = CASE WHEN @UserName IS NOT NULL AND LTRIM(RTRIM(@UserName)) <> '' THEN @UserName ELSE UserName END,
+                                    Email = CASE WHEN @CanUpdateEmail = 1 THEN @Email ELSE Email END,
+                                    NormalizedEmail = CASE WHEN @CanUpdateEmail = 1 THEN UPPER(@Email) ELSE NormalizedEmail END,
+                                    PhoneNumber = CASE WHEN @Phone IS NOT NULL AND LTRIM(RTRIM(@Phone)) <> '' THEN @Phone ELSE PhoneNumber END,
+                                    BranchId = CASE WHEN @BranchId IS NOT NULL AND @BranchId > 0 THEN @BranchId ELSE BranchId END,
+                                    ShiftId = CASE WHEN @ShiftId IS NOT NULL AND @ShiftId > 0 THEN @ShiftId ELSE ShiftId END,
+                                    DepartmentId = CASE WHEN @DeptId IS NOT NULL AND @DeptId > 0 THEN @DeptId ELSE DepartmentId END,
+                                    CertificateCode = CASE WHEN @CertCode IS NOT NULL AND LTRIM(RTRIM(@CertCode)) <> '' THEN @CertCode ELSE CertificateCode END,
+                                    UpdatedAt = GETDATE(),
+                                    UpdatedBy = @AdminName
+                                WHERE Id = @UserId",
+                                new {
+                                    FullName = !string.IsNullOrWhiteSpace(rawUserName) ? rawUserName : null,
+                                    UserName = !string.IsNullOrWhiteSpace(userName) ? userName : null,
+                                    CanUpdateEmail = canUpdateEmail ? 1 : 0,
+                                    Email = email,
+                                    Phone = phone,
+                                    BranchId = bId,
+                                    ShiftId = sId,
+                                    DeptId = deptId,
+                                    CertCode = certCode,
+                                    AdminName = adminName,
+                                    UserId = existingUserId
+                                });
+
+                            // Update Role if provided
+                            if (!string.IsNullOrWhiteSpace(roleName))
+                            {
+                                var appUser = await _userManager.FindByIdAsync(existingUserId);
+                                if (appUser != null)
+                                {
+                                    if (!await _roleManager.RoleExistsAsync(roleName))
+                                    {
+                                        await _roleManager.CreateAsync(new IdentityRole(roleName));
+                                    }
+                                    var curRoles = await _userManager.GetRolesAsync(appUser);
+                                    if (!curRoles.Contains(roleName, StringComparer.OrdinalIgnoreCase))
+                                    {
+                                        if (curRoles.Any()) await _userManager.RemoveFromRolesAsync(appUser, curRoles);
+                                        await _userManager.AddToRoleAsync(appUser, roleName);
+                                    }
+                                }
+                            }
+
+                            // Update Password if explicitly provided and not default placeholder
+                            if (!string.IsNullOrWhiteSpace(password) && password != "TempPass@123")
+                            {
+                                var appUser = await _userManager.FindByIdAsync(existingUserId);
+                                if (appUser != null)
+                                {
+                                    var token = await _userManager.GeneratePasswordResetTokenAsync(appUser);
+                                    await _userManager.ResetPasswordAsync(appUser, token, password);
+                                }
+                            }
+
+                            successEditCount++;
+                            continue; // Done with editing this row
+                        }
+
+                        // =========================================================================
+                        // --- CASE B: ADD NEW USER ---
+                        // =========================================================================
+                        if (string.IsNullOrWhiteSpace(email))
+                        {
+                            errorLines.Add($"Row {row}: البريد الإلكتروني إلزامي لإضافة موظف جديد (كود: {cleanUserCode}). تم تخطي الصف.");
+                            continue;
+                        }
+
                         if (seenEmailsInFile.Contains(email))
                         {
                             errorLines.Add($"Row {row}: البريد الإلكتروني '{email}' مكرر داخل نفس ملف الإكسل المرفوع. تم تخطي الصف.");
@@ -4168,54 +4322,17 @@ ORDER BY U.UserName ASC";
                             continue;
                         }
 
-                        // --- Branch Processing & Restrictions (لو مفيش فرع لليوزر ميضافش) ---
-                        var branchName = colBranchName != null ? worksheet.Cell(row, colBranchName.Value).Value.ToString()?.Trim() : null;
-                        if (string.IsNullOrWhiteSpace(branchName))
-                        {
-                            errorLines.Add($"Row {row}: لم يتم تحديد فرع للموظف '{userName ?? email}' (كود: {cleanUserCode}). لا يمكن إضافة موظف بدون فرع. تم تخطي الصف.");
-                            continue;
-                        }
-
-                        int? bId = null;
-                        if (!branchIdByExcelValue.TryGetValue(branchName, out bId))
-                        {
-                            bId = BranchNameResolver.ResolveBranchId(branchName, branchList);
-                            branchIdByExcelValue[branchName] = bId;
-                        }
-
                         if (!bId.HasValue || bId.Value <= 0)
                         {
-                            errorLines.Add($"Row {row}: الفرع '{branchName}' غير موجود في النظام للموظف '{userName ?? email}' (كود: {cleanUserCode}). لا يمكن إضافة موظف بفرع غير معتمد. تم تخطي الصف.");
+                            errorLines.Add($"Row {row}: الفرع '{branchRaw}' غير موجود في النظام للموظف '{userName ?? email}' (كود: {cleanUserCode}). لا يمكن إضافة موظف بفرع غير معتمد. تم تخطي الصف.");
                             continue;
                         }
 
-                        var certCode = colCertificateCode != null ? worksheet.Cell(row, colCertificateCode.Value).Value.ToString()?.Trim() : null;
-                        var shiftIdStr = colshiftid != null ? worksheet.Cell(row, colshiftid.Value).Value.ToString()?.Trim() : null;
-                        int? sId = null;
-                        if (!string.IsNullOrWhiteSpace(shiftIdStr))
-                        {
-                            if (double.TryParse(shiftIdStr, out var dValue)) sId = (int)dValue;
-                        }
+                        if (string.IsNullOrWhiteSpace(roleName)) roleName = fallbackRoleName;
+                        if (string.IsNullOrWhiteSpace(password)) password = "TempPass@123";
 
-                        var rawDept = colDepartment != null ? worksheet.Cell(row, colDepartment.Value).Value.ToString()?.Trim() : null;
-                        int? deptId = null;
-                        if (!string.IsNullOrWhiteSpace(rawDept))
-                        {
-                            var matchedDept = deptList.FirstOrDefault(d => 
-                                string.Equals(d.Name, rawDept, StringComparison.OrdinalIgnoreCase) ||
-                                (d.Code != null && string.Equals(d.Code, rawDept, StringComparison.OrdinalIgnoreCase)) ||
-                                (int.TryParse(rawDept, out var parsedDid) && d.Id == parsedDid));
-                            if (matchedDept != null)
-                            {
-                                deptId = matchedDept.Id;
-                            }
-                        }
-
-                        // Mark unique identifiers as seen in file
-                        seenUserCodesInFile.Add(cleanUserCode);
                         seenEmailsInFile.Add(email);
 
-                        string adminName = User.Identity?.Name ?? "Admin";
                         var user = new ApplicationUser
                         {
                             UserName = userName ?? email,
@@ -4296,36 +4413,60 @@ ORDER BY U.UserName ASC";
                             });
                         }
 
-                        successCount++;
+                        successAddCount++;
                     }
                     catch (Exception ex)
                     {
                         errorLines.Add($"Row {row}: Error - {ex.Message}");
                     }
                 }
+
+                int totalSuccess = successAddCount + successEditCount;
+
                 var debugInfo = new List<string> {
-                    $"SuccessCount: {successCount}",
+                    $"SuccessAddCount: {successAddCount}",
+                    $"SuccessEditCount: {successEditCount}",
+                    $"TotalSuccess: {totalSuccess}",
+                    $"Mode: {mode}",
                     $"HeaderRow: {headerRow}",
-                    $"LastRow: {lastRow}",
-                    $"EmailCol: {colEmail}"
+                    $"LastRow: {lastRow}"
                 };
                 System.IO.File.WriteAllLines("import_debug.txt", debugInfo.Concat(errorLines));
                 
                 string finalMsg;
-                if (successCount == 0 && errorLines.Any())
+                if (totalSuccess == 0 && errorLines.Any())
                 {
-                    finalMsg = "لم تتم إضافة أي موظف. يرجى مراجعة تفاصيل الأخطاء والقيود الموضحة أدناه.";
+                    finalMsg = isEditOnly
+                        ? "لم يتم تعديل أي موظف. يرجى مراجعة تفاصيل الملاحظات والقيود أدناه."
+                        : (isAddOnly ? "لم تتم إضافة أي موظف. يرجى مراجعة تفاصيل الأخطاء والقيود أدناه." : "لم يتم تنفيذ أي عملية إضافة أو تعديل. يرجى مراجعة الملاحظات أدناه.");
                 }
                 else if (errorLines.Any())
                 {
-                    finalMsg = $"تمت إضافة {successCount} موظف بنجاح، وتم تخطي الصفوف التي بها تعارضات أو أخطاء.";
+                    if (successAddCount > 0 && successEditCount > 0)
+                        finalMsg = $"تمت إضافة {successAddCount} موظف جديد وتعديل بيانات {successEditCount} موظف حالي بنجاح، مع تخطي بعض الصفوف لوجود ملاحظات.";
+                    else if (successEditCount > 0)
+                        finalMsg = $"تم تعديل بيانات {successEditCount} موظف بنجاح، مع تخطي بعض الصفوف لوجود ملاحظات.";
+                    else
+                        finalMsg = $"تمت إضافة {successAddCount} موظف بنجاح، مع تخطي الصفوف التي بها تعارضات.";
                 }
                 else
                 {
-                    finalMsg = $"تمت إضافة {successCount} موظف بنجاح.";
+                    if (successAddCount > 0 && successEditCount > 0)
+                        finalMsg = $"تمت إضافة {successAddCount} موظف جديد وتعديل بيانات {successEditCount} موظف بنجاح.";
+                    else if (successEditCount > 0)
+                        finalMsg = $"تم تعديل بيانات {successEditCount} موظف بنجاح.";
+                    else
+                        finalMsg = $"تمت إضافة {successAddCount} موظف بنجاح.";
                 }
 
-                return Json(new { success = true, message = finalMsg, errors = errorLines, count = successCount });
+                return Json(new { 
+                    success = true, 
+                    message = finalMsg, 
+                    errors = errorLines, 
+                    count = totalSuccess,
+                    addedCount = successAddCount,
+                    editedCount = successEditCount
+                });
             }
             catch (Exception ex)
             {
@@ -6647,8 +6788,8 @@ ORDER BY U.UserName ASC";
                 worksheet.Cell(1, 4).Value = "Phone";
                 worksheet.Cell(1, 5).Value = "RoleName";
                 worksheet.Cell(1, 6).Value = "UserCode";
-                worksheet.Cell(1, 7).Value = "BranchName";
-                worksheet.Cell(1, 8).Value = "ShiftId";
+                worksheet.Cell(1, 7).Value = "BranchCode";
+                worksheet.Cell(1, 8).Value = "ShiftIdentity";
                 worksheet.Cell(1, 9).Value = "Department";
 
                 // Format header row to look professional
@@ -6657,9 +6798,35 @@ ORDER BY U.UserName ASC";
                 headerRange.Style.Font.FontColor = XLColor.White;
                 headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#0f172a"); // Slate 900
                 headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                // Add sample entries (Row 2 & 3) to guide users clearly
+                worksheet.Cell(2, 1).Value = "أحمد محمد علي";
+                worksheet.Cell(2, 2).Value = "ahmed.ali@eltarshouby.com";
+                worksheet.Cell(2, 3).Value = "Pass@123456";
+                worksheet.Cell(2, 4).Value = "01012345678";
+                worksheet.Cell(2, 5).Value = "Pharmacist";
+                worksheet.Cell(2, 6).Value = "5636";
+                worksheet.Cell(2, 7).Value = "GESH-01"; // Branch code example
+                worksheet.Cell(2, 8).Value = "M12";     // Shift identity example
+                worksheet.Cell(2, 9).Value = "Medical";
+
+                worksheet.Cell(3, 1).Value = "سارة إبراهيم حسن";
+                worksheet.Cell(3, 2).Value = "sara.ibrahim@eltarshouby.com";
+                worksheet.Cell(3, 3).Value = "Pass@123456";
+                worksheet.Cell(3, 4).Value = "01198765432";
+                worksheet.Cell(3, 5).Value = "Assistant";
+                worksheet.Cell(3, 6).Value = "5637";
+                worksheet.Cell(3, 7).Value = "الجيش"; // Branch name example
+                worksheet.Cell(3, 8).Value = "MO3";   // Shift identity example
+                worksheet.Cell(3, 9).Value = "Pharmacy";
+
+                var sampleRange = worksheet.Range("A2:I3");
+                sampleRange.Style.Font.Italic = true;
+                sampleRange.Style.Font.FontColor = XLColor.FromHtml("#475569"); // Slate 600
+                sampleRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#f8fafc"); // Slate 50
                 
-                // Set borders for first 15 rows for clean entry appearance
-                for (int row = 2; row <= 15; row++)
+                // Set borders for first 20 rows for clean entry appearance
+                for (int row = 2; row <= 20; row++)
                 {
                     for (int col = 1; col <= 9; col++)
                     {
@@ -6669,14 +6836,14 @@ ORDER BY U.UserName ASC";
                 }
                 
                 // Pre-adjust column widths
-                worksheet.Column(1).Width = 25; // UserName
-                worksheet.Column(2).Width = 30; // Email
+                worksheet.Column(1).Width = 26; // UserName
+                worksheet.Column(2).Width = 32; // Email
                 worksheet.Column(3).Width = 18; // Password
                 worksheet.Column(4).Width = 18; // Phone
                 worksheet.Column(5).Width = 18; // RoleName
-                worksheet.Column(6).Width = 15; // UserCode
-                worksheet.Column(7).Width = 20; // BranchName
-                worksheet.Column(8).Width = 15; // ShiftId
+                worksheet.Column(6).Width = 16; // UserCode
+                worksheet.Column(7).Width = 24; // BranchCode
+                worksheet.Column(8).Width = 20; // ShiftIdentity
                 worksheet.Column(9).Width = 22; // Department
 
                 using (var stream = new MemoryStream())
@@ -9800,230 +9967,6 @@ ORDER BY U.UserName ASC";
                 string uId = (string)sup.UserId;
                 string fn = (string)(sup.FullName ?? "");
                 string un = (string)(sup.UserName ?? "");
-                string uc = (string)(sup.UserCode ?? "");
-                string em = (string)(sup.Email ?? "");
-                
-                string displayName = !string.IsNullOrWhiteSpace(fn) ? fn : (!string.IsNullOrWhiteSpace(un) ? un : (!string.IsNullOrWhiteSpace(uc) ? uc : em));
-
-                var assignedIds = mappingsGrouped.ContainsKey(uId) ? mappingsGrouped[uId] : new List<int>();
-                var assignedNames = branches.Where(b => int.TryParse(b.Id, out int bId) && assignedIds.Contains(bId)).Select(b => b.BranchName).ToList();
-
-                viewModelList.Add(new BranchSupervisorViewModel
-                {
-                    UserId = uId,
-                    FullName = displayName,
-                    UserCode = uc,
-                    Email = em,
-                    MainBranchName = (string)(sup.MainBranchName ?? "N/A"),
-                    AssignedBranchIds = assignedIds,
-                    AssignedBranchNames = assignedNames
-                });
-            }
-
-            ViewBag.AllBranches = branches;
-            
-            var allBranchSupervisors = (await conn.QueryAsync<dynamic>(@"
-                SELECT DISTINCT u.Id as UserId, u.FullName, u.UserName, u.UserCode, u.Email, r.Name as RoleName
-                FROM AspNetUsers u
-                JOIN AspNetUserRoles ur ON u.Id = ur.UserId
-                JOIN AspNetRoles r ON ur.RoleId = r.Id
-                WHERE r.Name = 'Branch Supervisor'
-                ORDER BY u.FullName, u.UserName")).ToList();
-
-            ViewBag.AllSupervisorUsers = allBranchSupervisors;
-
-            return View(viewModelList);
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetSupervisorBranches(string userId)
-        {
-            if (string.IsNullOrEmpty(userId)) return Json(new { success = false, message = "User ID is required" });
-            using var conn = new SqlConnection(_connectionString);
-            var branchIds = (await conn.QueryAsync<int>("SELECT BranchId FROM SupervisorBranches WHERE UserId = @UserId", new { UserId = userId })).ToList();
-            return Json(new { success = true, branchIds });
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> SaveSupervisorBranches([FromBody] SaveSupervisorBranchesDto dto)
-        {
-            if (dto == null || string.IsNullOrEmpty(dto.UserId))
-                return Json(new { success = false, message = "بيانات غير صالحة" });
-
-            var userRoles = User.Claims
-                .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
-                .Select(c => c.Value)
-                .ToList();
-
-            bool canEdit = User.IsInRole("Admin") || userRoles.Contains("Admin")
-                || await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "BranchSupervisors", "edit")
-                || await _examService.HasSpecificPermissionAsync(userRoles, "Admin", "BranchSupervisors", "create");
-
-            if (!canEdit)
-            {
-                return Json(new { success = false, message = "غير مصرح لك بتعديل فروع المشرفين" });
-            }
-
-            using var conn = new SqlConnection(_connectionString);
-            await conn.OpenAsync();
-            using var tran = conn.BeginTransaction();
-            try
-            {
-                await conn.ExecuteAsync("DELETE FROM SupervisorBranches WHERE UserId = @UserId", new { UserId = dto.UserId }, tran);
-
-                if (dto.BranchIds != null && dto.BranchIds.Any())
-                {
-                    foreach (var bId in dto.BranchIds.Distinct())
-                    {
-                        await conn.ExecuteAsync(@"
-                            INSERT INTO SupervisorBranches (UserId, BranchId, CreatedAt)
-                            VALUES (@UserId, @BranchId, GETDATE())",
-                            new { UserId = dto.UserId, BranchId = bId }, tran);
-                    }
-                }
-
-                tran.Commit();
-                return Json(new { success = true, message = "تم حفظ الفروع المخصصة للمشرف بنجاح!" });
-            }
-            catch (System.Exception ex)
-            {
-                tran.Rollback();
-                return Json(new { success = false, message = "حدث خطأ أثناء الحفظ: " + ex.Message });
-            }
-        }
-
-        private async Task<List<string>> GetAllowedBranchNamesForUserAsync(ApplicationUser currentUser, SqlConnection conn)
-        {
-            if (currentUser == null) return new List<string>();
-
-            var roles = User.Claims
-                .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
-                .Select(c => c.Value)
-                .ToList();
-
-            // Admin, HR, and any other global roles have full unrestricted access (null means all branches)
-            bool isAdminOrHr = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources")
-                               || roles.Any(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase)
-                                              || r.Equals("HR", StringComparison.OrdinalIgnoreCase)
-                                              || r.Equals("Human Resources", StringComparison.OrdinalIgnoreCase));
-
-            if (isAdminOrHr)
-            {
-                return null;
-            }
-
-            bool isBranchSupervisor = User.IsInRole("Branch Supervisor") || roles.Any(r => r.Equals("Branch Supervisor", StringComparison.OrdinalIgnoreCase));
-            bool isBranchManager = User.IsInRole("Branch Manager") || roles.Any(r => r.Equals("Branch Manager", StringComparison.OrdinalIgnoreCase));
-
-            // ONLY Branch Manager and Branch Supervisor are restricted by branch!
-            if (!isBranchSupervisor && !isBranchManager)
-            {
-                return null;
-            }
-
-            var branchIds = new List<int>();
-
-            if (isBranchSupervisor)
-            {
-                var supervisorBranchIds = (await conn.QueryAsync<int>(
-                    "SELECT BranchId FROM SupervisorBranches WHERE UserId = @UserId", 
-                    new { UserId = currentUser.Id })).ToList();
-                branchIds.AddRange(supervisorBranchIds);
-            }
-
-            if (isBranchManager && currentUser.BranchId.HasValue && currentUser.BranchId.Value > 0)
-            {
-                branchIds.Add(currentUser.BranchId.Value);
-            }
-
-            branchIds = branchIds.Distinct().ToList();
-
-            if (!branchIds.Any())
-            {
-                return new List<string>();
-            }
-
-            var names = (await conn.QueryAsync<string>(
-                "SELECT BranchName FROM Branches WHERE Id IN @Ids AND BranchName IS NOT NULL AND BranchName != ''", 
-                new { Ids = branchIds })).ToList();
-
-            return names;
-        }
-
-        [HttpGet("Admin/ManageHome")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> ManageHome()
-        {
-            var cmsData = await _homeCmsService.GetHomeCmsDataAsync(activeOnly: false);
-            return View(cmsData);
-        }
-
-        [HttpPost("Admin/UploadSliderImage")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> UploadSliderImage(IFormFile file, string title, string subtitle)
-        {
-            if (file == null || file.Length == 0) return BadRequest(new { success = false, message = "Please select a valid image file." });
-            
-            bool success = await _homeCmsService.AddSliderImageAsync(file, title, subtitle);
-            if (success) return Json(new { success = true, message = "Slider image uploaded successfully." });
-            return BadRequest(new { success = false, message = "Failed to upload image." });
-        }
-
-        [HttpPost("Admin/DeleteSliderImage/{id}")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> DeleteSliderImage(int id)
-        {
-            bool success = await _homeCmsService.DeleteSliderImageAsync(id, _env.WebRootPath);
-            return Json(new { success, message = success ? "Slider image deleted." : "Failed to delete slider image." });
-        }
-
-        [HttpPost("Admin/ToggleSliderImage/{id}")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> ToggleSliderImage(int id)
-        {
-            bool success = await _homeCmsService.ToggleSliderImageAsync(id);
-            return Json(new { success, message = success ? "Slider image state updated." : "Failed to update slider state." });
-        }
-
-        [HttpPost("Admin/SaveHomeSection")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> SaveHomeSection(HomeSection model, IFormFile imageFile)
-        {
-            if (model == null) return BadRequest(new { success = false, message = "Invalid data." });
-            bool success = await _homeCmsService.SaveSectionAsync(model, imageFile, _env.WebRootPath);
-            return Json(new { success, message = success ? "Section saved successfully." : "Failed to save section." });
-        }
-
-        [HttpPost("Admin/DeleteHomeSection/{id}")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> DeleteHomeSection(int id)
-        {
-            bool success = await _homeCmsService.DeleteSectionAsync(id);
-            return Json(new { success, message = success ? "Section deleted." : "Failed to delete section." });
-        }
-
-        [HttpPost("Admin/ToggleHomeSection/{id}")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> ToggleHomeSection(int id)
-        {
-            bool success = await _homeCmsService.ToggleSectionVisibilityAsync(id);
-            return Json(new { success, message = success ? "Section visibility updated." : "Failed to update section visibility." });
-        }
-
-        [HttpPost("Admin/SaveFacultyMember")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> SaveFacultyMember(HomeFacultyMember model, IFormFile imageFile)
-        {
-            if (model == null) return BadRequest(new { success = false, message = "Invalid data." });
-            bool success = await _homeCmsService.SaveFacultyMemberAsync(model, imageFile, _env.WebRootPath);
-            return Json(new { success, message = success ? "Faculty member saved successfully." : "Failed to save faculty member." });
-        }
-
-        [HttpPost("Admin/DeleteFacultyMember/{id}")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> DeleteFacultyMember(int id)
-        {
-            bool success = await _homeCmsService.DeleteFacultyMemberAsync(id, _env.WebRootPath);
             return Json(new { success, message = success ? "Faculty member deleted." : "Failed to delete faculty member." });
         }
 
@@ -10555,6 +10498,52 @@ ORDER BY U.UserName ASC";
             while (s.StartsWith(al, StringComparison.Ordinal))
                 s = s.Substring(al.Length).TrimStart();
             return s.Trim();
+        }
+    }
+
+    internal static class ShiftNameResolver
+    {
+        internal static int? ResolveShiftId(string rawVal, IReadOnlyList<ShiftDto> shifts)
+        {
+            if (string.IsNullOrWhiteSpace(rawVal) || shifts == null || shifts.Count == 0)
+                return null;
+
+            var raw = rawVal.Trim();
+
+            // 1. Try numeric Id first
+            if (int.TryParse(raw, out var numId) && shifts.Any(s => s.Id == numId))
+            {
+                return numId;
+            }
+
+            // Also handle double (e.g., from Excel reading cell as numeric 3.0)
+            if (double.TryParse(raw, out var dblId))
+            {
+                int intDbl = (int)dblId;
+                if (shifts.Any(s => s.Id == intDbl)) return intDbl;
+            }
+
+            // 2. Exact match on ShiftName / Identity (case-insensitive) e.g. "M12"
+            var exact = shifts.FirstOrDefault(s => !string.IsNullOrEmpty(s.ShiftName) && string.Equals(s.ShiftName.Trim(), raw, StringComparison.OrdinalIgnoreCase));
+            if (exact != null) return exact.Id;
+
+            // 3. Normalized match (remove spaces, dashes, underscores)
+            var cleanRaw = raw.Replace(" ", "").Replace("-", "").Replace("_", "").ToLowerInvariant();
+            var normMatch = shifts.FirstOrDefault(s => {
+                if (string.IsNullOrEmpty(s.ShiftName)) return false;
+                var cleanName = s.ShiftName.Replace(" ", "").Replace("-", "").Replace("_", "").ToLowerInvariant();
+                return cleanName == cleanRaw;
+            });
+            if (normMatch != null) return normMatch.Id;
+
+            // 4. StartsWith or Contains (e.g. "M12 (...)" or "ID: #3")
+            var prefixMatch = shifts.FirstOrDefault(s => !string.IsNullOrEmpty(s.ShiftName) && (
+                raw.StartsWith(s.ShiftName.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                s.ShiftName.Trim().StartsWith(raw, StringComparison.OrdinalIgnoreCase)
+            ));
+            if (prefixMatch != null) return prefixMatch.Id;
+
+            return null;
         }
     }
 
