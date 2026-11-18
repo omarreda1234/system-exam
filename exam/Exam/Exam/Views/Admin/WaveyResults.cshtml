@@ -165,6 +165,7 @@
             <thead>
                 <tr>
                     <th class="min-w-[240px]">Personnel</th>
+                    <th>Wave</th>
                     <th>Branch</th>
                     <th>Role</th>
                     <th>Status</th>
@@ -180,7 +181,7 @@
                 @if (!Model.Any())
                 {
                     <tr>
-                        <td colspan="10" class="text-center py-12 text-slate-400">
+                        <td colspan="11" class="text-center py-12 text-slate-400">
                             <div class="flex flex-col items-center justify-center gap-3">
                                 <div class="w-16 h-16 bg-slate-50 dark:bg-slate-900 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-600 shadow-inner">
                                     <i class="fas fa-inbox text-2xl"></i>
@@ -209,6 +210,11 @@
                             </div>
                         </td>
                         <td>
+                            <span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 border border-violet-200 dark:border-violet-800 whitespace-nowrap">
+                                @(string.IsNullOrEmpty(s.WaveName) ? $"Wave #{s.WaveId}" : s.WaveName)
+                            </span>
+                        </td>
+                        <td>
                             <span class="text-[10px] font-black text-slate-400 uppercase">@(string.IsNullOrEmpty(s.BranchName) ? "--" : s.BranchName)</span>
                         </td>
                         <td>
@@ -224,7 +230,7 @@
                                 <span class="text-slate-400 text-xs">--</span>
                             }
                         </td>
-                        <td>
+                        <td class="status-cell">
                             @if (!string.IsNullOrEmpty(s.Status))
                             {
                                 var statusLower = s.Status.ToLower();
@@ -281,19 +287,41 @@
                                 <span class="text-slate-300 dark:text-slate-700 text-xs">--</span>
                             }
                         </td>
-                        <td>
+                        <td class="score-cell">
                             <div class="flex flex-col">
-                                <span class="text-brand-600 dark:text-brand-400 text-sm font-bold font-mono">
-                                    @s.TotalScore.ToString("0") / @s.TotalAvailable.ToString("0")
-                                </span>
+                                @if (s.TotalAvailable > 0)
+                                {
+                                    <span class="text-brand-600 dark:text-brand-400 text-sm font-bold font-mono">
+                                        @s.TotalScore.ToString("0") / @s.TotalAvailable.ToString("0")
+                                    </span>
+                                }
+                                else if (!string.IsNullOrEmpty(s.CertificateCode))
+                                {
+                                    <span class="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">Cert Uploaded</span>
+                                }
+                                else
+                                {
+                                    <span class="text-slate-400 text-xs">--</span>
+                                }
                             </div>
                         </td>
                         <td>
                             @{
-                                double pct = s.TotalAvailable > 0 ? (double)(s.TotalScore / s.TotalAvailable) * 100 : 0;
-                                string pctColor = pct >= 75 ? "text-emerald-600" : pct >= 70 ? "text-blue-600" : "text-rose-500";
+                                if (s.TotalAvailable > 0)
+                                {
+                                    double pct = (double)(s.TotalScore / s.TotalAvailable) * 100;
+                                    string pctColor = pct >= 75 ? "text-emerald-600" : pct >= 70 ? "text-blue-600" : "text-rose-500";
+                                    <span class="font-black text-sm @pctColor">@pct.ToString("0.0")%</span>
+                                }
+                                else if (!string.IsNullOrEmpty(s.CertificateCode))
+                                {
+                                    <span class="text-emerald-600 dark:text-emerald-400 font-bold text-xs">Certified</span>
+                                }
+                                else
+                                {
+                                    <span class="text-slate-400 text-xs">--</span>
+                                }
                             }
-                            <span class="font-black text-sm @pctColor">@pct.ToString("0.0")%</span>
                         </td>
 
                         <td class="text-right px-8">
@@ -447,8 +475,8 @@
                 const selWaves = getSelectedWavesWavey();
 
                 const tr = settings.aoData[dataIndex] ? settings.aoData[dataIndex].nTr : null;
-                const rowBranch = (data[1] || '') + ' ' + (data[0] || '') + ' ' + (tr ? $(tr).attr('data-branch-name') || '' : '');
-                const rowWave = tr ? ($(tr).attr('data-wave-name') || '') : '';
+                const rowBranch = (data[2] || '') + ' ' + (data[0] || '') + ' ' + (tr ? $(tr).attr('data-branch-name') || '' : '');
+                const rowWave = (data[1] || '') + ' ' + (tr ? ($(tr).attr('data-wave-name') || '') : '');
                 const rowWaveId = tr ? ($(tr).attr('data-wave-id') || '') : '';
 
                 let branchMatch = (selBranches.length === 0 || selBranches.length === $('.chk-branch-wavey').length);
@@ -483,11 +511,11 @@
             let totalAvailable = 0;
 
             $(rows).each(function() {
-                const status = $(this).find('td:nth-child(4)').text().trim().toLowerCase();
+                const status = ($(this).find('.status-cell').length ? $(this).find('.status-cell').text() : $(this).find('td:nth-child(5)').text()).trim().toLowerCase();
                 if (status.includes('completed')) completed++;
                 else incomplete++;
 
-                const scoreText = $(this).find('td:nth-child(8)').text().trim();
+                const scoreText = ($(this).find('.score-cell').length ? $(this).find('.score-cell').text() : $(this).find('td:nth-child(9)').text()).trim();
                 const parts = scoreText.split('/');
                 if (parts.length === 2) {
                     const sc = parseFloat(parts[0]);

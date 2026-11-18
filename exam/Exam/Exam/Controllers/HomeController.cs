@@ -230,7 +230,7 @@ namespace Exam.Controllers
             }
             catch { }
 
-            // Fetch DB wave certificates
+            // Fetch DB wave certificates (Only valid certified entries: uploaded files or issued cert codes)
             var certsQuery = @"
                 SELECT 
                     uwc.WaveId,
@@ -248,6 +248,8 @@ namespace Exam.Controllers
                 FROM dbo.UserWaveCertificates uwc
                 LEFT JOIN TrainingWaves w ON uwc.WaveId = w.Id
                 WHERE uwc.UserId = @UserId
+                  AND (ISNULL(uwc.FileUploaded, 0) = 1 
+                       OR (uwc.CertificateCode IS NOT NULL AND (uwc.Score IS NULL OR uwc.Score >= 70)))
                 ORDER BY uwc.CreatedAt DESC";
 
             var dbCerts = (await conn.QueryAsync<UserCertificateItemViewModel>(certsQuery, new { UserId = userId })).ToList();
@@ -265,9 +267,12 @@ namespace Exam.Controllers
             bool IsMatchingUserCodeFile(string fileNameWithoutExt)
             {
                 if (string.IsNullOrEmpty(userCode) || string.IsNullOrEmpty(fileNameWithoutExt)) return false;
-                if (fileNameWithoutExt.Equals(userCode, StringComparison.OrdinalIgnoreCase)) return true;
-                if (hasNumericUserCode && long.TryParse(fileNameWithoutExt, out long fileNum) && fileNum == numericUserCode) return true;
-                if (fileNameWithoutExt.Contains(userCode, StringComparison.OrdinalIgnoreCase)) return true;
+                string cleanFn = fileNameWithoutExt.Trim();
+                if (cleanFn.Equals(userCode, StringComparison.OrdinalIgnoreCase)) return true;
+                if (hasNumericUserCode && long.TryParse(cleanFn, out long fileNum) && fileNum == numericUserCode) return true;
+                // Boundary regex: matches "422", "422_cert", "cert_422", "WTTA-...-422" but NEVER "4221" or "1422"
+                var pattern = $@"(^|[^0-9a-zA-Z]){System.Text.RegularExpressions.Regex.Escape(userCode)}($|[^0-9a-zA-Z])";
+                if (System.Text.RegularExpressions.Regex.IsMatch(cleanFn, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase)) return true;
                 return false;
             }
 

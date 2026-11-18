@@ -3281,9 +3281,12 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
                 // Role Options
                 string roleSelectOptions = "";
+                string selectedRoleDisplay = roleName.ToUpper();
                 foreach (var r in allRoles)
                 {
-                    string sel = string.Equals(r.RoleName, roleName, StringComparison.OrdinalIgnoreCase) ? "selected" : "";
+                    bool isSel = string.Equals(r.RoleName, roleName, StringComparison.OrdinalIgnoreCase);
+                    string sel = isSel ? "selected" : "";
+                    if (isSel) selectedRoleDisplay = r.RoleName.ToUpper();
                     roleSelectOptions += $"<option value='{r.RoleId}' {sel}>{r.RoleName.ToUpper()}</option>";
                 }
 
@@ -3294,7 +3297,11 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     roleHtml = $@"
                         <form action='/Admin/UpdateUserRole' method='post' class='ajax-update-form m-0 p-0 inline-block' data-type='role'>
                             <input type='hidden' name='userId' value='{userId}' />
-                            <select name='roleId' onchange=""$(this).closest('form').submit();"" class='bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider outline-none focus:ring-2 focus:ring-brand-500 transition-all cursor-pointer shadow-sm max-w-[120px] truncate'>
+                            <button type='button' class='custom-select-trigger group flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200/90 dark:border-slate-700/80 bg-slate-100/90 hover:bg-slate-200/90 dark:bg-slate-800 dark:hover:bg-slate-700/90 text-slate-800 dark:text-slate-200 text-[10px] font-extrabold uppercase tracking-wider shadow-2xs transition-all cursor-pointer select-none max-w-[130px] truncate' title='Change Classification / تعديل الوظيفة'>
+                                <span class='trigger-label truncate'>{selectedRoleDisplay}</span>
+                                <i class='fas fa-chevron-down text-[8px] text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-transform shrink-0'></i>
+                            </button>
+                            <select name='roleId' onchange=""$(this).closest('form').submit();"" class='hidden'>
                                 {roleSelectOptions}
                             </select>
                         </form>";
@@ -3306,13 +3313,17 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
                 // Shift Options
                 string shiftSelectOptions = "<option value='0'>-- NO SHIFT --</option>";
+                string selectedShiftDisplay = "-- NO SHIFT --";
                 foreach (var s in allShifts)
                 {
-                    string sel = string.Equals(shiftName, s.ShiftName, StringComparison.OrdinalIgnoreCase) ? "selected" : "";
+                    bool isSel = string.Equals(shiftName, s.ShiftName, StringComparison.OrdinalIgnoreCase);
+                    string sel = isSel ? "selected" : "";
                     string startTimeStr = DateTime.Today.Add(s.StartTime).ToString("hh:mm tt");
                     string endTimeStr = DateTime.Today.Add(s.EndTime).ToString("hh:mm tt");
                     string durationStr = s.DurationHours > 0 ? $" • {s.DurationHours}h" : "";
-                    shiftSelectOptions += $"<option value='{s.Id}' data-name='{s.ShiftName.ToUpper()}' data-time='{startTimeStr} — {endTimeStr}' {sel}>{s.ShiftName.ToUpper()} ({startTimeStr} - {endTimeStr}{durationStr})</option>";
+                    string fullLabel = $"{s.ShiftName.ToUpper()} ({startTimeStr} - {endTimeStr}{durationStr})";
+                    if (isSel) selectedShiftDisplay = fullLabel;
+                    shiftSelectOptions += $"<option value='{s.Id}' data-name='{s.ShiftName.ToUpper()}' data-time='{startTimeStr} — {endTimeStr}' {sel}>{fullLabel}</option>";
                 }
 
                 // Shift Column (Self-contained Shift Selector if permitted, or Shift Info)
@@ -3322,7 +3333,11 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     shiftHtml = $@"
                         <form action='/Admin/UpdateUserShift' method='post' class='ajax-update-form m-0 p-0 inline-block' data-type='shift'>
                             <input type='hidden' name='userId' value='{userId}' />
-                            <select name='newShiftId' onchange=""$(this).closest('form').submit();"" class='bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-1.5 py-1 text-[9px] font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-amber-500 transition-all cursor-pointer max-w-[130px] shadow-sm truncate'>
+                            <button type='button' class='custom-select-trigger group flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-lg border border-amber-200/80 dark:border-amber-800/60 bg-amber-50/70 hover:bg-amber-100/80 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-900 dark:text-amber-300 text-[9.5px] font-bold shadow-2xs transition-all cursor-pointer select-none max-w-[140px] truncate' title='Change Shift / تعديل الشيفت'>
+                                <span class='trigger-label truncate'>{selectedShiftDisplay}</span>
+                                <i class='fas fa-chevron-down text-[8px] text-amber-400 group-hover:text-amber-600 dark:group-hover:text-amber-300 transition-transform shrink-0'></i>
+                            </button>
+                            <select name='newShiftId' onchange=""$(this).closest('form').submit();"" class='hidden'>
                                 {shiftSelectOptions}
                             </select>
                         </form>";
@@ -3348,10 +3363,14 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
 
                 // Department Options
                 string deptSelectOptions = "<option value='0'>-- NO DEPARTMENT --</option>";
+                string selectedDeptDisplay = "-- NO DEPARTMENT --";
                 foreach (var d in allDepartments)
                 {
-                    string sel = (deptId.HasValue && deptId.Value == d.Id) ? "selected" : "";
-                    deptSelectOptions += $"<option value='{d.Id}' {sel}>{d.Name} ({d.Code})</option>";
+                    bool isSel = (deptId.HasValue && deptId.Value == d.Id);
+                    string sel = isSel ? "selected" : "";
+                    string label = $"{d.Name} ({d.Code})";
+                    if (isSel) selectedDeptDisplay = label;
+                    deptSelectOptions += $"<option value='{d.Id}' {sel}>{label}</option>";
                 }
 
                 // Department Column (Interactive AJAX Dropdown if permitted, or Badge)
@@ -3361,7 +3380,11 @@ OFFSET @Start ROWS FETCH NEXT @Length ROWS ONLY";
                     departmentHtml = $@"
                         <form action='/Admin/UpdateUserDepartment' method='post' class='ajax-update-form m-0 p-0 inline-block' data-type='department'>
                             <input type='hidden' name='userId' value='{userId}' />
-                            <select name='departmentId' onchange=""$(this).closest('form').submit();"" class='bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/50 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800 rounded-lg px-1.5 py-1 text-[9px] font-bold outline-none focus:ring-2 focus:ring-sky-500 transition-all cursor-pointer shadow-sm max-w-[140px] truncate' title='Department / القسم'>
+                            <button type='button' class='custom-select-trigger group flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-lg border border-sky-200/80 dark:border-sky-800/60 bg-sky-50/70 hover:bg-sky-100/80 dark:bg-sky-950/30 dark:hover:bg-sky-900/50 text-sky-900 dark:text-sky-300 text-[9.5px] font-bold shadow-2xs transition-all cursor-pointer select-none max-w-[140px] truncate' title='Change Department / تعديل القسم'>
+                                <span class='trigger-label truncate'>{selectedDeptDisplay}</span>
+                                <i class='fas fa-chevron-down text-[8px] text-sky-400 group-hover:text-sky-600 dark:group-hover:text-sky-300 transition-transform shrink-0'></i>
+                            </button>
+                            <select name='departmentId' onchange=""$(this).closest('form').submit();"" class='hidden' title='Department / القسم'>
                                 {deptSelectOptions}
                             </select>
                         </form>";
@@ -9967,6 +9990,173 @@ ORDER BY U.UserName ASC";
                 string uId = (string)sup.UserId;
                 string fn = (string)(sup.FullName ?? "");
                 string un = (string)(sup.UserName ?? "");
+                string uc = (string)(sup.UserCode ?? "");
+                string em = (string)(sup.Email ?? "");
+                
+                string displayName = !string.IsNullOrWhiteSpace(fn) ? fn : (!string.IsNullOrWhiteSpace(un) ? un : (!string.IsNullOrWhiteSpace(uc) ? uc : em));
+
+                var assignedIds = mappingsGrouped.ContainsKey(uId) ? mappingsGrouped[uId] : new List<int>();
+                var assignedNames = branches.Where(b => int.TryParse(b.Id, out int bId) && assignedIds.Contains(bId)).Select(b => b.BranchName).ToList();
+
+                viewModelList.Add(new BranchSupervisorViewModel
+                {
+                    UserId = uId,
+                    FullName = displayName,
+                    UserCode = uc,
+                    Email = em,
+                    MainBranchName = (string)(sup.MainBranchName ?? "N/A"),
+                    AssignedBranchIds = assignedIds,
+                    AssignedBranchNames = assignedNames
+                });
+            }
+
+            ViewBag.AllBranches = branches;
+            
+            var allBranchSupervisors = (await conn.QueryAsync<dynamic>(@"
+                SELECT DISTINCT u.Id as UserId, u.FullName, u.UserName, u.UserCode, u.Email, r.Name as RoleName
+                FROM AspNetUsers u
+                JOIN AspNetUserRoles ur ON u.Id = ur.UserId
+                JOIN AspNetRoles r ON ur.RoleId = r.Id
+                WHERE r.Name = 'Branch Supervisor'
+                ORDER BY u.FullName, u.UserName")).ToList();
+
+            ViewBag.AllSupervisors = allBranchSupervisors;
+
+            return View(viewModelList);
+        }
+
+        private async Task<List<string>> GetAllowedBranchNamesForUserAsync(ApplicationUser currentUser, SqlConnection conn)
+        {
+            if (currentUser == null) return new List<string>();
+
+            var roles = User.Claims
+                .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
+                .Select(c => c.Value)
+                .ToList();
+
+            // Admin, HR, and any other global roles have full unrestricted access (null means all branches)
+            bool isAdminOrHr = User.IsInRole("Admin") || User.IsInRole("HR") || User.IsInRole("Human Resources")
+                               || roles.Any(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase)
+                                              || r.Equals("HR", StringComparison.OrdinalIgnoreCase)
+                                              || r.Equals("Human Resources", StringComparison.OrdinalIgnoreCase));
+
+            if (isAdminOrHr)
+            {
+                return null;
+            }
+
+            bool isBranchSupervisor = User.IsInRole("Branch Supervisor") || roles.Any(r => r.Equals("Branch Supervisor", StringComparison.OrdinalIgnoreCase));
+            bool isBranchManager = User.IsInRole("Branch Manager") || roles.Any(r => r.Equals("Branch Manager", StringComparison.OrdinalIgnoreCase));
+
+            // ONLY Branch Manager and Branch Supervisor are restricted by branch!
+            if (!isBranchSupervisor && !isBranchManager)
+            {
+                return null;
+            }
+
+            var branchIds = new List<int>();
+
+            if (isBranchSupervisor)
+            {
+                var supervisorBranchIds = (await conn.QueryAsync<int>(
+                    "SELECT BranchId FROM SupervisorBranches WHERE UserId = @UserId", 
+                    new { UserId = currentUser.Id })).ToList();
+                branchIds.AddRange(supervisorBranchIds);
+            }
+
+            if (isBranchManager && currentUser.BranchId.HasValue && currentUser.BranchId.Value > 0)
+            {
+                branchIds.Add(currentUser.BranchId.Value);
+            }
+
+            branchIds = branchIds.Distinct().ToList();
+
+            if (!branchIds.Any())
+            {
+                return new List<string>();
+            }
+
+            var names = (await conn.QueryAsync<string>(
+                "SELECT BranchName FROM Branches WHERE Id IN @Ids AND BranchName IS NOT NULL AND BranchName != ''", 
+                new { Ids = branchIds })).ToList();
+
+            return names;
+        }
+
+        [HttpGet("Admin/ManageHome")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> ManageHome()
+        {
+            var cmsData = await _homeCmsService.GetHomeCmsDataAsync(activeOnly: false);
+            return View(cmsData);
+        }
+
+        [HttpPost("Admin/UploadSliderImage")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UploadSliderImage(IFormFile file, string title, string subtitle)
+        {
+            if (file == null || file.Length == 0) return BadRequest(new { success = false, message = "Please select a valid image file." });
+            
+            bool success = await _homeCmsService.AddSliderImageAsync(file, title, subtitle);
+            if (success) return Json(new { success = true, message = "Slider image uploaded successfully." });
+            return BadRequest(new { success = false, message = "Failed to upload image." });
+        }
+
+        [HttpPost("Admin/DeleteSliderImage/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteSliderImage(int id)
+        {
+            bool success = await _homeCmsService.DeleteSliderImageAsync(id, _env.WebRootPath);
+            return Json(new { success, message = success ? "Slider image deleted." : "Failed to delete slider image." });
+        }
+
+        [HttpPost("Admin/ToggleSliderImage/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> ToggleSliderImage(int id)
+        {
+            bool success = await _homeCmsService.ToggleSliderImageAsync(id);
+            return Json(new { success, message = success ? "Slider image state updated." : "Failed to update slider state." });
+        }
+
+        [HttpPost("Admin/SaveHomeSection")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> SaveHomeSection(HomeSection model, IFormFile imageFile)
+        {
+            if (model == null) return BadRequest(new { success = false, message = "Invalid data." });
+            bool success = await _homeCmsService.SaveSectionAsync(model, imageFile, _env.WebRootPath);
+            return Json(new { success, message = success ? "Section saved successfully." : "Failed to save section." });
+        }
+
+        [HttpPost("Admin/DeleteHomeSection/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteHomeSection(int id)
+        {
+            bool success = await _homeCmsService.DeleteSectionAsync(id);
+            return Json(new { success, message = success ? "Section deleted." : "Failed to delete section." });
+        }
+
+        [HttpPost("Admin/ToggleHomeSection/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> ToggleHomeSection(int id)
+        {
+            bool success = await _homeCmsService.ToggleSectionVisibilityAsync(id);
+            return Json(new { success, message = success ? "Section visibility updated." : "Failed to update section visibility." });
+        }
+
+        [HttpPost("Admin/SaveFacultyMember")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> SaveFacultyMember(HomeFacultyMember model, IFormFile imageFile)
+        {
+            if (model == null) return BadRequest(new { success = false, message = "Invalid data." });
+            bool success = await _homeCmsService.SaveFacultyMemberAsync(model, imageFile, _env.WebRootPath);
+            return Json(new { success, message = success ? "Faculty member saved successfully." : "Failed to save faculty member." });
+        }
+
+        [HttpPost("Admin/DeleteFacultyMember/{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteFacultyMember(int id)
+        {
+            bool success = await _homeCmsService.DeleteFacultyMemberAsync(id, _env.WebRootPath);
             return Json(new { success, message = success ? "Faculty member deleted." : "Failed to delete faculty member." });
         }
 
