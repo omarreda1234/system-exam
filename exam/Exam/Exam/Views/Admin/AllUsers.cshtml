@@ -1033,6 +1033,8 @@
         $(document).on('submit', '.ajax-update-form', async function(e) {
             e.preventDefault();
             const $form = $(this);
+            if ($form.data('submitting')) return;
+            $form.data('submitting', true);
             const $select = $form.find('select');
             const $trigger = $form.find('.custom-select-trigger');
             const type = $form.data('type');
@@ -1066,6 +1068,7 @@
             } catch(e) {
                 Swal.fire('Error', 'Update communication failed', 'error');
             } finally {
+                $form.data('submitting', false);
                 $select.prop('disabled', false).removeClass('opacity-50 cursor-wait');
                 $trigger.removeClass('opacity-50 pointer-events-none cursor-wait');
             }

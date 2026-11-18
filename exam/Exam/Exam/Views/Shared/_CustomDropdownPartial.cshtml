@@ -1,0 +1,303 @@
+<!-- Global Modern Professional Custom Dropdown System -->
+<script>
+    (function() {
+        if (window.__customDropdownSystemInitialized) return;
+        window.__customDropdownSystemInitialized = true;
+
+        let $activeDropdown = null;
+        let $activeTrigger = null;
+        let $activeSelect = null;
+
+        function normalizeArabic(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/[\u064B-\u065F\u0670]/g, '')
+                .replace(/[إأآا]/g, 'ا')
+                .replace(/ى/g, 'ي')
+                .replace(/ة/g, 'ه')
+                .replace(/[\u0660-\u0669]/g, function(d) {
+                    return d.charCodeAt(0) - 1632;
+                })
+                .toLowerCase();
+        }
+
+        function getOrCreatePortal(targetParent) {
+            let $portal = $('#globalCustomDropdownPortal');
+            if (!$portal.length) {
+                $portal = $(`
+                    <div id="globalCustomDropdownPortal" class="hidden fixed z-[999999] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2.5 transition-all text-slate-800 dark:text-slate-100 font-sans" style="width: 280px; max-width: 90vw;">
+                        <div class="relative mb-2">
+                            <i class="fas fa-search absolute left-3 top-2.5 text-slate-400 text-xs pointer-events-none"></i>
+                            <input type="text" id="globalDropdownSearchInput" placeholder="بحث / Search..." class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700/80 rounded-xl pl-8 pr-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 text-slate-800 dark:text-slate-200 placeholder:text-slate-400" autocomplete="off" />
+                        </div>
+                        <div id="globalDropdownItemsList" class="max-h-60 overflow-y-auto space-y-1 custom-scrollbar pr-0.5">
+                            <!-- Dynamically populated items -->
+                        </div>
+                        <div id="globalDropdownEmptyState" class="hidden py-4 text-center text-xs font-bold text-slate-400">
+                            <i class="fas fa-search mr-1"></i> لا توجد نتائج مطابقة
+                        </div>
+                    </div>
+                `);
+                
+                // Search filtering
+                $portal.on('input', '#globalDropdownSearchInput', function() {
+                    const q = normalizeArabic($(this).val().trim());
+                    let visibleCount = 0;
+                    $portal.find('.dropdown-option-item').each(function() {
+                        const text = $(this).data('search-text') || '';
+                        const matches = !q || text.includes(q);
+                        $(this).toggle(matches);
+                        if (matches) visibleCount++;
+                    });
+                    $('#globalDropdownEmptyState').toggle(visibleCount === 0);
+                });
+
+                // Item click
+                $portal.on('click', '.dropdown-option-item', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const val = $(this).data('value');
+                    const text = $(this).data('text');
+
+                    if ($activeSelect && $activeSelect.length) {
+                        const oldVal = $activeSelect.val();
+                        $activeSelect.val(val);
+                        
+                        // Native event dispatch for frameworks
+                        if ($activeSelect[0]) {
+                            $activeSelect[0].dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        $activeSelect.trigger('change');
+
+                        // Update trigger button label
+                        if ($activeTrigger && $activeTrigger.length) {
+                            $activeTrigger.find('.trigger-label').text(text);
+                        }
+
+                        // If inside ajax-update-form and value changed, submit the form safely
+                        const $form = $activeSelect.closest('form.ajax-update-form');
+                        if ($form.length && String(oldVal) !== String(val)) {
+                            $form.trigger('submit');
+                        }
+                    }
+                    closeCustomDropdown();
+                });
+
+                // Keyboard navigation
+                $portal.on('keydown', '#globalDropdownSearchInput', function(e) {
+                    const $visibleItems = $portal.find('.dropdown-option-item:visible');
+                    if (!$visibleItems.length) return;
+                    
+                    let $focused = $visibleItems.filter('.keyboard-focus');
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        if (!$focused.length || $focused.is($visibleItems.last())) {
+                            $visibleItems.removeClass('keyboard-focus bg-brand-50/50 dark:bg-slate-800');
+                            $visibleItems.first().addClass('keyboard-focus bg-brand-50/50 dark:bg-slate-800')[0].scrollIntoView({ block: 'nearest' });
+                        } else {
+                            const next = $visibleItems.eq($visibleItems.index($focused) + 1);
+                            $visibleItems.removeClass('keyboard-focus bg-brand-50/50 dark:bg-slate-800');
+                            next.addClass('keyboard-focus bg-brand-50/50 dark:bg-slate-800')[0].scrollIntoView({ block: 'nearest' });
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (!$focused.length || $focused.is($visibleItems.first())) {
+                            $visibleItems.removeClass('keyboard-focus bg-brand-50/50 dark:bg-slate-800');
+                            $visibleItems.last().addClass('keyboard-focus bg-brand-50/50 dark:bg-slate-800')[0].scrollIntoView({ block: 'nearest' });
+                        } else {
+                            const prev = $visibleItems.eq($visibleItems.index($focused) - 1);
+                            $visibleItems.removeClass('keyboard-focus bg-brand-50/50 dark:bg-slate-800');
+                            prev.addClass('keyboard-focus bg-brand-50/50 dark:bg-slate-800')[0].scrollIntoView({ block: 'nearest' });
+                        }
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if ($focused.length) {
+                            $focused.trigger('click');
+                        } else if ($visibleItems.length === 1) {
+                            $visibleItems.first().trigger('click');
+                        }
+                    }
+                });
+
+                // Outside click to close
+                $(document).on('mousedown pointerdown', function(e) {
+                    if ($portal.is(':visible')) {
+                        if (!$(e.target).closest('#globalCustomDropdownPortal').length && !$(e.target).closest('.custom-select-trigger').length) {
+                            closeCustomDropdown();
+                        }
+                    }
+                });
+
+                // Escape to close
+                $(document).on('keydown', function(e) {
+                    if (e.key === 'Escape' && $portal.is(':visible')) {
+                        closeCustomDropdown();
+                    }
+                });
+
+                // Scroll tracking
+                window.addEventListener('scroll', function() {
+                    if ($portal.is(':visible') && $activeTrigger) {
+                        positionPortal($activeTrigger, $portal);
+                    }
+                }, true);
+
+                // Resize tracking
+                window.addEventListener('resize', function() {
+                    if ($portal.is(':visible') && $activeTrigger) {
+                        positionPortal($activeTrigger, $portal);
+                    }
+                });
+            }
+
+            // If inside a SweetAlert modal, append inside modal to preserve focus trap
+            const modalContainer = targetParent ? $(targetParent).closest('.swal2-popup')[0] : null;
+            const desiredParent = modalContainer || document.body;
+            if ($portal.parent()[0] !== desiredParent) {
+                $portal.appendTo(desiredParent);
+            }
+
+            return $portal;
+        }
+
+        function positionPortal($trigger, $portal) {
+            if (!$trigger || !$trigger.length || !document.body.contains($trigger[0])) {
+                closeCustomDropdown();
+                return;
+            }
+            const rect = $trigger[0].getBoundingClientRect();
+            const portalWidth = Math.min(380, Math.max(rect.width, 260));
+            $portal.css('width', portalWidth + 'px');
+
+            let left = rect.left;
+            if (left + portalWidth > window.innerWidth - 12) {
+                left = Math.max(12, window.innerWidth - portalWidth - 12);
+            }
+            if (left < 12) left = 12;
+
+            $portal.removeClass('hidden');
+            const portalHeight = $portal.outerHeight() || 280;
+
+            let top = rect.bottom + 6;
+            if (top + portalHeight > window.innerHeight - 10 && rect.top > portalHeight + 10) {
+                top = rect.top - portalHeight - 6;
+            }
+
+            $portal.css({
+                top: Math.round(top) + 'px',
+                left: Math.round(left) + 'px'
+            });
+        }
+
+        function openCustomDropdown($select, $trigger) {
+            if (!$select || !$select.length || !$trigger || !$trigger.length) return;
+            
+            // If this same trigger is already active and portal visible, close it
+            if ($activeTrigger && $activeTrigger[0] === $trigger[0] && $('#globalCustomDropdownPortal').is(':visible')) {
+                closeCustomDropdown();
+                return;
+            }
+
+            closeCustomDropdown();
+
+            const $portal = getOrCreatePortal($trigger[0]);
+            $activeDropdown = $portal;
+            $activeTrigger = $trigger;
+            $activeSelect = $select;
+
+            // Animate chevron
+            $trigger.find('.fa-chevron-down').addClass('rotate-180 text-brand-500');
+
+            $('#globalDropdownSearchInput').val('');
+            $('#globalDropdownEmptyState').addClass('hidden');
+
+            const currentVal = String($select.val() || '');
+            const $itemsList = $('#globalDropdownItemsList');
+            $itemsList.empty();
+
+            $select.find('option').each(function() {
+                const optVal = $(this).val();
+                const optText = $(this).text().trim();
+                const isSelected = String(optVal) === currentVal;
+                const normalizedText = normalizeArabic(optText);
+
+                let selectedClass = isSelected 
+                    ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300 font-extrabold border-brand-200 dark:border-brand-800' 
+                    : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-200';
+
+                const $item = $(`
+                    <div class="dropdown-option-item flex items-center justify-between p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer select-none mb-1 ${selectedClass}"
+                         data-value="${optVal}"
+                         data-text="${optText.replace(/"/g, '&quot;')}"
+                         data-search-text="${normalizedText}">
+                        <span class="truncate flex-1">${optText}</span>
+                        ${isSelected ? '<i class="fas fa-check text-brand-600 dark:text-brand-400 text-xs shrink-0 ml-2"></i>' : ''}
+                    </div>
+                `);
+                $itemsList.append($item);
+            });
+
+            positionPortal($trigger, $portal);
+
+            setTimeout(() => {
+                $('#globalDropdownSearchInput').focus();
+            }, 40);
+        }
+
+        function closeCustomDropdown() {
+            const $portal = $('#globalCustomDropdownPortal');
+            if ($portal.length) {
+                $portal.addClass('hidden');
+            }
+            if ($activeTrigger && $activeTrigger.length) {
+                $activeTrigger.find('.fa-chevron-down').removeClass('rotate-180 text-brand-500');
+            }
+            $activeDropdown = null;
+            $activeTrigger = null;
+            $activeSelect = null;
+        }
+
+        window.enhanceSelectToProfessional = function($select, customBtnClasses) {
+            if (!$select || !$select.length) return;
+            
+            let $trigger = $select.siblings('.custom-select-trigger');
+            const selectedOpt = $select.find('option:selected');
+            const selectedText = selectedOpt.length ? selectedOpt.text().trim() : ($select.find('option').first().text().trim() || '-- Select --');
+
+            if ($trigger.length) {
+                $trigger.find('.trigger-label').text(selectedText);
+                return;
+            }
+
+            $select.addClass('hidden');
+
+            let btnClasses = customBtnClasses || 'w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 py-2.5 px-3.5 rounded-xl text-xs font-bold';
+            const isDisabled = $select.prop('disabled');
+            const disabledClasses = isDisabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : 'cursor-pointer hover:border-brand-500';
+
+            $trigger = $(`
+                <button type="button" class="custom-select-trigger group flex items-center justify-between gap-2 shadow-2xs transition-all outline-none select-none ${btnClasses} ${disabledClasses}">
+                    <span class="trigger-label truncate text-left rtl:text-right flex-1">${selectedText}</span>
+                    <i class="fas fa-chevron-down text-[10px] text-slate-400 group-hover:text-brand-500 transition-transform shrink-0"></i>
+                </button>
+            `);
+
+            $select.after($trigger);
+        };
+
+        // Global Delegated Click Handler for all custom-select-triggers
+        $(document).on('click', '.custom-select-trigger', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const $trigger = $(this);
+            const $select = $trigger.siblings('select').length ? $trigger.siblings('select') : $trigger.parent().find('select');
+            if (!$select.length) return;
+            if ($select.prop('disabled')) return;
+            openCustomDropdown($select, $trigger);
+        });
+
+        window.openCustomDropdown = openCustomDropdown;
+        window.closeCustomDropdown = closeCustomDropdown;
+    })();
+</script>
+
