@@ -829,23 +829,32 @@ namespace Exam.Services
             var examsByWave = waveExams.GroupBy(e => (int)e.WaveId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            // 3. All students assigned to these waves or having certificates in these waves
+            // 3. All students assigned to these waves or having certificates in these waves (strictly deduplicated)
             var students = (await conn.QueryAsync<dynamic>(@"
-                SELECT DISTINCT
-                    ISNULL(uw.WaveId, uwc.WaveId) AS WaveId,
+                WITH WaveUsers AS (
+                    SELECT uw.WaveId, uw.UserId 
+                    FROM dbo.UserWaves uw 
+                    WHERE uw.WaveId IN @WaveIds AND (uw.IsDeactivated IS NULL OR uw.IsDeactivated = 0)
+                    UNION
+                    SELECT uwc.WaveId, uwc.UserId 
+                    FROM dbo.UserWaveCertificates uwc 
+                    WHERE uwc.WaveId IN @WaveIds
+                )
+                SELECT 
+                    wu.WaveId,
                     u.Id               AS UserId,
                     ISNULL(u.FullName, u.UserName) AS StudentName,
                     u.Email            AS StudentEmail,
                     u.UserCode,
                     b.BranchName,
-                    r.Name             AS RoleName
-                FROM dbo.AspNetUsers u
-                LEFT JOIN dbo.UserWaves uw ON u.Id = uw.UserId AND uw.WaveId IN @WaveIds AND (uw.IsDeactivated IS NULL OR uw.IsDeactivated = 0)
-                LEFT JOIN dbo.UserWaveCertificates uwc ON u.Id = uwc.UserId AND uwc.WaveId IN @WaveIds
-                LEFT JOIN dbo.Branches b     ON b.Id = u.BranchId
-                LEFT JOIN dbo.AspNetUserRoles ur ON ur.UserId = u.Id
-                LEFT JOIN dbo.AspNetRoles r       ON r.Id = ur.RoleId
-                WHERE (uw.WaveId IN @WaveIds) OR (uwc.WaveId IN @WaveIds)",
+                    (SELECT TOP 1 r.Name 
+                     FROM dbo.AspNetUserRoles ur 
+                     JOIN dbo.AspNetRoles r ON r.Id = ur.RoleId 
+                     WHERE ur.UserId = u.Id 
+                     ORDER BY CASE WHEN r.Name IN ('Pharmacist', 'Assistant') THEN 0 ELSE 1 END) AS RoleName
+                FROM WaveUsers wu
+                INNER JOIN dbo.AspNetUsers u ON u.Id = wu.UserId
+                LEFT JOIN dbo.Branches b     ON b.Id = u.BranchId",
                 new { WaveIds = wIds })).ToList();
 
             // 4. All attempts for all exams in these waves (best/latest attempt per student per exam)
