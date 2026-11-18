@@ -32,9 +32,8 @@ namespace Exam.Models
         [Display(Name = "الشيفت")]
         public string Shift { get; set; }
         
-        [Required]
         [Display(Name = "رقم الموبايل")]
-        public string PhoneNumber { get; set; }
+        public string? PhoneNumber { get; set; } = string.Empty;
         
         [Display(Name = "الفرع")]
         public int? BranchId { get; set; }

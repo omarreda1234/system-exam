@@ -427,10 +427,18 @@
             return checked;
         }
 
+        let cachedSelectedBranches = new Set();
+        let cachedSelectedWaves = new Set();
+        let isAllBranchesSelected = true;
+        let isAllWavesSelected = true;
+
         function onBranchFilterChangeWavey() {
             let selected = getSelectedBranchesWavey();
             let total = $('.chk-branch-wavey').length;
-            if (selected.length === 0 || selected.length === total) {
+            isAllBranchesSelected = (selected.length === 0 || selected.length === total);
+            cachedSelectedBranches = new Set(selected.map(s => normStrWavey(s)));
+
+            if (isAllBranchesSelected) {
                 $('#lblBranchSelectedWavey').html('<span class="text-slate-500">All Branches</span>');
             } else if (selected.length === 1) {
                 $('#lblBranchSelectedWavey').html(`<span class="text-brand-600 font-extrabold">${selected[0]}</span>`);
@@ -443,7 +451,10 @@
         function onWaveFilterChangeWavey() {
             let selected = getSelectedWavesWavey();
             let total = $('.chk-wave-wavey').length;
-            if (selected.length === 0 || selected.length === total) {
+            isAllWavesSelected = (selected.length === 0 || selected.length === total);
+            cachedSelectedWaves = new Set(selected.map(s => normStrWavey(s)));
+
+            if (isAllWavesSelected) {
                 $('#lblWaveSelectedWavey').html('<span class="text-slate-500">All Waves</span>');
                 $('#waveFilter').val('-1');
             } else if (selected.length === 1) {
@@ -466,66 +477,66 @@
 
         const normStrWavey = s => (s || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
 
-        // DataTables Custom Multi-Select Filter for Wave & Branch
+        // Fast DataTables Custom Multi-Select Filter for Wave & Branch (O(1) Set lookups, no DOM queries)
         $.fn.dataTable.ext.search.push(
             function(settings, data, dataIndex) {
                 if (settings.nTable.id !== 'waveResultsTable') return true;
-                
-                const selBranches = getSelectedBranchesWavey();
-                const selWaves = getSelectedWavesWavey();
+                if (isAllBranchesSelected && isAllWavesSelected) return true;
 
-                const tr = settings.aoData[dataIndex] ? settings.aoData[dataIndex].nTr : null;
-                const rowBranch = (data[2] || '') + ' ' + (data[0] || '') + ' ' + (tr ? $(tr).attr('data-branch-name') || '' : '');
-                const rowWave = (data[1] || '') + ' ' + (tr ? ($(tr).attr('data-wave-name') || '') : '');
-                const rowWaveId = tr ? ($(tr).attr('data-wave-id') || '') : '';
-
-                let branchMatch = (selBranches.length === 0 || selBranches.length === $('.chk-branch-wavey').length);
-                if (!branchMatch) {
-                    const nRowBranch = normStrWavey(rowBranch);
-                    branchMatch = selBranches.some(b => {
-                        const nb = normStrWavey(b);
-                        return nRowBranch.includes(nb) || nb.includes(nRowBranch);
-                    });
+                if (!isAllBranchesSelected) {
+                    const rowBranch = normStrWavey(data[2]);
+                    let branchMatch = false;
+                    for (let b of cachedSelectedBranches) {
+                        if (rowBranch.includes(b) || b.includes(rowBranch)) {
+                            branchMatch = true;
+                            break;
+                        }
+                    }
+                    if (!branchMatch) return false;
                 }
 
-                let waveMatch = (selWaves.length === 0 || selWaves.length === $('.chk-wave-wavey').length);
-                if (!waveMatch) {
-                    const nRowWave = normStrWavey(rowWave);
-                    waveMatch = selWaves.some(w => {
-                        const nw = normStrWavey(w);
-                        return nRowWave.includes(nw) || nw.includes(nRowWave) || (rowWaveId && rowWaveId === w);
-                    });
+                if (!isAllWavesSelected) {
+                    const rowWave = normStrWavey(data[1]);
+                    let waveMatch = false;
+                    for (let w of cachedSelectedWaves) {
+                        if (rowWave.includes(w) || w.includes(rowWave)) {
+                            waveMatch = true;
+                            break;
+                        }
+                    }
+                    if (!waveMatch) return false;
                 }
 
-                return branchMatch && waveMatch;
+                return true;
             }
         );
 
         function updateSummaryCardsWavey() {
             if (!window.waveyTable) return;
-            const rows = window.waveyTable.rows({ search: 'applied' }).nodes();
-            let total = rows.length;
+            const rowsData = window.waveyTable.rows({ search: 'applied' }).data();
+            let total = rowsData.length;
             let completed = 0;
             let incomplete = 0;
             let totalScore = 0;
             let totalAvailable = 0;
 
-            $(rows).each(function() {
-                const status = ($(this).find('.status-cell').length ? $(this).find('.status-cell').text() : $(this).find('td:nth-child(5)').text()).trim().toLowerCase();
+            for (let i = 0; i < total; i++) {
+                const row = rowsData[i];
+                const status = (row[4] || '').toLowerCase();
                 if (status.includes('completed')) completed++;
                 else incomplete++;
 
-                const scoreText = ($(this).find('.score-cell').length ? $(this).find('.score-cell').text() : $(this).find('td:nth-child(9)').text()).trim();
-                const parts = scoreText.split('/');
-                if (parts.length === 2) {
-                    const sc = parseFloat(parts[0]);
-                    const av = parseFloat(parts[1]);
+                const scoreText = (row[8] || '');
+                const match = scoreText.match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/);
+                if (match) {
+                    const sc = parseFloat(match[1]);
+                    const av = parseFloat(match[2]);
                     if (!isNaN(sc) && !isNaN(av) && av > 0) {
                         totalScore += sc;
                         totalAvailable += av;
                     }
                 }
-            });
+            }
 
             let avg = totalAvailable > 0 ? (totalScore / totalAvailable * 100) : 0;
             $('#summaryTotal').text(total);
@@ -541,6 +552,7 @@
                 window.waveyTable = $('#waveResultsTable').DataTable({
                     pageLength: 25,
                     responsive: true,
+                    deferRender: true,
                     language: { search: "", searchPlaceholder: "Search student, branch..." }
                 });
             }

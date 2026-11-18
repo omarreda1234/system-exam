@@ -71,8 +71,22 @@ namespace Exam.Controllers
         [HttpGet]
         public async Task<IActionResult> Apply()
         {
-            ViewBag.Branches = await _examService.GetAllBranchesAsync();
+            using var conn = new Microsoft.Data.SqlClient.SqlConnection(_connectionString);
+            await PopulateApplyViewBagAsync(conn);
             return View(new Models.RegistrationRequest());
+        }
+
+        private async Task PopulateApplyViewBagAsync(Microsoft.Data.SqlClient.SqlConnection conn)
+        {
+            ViewBag.Branches = await _examService.GetAllBranchesAsync();
+            try
+            {
+                ViewBag.Shifts = (await conn.QueryAsync<dynamic>("SELECT Id, ShiftName, StartTime, EndTime FROM Shifts ORDER BY ShiftName ASC")).ToList();
+            }
+            catch
+            {
+                ViewBag.Shifts = new List<dynamic>();
+            }
         }
 
         [HttpPost]
@@ -81,7 +95,8 @@ namespace Exam.Controllers
         {
             if (string.IsNullOrEmpty(request.FullName) || string.IsNullOrEmpty(request.Email))
             {
-                ViewBag.Branches = await _examService.GetAllBranchesAsync();
+                using var connErr = new Microsoft.Data.SqlClient.SqlConnection(_connectionString);
+                await PopulateApplyViewBagAsync(connErr);
                 ModelState.AddModelError("", "رجاءً ملء جميع الحقول المطلوبة.");
                 return View(request);
             }
@@ -96,7 +111,7 @@ namespace Exam.Controllers
 
             if (existingUserCount > 0)
             {
-                ViewBag.Branches = await _examService.GetAllBranchesAsync();
+                await PopulateApplyViewBagAsync(conn);
                 ModelState.AddModelError("", "هذا البريد الإلكتروني أو كود المستخدم (UserCode) مسجل بالفعل بالنظام. يمكنك تسجيل الدخول مباشرة بدلاً من إنشاء حساب جديد.");
                 return View(request);
             }
@@ -109,9 +124,14 @@ namespace Exam.Controllers
 
             if (existingReqCount > 0)
             {
-                ViewBag.Branches = await _examService.GetAllBranchesAsync();
+                await PopulateApplyViewBagAsync(conn);
                 ModelState.AddModelError("", "يوجد طلب تسجيل معلق بالفعل بنفس البريد الإلكتروني أو كود المستخدم تحت المراجعة.");
                 return View(request);
+            }
+
+            if (string.IsNullOrEmpty(request.PhoneNumber))
+            {
+                request.PhoneNumber = "";
             }
 
             var sql = @"
@@ -121,7 +141,7 @@ namespace Exam.Controllers
             await conn.ExecuteAsync(sql, request);
 
             ViewBag.ShowSuccess = true;
-            ViewBag.Branches = await _examService.GetAllBranchesAsync();
+            await PopulateApplyViewBagAsync(conn);
             return View(new Models.RegistrationRequest());
         }
 

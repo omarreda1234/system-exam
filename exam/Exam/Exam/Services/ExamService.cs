@@ -780,38 +780,38 @@ namespace Exam.Services
         /// </summary>
         public async Task<IEnumerable<Exam.DTOs.WaveStudentResultDto>> GetWaveAggregateResultsAsync(int waveId)
         {
+            return await GetWaveAggregateResultsBatchAsync(new[] { waveId });
+        }
+
+        public async Task<IEnumerable<Exam.DTOs.WaveStudentResultDto>> GetWaveAggregateResultsBatchAsync(IEnumerable<int> waveIds)
+        {
+            var wIds = waveIds?.Distinct().Where(id => id > 0).ToList() ?? new List<int>();
+            if (!wIds.Any()) return Enumerable.Empty<Exam.DTOs.WaveStudentResultDto>();
+
             using var conn = new SqlConnection(_connectionString);
             await conn.OpenAsync();
 
-            // 1. Get wave name
-            var waveName = await conn.QueryFirstOrDefaultAsync<string>(
-                "SELECT WaveName FROM TrainingWaves WHERE Id = @WaveId",
-                new { WaveId = waveId });
+            // 1. Get wave names
+            var waveRows = (await conn.QueryAsync<dynamic>(
+                "SELECT Id, WaveName FROM TrainingWaves WHERE Id IN @WaveIds",
+                new { WaveIds = wIds })).ToList();
+            var waveNames = waveRows.ToDictionary(x => (int)x.Id, x => (string)x.WaveName);
 
-            // 2. All exams in this wave with details
+            // 2. All exams in these waves with details
             var waveExams = (await conn.QueryAsync<dynamic>(@"
-                SELECT E.Id, E.TotalPoints, E.TotalQuestionsToShow, ET.TypeName AS ExamType, E.IsFinalExam 
+                SELECT E.Id, E.WaveId, E.TotalPoints, E.TotalQuestionsToShow, ET.TypeName AS ExamType, E.IsFinalExam 
                 FROM Exams E 
                 LEFT JOIN ExamTypes ET ON E.ExamTypeId = ET.Id 
-                WHERE E.WaveId = @WaveId",
-                new { WaveId = waveId })).ToList();
+                WHERE E.WaveId IN @WaveIds",
+                new { WaveIds = wIds })).ToList();
 
-            int totalExamsInWave = waveExams.Count;
+            var examsByWave = waveExams.GroupBy(e => (int)e.WaveId)
+                .ToDictionary(g => g.Key, g => g.ToList());
 
-            var examIds = waveExams.Select(e => (int)e.Id).ToList();
-            var rules = new List<dynamic>();
-            if (examIds.Any())
-            {
-                rules = (await conn.QueryAsync<dynamic>(@"
-                    SELECT ExamId, EasyCount, MediumCount, HardCount, CategoryId, TargetRole 
-                    FROM ExamGenerationRules 
-                    WHERE ExamId IN @ExamIds", 
-                    new { ExamIds = examIds })).ToList();
-            }
-
-            // 3. All students assigned to this wave or having certificates in this wave
+            // 3. All students assigned to these waves or having certificates in these waves
             var students = (await conn.QueryAsync<dynamic>(@"
                 SELECT DISTINCT
+                    ISNULL(uw.WaveId, uwc.WaveId) AS WaveId,
                     u.Id               AS UserId,
                     ISNULL(u.FullName, u.UserName) AS StudentName,
                     u.Email            AS StudentEmail,
@@ -819,17 +819,18 @@ namespace Exam.Services
                     b.BranchName,
                     r.Name             AS RoleName
                 FROM dbo.AspNetUsers u
-                LEFT JOIN dbo.UserWaves uw ON u.Id = uw.UserId AND uw.WaveId = @WaveId AND (uw.IsDeactivated IS NULL OR uw.IsDeactivated = 0)
-                LEFT JOIN dbo.UserWaveCertificates uwc ON u.Id = uwc.UserId AND uwc.WaveId = @WaveId
+                LEFT JOIN dbo.UserWaves uw ON u.Id = uw.UserId AND uw.WaveId IN @WaveIds AND (uw.IsDeactivated IS NULL OR uw.IsDeactivated = 0)
+                LEFT JOIN dbo.UserWaveCertificates uwc ON u.Id = uwc.UserId AND uwc.WaveId IN @WaveIds
                 LEFT JOIN dbo.Branches b     ON b.Id = u.BranchId
                 LEFT JOIN dbo.AspNetUserRoles ur ON ur.UserId = u.Id
                 LEFT JOIN dbo.AspNetRoles r       ON r.Id = ur.RoleId
-                WHERE uw.UserId IS NOT NULL OR uwc.UserId IS NOT NULL",
-                new { WaveId = waveId })).ToList();
+                WHERE (uw.WaveId IN @WaveIds) OR (uwc.WaveId IN @WaveIds)",
+                new { WaveIds = wIds })).ToList();
 
-            // 4. All attempts for all exams in this wave (best attempt per student per exam)
+            // 4. All attempts for all exams in these waves (best/latest attempt per student per exam)
             var allAttempts = (await conn.QueryAsync<dynamic>(@"
                 SELECT 
+                    e.WaveId,
                     uea.UserId,
                     uea.ExamId,
                     uea.Status,
@@ -841,47 +842,60 @@ namespace Exam.Services
                     uea.StartTime,
                     uea.EndTime,
                     uea.DurationInMinutes,
-                    ROW_NUMBER() OVER (PARTITION BY uea.UserId, uea.ExamId ORDER BY uea.AttemptNumber DESC) AS rn
+                    ROW_NUMBER() OVER (PARTITION BY e.WaveId, uea.UserId, uea.ExamId ORDER BY uea.AttemptNumber DESC) AS rn
                 FROM UserExamAttempts uea
                 INNER JOIN Exams e ON e.Id = uea.ExamId
-                WHERE e.WaveId = @WaveId",
-                new { WaveId = waveId })).ToList();
+                WHERE e.WaveId IN @WaveIds",
+                new { WaveIds = wIds })).ToList();
 
-            // Keep only latest attempt per (user, exam)
             var latestAttempts = allAttempts.Where(a => (int)a.rn == 1).ToList();
+            var attemptsByWaveAndUser = latestAttempts
+                .GroupBy(a => ((int)a.WaveId, (string)a.UserId))
+                .ToDictionary(g => g.Key, g => g.ToList());
 
-            // Fetch seen question points for all attempts in this wave
+            // 5. Fetch seen question points for all attempts in these waves
             var seenPointsList = (await conn.QueryAsync<dynamic>(@"
                 SELECT usq.AttemptId, SUM(q.Points) AS SeenPoints
                 FROM UserSeenQuestions usq
                 JOIN Questions q ON usq.QuestionId = q.Id
                 JOIN UserExamAttempts uea ON usq.AttemptId = uea.Id
                 INNER JOIN Exams e ON e.Id = uea.ExamId
-                WHERE e.WaveId = @WaveId
+                WHERE e.WaveId IN @WaveIds
                 GROUP BY usq.AttemptId",
-                new { WaveId = waveId })).ToList();
+                new { WaveIds = wIds })).ToList();
             
             var attemptSeenPoints = seenPointsList.ToDictionary(
                 x => (int)x.AttemptId,
                 x => (decimal)x.SeenPoints
             );
 
-            // Fetch all wave certificates for this wave
+            // 6. Fetch all wave certificates for these waves
             var waveCerts = (await conn.QueryAsync<dynamic>(@"
-                SELECT UserId, CertificateCode, Score 
+                SELECT WaveId, UserId, CertificateCode, Score 
                 FROM dbo.UserWaveCertificates 
-                WHERE WaveId = @WaveId",
-                new { WaveId = waveId })).ToList();
+                WHERE WaveId IN @WaveIds",
+                new { WaveIds = wIds })).ToList();
+
+            var waveCertsByWaveAndUser = waveCerts
+                .GroupBy(c => ((int)c.WaveId, (string)c.UserId))
+                .ToDictionary(g => g.Key, g => g.First());
 
             var results = new List<Exam.DTOs.WaveStudentResultDto>();
 
             foreach (var student in students)
             {
+                int waveId = Convert.ToInt32(student.WaveId);
                 string userId = (string)student.UserId;
                 string roleName = (string)student.RoleName ?? "";
+                string waveName = waveNames.ContainsKey(waveId) ? waveNames[waveId] : $"Wave #{waveId}";
 
-                var studentAttempts = latestAttempts.Where(a => (string)a.UserId == userId).ToList();
-                var targetExam = waveExams.FirstOrDefault(e => e.IsFinalExam != null && (bool)e.IsFinalExam) ?? waveExams.FirstOrDefault();
+                examsByWave.TryGetValue(waveId, out var currentWaveExams);
+                currentWaveExams ??= new List<dynamic>();
+
+                attemptsByWaveAndUser.TryGetValue((waveId, userId), out var studentAttempts);
+                studentAttempts ??= new List<dynamic>();
+
+                var targetExam = currentWaveExams.FirstOrDefault(e => e.IsFinalExam != null && (bool)e.IsFinalExam) ?? currentWaveExams.FirstOrDefault();
 
                 int examsCompleted = 0;
                 int examsAssigned = targetExam != null ? 1 : 0;
@@ -891,7 +905,7 @@ namespace Exam.Services
                     ? studentAttempts.FirstOrDefault(a => (int)a.ExamId == (int)targetExam.Id)
                     : null;
 
-                var waveCert = waveCerts.FirstOrDefault(c => (string)c.UserId == userId);
+                waveCertsByWaveAndUser.TryGetValue((waveId, userId), out var waveCert);
                 string certCode = null;
                 double percentage = 0.0;
 
@@ -921,7 +935,7 @@ namespace Exam.Services
                 {
                     examsCompleted = 1;
                     examsAssigned = 1;
-                    certCode = waveCert.CertificateCode;
+                    certCode = (string)waveCert.CertificateCode;
                     if (attemptStatus == "Not Started") attemptStatus = "Completed";
 
                     if (waveCert.Score != null)
@@ -944,8 +958,8 @@ namespace Exam.Services
                         }
                         else
                         {
-                            int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
-                            studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
+                            int questionsToShow = targetExam?.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
+                            studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam?.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
                         }
                         percentage = studentTotalAvailablePoints > 0 ? (double)(totalScore / studentTotalAvailablePoints) * 100 : 0;
                     }
@@ -966,8 +980,8 @@ namespace Exam.Services
                         }
                         else
                         {
-                            int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
-                            studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
+                            int questionsToShow = targetExam?.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
+                            studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam?.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
                         }
                     }
                     else if (targetExam != null)

@@ -850,11 +850,7 @@ namespace Exam.Controllers
                     if (month.HasValue && month.Value > 0)
                         targetWaves = targetWaves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Month == month.Value).ToList();
 
-                    foreach (var w in targetWaves)
-                    {
-                        var res = await _examService.GetWaveAggregateResultsAsync(w.Id);
-                        results.AddRange(res);
-                    }
+                    results = (await _examService.GetWaveAggregateResultsBatchAsync(targetWaves.Select(w => w.Id))).ToList();
                 }
                 else
                 {
@@ -1285,13 +1281,15 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
             int selectedWaveId = waveId ?? -1;
             ViewBag.SelectedWaveId = selectedWaveId;
 
-            List<Exam.DTOs.WaveStudentResultDto> allResults = new List<Exam.DTOs.WaveStudentResultDto>();
-
-            var tasks = waves.Select(w => _examService.GetWaveAggregateResultsAsync(w.Id));
-            var resultsArray = await Task.WhenAll(tasks);
-            foreach (var res in resultsArray)
+            List<Exam.DTOs.WaveStudentResultDto> allResults;
+            if (selectedWaveId > 0)
             {
-                allResults.AddRange(res);
+                allResults = (await _examService.GetWaveAggregateResultsBatchAsync(new[] { selectedWaveId })).ToList();
+            }
+            else
+            {
+                var waveIdsToFetch = waves.Select(w => w.Id);
+                allResults = (await _examService.GetWaveAggregateResultsBatchAsync(waveIdsToFetch)).ToList();
             }
 
             // Branch manager restriction

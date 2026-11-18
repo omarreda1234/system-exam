@@ -85,6 +85,7 @@ namespace Exam.Services
         // Admin filtering: exams types/waves
         Task<IEnumerable<Exam.DTOs.WaveDto>> GetAllWavesAsync();
         Task<IEnumerable<Exam.DTOs.WaveStudentResultDto>> GetWaveAggregateResultsAsync(int waveId);
+        Task<IEnumerable<Exam.DTOs.WaveStudentResultDto>> GetWaveAggregateResultsBatchAsync(IEnumerable<int> waveIds);
         Task<IEnumerable<Exam.DTOs.LiveMonitorRowDto>> GetLiveMonitorDataAsync(
             int? branchId = null, int? shiftId = null, string roleName = null,
             string status = null, int? waveId = null, DateTime? date = null, int? examId = null);
