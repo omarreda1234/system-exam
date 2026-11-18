@@ -165,11 +165,32 @@ namespace Exam.Services
                     var ruleExcluded = seenIds.Concat(selected.Select(q => q.QuestionId)).ToList();
                     if (!ruleExcluded.Any()) ruleExcluded.Add(-1);
 
-                    var d3Ids = await conn.QueryAsync<int>(ruleSql, new { Limit = rule.HardCount, CategoryId = rule.CategoryId, TopicId = rule.TopicId, Diff = 3, Excluded = ruleExcluded });
-                    var d2Ids = await conn.QueryAsync<int>(ruleSql, new { Limit = rule.MediumCount, CategoryId = rule.CategoryId, TopicId = rule.TopicId, Diff = 2, Excluded = ruleExcluded });
-                    var d1Ids = await conn.QueryAsync<int>(ruleSql, new { Limit = rule.EasyCount, CategoryId = rule.CategoryId, TopicId = rule.TopicId, Diff = 1, Excluded = ruleExcluded });
+                    var d3Ids = (await conn.QueryAsync<int>(ruleSql, new { Limit = rule.HardCount, CategoryId = rule.CategoryId, TopicId = rule.TopicId, Diff = 3, Excluded = ruleExcluded })).ToList();
+                    ruleExcluded.AddRange(d3Ids);
+
+                    var d2Ids = (await conn.QueryAsync<int>(ruleSql, new { Limit = rule.MediumCount, CategoryId = rule.CategoryId, TopicId = rule.TopicId, Diff = 2, Excluded = ruleExcluded })).ToList();
+                    ruleExcluded.AddRange(d2Ids);
+
+                    var d1Ids = (await conn.QueryAsync<int>(ruleSql, new { Limit = rule.EasyCount, CategoryId = rule.CategoryId, TopicId = rule.TopicId, Diff = 1, Excluded = ruleExcluded })).ToList();
+                    ruleExcluded.AddRange(d1Ids);
 
                     var allRuleIds = d3Ids.Concat(d2Ids).Concat(d1Ids).ToList();
+                    int totalTargetForRule = rule.HardCount + rule.MediumCount + rule.EasyCount;
+                    if (allRuleIds.Count < totalTargetForRule)
+                    {
+                        // Deficit fallback: if specific difficulty counts were not met (e.g. topic has no Easy/Medium), fill remaining from same topic/category
+                        int deficit = totalTargetForRule - allRuleIds.Count;
+                        var fallbackSql = @"
+                            SELECT TOP (@Limit) Q.Id
+                            FROM Questions Q
+                            WHERE Q.CategoryId = @CategoryId
+                            AND (@TopicId IS NULL OR Q.TopicId = @TopicId)
+                            AND Q.Id NOT IN @Excluded
+                            ORDER BY NEWID()";
+                        var extraIds = (await conn.QueryAsync<int>(fallbackSql, new { Limit = deficit, CategoryId = rule.CategoryId, TopicId = rule.TopicId, Excluded = ruleExcluded })).ToList();
+                        allRuleIds.AddRange(extraIds);
+                        ruleExcluded.AddRange(extraIds);
+                    }
                     if (allRuleIds.Any())
                     {
                         var ruleRows = await conn.QueryAsync<dynamic>(@"
