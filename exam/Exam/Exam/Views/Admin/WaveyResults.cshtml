@@ -289,39 +289,57 @@
                         </td>
                         <td class="score-cell">
                             <div class="flex flex-col">
-                                @if (s.TotalAvailable > 0)
-                                {
-                                    <span class="text-brand-600 dark:text-brand-400 text-sm font-bold font-mono">
-                                        @s.TotalScore.ToString("0") / @s.TotalAvailable.ToString("0")
-                                    </span>
-                                }
-                                else if (!string.IsNullOrEmpty(s.CertificateCode))
-                                {
-                                    <span class="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">Cert Uploaded</span>
-                                }
-                                else
-                                {
-                                    <span class="text-slate-400 text-xs">--</span>
+                                @{
+                                    bool hasCert = !string.IsNullOrWhiteSpace(s.CertificateCode) && s.CertificateCode.Trim() != "/";
+                                    if (s.TotalAvailable > 0)
+                                    {
+                                        <span class="text-brand-600 dark:text-brand-400 text-sm font-bold font-mono">
+                                            @s.TotalScore.ToString("0.##") / @s.TotalAvailable.ToString("0")
+                                        </span>
+                                        if (hasCert)
+                                        {
+                                            <span class="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold flex items-center gap-1 mt-0.5" title="@s.CertificateCode">
+                                                <i class="fas fa-check-circle text-[8px]"></i> Cert Uploaded
+                                            </span>
+                                        }
+                                    }
+                                    else if (hasCert)
+                                    {
+                                        <span class="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold flex items-center gap-1" title="@s.CertificateCode">
+                                            <i class="fas fa-check-circle text-[8px]"></i> Cert Uploaded
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-slate-400 text-xs">--</span>
+                                    }
                                 }
                             </div>
                         </td>
                         <td>
-                            @{
-                                if (s.TotalAvailable > 0)
-                                {
-                                    double pct = (double)(s.TotalScore / s.TotalAvailable) * 100;
-                                    string pctColor = pct >= 75 ? "text-emerald-600" : pct >= 70 ? "text-blue-600" : "text-rose-500";
-                                    <span class="font-black text-sm @pctColor">@pct.ToString("0.0")%</span>
+                            <div class="flex flex-col">
+                                @{
+                                    bool isCertStudent = (!string.IsNullOrWhiteSpace(s.CertificateCode) && s.CertificateCode.Trim() != "/") || s.WaveStatus == "CERTIFIED";
+                                    if (s.TotalAvailable > 0)
+                                    {
+                                        double pct = (double)(s.TotalScore / s.TotalAvailable) * 100;
+                                        string pctColor = pct >= 75 ? "text-emerald-600" : pct >= 70 ? "text-blue-600" : "text-rose-500";
+                                        <span class="font-black text-sm @pctColor">@pct.ToString("0.0")%</span>
+                                        if (isCertStudent)
+                                        {
+                                            <span class="text-emerald-600 dark:text-emerald-400 font-black text-[10px] uppercase tracking-wider mt-0.5">Certified</span>
+                                        }
+                                    }
+                                    else if (isCertStudent)
+                                    {
+                                        <span class="text-emerald-600 dark:text-emerald-400 font-bold text-xs">Certified</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-slate-400 text-xs">--</span>
+                                    }
                                 }
-                                else if (!string.IsNullOrEmpty(s.CertificateCode))
-                                {
-                                    <span class="text-emerald-600 dark:text-emerald-400 font-bold text-xs">Certified</span>
-                                }
-                                else
-                                {
-                                    <span class="text-slate-400 text-xs">--</span>
-                                }
-                            }
+                            </div>
                         </td>
 
                         <td class="text-right px-8">
