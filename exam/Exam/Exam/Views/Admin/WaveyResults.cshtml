@@ -429,6 +429,7 @@
 
         let cachedSelectedBranches = new Set();
         let cachedSelectedWaves = new Set();
+        let cachedSelectedWaveIds = new Set();
         let isAllBranchesSelected = true;
         let isAllWavesSelected = true;
 
@@ -436,7 +437,7 @@
             let selected = getSelectedBranchesWavey();
             let total = $('.chk-branch-wavey').length;
             isAllBranchesSelected = (selected.length === 0 || selected.length === total);
-            cachedSelectedBranches = new Set(selected.map(s => normStrWavey(s)));
+            cachedSelectedBranches = new Set(selected.map(s => normStrWavey(s)).filter(s => s && s.length > 0));
 
             if (isAllBranchesSelected) {
                 $('#lblBranchSelectedWavey').html('<span class="text-slate-500">All Branches</span>');
@@ -449,61 +450,60 @@
         }
 
         function onWaveFilterChangeWavey() {
-            let selected = getSelectedWavesWavey();
+            let selectedNames = [];
+            let selectedIds = [];
+            $('.chk-wave-wavey:checked').each(function() {
+                selectedNames.push($(this).val().toUpperCase());
+                let wid = $(this).attr('data-wave-id');
+                if (wid) selectedIds.push(String(wid));
+            });
             let total = $('.chk-wave-wavey').length;
-            isAllWavesSelected = (selected.length === 0 || selected.length === total);
-            cachedSelectedWaves = new Set(selected.map(s => normStrWavey(s)));
+            isAllWavesSelected = (selectedNames.length === 0 || selectedNames.length === total);
+            cachedSelectedWaves = new Set(selectedNames.map(s => normStrWavey(s)));
+            cachedSelectedWaveIds = new Set(selectedIds);
 
             if (isAllWavesSelected) {
                 $('#lblWaveSelectedWavey').html('<span class="text-slate-500">All Waves</span>');
                 $('#waveFilter').val('-1');
-            } else if (selected.length === 1) {
+            } else if (selectedNames.length === 1) {
                 let $chk = $('.chk-wave-wavey:checked').first();
-                let waveName = $chk.attr('data-wave-name') || selected[0];
+                let waveName = $chk.attr('data-wave-name') || selectedNames[0];
                 let waveId = $chk.attr('data-wave-id') || '-1';
                 $('#lblWaveSelectedWavey').html(`<span class="text-brand-600 font-extrabold">${waveName}</span>`);
                 $('#waveFilter').val(waveId);
             } else {
-                $('#lblWaveSelectedWavey').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selected.length} Selected</span>`);
-                let waveIds = [];
-                $('.chk-wave-wavey:checked').each(function() {
-                    let wid = $(this).attr('data-wave-id');
-                    if (wid) waveIds.push(wid);
-                });
-                $('#waveFilter').val(waveIds.join(','));
+                $('#lblWaveSelectedWavey').html(`<span class="px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 font-extrabold text-[10px]">${selectedNames.length} Selected</span>`);
+                $('#waveFilter').val(selectedIds.join(','));
             }
             if (window.waveyTable) window.waveyTable.draw();
         }
 
         const normStrWavey = s => (s || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
 
-        // Fast DataTables Custom Multi-Select Filter for Wave & Branch (O(1) Set lookups, no DOM queries)
+        // Fast DataTables Custom Multi-Select Filter for Wave & Branch (O(1) Set lookups, exact matching)
         $.fn.dataTable.ext.search.push(
             function(settings, data, dataIndex) {
                 if (settings.nTable.id !== 'waveResultsTable') return true;
                 if (isAllBranchesSelected && isAllWavesSelected) return true;
 
+                const rowNode = (settings.aoData && settings.aoData[dataIndex]) ? settings.aoData[dataIndex].nTr : null;
+
                 if (!isAllBranchesSelected) {
                     const rowBranch = normStrWavey(data[2]);
-                    let branchMatch = false;
-                    for (let b of cachedSelectedBranches) {
-                        if (rowBranch.includes(b) || b.includes(rowBranch)) {
-                            branchMatch = true;
-                            break;
-                        }
-                    }
+                    const rowBranchAttr = rowNode ? normStrWavey(rowNode.getAttribute('data-branch-name')) : '';
+                    const branchMatch = (rowBranch && cachedSelectedBranches.has(rowBranch)) ||
+                                        (rowBranchAttr && cachedSelectedBranches.has(rowBranchAttr));
                     if (!branchMatch) return false;
                 }
 
                 if (!isAllWavesSelected) {
+                    const rowWaveId = rowNode ? String(rowNode.getAttribute('data-wave-id') || '') : '';
                     const rowWave = normStrWavey(data[1]);
-                    let waveMatch = false;
-                    for (let w of cachedSelectedWaves) {
-                        if (rowWave.includes(w) || w.includes(rowWave)) {
-                            waveMatch = true;
-                            break;
-                        }
-                    }
+                    const rowWaveAttr = rowNode ? normStrWavey(rowNode.getAttribute('data-wave-name')) : '';
+
+                    const waveMatch = (rowWaveId && cachedSelectedWaveIds.has(rowWaveId)) ||
+                                      (rowWave && cachedSelectedWaves.has(rowWave)) ||
+                                      (rowWaveAttr && cachedSelectedWaves.has(rowWaveAttr));
                     if (!waveMatch) return false;
                 }
 
