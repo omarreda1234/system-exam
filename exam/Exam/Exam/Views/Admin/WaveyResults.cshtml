@@ -592,7 +592,20 @@
 
         // Export
         $('#btnExport').on('click', function () {
-            window.location = '/Admin/ExportWaveResultsToExcel?year=' + $('#yearFilter').val() + '&month=' + $('#monthFilter').val();
+            const year = $('#yearFilter').val() || 0;
+            const month = $('#monthFilter').val() || 0;
+            const waveFilterVal = $('#waveFilter').val() || '-1';
+
+            let branchParam = '';
+            if (typeof isAllBranchesSelected !== 'undefined' && !isAllBranchesSelected) {
+                let selectedBranches = getSelectedBranchesWavey();
+                if (selectedBranches && selectedBranches.length > 0) {
+                    branchParam = '&branches=' + encodeURIComponent(selectedBranches.join(','));
+                }
+            }
+
+            let url = '/Admin/ExportWaveResultsToExcel?waveIds=' + encodeURIComponent(waveFilterVal) + '&year=' + year + '&month=' + month + branchParam;
+            window.location = url;
         });
 
         $('#btnShowUnassignedModal').on('click', function () {

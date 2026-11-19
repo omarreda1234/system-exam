@@ -833,30 +833,58 @@ namespace Exam.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> ExportWaveResultsToExcel(int waveId, int? month = null, int? year = null, int? branchId = null)
+        public async Task<IActionResult> ExportWaveResultsToExcel(int? waveId = null, string? waveIds = null, int? month = null, int? year = null, int? branchId = null, string? branches = null)
         {
             try
             {
-                var waves = (await _examService.GetAllWavesAsync()).ToList();
-                string waveName = "Wave";
-                List<Exam.DTOs.WaveStudentResultDto> results = new List<Exam.DTOs.WaveStudentResultDto>();
+                var allWaves = (await _examService.GetAllWavesAsync()).ToList();
+                var targetWaves = allWaves;
 
-                if (waveId == -1)
+                if (year.HasValue && year.Value > 0)
+                    targetWaves = targetWaves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Year == year.Value).ToList();
+                if (month.HasValue && month.Value > 0)
+                    targetWaves = targetWaves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Month == month.Value).ToList();
+
+                List<int> selectedWaveIds = new List<int>();
+                string waveName = "All_Waves";
+
+                if (!string.IsNullOrWhiteSpace(waveIds))
                 {
-                    waveName = "All_Waves";
-                    var targetWaves = waves;
-                    if (year.HasValue && year.Value > 0)
-                        targetWaves = targetWaves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Year == year.Value).ToList();
-                    if (month.HasValue && month.Value > 0)
-                        targetWaves = targetWaves.Where(w => w.StartDate.HasValue && w.StartDate.Value.Month == month.Value).ToList();
+                    var idTokens = waveIds.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var token in idTokens)
+                    {
+                        if (int.TryParse(token.Trim(), out int wid))
+                        {
+                            if (wid > 0) selectedWaveIds.Add(wid);
+                        }
+                    }
+                }
 
-                    results = (await _examService.GetWaveAggregateResultsBatchAsync(targetWaves.Select(w => w.Id))).ToList();
+                if (!selectedWaveIds.Any() && waveId.HasValue && waveId.Value > 0)
+                {
+                    selectedWaveIds.Add(waveId.Value);
+                }
+
+                List<Exam.DTOs.WaveStudentResultDto> results;
+
+                if (selectedWaveIds.Any())
+                {
+                    if (selectedWaveIds.Count == 1)
+                    {
+                        var waveInfo = allWaves.FirstOrDefault(w => w.Id == selectedWaveIds[0]);
+                        waveName = waveInfo?.WaveName ?? $"Wave_{selectedWaveIds[0]}";
+                    }
+                    else
+                    {
+                        waveName = $"{selectedWaveIds.Count}_Waves";
+                    }
+                    results = (await _examService.GetWaveAggregateResultsBatchAsync(selectedWaveIds)).ToList();
                 }
                 else
                 {
-                    var waveInfo = waves.FirstOrDefault(w => w.Id == waveId);
-                    waveName = waveInfo?.WaveName ?? "Wave";
-                    results = (await _examService.GetWaveAggregateResultsAsync(waveId)).ToList();
+                    // No specific wave selected or -1/0 -> fetch all target waves
+                    var targetIds = targetWaves.Select(w => w.Id).ToList();
+                    results = (await _examService.GetWaveAggregateResultsBatchAsync(targetIds)).ToList();
                 }
 
                 // Branch manager restriction
@@ -884,14 +912,27 @@ namespace Exam.Controllers
                     }
                 }
 
-                // User branch filter
+                // User branch filter by Id
                 if (branchId.HasValue && branchId.Value > 0)
                 {
-                    var branches = await _examService.GetAllBranchesAsync();
-                    var selectedBranch = branches.FirstOrDefault(b => b.Id == branchId.Value.ToString());
+                    var allBranches = await _examService.GetAllBranchesAsync();
+                    var selectedBranch = allBranches.FirstOrDefault(b => b.Id == branchId.Value.ToString());
                     if (selectedBranch != null)
                     {
                         results = results.Where(r => string.Equals(r.BranchName, selectedBranch.BranchName, StringComparison.OrdinalIgnoreCase)).ToList();
+                    }
+                }
+
+                // User multi-branch filter by names
+                if (!string.IsNullOrWhiteSpace(branches) && !branches.Equals("all", StringComparison.OrdinalIgnoreCase))
+                {
+                    var branchTokens = branches.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(b => b.Trim().ToLowerInvariant())
+                        .ToHashSet();
+
+                    if (branchTokens.Any())
+                    {
+                        results = results.Where(r => branchTokens.Contains((r.BranchName ?? "").Trim().ToLowerInvariant())).ToList();
                     }
                 }
 
