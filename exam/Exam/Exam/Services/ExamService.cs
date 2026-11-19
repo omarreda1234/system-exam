@@ -925,12 +925,25 @@ namespace Exam.Services
                 attemptsByWaveAndUser.TryGetValue((waveId, userId), out var studentAttempts);
                 studentAttempts ??= new List<dynamic>();
 
-                var targetExam = currentWaveExams.FirstOrDefault(e => e.IsFinalExam != null && (bool)e.IsFinalExam) ?? currentWaveExams.FirstOrDefault();
+                bool isAssistant = roleName.ToLower().Contains("assistant") || roleName.Contains("مساعد");
+                var attemptExam = studentAttempts.FirstOrDefault() != null 
+                    ? currentWaveExams.FirstOrDefault(e => (int)e.Id == (int)studentAttempts.First().ExamId)
+                    : null;
+                var roleExam = currentWaveExams.FirstOrDefault(e => 
+                    isAssistant 
+                        ? ((string)e.TypeName ?? "").ToLower().Contains("assistant") || ((string)e.TypeName ?? "").Contains("مساعد") || ((string)e.ExamType ?? "").ToLower().Contains("assistant")
+                        : !(((string)e.TypeName ?? "").ToLower().Contains("assistant") || ((string)e.TypeName ?? "").Contains("مساعد") || ((string)e.ExamType ?? "").ToLower().Contains("assistant"))
+                );
+
+                var targetExam = attemptExam 
+                    ?? currentWaveExams.FirstOrDefault(e => e.IsFinalExam != null && (bool)e.IsFinalExam) 
+                    ?? roleExam 
+                    ?? currentWaveExams.FirstOrDefault();
 
                 int examsCompleted = 0;
                 int examsAssigned = targetExam != null ? 1 : 0;
                 decimal totalScore = 0;
-                decimal studentTotalAvailablePoints = 0;
+                decimal studentTotalAvailablePoints = 100.0m;
                 var targetAttempt = targetExam != null 
                     ? studentAttempts.FirstOrDefault(a => (int)a.ExamId == (int)targetExam.Id)
                     : null;
@@ -982,14 +995,18 @@ namespace Exam.Services
                         }
                         totalScore = (decimal)targetAttempt.FinalScore;
 
-                        if (attemptSeenPoints.TryGetValue((int)targetAttempt.AttemptId, out decimal sp))
+                        if (attemptSeenPoints.TryGetValue((int)targetAttempt.AttemptId, out decimal sp) && sp > 0 && sp <= 100)
                         {
                             studentTotalAvailablePoints = sp;
                         }
                         else
                         {
                             int questionsToShow = targetExam?.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
-                            studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam?.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
+                            studentTotalAvailablePoints = (questionsToShow > 0 && questionsToShow <= 100) 
+                                ? questionsToShow * 1.0m 
+                                : (targetExam?.TotalPoints != null && (decimal)targetExam.TotalPoints > 0 && (decimal)targetExam.TotalPoints <= 100 
+                                    ? (decimal)targetExam.TotalPoints 
+                                    : 100.0m);
                         }
                         percentage = studentTotalAvailablePoints > 0 ? (double)(totalScore / studentTotalAvailablePoints) * 100 : 0;
                     }
@@ -1004,20 +1021,30 @@ namespace Exam.Services
                         }
                         totalScore = (decimal)targetAttempt.FinalScore;
 
-                        if (attemptSeenPoints.TryGetValue((int)targetAttempt.AttemptId, out decimal sp))
+                        if (attemptSeenPoints.TryGetValue((int)targetAttempt.AttemptId, out decimal sp) && sp > 0 && sp <= 100)
                         {
                             studentTotalAvailablePoints = sp;
                         }
                         else
                         {
                             int questionsToShow = targetExam?.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
-                            studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam?.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
+                            studentTotalAvailablePoints = (questionsToShow > 0 && questionsToShow <= 100) 
+                                ? questionsToShow * 1.0m 
+                                : (targetExam?.TotalPoints != null && (decimal)targetExam.TotalPoints > 0 && (decimal)targetExam.TotalPoints <= 100 
+                                    ? (decimal)targetExam.TotalPoints 
+                                    : 100.0m);
                         }
+
+                        percentage = studentTotalAvailablePoints > 0
+                            ? (double)(totalScore / studentTotalAvailablePoints) * 100
+                            : 0;
                     }
-                    else if (targetExam != null)
+                    else
                     {
-                        int questionsToShow = targetExam.TotalQuestionsToShow != null ? (int)targetExam.TotalQuestionsToShow : 0;
-                        studentTotalAvailablePoints = questionsToShow > 0 ? questionsToShow * 1.0m : (targetExam.TotalPoints != null ? (decimal)targetExam.TotalPoints : 100.0m);
+                        // Unattempted student: total score is 0, total available points is 100
+                        totalScore = 0;
+                        studentTotalAvailablePoints = 100.0m;
+                        percentage = 0.0;
                     }
 
                     // Certificate code from any completed attempt (latest)
@@ -1025,10 +1052,12 @@ namespace Exam.Services
                         .Where(a => (string)a.Status == "Completed" && !string.IsNullOrEmpty((string)a.CertificateCode))
                         .Select(a => (string)a.CertificateCode)
                         .FirstOrDefault();
+                }
 
-                    percentage = studentTotalAvailablePoints > 0
-                        ? (double)(totalScore / studentTotalAvailablePoints) * 100
-                        : 0;
+                // Guard: Available points should never exceed 100 (e.g. raw question pool sums of 1000+ points)
+                if (studentTotalAvailablePoints > 100.0m || studentTotalAvailablePoints <= 0)
+                {
+                    studentTotalAvailablePoints = 100.0m;
                 }
 
                 double certThreshold = 75.0;
