@@ -52,6 +52,7 @@ namespace Exam.DTOs
         public int? FallbackBranchId { get; set; } = 61; // Default: Call Center (كول سنتر)
         public int? PreferredShiftId { get; set; } // null / 0 = Any Shift
         public int HybridLocalPercentage { get; set; } = 50; // 50% Local, 50% Outside
+        public bool RandomDiverseShifts { get; set; } = false; // Random shift-diversified selection without deficit fallback
     }
 
     public class WaveProposalResultDto

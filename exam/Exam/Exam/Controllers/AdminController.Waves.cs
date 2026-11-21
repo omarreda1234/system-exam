@@ -1078,8 +1078,69 @@ Eltarshoubi Training Academy Team";
                         shiftQuotaRemaining[c.ShiftId.Value] = Math.Max(0, shiftQuotaRemaining[c.ShiftId.Value] - 1);
                 }
 
-                // If specialized Training Delivery Mode is selected and no manual fixed quotas were provided:
-                if (!hasBranchQuotas && !hasShiftQuotas && (trainingMode.Equals("Offline", StringComparison.OrdinalIgnoreCase) || 
+                void PickRandomShiftDiversified(List<WaveCandidateDto> pool, int targetCount)
+                {
+                    if (!pool.Any() || (selectedFresh.Count + selectedResitters.Count) >= targetCount) return;
+
+                    var unpicked = pool.Where(c => !pickedUserIds.Contains(c.UserId)).ToList();
+                    if (!unpicked.Any()) return;
+
+                    // Group by Shift and shuffle candidates within each shift group
+                    var shiftQueues = unpicked
+                        .GroupBy(c => c.ShiftId ?? 0)
+                        .Select(g => new Queue<WaveCandidateDto>(g.OrderBy(_ => Random.Shared.Next())))
+                        .ToList();
+
+                    bool added = true;
+                    while ((selectedFresh.Count + selectedResitters.Count) < targetCount && added && shiftQueues.Any(q => q.Count > 0))
+                    {
+                        added = false;
+                        foreach (var q in shiftQueues)
+                        {
+                            if ((selectedFresh.Count + selectedResitters.Count) >= targetCount) break;
+                            if (q.Count > 0)
+                            {
+                                var cand = q.Dequeue();
+                                if (!pickedUserIds.Contains(cand.UserId))
+                                {
+                                    PickCandidate(cand);
+                                    added = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Strategy 1: Random Shift-Diversified Selection (strict within group, zero deficit fallback)
+                if (filter.RandomDiverseShifts)
+                {
+                    if (trainingMode.Equals("Offline", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var localPool = allFresh.Concat(allResitters).Where(IsLocal).ToList();
+                        PickRandomShiftDiversified(localPool, capacity);
+                    }
+                    else if (trainingMode.Equals("Online", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var outsidePool = allFresh.Concat(allResitters).Where(IsOutside).ToList();
+                        PickRandomShiftDiversified(outsidePool, capacity);
+                    }
+                    else if (trainingMode.Equals("Hybrid", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int localTarget = (int)Math.Round(capacity * (hybridLocalPct / 100.0));
+                        var localPool = allFresh.Concat(allResitters).Where(IsLocal).ToList();
+                        var outsidePool = allFresh.Concat(allResitters).Where(IsOutside).ToList();
+
+                        PickRandomShiftDiversified(localPool, localTarget);
+                        PickRandomShiftDiversified(outsidePool, capacity);
+                    }
+                    else
+                    {
+                        var allPool = allFresh.Concat(allResitters).ToList();
+                        PickRandomShiftDiversified(allPool, capacity);
+                    }
+                }
+                // Strategy 2: Structured 1-per-branch & Call Center fallback delivery mode
+                else if (!hasBranchQuotas && !hasShiftQuotas && (trainingMode.Equals("Offline", StringComparison.OrdinalIgnoreCase) || 
                                                             trainingMode.Equals("Online", StringComparison.OrdinalIgnoreCase) || 
                                                             trainingMode.Equals("Hybrid", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -1645,6 +1706,13 @@ Eltarshoubi Training Academy Team";
                     .OrderByDescending(b => b.total)
                     .ToList();
 
+                var unpickedAlternates = allFresh.Concat(allResitters)
+                    .Where(c => !pickedUserIds.Contains(c.UserId))
+                    .OrderBy(c => c.BranchName)
+                    .ThenBy(c => c.ShiftName)
+                    .ThenBy(c => c.StudentName)
+                    .ToList();
+
                 return Json(new
                 {
                     success = true,
@@ -1659,10 +1727,12 @@ Eltarshoubi Training Academy Team";
                     fallbackCandidatesCount = fallbackCandidatesCount,
                     availableFreshPool = allFresh.Count,
                     availableResittersPool = allResitters.Count,
+                    isRandomDiverse = filter.RandomDiverseShifts,
                     branchBreakdown = branchBreakdown,
                     shiftBreakdown = shiftBreakdown,
                     branchShiftMatrix = branchShiftMatrix,
-                    candidates = finalCandidates
+                    candidates = finalCandidates,
+                    availableAlternates = unpickedAlternates
                 });
             }
             catch (Exception ex)

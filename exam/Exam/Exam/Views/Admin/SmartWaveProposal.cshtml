@@ -132,6 +132,29 @@
                             <p class="text-[10px] text-slate-400 mt-1">تحديد الحصص يدوياً حسب الرغبة</p>
                         </label>
                     </div>
+
+                    <!-- Random Shift-Diversified Toggle Switch (الاختيار العشوائي متنوع الورديات - بدون سد عجز) -->
+                    <div class="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between flex-wrap gap-3 bg-white/70 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 flex items-center justify-center text-base font-black shadow-2xs">
+                                <i class="fas fa-dice"></i>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-black text-slate-900 dark:text-white">Random Shift-Diversified Allocation (سحب عشوائي متنوع الورديات)</span>
+                                    <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">خيار عشوائي</span>
+                                </div>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">سحب عشوائي للمرشحين حصرياً من فروع المجموعة مع توزيعهم على شيفتات مختلفة (بدون إجبار سد العجز من الكول سنتر)</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span id="randomDiverseShiftsStatus" class="text-xs font-bold text-slate-500">معطّل (توزيع هيكلي)</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="chkRandomDiverseShifts" class="sr-only peer" onchange="onRandomDiverseShiftsToggle(this.checked)" />
+                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 1. Registration Window -->
@@ -765,10 +788,101 @@
     </div>
 </div>
 
+<!-- Modal: Replace Candidate (استبدال مرشح ببديل) -->
+<div id="replaceCandidateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm hidden animate-fade-in p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 md:p-7 shadow-2xl space-y-4 max-h-[92vh] flex flex-col">
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg font-black shadow-inner">
+                    <i class="fas fa-rotate"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>استبدال المرشح (Candidate Replacement)</span>
+                        <span id="replaceAlternatesCountBadge" class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"></span>
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">اختر مرشحاً بديلاً من نفس الفرع أو الوردية، أو نفذ استبدالاً عشوائياً فورياً</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeReplaceModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-lg font-bold transition-colors">&times;</button>
+        </div>
+
+        <!-- Target Candidate Info Card -->
+        <div id="replaceTargetInfoCard" class="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 flex items-center justify-between gap-4 flex-wrap shrink-0">
+            <div class="flex items-center gap-3">
+                <div id="replaceTargetAvatar" class="w-11 h-11 rounded-2xl bg-brand-500 text-white font-black text-base flex items-center justify-center shrink-0 shadow-md shadow-brand-500/20">
+                    ?
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800">المرشح المطلوب استبداله</span>
+                        <span id="replaceTargetTypeBadge"></span>
+                    </div>
+                    <h4 id="replaceTargetName" class="text-sm font-black text-slate-900 dark:text-white leading-tight mt-1">--</h4>
+                    <div class="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1 flex-wrap">
+                        <span>كود: <b id="replaceTargetCode" class="font-mono text-slate-700 dark:text-slate-200">--</b></span>
+                        <span>•</span>
+                        <span>فرع: <b id="replaceTargetBranch" class="text-slate-700 dark:text-slate-200">--</b></span>
+                        <span>•</span>
+                        <span>وردية: <b id="replaceTargetShift" class="text-slate-700 dark:text-slate-200">--</b></span>
+                    </div>
+                </div>
+            </div>
+            <button type="button" onclick="quickRandomAutoSwap()" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-2">
+                <i class="fas fa-dice text-sm"></i>
+                <span>استبدال عشوائي فوري</span>
+            </button>
+        </div>
+
+        <!-- Filter Controls & Search -->
+        <div class="space-y-2.5 shrink-0">
+            <!-- Tabs -->
+            <div class="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <button type="button" onclick="switchReplaceTab('branch')" id="tabBtn-branch" class="flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all bg-white dark:bg-slate-900 text-brand-600 shadow-sm border border-slate-200 dark:border-slate-700">
+                    <i class="fas fa-store mr-1 text-[11px]"></i> نفس الفرع
+                </button>
+                <button type="button" onclick="switchReplaceTab('shift')" id="tabBtn-shift" class="flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900">
+                    <i class="fas fa-business-time mr-1 text-[11px]"></i> نفس الوردية
+                </button>
+                <button type="button" onclick="switchReplaceTab('all')" id="tabBtn-all" class="flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900">
+                    <i class="fas fa-users mr-1 text-[11px]"></i> كل البدلاء المتاحين
+                </button>
+            </div>
+
+            <!-- Search input -->
+            <div class="relative">
+                <input type="text" id="replaceSearchInput" placeholder="ابحث بالاسم، الكود، الفرع، أو الوردية..." oninput="onReplaceSearchInput(this.value)" class="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200 shadow-inner" />
+            </div>
+        </div>
+
+        <!-- Alternates Candidate List (Scrollable) -->
+        <div id="replaceAlternatesList" class="flex-1 overflow-y-auto space-y-2 p-1 min-h-[220px] max-h-[340px] custom-scrollbar border border-slate-100 dark:border-slate-800 rounded-2xl">
+            <!-- Dynamic Alternate Candidates -->
+        </div>
+
+        <!-- Footer -->
+        <div class="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
+            <button type="button" onclick="closeReplaceModal()" class="px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
+                إغلاق
+            </button>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script src="~/lib/sweetalert2/sweetalert2.all.min.js"></script>
     <script>
         let currentCandidates = [];
+        let availableAlternates = [];
+
+        // Random Diverse Shifts State
+        let isRandomDiverseShifts = false;
+
+        // Candidate Replacement State
+        let replaceTargetUserId = null;
+        let currentReplaceTab = 'branch';
+        let currentReplaceSearch = '';
 
         // Training Delivery Mode & Configuration State
         let currentTrainingMode = 'Offline';
@@ -776,6 +890,22 @@
         let currentFallbackBranchId = 61;
         let currentPreferredShiftId = 0;
         let currentHybridPct = 50;
+
+        function onRandomDiverseShiftsToggle(checked) {
+            isRandomDiverseShifts = !!checked;
+            const status = $('#randomDiverseShiftsStatus');
+            if (isRandomDiverseShifts) {
+                status.text('مفعّل (عشوائي متنوع الورديات)')
+                      .removeClass('text-slate-500')
+                      .addClass('text-indigo-600 font-black');
+            } else {
+                status.text('معطّل (توزيع هيكلي)')
+                      .removeClass('text-indigo-600 font-black')
+                      .addClass('text-slate-500 font-bold');
+            }
+            // Re-apply current mode to sync branch selection (e.g. exclude call center in offline)
+            setTrainingMode(currentTrainingMode);
+        }
 
         function openModeSettingsModal() {
             // Check matching city checkboxes
@@ -911,11 +1041,21 @@
                 const chk = $(this).find('.chk-branch');
 
                 if (mode === 'Offline') {
-                    // Selected Local Cities + Call Center
-                    if (currentLocalCities.includes(city) || bId === currentFallbackBranchId) {
-                        chk.prop('checked', true);
+                    // Selected Local Cities
+                    if (isRandomDiverseShifts) {
+                        // Strict group selection without fallback deficit branch (e.g. Call Center)
+                        if (currentLocalCities.includes(city) && bId !== currentFallbackBranchId) {
+                            chk.prop('checked', true);
+                        } else {
+                            chk.prop('checked', false);
+                        }
                     } else {
-                        chk.prop('checked', false);
+                        // Standard offline: local cities + fallback branch
+                        if (currentLocalCities.includes(city) || bId === currentFallbackBranchId) {
+                            chk.prop('checked', true);
+                        } else {
+                            chk.prop('checked', false);
+                        }
                     }
                 } else if (mode === 'Online') {
                     // Outside Selected Local Cities (exclude local cities and exclude fallback)
@@ -924,14 +1064,6 @@
                     } else {
                         chk.prop('checked', false);
                     }
-                } else {
-                    // Hybrid or All: check all
-                    chk.prop('checked', true);
-                }
-            });
-
-            updateBranchSelectedLabel();
-        }
                 } else {
                     // Hybrid or All: check all
                     chk.prop('checked', true);
@@ -1393,7 +1525,8 @@
                 localCityGroups: currentLocalCities,
                 fallbackBranchId: currentFallbackBranchId,
                 preferredShiftId: currentPreferredShiftId > 0 ? currentPreferredShiftId : null,
-                hybridLocalPercentage: currentHybridPct
+                hybridLocalPercentage: currentHybridPct,
+                randomDiverseShifts: isRandomDiverseShifts
             };
 
             try {
@@ -1418,6 +1551,7 @@
                 }
 
                 currentCandidates = data.candidates || [];
+                availableAlternates = data.availableAlternates || [];
                 currentCandidates.forEach(c => {
                     c.isSelected = true;
                 });
@@ -1489,6 +1623,15 @@
                         <span class="px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 shadow-xs">
                             <i class="fas fa-sliders"></i>
                             <span>مخصص (Custom / All)</span>
+                        </span>
+                    `);
+                }
+
+                if (data.isRandomDiverse) {
+                    modeBadge.append(`
+                        <span class="px-3 py-1 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 flex items-center gap-1.5 shadow-xs">
+                            <i class="fas fa-dice"></i>
+                            <span>سحب عشوائي متنوع الورديات (بدون سد عجز)</span>
                         </span>
                     `);
                 }
@@ -1736,9 +1879,15 @@
                         <td class="p-4 text-center text-slate-500 font-mono text-[11px]">${regDate}</td>
                         <td class="p-4 text-center text-slate-500">${c.shiftName || '--'}</td>
                         <td class="p-4 text-right pr-4">
-                            <button type="button" onclick="removeCandidate('${c.userId}')" class="text-slate-400 hover:text-rose-500 text-xs font-bold transition-all p-1" title="Exclude from Roster">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
+                            <div class="flex items-center justify-end gap-1.5">
+                                <button type="button" onclick="openReplaceModal('${c.userId}')" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 dark:text-indigo-300 text-xs font-bold transition-all border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 shadow-2xs" title="استبدال المرشح ببديل آخر">
+                                    <i class="fas fa-rotate text-[10px]"></i>
+                                    <span>استبدال</span>
+                                </button>
+                                <button type="button" onclick="removeCandidate('${c.userId}')" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-bold transition-all" title="استبعاد من القائمة">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 `;
@@ -1809,13 +1958,340 @@
         }
 
         function removeCandidate(userId) {
-            currentCandidates = currentCandidates.filter(c => c.userId !== userId);
-            if (candidatesDataTable) {
-                const row = $(`#candidatesTable tbody tr[data-userid="${userId}"]`);
-                candidatesDataTable.row(row).remove().draw(false);
+            const cand = currentCandidates.find(c => c.userId === userId);
+            if (!cand) return;
+
+            Swal.fire({
+                title: 'استبعاد المرشح؟',
+                text: `هل ترغب في استبعاد "${cand.studentName}" من قائمة المرشحين للويف وإعادته لقائمة الاحتياط؟`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'نعم، استبعاد',
+                cancelButtonText: 'إلغاء'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    currentCandidates = currentCandidates.filter(c => c.userId !== userId);
+                    if (!availableAlternates.some(a => a.userId === userId)) {
+                        availableAlternates.push(cand);
+                    }
+                    renderTable();
+                    updateRosterStats();
+                    updateSelectedCount();
+                    rebuildBreakdownsAndMatrix();
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'تم الاستبعاد',
+                        text: `تم استبعاد "${cand.studentName}" بنجاح وإعادته للاحتياط.`,
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                }
+            });
+        }
+
+        function openReplaceModal(userId) {
+            replaceTargetUserId = userId;
+            const target = currentCandidates.find(c => c.userId === userId);
+            if (!target) return;
+
+            $('#replaceTargetName').text(target.studentName || '--');
+            $('#replaceTargetCode').text(target.userCode || '--');
+            $('#replaceTargetBranch').text(target.branchName || '--');
+            $('#replaceTargetShift').text(target.shiftName || '--');
+            $('#replaceTargetAvatar').text((target.studentName || '?').trim().charAt(0).toUpperCase());
+
+            const isFresh = target.candidateType === 'New';
+            const typeBadge = isFresh
+                ? `<span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200">First-Time</span>`
+                : `<span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200">Resitter</span>`;
+            $('#replaceTargetTypeBadge').html(typeBadge);
+
+            $('#replaceSearchInput').val('');
+            currentReplaceSearch = '';
+            switchReplaceTab('branch');
+
+            $('#replaceCandidateModal').removeClass('hidden');
+        }
+
+        function closeReplaceModal() {
+            $('#replaceCandidateModal').addClass('hidden');
+            replaceTargetUserId = null;
+        }
+
+        function switchReplaceTab(tab) {
+            currentReplaceTab = tab;
+            $('#tabBtn-branch, #tabBtn-shift, #tabBtn-all')
+                .removeClass('bg-white dark:bg-slate-900 text-brand-600 shadow-sm border border-slate-200 dark:border-slate-700')
+                .addClass('text-slate-600 dark:text-slate-400 hover:text-slate-900');
+            $(`#tabBtn-${tab}`)
+                .removeClass('text-slate-600 dark:text-slate-400 hover:text-slate-900')
+                .addClass('bg-white dark:bg-slate-900 text-brand-600 shadow-sm border border-slate-200 dark:border-slate-700');
+            renderReplaceAlternatesList();
+        }
+
+        function onReplaceSearchInput(val) {
+            currentReplaceSearch = (val || '').toLowerCase().trim();
+            renderReplaceAlternatesList();
+        }
+
+        function renderReplaceAlternatesList() {
+            const container = $('#replaceAlternatesList');
+            container.empty();
+
+            const target = currentCandidates.find(c => c.userId === replaceTargetUserId);
+            if (!target) return;
+
+            const currentCandidateIds = new Set(currentCandidates.map(c => c.userId));
+            let pool = availableAlternates.filter(c => !currentCandidateIds.has(c.userId));
+
+            if (currentReplaceTab === 'branch') {
+                pool = pool.filter(c => c.branchId === target.branchId || (c.branchName && target.branchName && c.branchName.trim() === target.branchName.trim()));
+            } else if (currentReplaceTab === 'shift') {
+                pool = pool.filter(c => c.shiftId === target.shiftId || (c.shiftName && target.shiftName && c.shiftName.trim() === target.shiftName.trim()));
             }
+
+            if (currentReplaceSearch) {
+                pool = pool.filter(c => {
+                    const name = (c.studentName || '').toLowerCase();
+                    const code = (c.userCode || '').toLowerCase();
+                    const email = (c.email || '').toLowerCase();
+                    const b = (c.branchName || '').toLowerCase();
+                    const s = (c.shiftName || '').toLowerCase();
+                    return name.includes(currentReplaceSearch) ||
+                           code.includes(currentReplaceSearch) ||
+                           email.includes(currentReplaceSearch) ||
+                           b.includes(currentReplaceSearch) ||
+                           s.includes(currentReplaceSearch);
+                });
+            }
+
+            $('#replaceAlternatesCountBadge').text(`${pool.length} بديل متاح`);
+
+            if (pool.length === 0) {
+                container.html(`
+                    <div class="py-10 text-center text-slate-400 space-y-2">
+                        <i class="fas fa-user-slash text-3xl text-slate-300 dark:text-slate-600"></i>
+                        <p class="font-bold text-xs text-slate-600 dark:text-slate-300">لا يوجد مرشحون بدلاء يطابقون هذا الفلتر</p>
+                        ${currentReplaceTab !== 'all' ? `
+                            <button type="button" onclick="switchReplaceTab('all')" class="mt-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-brand-600 hover:bg-brand-50 transition-colors">
+                                عرض كل البدلاء المتاحين (${availableAlternates.filter(c => !currentCandidateIds.has(c.userId)).length})
+                            </button>
+                        ` : ''}
+                    </div>
+                `);
+                return;
+            }
+
+            pool.forEach(c => {
+                const isFresh = c.candidateType === 'New';
+                const typeBadge = isFresh
+                    ? `<span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200">First-Time</span>`
+                    : `<span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200">Resitter</span>`;
+                const avatarChar = (c.studentName || '?').trim().charAt(0).toUpperCase();
+
+                const itemHtml = `
+                    <div class="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-brand-500/50 hover:shadow-sm transition-all flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-xs uppercase shrink-0">
+                                ${avatarChar}
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold text-xs text-slate-900 dark:text-white truncate">${c.studentName || '--'}</span>
+                                    ${typeBadge}
+                                </div>
+                                <div class="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5 flex-wrap">
+                                    <span class="font-mono font-bold text-slate-600 dark:text-slate-300">${c.userCode || '--'}</span>
+                                    <span>•</span>
+                                    <span class="font-bold text-slate-600 dark:text-slate-300">${c.branchName || '--'}</span>
+                                    <span>•</span>
+                                    <span>${c.shiftName || '--'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" onclick="swapCandidate('${replaceTargetUserId}', '${c.userId}')" class="px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shrink-0 active:scale-95 transition-all shadow-sm flex items-center gap-1.5">
+                            <i class="fas fa-check text-[10px]"></i>
+                            <span>اختيار كبديل</span>
+                        </button>
+                    </div>
+                `;
+                container.append(itemHtml);
+            });
+        }
+
+        function quickRandomAutoSwap() {
+            if (!replaceTargetUserId) return;
+            const target = currentCandidates.find(c => c.userId === replaceTargetUserId);
+            if (!target) return;
+
+            const currentCandidateIds = new Set(currentCandidates.map(c => c.userId));
+            let pool = availableAlternates.filter(c => !currentCandidateIds.has(c.userId));
+
+            if (pool.length === 0) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'لا يوجد بدلاء',
+                    text: 'قائمة البدلاء فارغة حالياً ولا يوجد مرشحون مؤهلون متاحون للاستبدال.'
+                });
+                return;
+            }
+
+            // Try same branch first
+            let matchPool = pool.filter(c => c.branchId === target.branchId || (c.branchName && target.branchName && c.branchName.trim() === target.branchName.trim()));
+            // If none, try same shift
+            if (matchPool.length === 0) {
+                matchPool = pool.filter(c => c.shiftId === target.shiftId || (c.shiftName && target.shiftName && c.shiftName.trim() === target.shiftName.trim()));
+            }
+            // If still none, any candidate in pool
+            if (matchPool.length === 0) {
+                matchPool = pool;
+            }
+
+            const randomPick = matchPool[Math.floor(Math.random() * matchPool.length)];
+            swapCandidate(replaceTargetUserId, randomPick.userId);
+        }
+
+        function swapCandidate(oldUserId, newUserId) {
+            const oldCandIdx = currentCandidates.findIndex(c => c.userId === oldUserId);
+            const newCandIdx = availableAlternates.findIndex(c => c.userId === newUserId);
+
+            if (oldCandIdx === -1 || newCandIdx === -1) {
+                Swal.fire({ icon: 'error', text: 'تعذر إتمام عملية الاستبدال.' });
+                return;
+            }
+
+            const oldCand = currentCandidates[oldCandIdx];
+            const newCand = availableAlternates[newCandIdx];
+
+            // Remove newCand from alternates
+            availableAlternates.splice(newCandIdx, 1);
+            // Put oldCand into alternates
+            availableAlternates.push(oldCand);
+
+            // Place newCand in currentCandidates
+            newCand.isSelected = true;
+            currentCandidates[oldCandIdx] = newCand;
+
+            closeReplaceModal();
+
+            renderTable();
             updateRosterStats();
             updateSelectedCount();
+            rebuildBreakdownsAndMatrix();
+
+            Swal.fire({
+                icon: 'success',
+                title: 'تم الاستبدال بنجاح',
+                text: `تم استبدال "${oldCand.studentName}" بالمرشح البديل "${newCand.studentName}".`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+
+        function rebuildBreakdownsAndMatrix() {
+            // 1. Branch Breakdown
+            const branchMap = {};
+            currentCandidates.forEach(c => {
+                const bName = c.branchName || 'Unknown';
+                if (!branchMap[bName]) {
+                    branchMap[bName] = { branchName: bName, total: 0, fresh: 0, resitters: 0 };
+                }
+                branchMap[bName].total++;
+                if (c.candidateType === 'New') branchMap[bName].fresh++;
+                else branchMap[bName].resitters++;
+            });
+            const branchBreakdown = Object.values(branchMap).sort((a, b) => b.total - a.total);
+
+            const chipsContainer = $('#branchBreakdownChips');
+            chipsContainer.empty();
+            if (branchBreakdown.length > 0) {
+                branchBreakdown.forEach(b => {
+                    chipsContainer.append(`
+                        <div class="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-2 text-xs font-bold shadow-sm">
+                            <span class="text-slate-800 dark:text-white font-black">${b.branchName}:</span>
+                            <span class="px-2 py-0.5 rounded-md bg-brand-50 dark:bg-brand-950/40 text-brand-600 dark:text-brand-300 font-black text-[11px]">${b.total} seats</span>
+                            <span class="text-[10px] text-slate-400">(${b.fresh} New • ${b.resitters} Resitters)</span>
+                        </div>
+                    `);
+                });
+                $('#branchBreakdownTotalCount').text(`${branchBreakdown.length} branches included`);
+                $('#branchBreakdownContainer').removeClass('hidden');
+            } else {
+                $('#branchBreakdownContainer').addClass('hidden');
+            }
+
+            // 2. Shift Breakdown
+            const shiftMap = {};
+            currentCandidates.forEach(c => {
+                const sName = c.shiftName || 'Unassigned Shift';
+                if (!shiftMap[sName]) {
+                    shiftMap[sName] = { shiftName: sName, total: 0, fresh: 0, resitters: 0 };
+                }
+                shiftMap[sName].total++;
+                if (c.candidateType === 'New') shiftMap[sName].fresh++;
+                else shiftMap[sName].resitters++;
+            });
+            const shiftBreakdown = Object.values(shiftMap).sort((a, b) => b.total - a.total);
+
+            const shiftChipsContainer = $('#shiftBreakdownChips');
+            shiftChipsContainer.empty();
+            if (shiftBreakdown.length > 0) {
+                shiftBreakdown.forEach(s => {
+                    shiftChipsContainer.append(`
+                        <div class="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-2 text-xs font-bold shadow-sm">
+                            <span class="text-slate-800 dark:text-white font-black">${s.shiftName}:</span>
+                            <span class="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 font-black text-[11px]">${s.total} seats</span>
+                            <span class="text-[10px] text-slate-400">(${s.fresh} New • ${s.resitters} Resitters)</span>
+                        </div>
+                    `);
+                });
+                $('#shiftBreakdownTotalCount').text(`${shiftBreakdown.length} shifts represented`);
+                $('#shiftBreakdownContainer').removeClass('hidden');
+            } else {
+                $('#shiftBreakdownContainer').addClass('hidden');
+            }
+
+            // 3. Branch x Shift Cross Matrix
+            const matrixBranches = {};
+            currentCandidates.forEach(c => {
+                const bName = c.branchName || 'Unknown';
+                const sName = c.shiftName || 'Unassigned Shift';
+                if (!matrixBranches[bName]) {
+                    matrixBranches[bName] = {
+                        branchName: bName,
+                        total: 0,
+                        fresh: 0,
+                        resitters: 0,
+                        shifts: {}
+                    };
+                }
+                matrixBranches[bName].total++;
+                if (c.candidateType === 'New') matrixBranches[bName].fresh++;
+                else matrixBranches[bName].resitters++;
+
+                matrixBranches[bName].shifts[sName] = (matrixBranches[bName].shifts[sName] || 0) + 1;
+            });
+
+            const matrixArray = Object.values(matrixBranches).map(b => ({
+                branchName: b.branchName,
+                total: b.total,
+                fresh: b.fresh,
+                resitters: b.resitters,
+                shifts: Object.keys(b.shifts).map(sn => ({ shiftName: sn, count: b.shifts[sn] }))
+            })).sort((a, b) => b.total - a.total);
+
+            if (matrixArray.length > 0) {
+                renderMatrix(matrixArray);
+                const allUniqueShifts = new Set();
+                matrixArray.forEach(b => b.shifts.forEach(s => allUniqueShifts.add(s.shiftName)));
+                $('#matrixBranchesCount').text(`${matrixArray.length} Branches × ${allUniqueShifts.size} Shifts`);
+                $('#matrixContainer').removeClass('hidden');
+            } else {
+                $('#matrixContainer').addClass('hidden');
+            }
         }
 
         function getSelectedUserIds() {
