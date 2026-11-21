@@ -984,13 +984,31 @@ Eltarshoubi Training Academy Team";
                 }
 
                 string trainingMode = string.IsNullOrWhiteSpace(filter.TrainingMode) ? "All" : filter.TrainingMode.Trim();
-                string localCity = string.IsNullOrWhiteSpace(filter.LocalCityGroup) ? "المنصورة" : filter.LocalCityGroup.Trim();
+
+                var localCities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (filter.LocalCityGroups != null && filter.LocalCityGroups.Any())
+                {
+                    foreach (var c in filter.LocalCityGroups)
+                    {
+                        if (!string.IsNullOrWhiteSpace(c)) localCities.Add(c.Trim());
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(filter.LocalCityGroup))
+                {
+                    localCities.Add(filter.LocalCityGroup.Trim());
+                }
+
+                if (!localCities.Any())
+                {
+                    localCities.Add("المنصورة");
+                }
+
                 int fallbackBranchId = filter.FallbackBranchId ?? 61;
                 int? prefShiftId = (filter.PreferredShiftId.HasValue && filter.PreferredShiftId.Value > 0) ? filter.PreferredShiftId.Value : null;
                 int hybridLocalPct = Math.Clamp(filter.HybridLocalPercentage > 0 ? filter.HybridLocalPercentage : 50, 10, 90);
 
-                bool IsLocal(WaveCandidateDto c) => (c.City != null && c.City.Trim().Equals(localCity, StringComparison.OrdinalIgnoreCase)) && c.BranchId != fallbackBranchId;
-                bool IsOutside(WaveCandidateDto c) => (c.City == null || !c.City.Trim().Equals(localCity, StringComparison.OrdinalIgnoreCase)) && c.BranchId != fallbackBranchId;
+                bool IsLocal(WaveCandidateDto c) => c.City != null && localCities.Contains(c.City.Trim()) && c.BranchId != fallbackBranchId;
+                bool IsOutside(WaveCandidateDto c) => (c.City == null || !localCities.Contains(c.City.Trim())) && c.BranchId != fallbackBranchId;
                 bool IsFallback(WaveCandidateDto c) => c.BranchId == fallbackBranchId;
 
                 // Filter by Branches if specified

@@ -9,6 +9,9 @@
     var cities = ViewBag.Cities as List<string> ?? new List<string>();
     int callCenterBranchId = ViewBag.CallCenterBranchId != null ? (int)ViewBag.CallCenterBranchId : 61;
     string defaultWaveName = ViewBag.DefaultWaveName as string ?? "Batch - Proposed";
+    var cityBranchCounts = branches.Where(b => !string.IsNullOrEmpty(b.City))
+                                   .GroupBy(b => b.City!.Trim())
+                                   .ToDictionary(g => g.Key, g => g.Count());
 }
 
 @Html.AntiForgeryToken()
@@ -573,19 +576,57 @@
         </div>
 
         <div class="space-y-4 text-left">
-            <!-- 1. Local City / Branch Group -->
-            <div class="space-y-1.5">
-                <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                    <i class="fas fa-city text-brand-600"></i>
-                    <span>المجموعة المحلية للأوفلاين (Local City / Group)</span>
-                </label>
-                <select id="cfgLocalCity" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:ring-2 focus:ring-brand-500 outline-none">
+            <!-- 1. Local Cities / Branch Groups (Multi-select) -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <i class="fas fa-city text-brand-600"></i>
+                        <span>المجموعات والمدن المحلية للأوفلاين (Local Cities / Groups)</span>
+                    </label>
+                    <span id="selectedCityCountBadge" class="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-600 border border-brand-200 dark:bg-brand-950 dark:text-brand-300 dark:border-brand-800">
+                        1 مجموعة محددة
+                    </span>
+                </div>
+
+                <!-- Fast Presets Bar -->
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <button type="button" onclick="setCityGroupPreset('mansoura')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-slate-800 dark:hover:bg-brand-950/40 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all">
+                        المنصورة فقط (الافتراضي)
+                    </button>
+                    <button type="button" onclick="setCityGroupPreset('dakahlia')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-slate-800 dark:hover:bg-brand-950/40 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all">
+                        مدن الدقهلية (المنصورة + طلخا + أجا + بلقاس ...)
+                    </button>
+                    <button type="button" onclick="setCityGroupPreset('all')" class="px-2 py-1 rounded-lg text-[10px] font-bold text-brand-600 hover:underline">
+                        تحديد الكل
+                    </button>
+                    <span class="text-slate-300">|</span>
+                    <button type="button" onclick="setCityGroupPreset('clear')" class="px-2 py-1 rounded-lg text-[10px] font-bold text-rose-500 hover:underline">
+                        مسح
+                    </button>
+                </div>
+
+                <!-- Search box for cities -->
+                <div class="relative">
+                    <input type="text" id="searchCityGroupsInput" placeholder="ابحث عن مدينة أو مجموعة..." oninput="filterCityGroupsList(this.value)" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-brand-500 text-slate-800 dark:text-slate-200 shadow-inner" />
+                </div>
+
+                <!-- Multi-select City Grid Container -->
+                <div class="max-h-44 overflow-y-auto space-y-1 p-2 bg-slate-50/50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700 rounded-xl custom-scrollbar" id="cityGroupsContainer">
                     @foreach (var c in cities)
                     {
-                        <option value="@c" selected="@(c == "المنصورة" ? "selected" : null)">@c @(c == "المنصورة" ? "(المجموعة الافتراضية)" : "")</option>
+                        int branchCnt = cityBranchCounts.ContainsKey(c) ? cityBranchCounts[c] : 0;
+                        <label class="city-group-item flex items-center justify-between p-2 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer select-none" data-cityname="@c">
+                            <div class="flex items-center gap-2.5">
+                                <input type="checkbox" name="cfgCityGroup" value="@c" checked="@(c == "المنصورة" ? "checked" : null)" onchange="onCityGroupToggle()" class="chk-city-group rounded border-slate-300 text-brand-600 focus:ring-brand-500 w-4 h-4" />
+                                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">@c</span>
+                            </div>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500">
+                                @branchCnt @(branchCnt == 1 ? "فرع" : "فروع")
+                            </span>
+                        </label>
                     }
-                </select>
-                <p class="text-[10px] text-slate-400">الفروع التابعة لهذه المدينة يتم سحب مرشح واحد على الأقل من كل فرع فيها في تدريب الأوفلاين.</p>
+                </div>
+                <p class="text-[10px] text-slate-400">الفروع التابعة للمجموعات المحددة تعتبر فروعاً محلية، ويتم سحب مرشح واحد على الأقل من كل فرع فيها، وسد أي عجز تلقائياً من الكول سنتر.</p>
             </div>
 
             <!-- 2. Fallback Deficit Branch -->
@@ -731,13 +772,19 @@
 
         // Training Delivery Mode & Configuration State
         let currentTrainingMode = 'Offline';
-        let currentLocalCity = 'المنصورة';
+        let currentLocalCities = ['المنصورة'];
         let currentFallbackBranchId = 61;
         let currentPreferredShiftId = 0;
         let currentHybridPct = 50;
 
         function openModeSettingsModal() {
-            $('#cfgLocalCity').val(currentLocalCity);
+            // Check matching city checkboxes
+            $('.chk-city-group').each(function () {
+                const val = $(this).val();
+                $(this).prop('checked', currentLocalCities.includes(val));
+            });
+            onCityGroupToggle();
+
             $('#cfgFallbackBranch').val(currentFallbackBranchId);
             $('#cfgPreferredShift').val(currentPreferredShiftId);
             $('#cfgHybridPct').val(currentHybridPct);
@@ -749,13 +796,52 @@
             $('#modeSettingsModal').addClass('hidden');
         }
 
+        function onCityGroupToggle() {
+            const checkedCount = $('.chk-city-group:checked').length;
+            const badge = $('#selectedCityCountBadge');
+            if (checkedCount === 0) {
+                badge.text('0 مجموعات (اختر واحدة على الأقل)').removeClass('text-brand-600 bg-brand-50 border-brand-200').addClass('text-rose-600 bg-rose-50 border-rose-200');
+            } else {
+                badge.text(`${checkedCount} مجموعة محددة`).removeClass('text-rose-600 bg-rose-50 border-rose-200').addClass('text-brand-600 bg-brand-50 border-brand-200');
+            }
+        }
+
+        function setCityGroupPreset(preset) {
+            if (preset === 'mansoura') {
+                $('.chk-city-group').prop('checked', false);
+                $('.chk-city-group[value="المنصورة"]').prop('checked', true);
+            } else if (preset === 'dakahlia') {
+                const dakahliaCities = ['المنصورة', 'طلخا', 'أجا', 'بلقاس', 'شربين', 'دكرنس', 'السنبلاوين', 'ميت غمر'];
+                $('.chk-city-group').each(function () {
+                    $(this).prop('checked', dakahliaCities.includes($(this).val()));
+                });
+            } else if (preset === 'all') {
+                $('.chk-city-group').prop('checked', true);
+            } else if (preset === 'clear') {
+                $('.chk-city-group').prop('checked', false);
+            }
+            onCityGroupToggle();
+        }
+
+        function filterCityGroupsList(term) {
+            term = (term || '').toLowerCase().trim();
+            $('.city-group-item').each(function () {
+                const text = $(this).text().toLowerCase();
+                if (text.includes(term)) {
+                    $(this).removeClass('hidden');
+                } else {
+                    $(this).addClass('hidden');
+                }
+            });
+        }
+
         function updateHybridPctLabel(val) {
             val = parseInt(val) || 50;
             $('#cfgHybridPctLabel').text(`${val}% محلي / ${100 - val}% خارجي`);
         }
 
         function resetModeSettingsDefaults() {
-            $('#cfgLocalCity').val('المنصورة');
+            setCityGroupPreset('mansoura');
             $('#cfgFallbackBranch').val('61');
             $('#cfgPreferredShift').val('0');
             $('#cfgHybridPct').val(50);
@@ -763,13 +849,29 @@
         }
 
         function saveModeSettings() {
-            currentLocalCity = $('#cfgLocalCity').val() || 'المنصورة';
+            const selectedCities = [];
+            $('.chk-city-group:checked').each(function () {
+                selectedCities.push($(this).val());
+            });
+
+            if (selectedCities.length === 0) {
+                selectedCities.push('المنصورة');
+                $('.chk-city-group[value="المنصورة"]').prop('checked', true);
+            }
+
+            currentLocalCities = selectedCities;
             currentFallbackBranchId = parseInt($('#cfgFallbackBranch').val()) || 61;
             currentPreferredShiftId = parseInt($('#cfgPreferredShift').val()) || 0;
             currentHybridPct = parseInt($('#cfgHybridPct').val()) || 50;
 
             const fallbackText = $('#cfgFallbackBranch option:selected').text().trim().split('(')[0].trim() || 'كول سنتر';
-            $('#settingsSummaryBadge').text(`${currentLocalCity} + ${fallbackText}`);
+            let summaryText = '';
+            if (currentLocalCities.length === 1) {
+                summaryText = `${currentLocalCities[0]} + ${fallbackText}`;
+            } else {
+                summaryText = `${currentLocalCities.slice(0, 2).join('، ')}${currentLocalCities.length > 2 ? ` (+${currentLocalCities.length - 2})` : ''} + ${fallbackText}`;
+            }
+            $('#settingsSummaryBadge').text(summaryText);
 
             closeModeSettingsModal();
 
@@ -779,7 +881,7 @@
             Swal.fire({
                 icon: 'success',
                 title: 'تم حفظ الإعدادات',
-                text: `المجموعة: ${currentLocalCity} | الفرع البديل: ${fallbackText}`,
+                text: `المجموعات: ${currentLocalCities.join('، ')} | البديل: ${fallbackText}`,
                 timer: 1600,
                 showConfirmButton: false
             });
@@ -809,19 +911,27 @@
                 const chk = $(this).find('.chk-branch');
 
                 if (mode === 'Offline') {
-                    // Mansoura branches + Call Center
-                    if (city === currentLocalCity || bId === currentFallbackBranchId) {
+                    // Selected Local Cities + Call Center
+                    if (currentLocalCities.includes(city) || bId === currentFallbackBranchId) {
                         chk.prop('checked', true);
                     } else {
                         chk.prop('checked', false);
                     }
                 } else if (mode === 'Online') {
-                    // Outside Mansoura (exclude local and exclude fallback)
-                    if (city !== currentLocalCity && bId !== currentFallbackBranchId) {
+                    // Outside Selected Local Cities (exclude local cities and exclude fallback)
+                    if (!currentLocalCities.includes(city) && bId !== currentFallbackBranchId) {
                         chk.prop('checked', true);
                     } else {
                         chk.prop('checked', false);
                     }
+                } else {
+                    // Hybrid or All: check all
+                    chk.prop('checked', true);
+                }
+            });
+
+            updateBranchSelectedLabel();
+        }
                 } else {
                     // Hybrid or All: check all
                     chk.prop('checked', true);
@@ -1279,7 +1389,8 @@
                 balanceAcrossBranches: $('#balanceAcrossBranchesChk').is(':checked'),
                 balanceAcrossShifts: $('#balanceAcrossShiftsChk').is(':checked'),
                 trainingMode: currentTrainingMode,
-                localCityGroup: currentLocalCity,
+                localCityGroup: currentLocalCities[0] || 'المنصورة',
+                localCityGroups: currentLocalCities,
                 fallbackBranchId: currentFallbackBranchId,
                 preferredShiftId: currentPreferredShiftId > 0 ? currentPreferredShiftId : null,
                 hybridLocalPercentage: currentHybridPct
@@ -1319,6 +1430,7 @@
                 $('#statShifts').text(data.shiftsCount || 0);
 
                 // Render Mode Badge
+                const citiesSummary = currentLocalCities.join('، ');
                 const modeBadge = $('#resultsModeBadge');
                 modeBadge.empty().removeClass('hidden');
                 if (data.trainingMode === 'Offline') {
@@ -1328,7 +1440,7 @@
                             <span>حضوري (Offline)</span>
                         </span>
                         <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                            📍 فروع المنصورة: <b>${data.localCandidatesCount || 0}</b>
+                            📍 فروع (${citiesSummary}): <b>${data.localCandidatesCount || 0}</b>
                         </span>
                         ${(data.fallbackCandidatesCount > 0) ? `
                             <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 flex items-center gap-1">
@@ -1344,7 +1456,7 @@
                             <span>أونلاين (Online)</span>
                         </span>
                         <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                            🌐 فروع خارج المنصورة: <b>${data.outsideCandidatesCount || 0}</b>
+                            🌐 فروع خارج (${citiesSummary}): <b>${data.outsideCandidatesCount || 0}</b>
                         </span>
                         ${(data.fallbackCandidatesCount > 0) ? `
                             <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 flex items-center gap-1">
@@ -1357,13 +1469,13 @@
                     modeBadge.html(`
                         <span class="px-3 py-1 rounded-full text-xs font-black bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-300 flex items-center gap-1.5 shadow-xs">
                             <i class="fas fa-arrows-split-up-and-left"></i>
-                            <span>مختلط (Hybrid 50/50)</span>
+                            <span>مختلط (Hybrid ${currentHybridPct}/${100 - currentHybridPct})</span>
                         </span>
                         <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                            📍 فروع المنصورة: <b>${data.localCandidatesCount || 0}</b>
+                            📍 فروع (${citiesSummary}): <b>${data.localCandidatesCount || 0}</b>
                         </span>
                         <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                            🌐 خارج المنصورة: <b>${data.outsideCandidatesCount || 0}</b>
+                            🌐 خارج المجموعات: <b>${data.outsideCandidatesCount || 0}</b>
                         </span>
                         ${(data.fallbackCandidatesCount > 0) ? `
                             <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 flex items-center gap-1">
