@@ -14,6 +14,7 @@ namespace Exam.DTOs
         public DateTime? CreatedAt { get; set; }
         public int? BranchId { get; set; }
         public string BranchName { get; set; } = "--";
+        public string City { get; set; } = "";
         public int? ShiftId { get; set; }
         public string ShiftName { get; set; } = "--";
         public string RoleName { get; set; } = "User";
@@ -43,6 +44,13 @@ namespace Exam.DTOs
         public Dictionary<int, Dictionary<int, int>>? BranchShiftQuotas { get; set; } = new();
         public bool BalanceAcrossBranches { get; set; } = false;
         public bool BalanceAcrossShifts { get; set; } = false;
+
+        // Training Delivery Mode Parameters (Offline / Online / Hybrid / All)
+        public string? TrainingMode { get; set; } = "All"; // "Offline", "Online", "Hybrid", "All"
+        public string? LocalCityGroup { get; set; } = "المنصورة";
+        public int? FallbackBranchId { get; set; } = 61; // Default: Call Center (كول سنتر)
+        public int? PreferredShiftId { get; set; } // null / 0 = Any Shift
+        public int HybridLocalPercentage { get; set; } = 50; // 50% Local, 50% Outside
     }
 
     public class WaveProposalResultDto
@@ -52,6 +60,10 @@ namespace Exam.DTOs
         public int ResitterCount { get; set; }
         public int BranchesCount { get; set; }
         public int ShiftsCount { get; set; }
+        public string TrainingMode { get; set; } = "All";
+        public int LocalCandidatesCount { get; set; }
+        public int OutsideCandidatesCount { get; set; }
+        public int FallbackCandidatesCount { get; set; }
         public List<WaveCandidateDto> Candidates { get; set; } = new();
     }
 

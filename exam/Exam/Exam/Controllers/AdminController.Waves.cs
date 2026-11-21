@@ -817,7 +817,7 @@ Eltarshoubi Training Academy Team";
             await conn.OpenAsync();
 
             var branches = (await conn.QueryAsync<BranchDto>(
-                "SELECT CAST(Id AS NVARCHAR(50)) AS Id, BranchName FROM Branches ORDER BY BranchName")).ToList();
+                "SELECT CAST(Id AS NVARCHAR(50)) AS Id, BranchName, City FROM Branches ORDER BY BranchName")).ToList();
 
             var shifts = (await conn.QueryAsync<ShiftDto>(
                 "SELECT Id, ShiftName, StartTime, EndTime FROM Shifts ORDER BY ShiftName ASC")).ToList();
@@ -837,10 +837,19 @@ Eltarshoubi Training Academy Team";
             var recentWaves = (await conn.QueryAsync<WaveDto>(
                 "SELECT TOP 20 Id, WaveName, StartDate, EndDate, IsActive FROM TrainingWaves ORDER BY Id DESC")).ToList();
 
+            var cities = branches.Where(b => !string.IsNullOrWhiteSpace(b.City))
+                                 .Select(b => b.City!.Trim())
+                                 .Distinct()
+                                 .OrderBy(c => c == "المنصورة" ? 0 : 1)
+                                 .ThenBy(c => c)
+                                 .ToList();
+
             ViewBag.Branches = branches;
             ViewBag.Shifts = shifts;
             ViewBag.Roles = roles;
             ViewBag.RecentWaves = recentWaves;
+            ViewBag.Cities = cities;
+            ViewBag.CallCenterBranchId = 61;
             ViewBag.DefaultWaveName = $"Batch {recentWaves.Count + 1} - Proposed";
 
             return View();
@@ -883,6 +892,7 @@ Eltarshoubi Training Academy Team";
                         u.CreatedAt,
                         u.BranchId,
                         ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                        ISNULL(b.City, N'') AS City,
                         u.ShiftId,
                         ISNULL(s.ShiftName, '--') AS ShiftName,
                         COALESCE(ur.RoleName, N'User') AS RoleName,
@@ -926,6 +936,7 @@ Eltarshoubi Training Academy Team";
                         u.CreatedAt,
                         u.BranchId,
                         ISNULL(b.BranchName, N'بدون فرع') AS BranchName,
+                        ISNULL(b.City, N'') AS City,
                         u.ShiftId,
                         ISNULL(s.ShiftName, '--') AS ShiftName,
                         COALESCE(ur.RoleName, N'User') AS RoleName,
@@ -972,11 +983,26 @@ Eltarshoubi Training Academy Team";
                     )).ToList();
                 }
 
+                string trainingMode = string.IsNullOrWhiteSpace(filter.TrainingMode) ? "All" : filter.TrainingMode.Trim();
+                string localCity = string.IsNullOrWhiteSpace(filter.LocalCityGroup) ? "المنصورة" : filter.LocalCityGroup.Trim();
+                int fallbackBranchId = filter.FallbackBranchId ?? 61;
+                int? prefShiftId = (filter.PreferredShiftId.HasValue && filter.PreferredShiftId.Value > 0) ? filter.PreferredShiftId.Value : null;
+                int hybridLocalPct = Math.Clamp(filter.HybridLocalPercentage > 0 ? filter.HybridLocalPercentage : 50, 10, 90);
+
+                bool IsLocal(WaveCandidateDto c) => (c.City != null && c.City.Trim().Equals(localCity, StringComparison.OrdinalIgnoreCase)) && c.BranchId != fallbackBranchId;
+                bool IsOutside(WaveCandidateDto c) => (c.City == null || !c.City.Trim().Equals(localCity, StringComparison.OrdinalIgnoreCase)) && c.BranchId != fallbackBranchId;
+                bool IsFallback(WaveCandidateDto c) => c.BranchId == fallbackBranchId;
+
                 // Filter by Branches if specified
                 if (filter.BranchIds != null && filter.BranchIds.Any())
                 {
-                    allFresh = allFresh.Where(u => u.BranchId.HasValue && filter.BranchIds.Contains(u.BranchId.Value)).ToList();
-                    allResitters = allResitters.Where(u => u.BranchId.HasValue && filter.BranchIds.Contains(u.BranchId.Value)).ToList();
+                    var allowedBranchIds = filter.BranchIds.ToHashSet();
+                    if (trainingMode.Equals("Offline", StringComparison.OrdinalIgnoreCase) || trainingMode.Equals("Hybrid", StringComparison.OrdinalIgnoreCase))
+                    {
+                        allowedBranchIds.Add(fallbackBranchId); // Always permit fallback branch for deficit in Offline/Hybrid
+                    }
+                    allFresh = allFresh.Where(u => u.BranchId.HasValue && allowedBranchIds.Contains(u.BranchId.Value)).ToList();
+                    allResitters = allResitters.Where(u => u.BranchId.HasValue && allowedBranchIds.Contains(u.BranchId.Value)).ToList();
                 }
 
                 // Filter by Shifts if specified
@@ -1034,7 +1060,286 @@ Eltarshoubi Training Academy Team";
                         shiftQuotaRemaining[c.ShiftId.Value] = Math.Max(0, shiftQuotaRemaining[c.ShiftId.Value] - 1);
                 }
 
-                // Step 1: Fulfill branch-specific quotas first
+                // If specialized Training Delivery Mode is selected and no manual fixed quotas were provided:
+                if (!hasBranchQuotas && !hasShiftQuotas && (trainingMode.Equals("Offline", StringComparison.OrdinalIgnoreCase) || 
+                                                            trainingMode.Equals("Online", StringComparison.OrdinalIgnoreCase) || 
+                                                            trainingMode.Equals("Hybrid", StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (trainingMode.Equals("Offline", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Phase 1: Local representation - 1 candidate from each local branch
+                        var localBranchIds = allFresh.Concat(allResitters)
+                            .Where(IsLocal)
+                            .Where(c => c.BranchId.HasValue)
+                            .Select(c => c.BranchId!.Value)
+                            .Distinct()
+                            .ToList();
+
+                        foreach (var bId in localBranchIds)
+                        {
+                            if (pickedUserIds.Count >= capacity) break;
+
+                            var bEligible = allFresh.Concat(allResitters)
+                                .Where(c => c.BranchId == bId && !pickedUserIds.Contains(c.UserId))
+                                .ToList();
+
+                            if (!bEligible.Any()) continue;
+
+                            WaveCandidateDto? candidate = null;
+                            if (prefShiftId.HasValue)
+                            {
+                                candidate = bEligible.FirstOrDefault(c => c.ShiftId == prefShiftId.Value && c.CandidateType == "New")
+                                         ?? bEligible.FirstOrDefault(c => c.ShiftId == prefShiftId.Value)
+                                         ?? bEligible.FirstOrDefault(c => c.CandidateType == "New")
+                                         ?? bEligible.FirstOrDefault();
+                            }
+                            else
+                            {
+                                candidate = bEligible.FirstOrDefault(c => c.CandidateType == "New")
+                                         ?? bEligible.FirstOrDefault();
+                            }
+
+                            if (candidate != null)
+                            {
+                                PickCandidate(candidate);
+                            }
+                        }
+
+                        // Phase 2: Fill remaining local capacity from local branches (balanced round-robin)
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            var localBranchesRemaining = allFresh.Concat(allResitters)
+                                .Where(c => IsLocal(c) && c.BranchId.HasValue && !pickedUserIds.Contains(c.UserId))
+                                .GroupBy(c => c.BranchId!.Value)
+                                .ToList();
+
+                            bool addedAny = true;
+                            while (pickedUserIds.Count < capacity && addedAny && localBranchesRemaining.Any())
+                            {
+                                addedAny = false;
+                                foreach (var bg in localBranchesRemaining)
+                                {
+                                    if (pickedUserIds.Count >= capacity) break;
+                                    var unpicked = bg.Where(c => !pickedUserIds.Contains(c.UserId)).ToList();
+                                    if (unpicked.Any())
+                                    {
+                                        WaveCandidateDto? nextCand = null;
+                                        if (prefShiftId.HasValue)
+                                        {
+                                            nextCand = unpicked.FirstOrDefault(c => c.ShiftId == prefShiftId.Value && c.CandidateType == "New")
+                                                    ?? unpicked.FirstOrDefault(c => c.ShiftId == prefShiftId.Value)
+                                                    ?? unpicked.FirstOrDefault(c => c.CandidateType == "New")
+                                                    ?? unpicked.FirstOrDefault();
+                                        }
+                                        else
+                                        {
+                                            nextCand = unpicked.FirstOrDefault(c => c.CandidateType == "New")
+                                                    ?? unpicked.FirstOrDefault();
+                                        }
+
+                                        if (nextCand != null)
+                                        {
+                                            PickCandidate(nextCand);
+                                            addedAny = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Phase 3: Deficit Fallback (Call Center)
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            int deficit = capacity - pickedUserIds.Count;
+                            var fbEligible = allFresh.Concat(allResitters)
+                                .Where(c => IsFallback(c) && !pickedUserIds.Contains(c.UserId))
+                                .ToList();
+
+                            if (prefShiftId.HasValue)
+                            {
+                                fbEligible = fbEligible.OrderByDescending(c => c.ShiftId == prefShiftId.Value)
+                                                       .ThenByDescending(c => c.CandidateType == "New")
+                                                       .ToList();
+                            }
+                            else
+                            {
+                                fbEligible = fbEligible.OrderByDescending(c => c.CandidateType == "New")
+                                                       .ToList();
+                            }
+
+                            foreach (var c in fbEligible.Take(deficit))
+                            {
+                                PickCandidate(c);
+                            }
+                        }
+                    }
+                    else if (trainingMode.Equals("Online", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var outsideBranches = allFresh.Concat(allResitters)
+                            .Where(IsOutside)
+                            .Where(c => c.BranchId.HasValue && !pickedUserIds.Contains(c.UserId))
+                            .GroupBy(c => c.BranchId!.Value)
+                            .ToList();
+
+                        bool addedAny = true;
+                        while (pickedUserIds.Count < capacity && addedAny && outsideBranches.Any())
+                        {
+                            addedAny = false;
+                            foreach (var bg in outsideBranches)
+                            {
+                                if (pickedUserIds.Count >= capacity) break;
+                                var unpicked = bg.Where(c => !pickedUserIds.Contains(c.UserId)).ToList();
+                                if (unpicked.Any())
+                                {
+                                    WaveCandidateDto? nextCand = null;
+                                    if (prefShiftId.HasValue)
+                                    {
+                                        nextCand = unpicked.FirstOrDefault(c => c.ShiftId == prefShiftId.Value && c.CandidateType == "New")
+                                                ?? unpicked.FirstOrDefault(c => c.ShiftId == prefShiftId.Value)
+                                                ?? unpicked.FirstOrDefault(c => c.CandidateType == "New")
+                                                ?? unpicked.FirstOrDefault();
+                                    }
+                                    else
+                                    {
+                                        nextCand = unpicked.FirstOrDefault(c => c.CandidateType == "New")
+                                                ?? unpicked.FirstOrDefault();
+                                    }
+
+                                    if (nextCand != null)
+                                    {
+                                        PickCandidate(nextCand);
+                                        addedAny = true;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Fallback deficit for Online
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            int deficit = capacity - pickedUserIds.Count;
+                            var fbEligible = allFresh.Concat(allResitters)
+                                .Where(c => IsFallback(c) && !pickedUserIds.Contains(c.UserId))
+                                .ToList();
+
+                            foreach (var c in fbEligible.Take(deficit))
+                            {
+                                PickCandidate(c);
+                            }
+                        }
+                    }
+                    else if (trainingMode.Equals("Hybrid", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int localTarget = (int)Math.Round(capacity * (hybridLocalPct / 100.0));
+                        int outsideTarget = capacity - localTarget;
+
+                        // 1. Local Half: 1 per branch first
+                        var localBranchIds = allFresh.Concat(allResitters)
+                            .Where(IsLocal)
+                            .Where(c => c.BranchId.HasValue)
+                            .Select(c => c.BranchId!.Value)
+                            .Distinct()
+                            .ToList();
+
+                        foreach (var bId in localBranchIds)
+                        {
+                            if (pickedUserIds.Count >= localTarget) break;
+                            var bEligible = allFresh.Concat(allResitters)
+                                .Where(c => c.BranchId == bId && !pickedUserIds.Contains(c.UserId))
+                                .ToList();
+
+                            var candidate = bEligible.FirstOrDefault(c => c.CandidateType == "New") ?? bEligible.FirstOrDefault();
+                            if (candidate != null)
+                            {
+                                PickCandidate(candidate);
+                            }
+                        }
+
+                        // 2. Local Half: Fill remaining up to localTarget
+                        if (pickedUserIds.Count < localTarget)
+                        {
+                            var localBranchesRemaining = allFresh.Concat(allResitters)
+                                .Where(c => IsLocal(c) && c.BranchId.HasValue && !pickedUserIds.Contains(c.UserId))
+                                .GroupBy(c => c.BranchId!.Value)
+                                .ToList();
+
+                            bool added = true;
+                            while (pickedUserIds.Count < localTarget && added)
+                            {
+                                added = false;
+                                foreach (var bg in localBranchesRemaining)
+                                {
+                                    if (pickedUserIds.Count >= localTarget) break;
+                                    var unpicked = bg.Where(c => !pickedUserIds.Contains(c.UserId)).ToList();
+                                    if (unpicked.Any())
+                                    {
+                                        var cand = unpicked.FirstOrDefault(c => c.CandidateType == "New") ?? unpicked.FirstOrDefault();
+                                        if (cand != null)
+                                        {
+                                            PickCandidate(cand);
+                                            added = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 3. Local Half Deficit: Fill from Call Center
+                        if (pickedUserIds.Count < localTarget)
+                        {
+                            int def = localTarget - pickedUserIds.Count;
+                            var fb = allFresh.Concat(allResitters)
+                                .Where(c => IsFallback(c) && !pickedUserIds.Contains(c.UserId))
+                                .Take(def)
+                                .ToList();
+                            foreach (var c in fb) PickCandidate(c);
+                        }
+
+                        int localPickedCount = pickedUserIds.Count;
+                        int outsideTargetTotal = localPickedCount + outsideTarget;
+
+                        // 4. Outside Half: Distribute across outside branches
+                        var outsideBranches = allFresh.Concat(allResitters)
+                            .Where(IsOutside)
+                            .Where(c => c.BranchId.HasValue && !pickedUserIds.Contains(c.UserId))
+                            .GroupBy(c => c.BranchId!.Value)
+                            .ToList();
+
+                        bool outsideAdded = true;
+                        while (pickedUserIds.Count < outsideTargetTotal && outsideAdded && outsideBranches.Any())
+                        {
+                            outsideAdded = false;
+                            foreach (var bg in outsideBranches)
+                            {
+                                if (pickedUserIds.Count >= outsideTargetTotal) break;
+                                var unpicked = bg.Where(c => !pickedUserIds.Contains(c.UserId)).ToList();
+                                if (unpicked.Any())
+                                {
+                                    var cand = unpicked.FirstOrDefault(c => c.CandidateType == "New") ?? unpicked.FirstOrDefault();
+                                    if (cand != null)
+                                    {
+                                        PickCandidate(cand);
+                                        outsideAdded = true;
+                                    }
+                                }
+                            }
+                        }
+
+                        // 5. Total Deficit fallback
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            int totalDef = capacity - pickedUserIds.Count;
+                            var fb = allFresh.Concat(allResitters)
+                                .Where(c => IsFallback(c) && !pickedUserIds.Contains(c.UserId))
+                                .Take(totalDef)
+                                .ToList();
+                            foreach (var c in fb) PickCandidate(c);
+                        }
+                    }
+                }
+                else
+                {
+                    // Step 1: Fulfill branch-specific quotas first
                 if (hasBranchQuotas)
                 {
                     foreach (var bId in branchQuotaRemaining.Keys.ToList())
@@ -1261,6 +1566,7 @@ Eltarshoubi Training Academy Team";
                         foreach (var c in fallbackRes.Take(stillNeeded)) PickCandidate(c);
                     }
                 }
+                } // End of else (!deliveryMode)
 
                 var finalCandidates = new List<WaveCandidateDto>();
                 finalCandidates.AddRange(selectedFresh);
@@ -1276,6 +1582,10 @@ Eltarshoubi Training Academy Team";
 
                 var distinctBranches = finalCandidates.Where(c => !string.IsNullOrEmpty(c.BranchName) && c.BranchName != "--").Select(c => c.BranchName).Distinct().Count();
                 var distinctShifts = finalCandidates.Where(c => !string.IsNullOrEmpty(c.ShiftName) && c.ShiftName != "--").Select(c => c.ShiftName).Distinct().Count();
+
+                int localCandidatesCount = finalCandidates.Count(c => IsLocal(c));
+                int outsideCandidatesCount = finalCandidates.Count(c => IsOutside(c));
+                int fallbackCandidatesCount = finalCandidates.Count(c => IsFallback(c));
 
                 var branchBreakdown = finalCandidates
                     .GroupBy(c => string.IsNullOrWhiteSpace(c.BranchName) ? "بدون فرع" : c.BranchName)
@@ -1325,6 +1635,10 @@ Eltarshoubi Training Academy Team";
                     resitterCount = selectedResitters.Count,
                     branchesCount = distinctBranches,
                     shiftsCount = distinctShifts,
+                    trainingMode = trainingMode,
+                    localCandidatesCount = localCandidatesCount,
+                    outsideCandidatesCount = outsideCandidatesCount,
+                    fallbackCandidatesCount = fallbackCandidatesCount,
                     availableFreshPool = allFresh.Count,
                     availableResittersPool = allResitters.Count,
                     branchBreakdown = branchBreakdown,

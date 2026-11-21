@@ -6,6 +6,8 @@
     var shifts = ViewBag.Shifts as List<Exam.DTOs.ShiftDto> ?? new List<Exam.DTOs.ShiftDto>();
     var roles = ViewBag.Roles as List<string> ?? new List<string>();
     var recentWaves = ViewBag.RecentWaves as List<Exam.DTOs.WaveDto> ?? new List<Exam.DTOs.WaveDto>();
+    var cities = ViewBag.Cities as List<string> ?? new List<string>();
+    int callCenterBranchId = ViewBag.CallCenterBranchId != null ? (int)ViewBag.CallCenterBranchId : 61;
     string defaultWaveName = ViewBag.DefaultWaveName as string ?? "Batch - Proposed";
 }
 
@@ -48,6 +50,87 @@
 
         <form id="proposalForm" onsubmit="event.preventDefault(); generateProposal();" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- 0. Training Delivery Mode (Offline / Online / Hybrid / All) -->
+                <div class="lg:col-span-4 bg-gradient-to-r from-slate-50 to-brand-50/30 dark:from-slate-800/60 dark:to-brand-950/20 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 md:p-5 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center text-sm font-black shadow-sm">
+                                <i class="fas fa-graduation-cap"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-white">Training Delivery Mode (نوع التدريب والتوزيع الذكي)</h3>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">حدد آلية التوزيع الجغرافي للمرشحين بين فروع المنصورة والفروع الخارجية وسد العجز</p>
+                            </div>
+                        </div>
+
+                        <!-- Mode Settings Button (Gear Icon) -->
+                        <button type="button" onclick="openModeSettingsModal()" class="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all shadow-sm flex items-center gap-2 group" title="إعدادات توزيع أنماط التدريب والفرع البديل">
+                            <i class="fas fa-gear text-brand-600 group-hover:rotate-90 transition-transform duration-300"></i>
+                            <span>Settings</span>
+                            <span id="settingsSummaryBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-brand-50 dark:bg-brand-950 text-brand-600 border border-brand-200 dark:border-brand-800">المنصورة + كول سنتر</span>
+                        </button>
+                    </div>
+
+                    <!-- Mode Selector Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                        <!-- 1. Offline Mode Card -->
+                        <label id="modeCard-Offline" onclick="onTrainingModeChanged('Offline')" class="mode-card relative flex flex-col p-3.5 rounded-xl border-2 cursor-pointer transition-all bg-white dark:bg-slate-800 border-brand-500 shadow-md ring-2 ring-brand-500/20">
+                            <input type="radio" name="trainingMode" value="Offline" checked class="sr-only" />
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-black text-brand-600 dark:text-brand-400 flex items-center gap-1.5">
+                                    <i class="fas fa-chalkboard-user"></i>
+                                    <span>Offline (حضوري)</span>
+                                </span>
+                                <span class="w-2.5 h-2.5 rounded-full bg-brand-600 mode-dot"></span>
+                            </div>
+                            <p class="text-[11px] font-bold text-slate-700 dark:text-slate-200">فروع المنصورة (1 من كل فرع)</p>
+                            <p class="text-[10px] text-slate-400 mt-1">سد أي عجز تلقائياً من الكول سنتر</p>
+                        </label>
+
+                        <!-- 2. Online Mode Card -->
+                        <label id="modeCard-Online" onclick="onTrainingModeChanged('Online')" class="mode-card relative flex flex-col p-3.5 rounded-xl border-2 cursor-pointer transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300">
+                            <input type="radio" name="trainingMode" value="Online" class="sr-only" />
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <i class="fas fa-laptop"></i>
+                                    <span>Online (أونلاين)</span>
+                                </span>
+                                <span class="w-2.5 h-2.5 rounded-full bg-transparent border border-slate-300 mode-dot"></span>
+                            </div>
+                            <p class="text-[11px] font-bold text-slate-700 dark:text-slate-200">فروع خارج المنصورة</p>
+                            <p class="text-[10px] text-slate-400 mt-1">توزيع عادل حسب السعة المستهدفة</p>
+                        </label>
+
+                        <!-- 3. Hybrid Mode Card -->
+                        <label id="modeCard-Hybrid" onclick="onTrainingModeChanged('Hybrid')" class="mode-card relative flex flex-col p-3.5 rounded-xl border-2 cursor-pointer transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300">
+                            <input type="radio" name="trainingMode" value="Hybrid" class="sr-only" />
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <i class="fas fa-arrows-split-up-and-left"></i>
+                                    <span>Hybrid (مختلط)</span>
+                                </span>
+                                <span class="w-2.5 h-2.5 rounded-full bg-transparent border border-slate-300 mode-dot"></span>
+                            </div>
+                            <p class="text-[11px] font-bold text-slate-700 dark:text-slate-200">مناصفة 50% / 50%</p>
+                            <p class="text-[10px] text-slate-400 mt-1">نصف من المنصورة والنصف خارجها</p>
+                        </label>
+
+                        <!-- 4. All / Custom Mode Card -->
+                        <label id="modeCard-All" onclick="onTrainingModeChanged('All')" class="mode-card relative flex flex-col p-3.5 rounded-xl border-2 cursor-pointer transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300">
+                            <input type="radio" name="trainingMode" value="All" class="sr-only" />
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <i class="fas fa-sliders"></i>
+                                    <span>Custom / All (مخصص)</span>
+                                </span>
+                                <span class="w-2.5 h-2.5 rounded-full bg-transparent border border-slate-300 mode-dot"></span>
+                            </div>
+                            <p class="text-[11px] font-bold text-slate-700 dark:text-slate-200">توزيع حر لكافة الفروع</p>
+                            <p class="text-[10px] text-slate-400 mt-1">تحديد الحصص يدوياً حسب الرغبة</p>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- 1. Registration Window -->
                 <div class="space-y-2 lg:col-span-2">
                     <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
@@ -133,10 +216,16 @@
                         <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar" id="branchOptionsContainer">
                             @foreach (var b in branches)
                             {
-                                <div class="branch-item flex items-center justify-between p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer" data-branchid="@b.Id" onclick="setActiveBranch(@b.Id, '@b.BranchName.Replace("'", "\\'")')">
-                                    <label class="flex items-center gap-2.5 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300 flex-1 truncate">
+                                <div class="branch-item flex items-center justify-between p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer" data-branchid="@b.Id" data-city="@(b.City ?? "")" onclick="setActiveBranch(@b.Id, '@b.BranchName.Replace("'", "\\'")')">
+                                    <label class="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-700 dark:text-slate-300 flex-1 truncate">
                                         <input type="checkbox" name="branchFilter" value="@b.Id" checked class="chk-branch rounded border-slate-300 text-brand-600 focus:ring-brand-500" onchange="updateBranchSelectedLabel()" />
                                         <span class="truncate">@b.BranchName.ToUpper()</span>
+                                        @if (!string.IsNullOrEmpty(b.City))
+                                        {
+                                            <span class="text-[9px] px-1.5 py-0.5 rounded-md font-bold @(b.City == "المنصورة" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800" : (b.Id == "61" || b.BranchName.Contains("كول سنتر") ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800" : "bg-slate-100 text-slate-500 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"))">
+                                                @(b.Id == "61" || b.BranchName.Contains("كول سنتر") ? "كول سنتر (سد عجز)" : b.City)
+                                            </span>
+                                        }
                                     </label>
                                     <div class="flex items-center gap-1.5 shrink-0 pl-2">
                                         <span class="text-[9px] font-bold text-slate-400">Seats:</span>
@@ -420,6 +509,7 @@
                         <span id="selectedCountBadge" class="px-2.5 py-0.5 rounded-full text-xs font-black bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400">0 Selected</span>
                     </h3>
                     <p class="text-xs text-slate-400">Review, exclude, or modify candidates before exporting or enrolling</p>
+                    <div id="resultsModeBadge" class="hidden mt-2.5 flex items-center gap-2 flex-wrap"></div>
                 </div>
 
                 <div class="flex items-center gap-3 flex-wrap">
@@ -462,6 +552,95 @@
                     </table>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Training Mode & Fallback Configuration -->
+<div id="modeSettingsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm hidden animate-fade-in p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl space-y-6">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-brand-50 dark:bg-brand-950/50 text-brand-600 flex items-center justify-center text-lg font-black">
+                    <i class="fas fa-gear"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-slate-900 dark:text-white">إعدادات توزيع أنماط التدريب</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">تحكم بالمجموعة المحلية وفرع سد العجز والورديات المفضلة</p>
+                </div>
+            </div>
+            <button onclick="closeModeSettingsModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+        </div>
+
+        <div class="space-y-4 text-left">
+            <!-- 1. Local City / Branch Group -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                    <i class="fas fa-city text-brand-600"></i>
+                    <span>المجموعة المحلية للأوفلاين (Local City / Group)</span>
+                </label>
+                <select id="cfgLocalCity" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:ring-2 focus:ring-brand-500 outline-none">
+                    @foreach (var c in cities)
+                    {
+                        <option value="@c" selected="@(c == "المنصورة" ? "selected" : null)">@c @(c == "المنصورة" ? "(المجموعة الافتراضية)" : "")</option>
+                    }
+                </select>
+                <p class="text-[10px] text-slate-400">الفروع التابعة لهذه المدينة يتم سحب مرشح واحد على الأقل من كل فرع فيها في تدريب الأوفلاين.</p>
+            </div>
+
+            <!-- 2. Fallback Deficit Branch -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                    <i class="fas fa-headset text-brand-600"></i>
+                    <span>فرع سد العجز والبديل (Fallback Deficit Branch)</span>
+                </label>
+                <select id="cfgFallbackBranch" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:ring-2 focus:ring-brand-500 outline-none">
+                    @foreach (var b in branches)
+                    {
+                        <option value="@b.Id" selected="@(b.Id == "61" || b.BranchName.Contains("كول سنتر") ? "selected" : null)">
+                            @b.BranchName (@(string.IsNullOrEmpty(b.City) ? "بدون مدينة" : b.City)) @(b.Id == "61" || b.BranchName.Contains("كول سنتر") ? "⭐ [الافتراضي]" : "")
+                        </option>
+                    }
+                </select>
+                <p class="text-[10px] text-slate-400">إذا لم تكتمل السعة المستهدفة من فروع المنصورة، يتم سحب باقي المرشحين فوراً من هذا الفرع.</p>
+            </div>
+
+            <!-- 3. Preferred Shift -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                    <i class="fas fa-business-time text-brand-600"></i>
+                    <span>الوردية المفضلة لسحب المرشحين (Preferred Shift)</span>
+                </label>
+                <select id="cfgPreferredShift" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:ring-2 focus:ring-brand-500 outline-none">
+                    <option value="0">أي شيفت متاح (Any Shift - الافتراضي)</option>
+                    @foreach (var s in shifts)
+                    {
+                        <option value="@s.Id">@s.ShiftName (@s.StartTime.ToString(@"hh\:mm") - @s.EndTime.ToString(@"hh\:mm"))</option>
+                    }
+                </select>
+                <p class="text-[10px] text-slate-400">اختياري: لتفضيل سحب المرشحين أو سد العجز من وردية محددة أو تركها مفتوحة لأي شيفت.</p>
+            </div>
+
+            <!-- 4. Hybrid Split Percentage -->
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <i class="fas fa-arrows-split-up-and-left text-brand-600"></i>
+                        <span>نسبة الفروع المحلية في النمط المختلط (Hybrid Ratio)</span>
+                    </label>
+                    <span id="cfgHybridPctLabel" class="text-xs font-black text-brand-600 px-2 py-0.5 rounded-full bg-brand-50 dark:bg-brand-950 border border-brand-200 dark:border-brand-800">50% محلي / 50% خارجي</span>
+                </div>
+                <input type="range" id="cfgHybridPct" min="10" max="90" step="5" value="50" oninput="updateHybridPctLabel(this.value)" class="w-full accent-brand-600 cursor-pointer" />
+            </div>
+        </div>
+
+        <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onclick="resetModeSettingsDefaults()" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-bold transition-all">
+                استعادة الافتراضي
+            </button>
+            <button type="button" onclick="saveModeSettings()" class="px-6 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-md shadow-brand-600/20 transition-all">
+                حفظ الإعدادات
+            </button>
         </div>
     </div>
 </div>
@@ -549,6 +728,108 @@
     <script src="~/lib/sweetalert2/sweetalert2.all.min.js"></script>
     <script>
         let currentCandidates = [];
+
+        // Training Delivery Mode & Configuration State
+        let currentTrainingMode = 'Offline';
+        let currentLocalCity = 'المنصورة';
+        let currentFallbackBranchId = 61;
+        let currentPreferredShiftId = 0;
+        let currentHybridPct = 50;
+
+        function openModeSettingsModal() {
+            $('#cfgLocalCity').val(currentLocalCity);
+            $('#cfgFallbackBranch').val(currentFallbackBranchId);
+            $('#cfgPreferredShift').val(currentPreferredShiftId);
+            $('#cfgHybridPct').val(currentHybridPct);
+            updateHybridPctLabel(currentHybridPct);
+            $('#modeSettingsModal').removeClass('hidden');
+        }
+
+        function closeModeSettingsModal() {
+            $('#modeSettingsModal').addClass('hidden');
+        }
+
+        function updateHybridPctLabel(val) {
+            val = parseInt(val) || 50;
+            $('#cfgHybridPctLabel').text(`${val}% محلي / ${100 - val}% خارجي`);
+        }
+
+        function resetModeSettingsDefaults() {
+            $('#cfgLocalCity').val('المنصورة');
+            $('#cfgFallbackBranch').val('61');
+            $('#cfgPreferredShift').val('0');
+            $('#cfgHybridPct').val(50);
+            updateHybridPctLabel(50);
+        }
+
+        function saveModeSettings() {
+            currentLocalCity = $('#cfgLocalCity').val() || 'المنصورة';
+            currentFallbackBranchId = parseInt($('#cfgFallbackBranch').val()) || 61;
+            currentPreferredShiftId = parseInt($('#cfgPreferredShift').val()) || 0;
+            currentHybridPct = parseInt($('#cfgHybridPct').val()) || 50;
+
+            const fallbackText = $('#cfgFallbackBranch option:selected').text().trim().split('(')[0].trim() || 'كول سنتر';
+            $('#settingsSummaryBadge').text(`${currentLocalCity} + ${fallbackText}`);
+
+            closeModeSettingsModal();
+
+            // Re-apply current mode with updated settings
+            onTrainingModeChanged(currentTrainingMode);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'تم حفظ الإعدادات',
+                text: `المجموعة: ${currentLocalCity} | الفرع البديل: ${fallbackText}`,
+                timer: 1600,
+                showConfirmButton: false
+            });
+        }
+
+        function onTrainingModeChanged(mode) {
+            currentTrainingMode = mode;
+            $('input[name="trainingMode"]').prop('checked', false);
+            $(`input[name="trainingMode"][value="${mode}"]`).prop('checked', true);
+
+            // Update mode card styling
+            $('.mode-card').removeClass('border-brand-500 shadow-md ring-2 ring-brand-500/20')
+                           .addClass('border-slate-200 dark:border-slate-700');
+            $('.mode-dot').removeClass('bg-brand-600')
+                          .addClass('bg-transparent border border-slate-300');
+
+            const activeCard = $(`#modeCard-${mode}`);
+            activeCard.removeClass('border-slate-200 dark:border-slate-700')
+                      .addClass('border-brand-500 shadow-md ring-2 ring-brand-500/20');
+            activeCard.find('.mode-dot').removeClass('bg-transparent border border-slate-300')
+                                       .addClass('bg-brand-600');
+
+            // Synchronize branch checkboxes
+            $('.branch-item').each(function () {
+                const bId = parseInt($(this).data('branchid'));
+                const city = ($(this).data('city') || '').toString().trim();
+                const chk = $(this).find('.chk-branch');
+
+                if (mode === 'Offline') {
+                    // Mansoura branches + Call Center
+                    if (city === currentLocalCity || bId === currentFallbackBranchId) {
+                        chk.prop('checked', true);
+                    } else {
+                        chk.prop('checked', false);
+                    }
+                } else if (mode === 'Online') {
+                    // Outside Mansoura (exclude local and exclude fallback)
+                    if (city !== currentLocalCity && bId !== currentFallbackBranchId) {
+                        chk.prop('checked', true);
+                    } else {
+                        chk.prop('checked', false);
+                    }
+                } else {
+                    // Hybrid or All: check all
+                    chk.prop('checked', true);
+                }
+            });
+
+            updateBranchSelectedLabel();
+        }
 
         function setRegistrationDays(days, btn) {
             $('#filterDays').val(days);
@@ -996,7 +1277,12 @@
                 branchQuotas: branchQuotas,
                 branchShiftQuotas: cleanBranchShiftQuotas,
                 balanceAcrossBranches: $('#balanceAcrossBranchesChk').is(':checked'),
-                balanceAcrossShifts: $('#balanceAcrossShiftsChk').is(':checked')
+                balanceAcrossShifts: $('#balanceAcrossShiftsChk').is(':checked'),
+                trainingMode: currentTrainingMode,
+                localCityGroup: currentLocalCity,
+                fallbackBranchId: currentFallbackBranchId,
+                preferredShiftId: currentPreferredShiftId > 0 ? currentPreferredShiftId : null,
+                hybridLocalPercentage: currentHybridPct
             };
 
             try {
@@ -1031,6 +1317,69 @@
                 $('#statResitter').text(data.resitterCount);
                 $('#statBranches').text(data.branchesCount);
                 $('#statShifts').text(data.shiftsCount || 0);
+
+                // Render Mode Badge
+                const modeBadge = $('#resultsModeBadge');
+                modeBadge.empty().removeClass('hidden');
+                if (data.trainingMode === 'Offline') {
+                    modeBadge.html(`
+                        <span class="px-3 py-1 rounded-full text-xs font-black bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 flex items-center gap-1.5 shadow-xs">
+                            <i class="fas fa-chalkboard-user"></i>
+                            <span>حضوري (Offline)</span>
+                        </span>
+                        <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            📍 فروع المنصورة: <b>${data.localCandidatesCount || 0}</b>
+                        </span>
+                        ${(data.fallbackCandidatesCount > 0) ? `
+                            <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 flex items-center gap-1">
+                                <i class="fas fa-headset"></i>
+                                <span>سد عجز (كول سنتر): <b>${data.fallbackCandidatesCount}</b></span>
+                            </span>
+                        ` : ''}
+                    `);
+                } else if (data.trainingMode === 'Online') {
+                    modeBadge.html(`
+                        <span class="px-3 py-1 rounded-full text-xs font-black bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300 flex items-center gap-1.5 shadow-xs">
+                            <i class="fas fa-laptop"></i>
+                            <span>أونلاين (Online)</span>
+                        </span>
+                        <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            🌐 فروع خارج المنصورة: <b>${data.outsideCandidatesCount || 0}</b>
+                        </span>
+                        ${(data.fallbackCandidatesCount > 0) ? `
+                            <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 flex items-center gap-1">
+                                <i class="fas fa-headset"></i>
+                                <span>سد عجز (كول سنتر): <b>${data.fallbackCandidatesCount}</b></span>
+                            </span>
+                        ` : ''}
+                    `);
+                } else if (data.trainingMode === 'Hybrid') {
+                    modeBadge.html(`
+                        <span class="px-3 py-1 rounded-full text-xs font-black bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-300 flex items-center gap-1.5 shadow-xs">
+                            <i class="fas fa-arrows-split-up-and-left"></i>
+                            <span>مختلط (Hybrid 50/50)</span>
+                        </span>
+                        <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            📍 فروع المنصورة: <b>${data.localCandidatesCount || 0}</b>
+                        </span>
+                        <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            🌐 خارج المنصورة: <b>${data.outsideCandidatesCount || 0}</b>
+                        </span>
+                        ${(data.fallbackCandidatesCount > 0) ? `
+                            <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 flex items-center gap-1">
+                                <i class="fas fa-headset"></i>
+                                <span>سد عجز (كول سنتر): <b>${data.fallbackCandidatesCount}</b></span>
+                            </span>
+                        ` : ''}
+                    `);
+                } else {
+                    modeBadge.html(`
+                        <span class="px-3 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 shadow-xs">
+                            <i class="fas fa-sliders"></i>
+                            <span>مخصص (Custom / All)</span>
+                        </span>
+                    `);
+                }
 
                 // Render Branch Breakdown
                 if (data.branchBreakdown && data.branchBreakdown.length > 0) {
@@ -1528,6 +1877,9 @@
         }
 
         $(document).ready(function () {
+            // Initialize Training Delivery Mode to Offline (Mansoura + Call Center fallback)
+            onTrainingModeChanged('Offline');
+
             // Pick first checked branch with quota or first branch
             const firstWithQuota = $('.branch-quota-input').filter(function () {
                 const val = parseInt($(this).val());
