@@ -82,7 +82,8 @@ namespace Exam.Controllers
             "DownloadBranchUpdateTemplate", "ImportBranchUpdatesFromExcel", "DownloadBranchesTemplate", "ImportBranchesFromExcel",
             "DownloadShiftUpdateTemplate", "ImportShiftUpdatesFromExcel", "DownloadShiftsTemplate", "ImportShiftsFromExcel",
             "UpdateUserDepartment", "DownloadDepartmentUpdateTemplate", "ImportDepartmentUpdatesFromExcel", "Departments", "SaveDepartment", "DeleteDepartment",
-            "GetDepartmentPersonnel", "ExportDepartmentPersonnelToExcel", "ImportUsersFromExcel", "DownloadPersonnelTemplate"
+            "GetDepartmentPersonnel", "ExportDepartmentPersonnelToExcel", "ImportUsersFromExcel", "DownloadPersonnelTemplate",
+            "Quizzes", "CreateQuiz", "UpdateQuiz", "DeleteQuiz", "ToggleQuizStatus", "GetQuizQuestions", "SaveQuizQuestions", "GetQuizAttempts", "GetTopicsByCategory", "GetWaveGradingSummary", "SaveWaveScoreWeights", "RunWaveCertificationAutomation"
         };
 
         public override void OnActionExecuting(Microsoft.AspNetCore.Mvc.Filters.ActionExecutingContext context)
@@ -544,25 +545,26 @@ namespace Exam.Controllers
         public async Task<IActionResult> Exams(int? typeId = null)
         {
             ViewBag.SelectedTypeId = typeId;
-            ViewBag.ExamTypes = await _examService.GetAllExamTypesAsync();
+            ViewBag.ExamTypes = (await _examService.GetAllExamTypesAsync()).Where(t => t.Id != 9 && !(t.TypeName ?? "").ToLower().Contains("quiz"));
             var exams = await _examService.GetAllExamsWithDetailsAsync();
+            exams = exams.Where(e => e.ExamTypeId != 9 && !(e.ExamType ?? "").Equals("Quiz", StringComparison.OrdinalIgnoreCase) && !e.IsQuiz).ToList();
             return View(exams);
         }
 
         public async Task<IActionResult> WeeklyExams()
         {
-            ViewBag.ExamTypes = (await _examService.GetAllExamTypesAsync()).Where(t => !(t.TypeName ?? "").ToLower().Contains("wave"));
+            ViewBag.ExamTypes = (await _examService.GetAllExamTypesAsync()).Where(t => !(t.TypeName ?? "").ToLower().Contains("wave") && t.Id != 9 && !(t.TypeName ?? "").ToLower().Contains("quiz"));
             var exams = await _examService.GetAllExamsWithDetailsAsync();
-            var weeklyExams = exams.Where(e => !(e.ExamType ?? "").ToLower().Contains("wave")).ToList();
+            var weeklyExams = exams.Where(e => !(e.ExamType ?? "").ToLower().Contains("wave") && e.ExamTypeId != 9 && !(e.ExamType ?? "").Equals("Quiz", StringComparison.OrdinalIgnoreCase) && !e.IsQuiz).ToList();
             return View(weeklyExams);
         }
 
         public async Task<IActionResult> WaveExams()
         {
-            ViewBag.ExamTypes = (await _examService.GetAllExamTypesAsync()).Where(t => (t.TypeName ?? "").ToLower().Contains("wave"));
+            ViewBag.ExamTypes = (await _examService.GetAllExamTypesAsync()).Where(t => (t.TypeName ?? "").ToLower().Contains("wave") && t.Id != 9 && !(t.TypeName ?? "").ToLower().Contains("quiz"));
             ViewBag.Waves = await _examService.GetAllWavesAsync();
             var exams = await _examService.GetAllExamsWithDetailsAsync();
-            var waveExams = exams.Where(e => (e.ExamType ?? "").ToLower().Contains("wave")).ToList();
+            var waveExams = exams.Where(e => (e.ExamType ?? "").ToLower().Contains("wave") && e.ExamTypeId != 9 && !(e.ExamType ?? "").Equals("Quiz", StringComparison.OrdinalIgnoreCase) && !e.IsQuiz).ToList();
             return View(waveExams);
         }
 
@@ -608,6 +610,8 @@ namespace Exam.Controllers
                 });
             }
 
+            exams = exams.Where(e => e.ExamTypeId != 9 && !(e.ExamType ?? "").Equals("Quiz", StringComparison.OrdinalIgnoreCase) && !e.IsQuiz);
+
             return Json(exams);
         }
 
@@ -615,7 +619,7 @@ namespace Exam.Controllers
         public async Task<IActionResult> GetWeeklyExamsForFilter(int examTypeId = 0)
         {
             var exams = await _examService.GetAllExamsWithDetailsAsync();
-            var weeklyExams = exams.Where(e => !(e.ExamType ?? "").ToLower().Contains("wave"));
+            var weeklyExams = exams.Where(e => !(e.ExamType ?? "").ToLower().Contains("wave") && e.ExamTypeId != 9 && !(e.ExamType ?? "").Equals("Quiz", StringComparison.OrdinalIgnoreCase) && !e.IsQuiz);
             
             if (examTypeId > 0) {
                 var allTypes = await _examService.GetAllExamTypesAsync();
@@ -640,7 +644,7 @@ namespace Exam.Controllers
                 exams = await _examService.GetAllExamsWithDetailsAsync();
             }
 
-            var waveExams = exams.Where(e => (e.ExamType ?? "").ToLower().Contains("wave"));
+            var waveExams = exams.Where(e => (e.ExamType ?? "").ToLower().Contains("wave") && e.ExamTypeId != 9 && !(e.ExamType ?? "").Equals("Quiz", StringComparison.OrdinalIgnoreCase) && !e.IsQuiz);
 
             if (examTypeId > 0) {
                 var allTypes = await _examService.GetAllExamTypesAsync();
@@ -5311,6 +5315,7 @@ ORDER BY U.UserName ASC";
             ("BatchCycles", "Wave Cycles (Waves)", "Admin", "Waves", new[] { "WaveDetails", "GetWaves", "CreateWave", "EditWave", "GetWaveUserIds", "GetUsersByWaveId", "AssignUsersToWave", "ImportUsersToWaveFromExcel", "DeleteWave" }),
             ("BatchCycles_RemoveUser", "Wave Action: Remove User from Wave", "Admin", "RemoveUserFromWave", new string[] { }),
             ("SmartWavePlanner", "Smart Wave Planner", "Admin", "SmartWaveProposal", new[] { "GenerateWaveCandidates", "ExportProposedCandidatesToExcel", "ConfirmWaveProposalEnrollment" }),
+            ("WaveQuizzes", "Wave Quizzes & Certification Scoring", "Admin", "Quizzes", new[] { "CreateQuiz", "UpdateQuiz", "DeleteQuiz", "ToggleQuizStatus", "GetQuizQuestions", "SaveQuizQuestions", "GetQuizAttempts", "GetTopicsByCategory", "GetWaveGradingSummary", "SaveWaveScoreWeights", "RunWaveCertificationAutomation" }),
             ("Companies", "Companies Management", "Admin", "Companies", new[] { "AddCompany", "EditCompany", "DeleteCompany", "ClearCompanyTrainees", "ImportCompanyTraineesFromExcel", "GetCompanyTrainees", "DeleteCompanyTrainee", "AddCompanyTraineeManually" }),
             ("Branches", "Branches Management", "Admin", "Branches", new[] { "AddBranch", "EditBranch", "DeleteBranch", "DownloadBranchesTemplate", "ImportBranchesFromExcel", "MergeBranch" }),
             ("BranchSupervisors", "Branch Supervisors Management", "Admin", "BranchSupervisors", new[] { "AddBranchSupervisor", "DeleteBranchSupervisor" }),

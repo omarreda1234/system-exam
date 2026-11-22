@@ -31,6 +31,10 @@ namespace Exam.DTOs
         public int? TotalQuestionsToShow { get; set; }
         public bool ShowQuestionOverview { get; set; } = false;
         public bool IsFinalExam { get; set; }
+        public bool IsQuiz { get; set; }
+        public int? CategoryId { get; set; }
+        public int? TopicId { get; set; }
+        public int? TotalPoints { get; set; }
 
         public List<ExamGenerationRuleDto> GenerationRules { get; set; } = new();
         public List<QuestionCreateDTO> Questions { get; set; } = new();
@@ -101,6 +105,14 @@ namespace Exam.DTOs
         public string WaveName { get; set; }
         public int? WaveId { get; set; }
         public string? CertificateTemplatePath { get; set; }
+
+        // Quiz & Category Extensions
+        public bool IsQuiz { get; set; }
+        public int? CategoryId { get; set; }
+        public int? TopicId { get; set; }
+        public int? TotalPoints { get; set; }
+        public string? CategoryName { get; set; }
+        public string? TopicName { get; set; }
 
         // Blueprint Support
         public List<ExamGenerationRuleDto> GenerationRules { get; set; } = new();

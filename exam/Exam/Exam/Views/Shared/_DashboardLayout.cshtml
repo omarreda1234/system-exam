@@ -486,7 +486,7 @@
                         bool isGroup3Active = currentController == "admin" && (currentAction == "allusers" || currentAction == "traineeprofile" || currentAction == "pendingrequests" || currentAction == "deactivatedusers");
                         bool isGroup4Active = (currentController == "admin" && (currentAction == "structure" || currentAction == "items")) || (currentController == "skilltracks" && currentAction == "index");
                         bool isGroup5Active = currentController == "admin" && (currentAction == "getallcategories" || currentAction == "getallexamtypes" || currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams" || currentAction == "manageinstructions");
-                        bool isGroup6Active = currentController == "admin" && (currentAction == "waves" || currentAction == "assignments" || currentAction == "livemonitor" || currentAction == "smartwaveproposal" || currentAction == "nominationhistory");
+                        bool isGroup6Active = currentController == "admin" && (currentAction == "waves" || currentAction == "assignments" || currentAction == "quizzes" || currentAction == "livemonitor" || currentAction == "smartwaveproposal" || currentAction == "nominationhistory");
                         bool isGroup7Active = (currentController == "admin" && (currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students" || currentAction == "certificates")) || (currentController == "attendance" && currentAction == "analytics");
                     }
 
@@ -820,6 +820,16 @@
                                         <a href="@Url.Action("Assignments", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "assignments")">
                                             <i class="fas fa-tasks w-4 text-center"></i>
                                             <span>Wave Assignments</span>
+                                        </a>
+                                    </li>
+                                }
+                                @if (HasAccess("Admin", "Quizzes") || HasAccess("Admin", "Waves") || User.IsInRole("Admin"))
+                                {
+                                    <li>
+                                        <a href="@Url.Action("Quizzes", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "quizzes")">
+                                            <i class="fas fa-spell-check w-4 text-center text-purple-500"></i>
+                                            <span>Wave Quizzes</span>
+                                            <span class="ml-auto px-1.5 py-0.5 rounded-md text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">Quiz</span>
                                         </a>
                                     </li>
                                 }

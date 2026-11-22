@@ -1,0 +1,1639 @@
+@model IEnumerable<dynamic>
+@{
+    ViewData["Title"] = "Wave Quizzes & Certification Scoring";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+
+    var waves = ViewBag.Waves as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var categories = ViewBag.Categories as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var topics = ViewBag.Topics as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    int? selectedWaveId = ViewBag.SelectedWaveId as int?;
+    int? selectedCategoryId = ViewBag.SelectedCategoryId as int?;
+
+    int totalQuizzes = Model?.Count() ?? 0;
+    int activeQuizzes = Model?.Count(q => q.IsActive == true) ?? 0;
+    int totalAssigned = Model?.Sum(q => (int)(q.AssignedStudentsCount ?? 0)) ?? 0;
+    int totalCompleted = Model?.Sum(q => (int)(q.CompletedAttemptsCount ?? 0)) ?? 0;
+}
+
+<div class="space-y-6 pb-12" dir="rtl">
+    <!-- Breadcrumb & Top Bar -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-xs border border-slate-200/80 dark:border-slate-800">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-1">
+                <span>لوحة التحكم</span>
+                <i class="fas fa-chevron-left text-[9px]"></i>
+                <span>عمليات الويفات</span>
+                <i class="fas fa-chevron-left text-[9px]"></i>
+                <span class="text-purple-600 dark:text-purple-400 font-bold">Wave Quizzes & Certification Scoring</span>
+            </div>
+            <h1 class="text-xl md:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+                <span class="p-2.5 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400">
+                    <i class="fas fa-spell-check text-lg"></i>
+                </span>
+                كويزات الويفات وبنوك الأسئلة وأتمتة درجات الشهادات
+            </h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                إدارة كاملة لكويزات كل ويف وتصنيفاتها، التحكم في درجات الكويزات، بنك الأسئلة، وأتمتة احتساب النتيجة النهائية للشهادة (كويزات + فاينال + أسينمنتس).
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button" onclick="openCreateQuizModal()"
+                    class="px-4 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-sm shadow-purple-500/20 transition-all flex items-center gap-2 cursor-pointer">
+                <i class="fas fa-plus"></i>
+                <span>إضافة كويز جديد</span>
+            </button>
+            <button type="button" onclick="switchMainTab('automation')"
+                    class="px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20 transition-all flex items-center gap-2 cursor-pointer">
+                <i class="fas fa-bolt"></i>
+                <span>أتمتة درجات الشهادات</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Stats Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-3.5">
+            <div class="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                <i class="fas fa-list-check text-base"></i>
+            </div>
+            <div>
+                <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">إجمالي الكويزات</p>
+                <h3 class="text-lg font-black text-slate-900 dark:text-white">@totalQuizzes</h3>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-3.5">
+            <div class="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <i class="fas fa-check-circle text-base"></i>
+            </div>
+            <div>
+                <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">الكويزات المفعلة</p>
+                <h3 class="text-lg font-black text-slate-900 dark:text-white">@activeQuizzes</h3>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-3.5">
+            <div class="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                <i class="fas fa-users text-base"></i>
+            </div>
+            <div>
+                <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">إجمالي المتدربين المعينين</p>
+                <h3 class="text-lg font-black text-slate-900 dark:text-white">@totalAssigned</h3>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-3.5">
+            <div class="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <i class="fas fa-graduation-cap text-base"></i>
+            </div>
+            <div>
+                <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400">المحاولات المكتملة</p>
+                <h3 class="text-lg font-black text-slate-900 dark:text-white">@totalCompleted</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800">
+        <button type="button" onclick="switchMainTab('quizzes')" id="tab-btn-quizzes"
+                class="px-5 py-3 text-xs font-black transition-all border-b-2 flex items-center gap-2 text-purple-600 border-purple-600 dark:text-purple-400 dark:border-purple-400 cursor-pointer">
+            <i class="fas fa-layer-group"></i>
+            <span>إدارة كويزات الويفات وبنوك الأسئلة</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300">@totalQuizzes</span>
+        </button>
+
+        <button type="button" onclick="switchMainTab('automation')" id="tab-btn-automation"
+                class="px-5 py-3 text-xs font-black transition-all border-b-2 flex items-center gap-2 text-slate-500 border-transparent hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer">
+            <i class="fas fa-bolt text-amber-500"></i>
+            <span>أتمتة واحتساب درجات الشهادات (Wave Certification Automation)</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Automation</span>
+        </button>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 1: WAVE QUIZZES MANAGEMENT                               -->
+    <!-- ============================================================ -->
+    <div id="tab-content-quizzes" class="space-y-4">
+        <!-- Filter Bar -->
+        <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <form method="get" action="@Url.Action("Quizzes", "Admin")" class="flex flex-wrap items-center gap-3 grow">
+                <div class="min-w-[200px]">
+                    <label class="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">الويف (Wave):</label>
+                    <select name="waveId" onchange="this.form.submit()"
+                            class="w-full text-xs font-medium px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden">
+                        <option value="">جميع الويفات</option>
+                        @foreach (var w in waves)
+                        {
+                            <option value="@w.Id" selected="@(selectedWaveId == (int)w.Id)">@w.WaveName</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="min-w-[200px]">
+                    <label class="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">التصنيف (Category):</label>
+                    <select name="categoryId" onchange="this.form.submit()"
+                            class="w-full text-xs font-medium px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden">
+                        <option value="">جميع التصنيفات</option>
+                        @foreach (var c in categories)
+                        {
+                            <option value="@c.Id" selected="@(selectedCategoryId == (int)c.Id)">@c.CategoryName</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="min-w-[220px]">
+                    <label class="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">بحث سريع:</label>
+                    <div class="relative">
+                        <i class="fas fa-search absolute right-3 top-2.5 text-xs text-slate-400"></i>
+                        <input type="text" id="quizSearchInput" placeholder="بحث بالاسم أو التوبيك..." onkeyup="filterQuizzesTable()"
+                               class="w-full text-xs font-medium pr-8 pl-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden" />
+                    </div>
+                </div>
+
+                @if (selectedWaveId.HasValue || selectedCategoryId.HasValue)
+                {
+                    <div class="self-end pb-0.5">
+                        <a href="@Url.Action("Quizzes", "Admin")" class="px-3 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-rose-600 bg-slate-100 dark:bg-slate-800 hover:bg-rose-50 transition-all flex items-center gap-1.5">
+                            <i class="fas fa-times"></i>
+                            <span>إلغاء الفلتر</span>
+                        </a>
+                    </div>
+                }
+            </form>
+
+            <div class="text-xs text-slate-500 dark:text-slate-400 font-bold">
+                عرض <span id="visibleQuizzesCount" class="text-purple-600 dark:text-purple-400">@totalQuizzes</span> من أصل @totalQuizzes كويز
+            </div>
+        </div>
+
+        <!-- Quizzes Table Card -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xs border border-slate-200/80 dark:border-slate-800 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-right text-xs" id="quizzesTable">
+                    <thead class="bg-slate-50/80 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                        <tr>
+                            <th class="p-3.5">الكويز</th>
+                            <th class="p-3.5">الويف المستهدفة</th>
+                            <th class="p-3.5">التصنيف والتوبيك</th>
+                            <th class="p-3.5 text-center">الدرجة الكلية والنجاح</th>
+                            <th class="p-3.5 text-center">المدة والأسئلة</th>
+                            <th class="p-3.5 text-center">المحاولات والتعيين</th>
+                            <th class="p-3.5 text-center">الحالة</th>
+                            <th class="p-3.5 text-center">الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/80 font-medium">
+                        @if (Model != null && Model.Any())
+                        {
+                            foreach (var q in Model)
+                            {
+                                <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors quiz-row"
+                                    data-title="@q.Title"
+                                    data-wave="@q.WaveName"
+                                    data-category="@q.CategoryName"
+                                    data-topic="@q.TopicName">
+                                    <td class="p-3.5">
+                                        <div class="font-black text-slate-900 dark:text-white text-xs flex items-center gap-2">
+                                            <span class="w-2 h-2 rounded-full @(q.IsActive == true ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600")"></span>
+                                            <span>@q.Title</span>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace((string)q.Description))
+                                        {
+                                            <p class="text-[11px] text-slate-400 mt-0.5 line-clamp-1">@q.Description</p>
+                                        }
+                                        <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
+                                            <span><i class="far fa-calendar-alt ml-1"></i>@(q.StartTime != null ? ((DateTime)q.StartTime).ToString("yyyy/MM/dd") : "-")</span>
+                                            <span>إلى</span>
+                                            <span>@(q.EndTime != null ? ((DateTime)q.EndTime).ToString("yyyy/MM/dd") : "-")</span>
+                                        </div>
+                                    </td>
+                                    <td class="p-3.5">
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                                            <i class="fas fa-water text-[10px]"></i>
+                                            @q.WaveName
+                                        </span>
+                                    </td>
+                                    <td class="p-3.5">
+                                        <div class="space-y-1">
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">
+                                                <i class="fas fa-folder text-[9px]"></i>
+                                                @q.CategoryName
+                                            </span>
+                                            @if (!string.IsNullOrWhiteSpace((string)q.TopicName) && q.TopicName != "عام / غير محدد")
+                                            {
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                                    <i class="fas fa-tag text-[9px]"></i>
+                                                    @q.TopicName
+                                                </span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="p-3.5 text-center">
+                                        <div class="inline-flex flex-col items-center">
+                                            <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                                                @q.TotalPoints درجة
+                                            </span>
+                                            <span class="text-[10px] text-slate-400 mt-0.5 font-bold">
+                                                نسبة النجاح: @q.PassPercentage%
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td class="p-3.5 text-center">
+                                        <div class="inline-flex flex-col items-center gap-1">
+                                            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                <i class="far fa-clock text-purple-500 ml-1"></i>@q.DurationInMinutes دقيقة
+                                            </span>
+                                            <button type="button" onclick="openQuestionsBankModal(@q.Id, '@q.Title', @q.CategoryId, @(q.TopicId ?? 0))"
+                                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-300 transition-all cursor-pointer">
+                                                <i class="fas fa-database text-[9px]"></i>
+                                                <span>@q.QuestionCount أسئلة بالبنك</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td class="p-3.5 text-center">
+                                        <div class="inline-flex flex-col items-center">
+                                            <button type="button" onclick="openAttemptsModal(@q.Id, '@q.Title')"
+                                                    class="text-xs font-black text-purple-600 hover:text-purple-700 dark:text-purple-400 hover:underline cursor-pointer">
+                                                @q.CompletedAttemptsCount مكتمل
+                                            </button>
+                                            <span class="text-[10px] text-slate-400">
+                                                من أصل @q.AssignedStudentsCount متدرب
+                                            </span>
+                                            @if (q.CompletedAttemptsCount > 0)
+                                            {
+                                                <span class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                                                    متوسط: @q.AverageScore%
+                                                </span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="p-3.5 text-center">
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" class="sr-only peer" @(q.IsActive == true ? "checked" : "")
+                                                   onchange="toggleQuizActive(@q.Id, this.checked)" />
+                                            <div class="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-purple-600"></div>
+                                        </label>
+                                    </td>
+                                    <td class="p-3.5 text-center">
+                                        <div class="flex items-center justify-center gap-1.5">
+                                            <button type="button" onclick="openQuestionsBankModal(@q.Id, '@q.Title', @q.CategoryId, @(q.TopicId ?? 0))"
+                                                    title="إدارة بنك أسئلة الكويز"
+                                                    class="p-2 rounded-xl text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-all cursor-pointer">
+                                                <i class="fas fa-question-circle text-xs"></i>
+                                            </button>
+                                            <button type="button" onclick="openAttemptsModal(@q.Id, '@q.Title')"
+                                                    title="عرض نتائج ومحاولات الطلاب"
+                                                    class="p-2 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all cursor-pointer">
+                                                <i class="fas fa-chart-bar text-xs"></i>
+                                            </button>
+                                            <button type="button" onclick="openEditQuizModal(@q.Id, '@q.Title', '@(q.Description ?? "")', @q.WaveId, @q.CategoryId, @(q.TopicId ?? 0), @q.TotalPoints, @q.PassPercentage, @q.DurationInMinutes, '@(q.StartTime != null ? ((DateTime)q.StartTime).ToString("yyyy-MM-ddTHH:mm") : "")', '@(q.EndTime != null ? ((DateTime)q.EndTime).ToString("yyyy-MM-ddTHH:mm") : "")', @(q.IsActive == true ? "true" : "false"))"
+                                                    title="تعديل الكويز"
+                                                    class="p-2 rounded-xl text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-all cursor-pointer">
+                                                <i class="fas fa-pen text-xs"></i>
+                                            </button>
+                                            <button type="button" onclick="deleteQuiz(@q.Id, '@q.Title')"
+                                                    title="حذف الكويز"
+                                                    class="p-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-all cursor-pointer">
+                                                <i class="fas fa-trash-alt text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="8" class="p-12 text-center text-slate-400">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <i class="fas fa-spell-check text-4xl mb-3 text-slate-300 dark:text-slate-700"></i>
+                                        <p class="font-bold text-sm">لا توجد كويزات مسجلة حالياً تطابق الفلتر المحدد</p>
+                                        <button type="button" onclick="openCreateQuizModal()" class="mt-3 px-4 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700">
+                                            + إضافة كويز جديد
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 2: CERTIFICATION GRADING & AUTOMATION ENGINE              -->
+    <!-- ============================================================ -->
+    <div id="tab-content-automation" class="space-y-6 hidden">
+        <!-- Automation Header & Wave Selector -->
+        <div class="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white p-6 rounded-3xl shadow-lg border border-purple-800/40 relative overflow-hidden">
+            <div class="absolute -right-10 -bottom-10 opacity-10 pointer-events-none text-9xl">
+                <i class="fas fa-bolt"></i>
+            </div>
+            <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                <div class="max-w-2xl">
+                    <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-500/30 text-purple-200 border border-purple-400/30 mb-2 inline-block">
+                        ⚡ المحرك الذكي لاحتساب درجات الشهادات (Wave Certification Automation Engine)
+                    </span>
+                    <h2 class="text-2xl font-black">أتمتة واعتماد النتيجة النهائية للشهادة</h2>
+                    <p class="text-xs text-purple-200/80 mt-1 leading-relaxed">
+                        يتم احتساب النتيجة المئوية الإجمالية لكل متدرب بناءً على الأوزان المحددة للتقييمات: (مجموع الكويزات + الواجبات + امتحان الفاينال)، وحفظ النتيجة تلقائياً في خانة <code class="bg-black/30 px-1 py-0.5 rounded text-amber-300">UserWaveCertificates.Score</code> مع توليد السيريال والشهادة للمجتازين.
+                    </p>
+                </div>
+
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/10">
+                    <div class="min-w-[220px]">
+                        <label class="block text-[11px] font-bold text-purple-200 mb-1">اختر الويف المستهدفة للأتمتة:</label>
+                        <select id="automationWaveSelect" onchange="loadWaveGradingSummary()"
+                                class="w-full text-xs font-bold px-3 py-2.5 rounded-xl bg-slate-900/90 text-white border border-purple-400/40 focus:ring-2 focus:ring-purple-400 focus:outline-hidden">
+                            <option value="">-- اضغط لاختيار ويف --</option>
+                            @foreach (var w in waves)
+                            {
+                                <option value="@w.Id" selected="@(selectedWaveId == (int)w.Id)">@w.WaveName</option>
+                            }
+                        </select>
+                    </div>
+
+                    <button type="button" onclick="runCertificationAutomation()" id="btnRunAutomation"
+                            class="px-5 py-2.5 self-end sm:self-auto rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 shadow-md shadow-amber-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                        <i class="fas fa-bolt"></i>
+                        <span>تشغيل الأتمتة وحفظ الدرجات</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weights Configuration Card -->
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                    <h3 class="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fas fa-sliders-h text-purple-600"></i>
+                        توزيع أوزان التقييمات في الويف (Grading Weights Distribution)
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">حدد نسبة مساهمة كل مكون في الدرجة النهائية للشهادة (مجموع الأوزان = 100%)</p>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="text-xs font-bold">
+                        المجموع الحالي: <span id="weightsSumBadge" class="font-black text-sm text-emerald-600">100%</span>
+                    </div>
+                    <button type="button" onclick="saveWaveWeights()"
+                            class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-300 transition-all flex items-center gap-1.5 cursor-pointer">
+                        <i class="fas fa-save"></i>
+                        <span>حفظ الأوزان</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 pt-1">
+                <!-- Quizzes Weight -->
+                <div class="bg-purple-50/60 dark:bg-purple-950/30 p-4 rounded-xl border border-purple-200/60 dark:border-purple-800/40">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-purple-900 dark:text-purple-300">
+                            <i class="fas fa-spell-check ml-1"></i> وزن الكويزات (Quizzes)
+                        </span>
+                        <span id="quizzesWeightDisplay" class="text-xs font-black text-purple-700 dark:text-purple-400">30%</span>
+                    </div>
+                    <input type="range" id="quizzesWeightInput" min="0" max="100" value="30" oninput="updateWeightsUI()"
+                           class="w-full accent-purple-600 cursor-pointer" />
+                    <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">متوسط درجات كويزات الويف</div>
+                </div>
+
+                <!-- Assignments Weight -->
+                <div class="bg-blue-50/60 dark:bg-blue-950/30 p-4 rounded-xl border border-blue-200/60 dark:border-blue-800/40">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-blue-900 dark:text-blue-300">
+                            <i class="fas fa-tasks ml-1"></i> وزن الواجبات (Assignments)
+                        </span>
+                        <span id="assignmentsWeightDisplay" class="text-xs font-black text-blue-700 dark:text-blue-400">20%</span>
+                    </div>
+                    <input type="range" id="assignmentsWeightInput" min="0" max="100" value="20" oninput="updateWeightsUI()"
+                           class="w-full accent-blue-600 cursor-pointer" />
+                    <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">متوسط درجات واجبات الويف</div>
+                </div>
+
+                <!-- Final Exam Weight -->
+                <div class="bg-emerald-50/60 dark:bg-emerald-950/30 p-4 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-emerald-900 dark:text-emerald-300">
+                            <i class="fas fa-graduation-cap ml-1"></i> وزن الفاينال (Final Exam)
+                        </span>
+                        <span id="finalExamWeightDisplay" class="text-xs font-black text-emerald-700 dark:text-emerald-400">50%</span>
+                    </div>
+                    <input type="range" id="finalExamWeightInput" min="0" max="100" value="50" oninput="updateWeightsUI()"
+                           class="w-full accent-emerald-600 cursor-pointer" />
+                    <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">امتحان الفاينال للويف</div>
+                </div>
+
+                <!-- Passing Percentage -->
+                <div class="bg-amber-50/60 dark:bg-amber-950/30 p-4 rounded-xl border border-amber-200/60 dark:border-amber-800/40">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-amber-900 dark:text-amber-300">
+                            <i class="fas fa-award ml-1"></i> درجة اجتياز الشهادة
+                        </span>
+                        <span id="passingPercentageDisplay" class="text-xs font-black text-amber-700 dark:text-amber-400">60%</span>
+                    </div>
+                    <input type="range" id="passingPercentageInput" min="40" max="90" value="60" oninput="updateWeightsUI()"
+                           class="w-full accent-amber-600 cursor-pointer" />
+                    <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">الحد الأدنى للنجاح واستحقاق الشهادة</div>
+                </div>
+            </div>
+
+            <!-- Wave Assessment Inventory Stats -->
+            <div id="waveAssessmentInventory" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs">
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between">
+                    <span class="text-slate-500 font-bold">كويزات الويف المكتشفة:</span>
+                    <span id="invQuizzesCount" class="font-black text-purple-600 dark:text-purple-400">0</span>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between">
+                    <span class="text-slate-500 font-bold">واجبات الويف المكتشفة:</span>
+                    <span id="invAssignmentsCount" class="font-black text-blue-600 dark:text-blue-400">0</span>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between">
+                    <span class="text-slate-500 font-bold">امتحان الفاينال:</span>
+                    <span id="invFinalExamTitle" class="font-black text-emerald-600 dark:text-emerald-400 truncate max-w-[200px]">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gradebook Master Table -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xs border border-slate-200/80 dark:border-slate-800 overflow-hidden">
+            <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-table-list text-purple-600"></i>
+                    <h3 class="text-sm font-black text-slate-900 dark:text-white">سجل درجات المتدربين والشهادات (Live Wave Gradebook)</h3>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="text" id="gradebookSearch" placeholder="بحث باسم أو كود المتدرب..." onkeyup="filterGradebookTable()"
+                           class="text-xs px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white" />
+                    <span id="gradebookCountBadge" class="text-xs font-bold text-slate-500">0 متدرب</span>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-right text-xs" id="gradebookTable">
+                    <thead class="bg-slate-50/80 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                        <tr>
+                            <th class="p-3.5">المتدرب</th>
+                            <th class="p-3.5">الفرع والوظيفة</th>
+                            <th class="p-3.5 text-center">متوسط الكويزات (@(ViewBag.QuizzesWeight ?? 30)%)</th>
+                            <th class="p-3.5 text-center">متوسط الواجبات (@(ViewBag.AssignmentsWeight ?? 20)%)</th>
+                            <th class="p-3.5 text-center">امتحان الفاينال (@(ViewBag.FinalExamWeight ?? 50)%)</th>
+                            <th class="p-3.5 text-center bg-purple-50/50 dark:bg-purple-950/20">الدرجة النهائية المحسوبة</th>
+                            <th class="p-3.5 text-center">الدرجة بالشهادة الحالية</th>
+                            <th class="p-3.5 text-center">حالة الاعتماد</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gradebookTbody" class="divide-y divide-slate-100 dark:divide-slate-800/80 font-medium">
+                        <tr>
+                            <td colspan="8" class="p-10 text-center text-slate-400">
+                                يرجى اختيار ويف من القائمة بالأعلى لعرض سجل الدرجات وتشغيل الأتمتة.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: CREATE / EDIT QUIZ                                     -->
+<!-- ============================================================ -->
+<div id="quizModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in" dir="rtl">
+        <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h3 id="quizModalTitle" class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-spell-check text-purple-600"></i>
+                <span>إضافة كويز جديد للويف</span>
+            </h3>
+            <button type="button" onclick="closeQuizModal()" class="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center">
+                <i class="fas fa-times text-sm"></i>
+            </button>
+        </div>
+
+        <form id="quizForm" onsubmit="submitQuizForm(event)" class="p-6 space-y-4 overflow-y-auto grow">
+            <input type="hidden" id="modalQuizId" value="" />
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">عنوان الكويز *</label>
+                <input type="text" id="modalQuizTitle" required placeholder="مثال: كويز الأسبوع الأول - أدوية القلب"
+                       class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden" />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">الويف المستهدفة *</label>
+                    <select id="modalQuizWaveId" required
+                            class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden">
+                        <option value="">-- اختر الويف --</option>
+                        @foreach (var w in waves)
+                        {
+                            <option value="@w.Id">@w.WaveName</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">التصنيف (Category) *</label>
+                    <select id="modalQuizCategoryId" required onchange="onCategoryChangeInModal()"
+                            class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden">
+                        <option value="">-- اختر التصنيف --</option>
+                        @foreach (var c in categories)
+                        {
+                            <option value="@c.Id">@c.CategoryName</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">التوبيك / المحاضرة (Topic - اختياري)</label>
+                <select id="modalQuizTopicId"
+                        class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden">
+                    <option value="">-- عام بدون توبيك محدد --</option>
+                    @foreach (var t in topics)
+                    {
+                        <option value="@t.Id" data-category="@t.CategoryId">@t.TopicName</option>
+                    }
+                </select>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">الدرجة الكلية للكويز *</label>
+                    <input type="number" id="modalQuizTotalPoints" required min="1" max="1000" value="100"
+                           class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">نسبة النجاح (%) *</label>
+                    <input type="number" id="modalQuizPassPercent" required min="1" max="100" value="60"
+                           class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">مدة الكويز (دقيقة) *</label>
+                    <input type="number" id="modalQuizDuration" required min="1" max="300" value="20"
+                           class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden" />
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">تاريخ ووقت البدء</label>
+                    <input type="datetime-local" id="modalQuizStartTime"
+                           class="w-full text-xs font-medium px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">تاريخ ووقت الانتهاء</label>
+                    <input type="datetime-local" id="modalQuizEndTime"
+                           class="w-full text-xs font-medium px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden" />
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">ملاحظات / وصف الكويز</label>
+                <textarea id="modalQuizDescription" rows="2" placeholder="ملاحظات توضيحية للطلاب..."
+                          class="w-full text-xs font-medium px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden"></textarea>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1">
+                <input type="checkbox" id="modalQuizIsActive" checked
+                       class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300" />
+                <label for="modalQuizIsActive" class="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                    تفعيل الكويز فوراً للمتدربين بالويف
+                </label>
+            </div>
+
+            <div class="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">
+                <button type="button" onclick="closeQuizModal()"
+                        class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+                    إلغاء
+                </button>
+                <button type="submit" id="modalQuizSubmitBtn"
+                        class="px-5 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-sm shadow-purple-500/20">
+                    حفظ الكويز
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: MANAGE QUIZ QUESTIONS & QUESTION BANK                 -->
+<!-- ============================================================ -->
+<div id="questionsBankModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-fade-in" dir="rtl">
+        <!-- Header -->
+        <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div>
+                <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-database text-purple-600"></i>
+                    <span id="bankModalQuizTitle">بنك أسئلة الكويز</span>
+                </h3>
+                <p id="bankModalQuizSubtitle" class="text-xs text-slate-400 mt-0.5">-</p>
+            </div>
+            <button type="button" onclick="closeQuestionsBankModal()" class="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center">
+                <i class="fas fa-times text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Bank Sub-Tabs -->
+        <div class="flex items-center gap-2 px-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+            <button type="button" onclick="switchBankSubTab('assigned')" id="subtab-assigned-btn"
+                    class="py-3 px-3 text-xs font-black border-b-2 text-purple-600 border-purple-600 dark:text-purple-400 dark:border-purple-400 flex items-center gap-1.5 cursor-pointer">
+                <i class="fas fa-check-circle"></i>
+                <span>الأسئلة الحالية بالكويز</span>
+                <span id="bankAssignedCountBadge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-950">0</span>
+            </button>
+            <button type="button" onclick="switchBankSubTab('available')" id="subtab-available-btn"
+                    class="py-3 px-3 text-xs font-black border-b-2 text-slate-500 border-transparent hover:text-slate-900 dark:text-slate-400 flex items-center gap-1.5 cursor-pointer">
+                <i class="fas fa-folder-open"></i>
+                <span>أسئلة متوفرة ببنك الأسئلة</span>
+                <span id="bankAvailableCountBadge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700 dark:bg-slate-800">0</span>
+            </button>
+            <button type="button" onclick="switchBankSubTab('quickadd')" id="subtab-quickadd-btn"
+                    class="py-3 px-3 text-xs font-black border-b-2 text-slate-500 border-transparent hover:text-slate-900 dark:text-slate-400 flex items-center gap-1.5 cursor-pointer">
+                <i class="fas fa-plus-circle text-emerald-500"></i>
+                <span>+ كتابة سؤال جديد فوراً</span>
+            </button>
+        </div>
+
+        <!-- Bank Content Container -->
+        <div class="p-6 overflow-y-auto grow space-y-4">
+            <!-- 1. Assigned Questions List -->
+            <div id="bankSubTab-assigned" class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-500">قائمة الأسئلة التي تظهر للطلاب في هذا الكويز:</span>
+                    <button type="button" onclick="removeAllQuizQuestions()" class="text-[11px] font-bold text-rose-600 hover:underline">
+                        إزالة جميع الأسئلة
+                    </button>
+                </div>
+                <div id="assignedQuestionsList" class="space-y-2">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+            <!-- 2. Available Bank Questions -->
+            <div id="bankSubTab-available" class="space-y-3 hidden">
+                <div class="flex items-center justify-between gap-3">
+                    <input type="text" id="bankSearchInput" placeholder="بحث بنص السؤال..." onkeyup="filterAvailableQuestions()"
+                           class="grow text-xs px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" />
+                    <button type="button" onclick="addAllAvailableQuestions()" class="shrink-0 px-3 py-2 rounded-xl text-xs font-bold bg-purple-50 text-purple-700 hover:bg-purple-100">
+                        + إضافة كل المتوفر
+                    </button>
+                </div>
+                <div id="availableQuestionsList" class="space-y-2">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+            <!-- 3. Quick Add Question -->
+            <div id="bankSubTab-quickadd" class="space-y-4 hidden">
+                <div class="bg-purple-50/50 dark:bg-purple-950/30 p-4 rounded-2xl border border-purple-200/60 dark:border-purple-800/40">
+                    <h4 class="text-xs font-black text-purple-900 dark:text-purple-300 mb-2">إضافة سؤال جديد وحفظه في بنك الأسئلة وربطه بهذا الكويز مباشرة</h4>
+
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">نص السؤال *</label>
+                            <textarea id="quickQuestionText" rows="2" placeholder="اكتب نص السؤال هنا..."
+                                      class="w-full text-xs p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"></textarea>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">الدرجة</label>
+                                <input type="number" id="quickQuestionPoints" min="1" max="100" value="5"
+                                       class="w-full text-xs p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">مستوى الصعوبة</label>
+                                <select id="quickQuestionDifficulty" class="w-full text-xs p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                                    <option value="1">سهل (Easy)</option>
+                                    <option value="2">متوسط (Medium)</option>
+                                    <option value="3">صعب (Hard)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2 pt-2">
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">الخيارات (حدد الخيار الصحيح) *</label>
+                            @for (int i = 1; i <= 4; i++)
+                            {
+                                <div class="flex items-center gap-2">
+                                    <input type="radio" name="quickCorrectChoice" value="@i" @(i == 1 ? "checked" : "")
+                                           class="w-4 h-4 text-purple-600 cursor-pointer" />
+                                    <input type="text" id="quickChoiceText@i" placeholder="الخيار رقم @i"
+                                           class="grow text-xs px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                                </div>
+                            }
+                        </div>
+
+                        <div class="pt-2 flex justify-end">
+                            <button type="button" onclick="submitQuickQuestion()" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
+                                <i class="fas fa-plus ml-1"></i> حفظ وإضافة للكويز
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <span class="text-xs text-slate-500 font-bold">
+                إجمالي الأسئلة المحددة: <span id="bankSelectedTotalCount" class="font-black text-purple-600">0</span>
+            </span>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="closeQuestionsBankModal()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl">
+                    إغلاق
+                </button>
+                <button type="button" onclick="saveQuizQuestionsSelection()" class="px-5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-sm">
+                    حفظ التغييرات في الكويز
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: VIEW QUIZ ATTEMPTS                                    -->
+<!-- ============================================================ -->
+<div id="attemptsModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in" dir="rtl">
+        <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div>
+                <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-chart-bar text-emerald-600"></i>
+                    <span id="attemptsModalTitle">نتائج ومحاولات المتدربين</span>
+                </h3>
+                <p id="attemptsModalSubtitle" class="text-xs text-slate-400 mt-0.5">-</p>
+            </div>
+            <button type="button" onclick="closeAttemptsModal()" class="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center">
+                <i class="fas fa-times text-sm"></i>
+            </button>
+        </div>
+
+        <div class="p-6 overflow-y-auto grow space-y-4">
+            <!-- Attempts Stats -->
+            <div class="grid grid-cols-3 gap-3 text-center">
+                <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800">
+                    <p class="text-[11px] text-slate-400 font-bold">إجمالي المحاولات</p>
+                    <h4 id="attTotalAttempts" class="text-lg font-black text-slate-900 dark:text-white">0</h4>
+                </div>
+                <div class="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40">
+                    <p class="text-[11px] text-emerald-600 font-bold">نسبة النجاح</p>
+                    <h4 id="attPassRate" class="text-lg font-black text-emerald-600">0%</h4>
+                </div>
+                <div class="p-3 rounded-2xl bg-purple-50 dark:bg-purple-950/40">
+                    <p class="text-[11px] text-purple-600 font-bold">متوسط الدرجات</p>
+                    <h4 id="attAvgScore" class="text-lg font-black text-purple-600">0%</h4>
+                </div>
+            </div>
+
+            <!-- Attempts Table -->
+            <div class="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
+                <table class="w-full text-right text-xs">
+                    <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">
+                        <tr>
+                            <th class="p-3">المتدرب</th>
+                            <th class="p-3">الفرع</th>
+                            <th class="p-3 text-center">الدرجة المئوية</th>
+                            <th class="p-3 text-center">الدرجة من أصل</th>
+                            <th class="p-3 text-center">الإجابات الصحيحة</th>
+                            <th class="p-3 text-center">الوقت المستغرق</th>
+                            <th class="p-3 text-center">الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attemptsTbody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                        <!-- Populated via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+            <button type="button" onclick="closeAttemptsModal()" class="px-5 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 rounded-xl">
+                إغلاق
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCRIPTS & INTERACTION LOGIC                                  -->
+<!-- ============================================================ -->
+@section Scripts {
+    <script>
+        let currentActiveQuizId = 0;
+        let activeBankAssignedIds = new Set();
+        let currentAvailableQuestionsData = [];
+        let currentAssignedQuestionsData = [];
+
+        // ------------------------------------------------------------
+        // Tab Switching
+        // ------------------------------------------------------------
+        function switchMainTab(tab) {
+            const quizzesTab = document.getElementById('tab-content-quizzes');
+            const autoTab = document.getElementById('tab-content-automation');
+            const btnQuizzes = document.getElementById('tab-btn-quizzes');
+            const btnAuto = document.getElementById('tab-btn-automation');
+
+            if (tab === 'quizzes') {
+                quizzesTab.classList.remove('hidden');
+                autoTab.classList.add('hidden');
+                btnQuizzes.className = "px-5 py-3 text-xs font-black transition-all border-b-2 flex items-center gap-2 text-purple-600 border-purple-600 dark:text-purple-400 dark:border-purple-400 cursor-pointer";
+                btnAuto.className = "px-5 py-3 text-xs font-black transition-all border-b-2 flex items-center gap-2 text-slate-500 border-transparent hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer";
+            } else {
+                quizzesTab.classList.add('hidden');
+                autoTab.classList.remove('hidden');
+                btnAuto.className = "px-5 py-3 text-xs font-black transition-all border-b-2 flex items-center gap-2 text-purple-600 border-purple-600 dark:text-purple-400 dark:border-purple-400 cursor-pointer";
+                btnQuizzes.className = "px-5 py-3 text-xs font-black transition-all border-b-2 flex items-center gap-2 text-slate-500 border-transparent hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer";
+
+                // Auto-trigger summary if wave is selected
+                const waveSelect = document.getElementById('automationWaveSelect');
+                if (waveSelect.value) {
+                    loadWaveGradingSummary();
+                }
+            }
+        }
+
+        // ------------------------------------------------------------
+        // Filter Quizzes Table
+        // ------------------------------------------------------------
+        function filterQuizzesTable() {
+            const query = (document.getElementById('quizSearchInput').value || '').toLowerCase().trim();
+            const rows = document.querySelectorAll('.quiz-row');
+            let visibleCount = 0;
+
+            rows.forEach(r => {
+                const title = (r.getAttribute('data-title') || '').toLowerCase();
+                const wave = (r.getAttribute('data-wave') || '').toLowerCase();
+                const cat = (r.getAttribute('data-category') || '').toLowerCase();
+                const top = (r.getAttribute('data-topic') || '').toLowerCase();
+
+                if (!query || title.includes(query) || wave.includes(query) || cat.includes(query) || top.includes(query)) {
+                    r.style.display = '';
+                    visibleCount++;
+                } else {
+                    r.style.display = 'none';
+                }
+            });
+
+            document.getElementById('visibleQuizzesCount').innerText = visibleCount;
+        }
+
+        // ------------------------------------------------------------
+        // Create / Edit Quiz Modal
+        // ------------------------------------------------------------
+        function openCreateQuizModal() {
+            document.getElementById('modalQuizId').value = '';
+            document.getElementById('quizModalTitle').innerHTML = '<i class="fas fa-spell-check text-purple-600"></i><span>إضافة كويز جديد للويف</span>';
+            document.getElementById('modalQuizSubmitBtn').innerText = 'حفظ وإنشاء الكويز';
+            document.getElementById('quizForm').reset();
+            document.getElementById('modalQuizTotalPoints').value = 100;
+            document.getElementById('modalQuizPassPercent').value = 60;
+            document.getElementById('modalQuizDuration').value = 20;
+            document.getElementById('modalQuizIsActive').checked = true;
+
+            // Set default dates
+            const now = new Date();
+            const nowIso = now.toISOString().slice(0, 16);
+            const future = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            const futureIso = future.toISOString().slice(0, 16);
+            document.getElementById('modalQuizStartTime').value = nowIso;
+            document.getElementById('modalQuizEndTime').value = futureIso;
+
+            // If a wave is filtered, pre-select it
+            const curWave = '@(selectedWaveId ?? 0)';
+            if (curWave > 0) document.getElementById('modalQuizWaveId').value = curWave;
+
+            document.getElementById('quizModal').classList.remove('hidden');
+        }
+
+        function openEditQuizModal(id, title, desc, waveId, catId, topId, totalPoints, passPercent, duration, startTime, endTime, isActive) {
+            document.getElementById('modalQuizId').value = id;
+            document.getElementById('quizModalTitle').innerHTML = '<i class="fas fa-pen text-blue-600"></i><span>تعديل بيانات الكويز</span>';
+            document.getElementById('modalQuizSubmitBtn').innerText = 'حفظ التعديلات';
+
+            document.getElementById('modalQuizTitle').value = title;
+            document.getElementById('modalQuizDescription').value = desc || '';
+            document.getElementById('modalQuizWaveId').value = waveId;
+            document.getElementById('modalQuizCategoryId').value = catId;
+            onCategoryChangeInModal(topId);
+
+            document.getElementById('modalQuizTotalPoints').value = totalPoints || 100;
+            document.getElementById('modalQuizPassPercent').value = passPercent || 60;
+            document.getElementById('modalQuizDuration').value = duration || 20;
+            if (startTime) document.getElementById('modalQuizStartTime').value = startTime;
+            if (endTime) document.getElementById('modalQuizEndTime').value = endTime;
+            document.getElementById('modalQuizIsActive').checked = isActive;
+
+            document.getElementById('quizModal').classList.remove('hidden');
+        }
+
+        function closeQuizModal() {
+            document.getElementById('quizModal').classList.add('hidden');
+        }
+
+        function onCategoryChangeInModal(selectedTopicId = null) {
+            const catId = document.getElementById('modalQuizCategoryId').value;
+            const topicSelect = document.getElementById('modalQuizTopicId');
+
+            Array.from(topicSelect.options).forEach(opt => {
+                if (!opt.value) {
+                    opt.style.display = '';
+                    return;
+                }
+                const optCat = opt.getAttribute('data-category');
+                if (!catId || optCat == catId) {
+                    opt.style.display = '';
+                } else {
+                    opt.style.display = 'none';
+                }
+            });
+
+            if (selectedTopicId) {
+                topicSelect.value = selectedTopicId;
+            } else {
+                topicSelect.value = '';
+            }
+        }
+
+        async function submitQuizForm(e) {
+            e.preventDefault();
+            const idVal = document.getElementById('modalQuizId').value;
+            const isEdit = idVal && parseInt(idVal) > 0;
+
+            const payload = {
+                id: isEdit ? parseInt(idVal) : null,
+                title: document.getElementById('modalQuizTitle').value.trim(),
+                description: document.getElementById('modalQuizDescription').value.trim(),
+                waveId: parseInt(document.getElementById('modalQuizWaveId').value),
+                categoryId: parseInt(document.getElementById('modalQuizCategoryId').value),
+                topicId: document.getElementById('modalQuizTopicId').value ? parseInt(document.getElementById('modalQuizTopicId').value) : null,
+                totalPoints: parseInt(document.getElementById('modalQuizTotalPoints').value) || 100,
+                passPercentage: parseFloat(document.getElementById('modalQuizPassPercent').value) || 60,
+                durationInMinutes: parseInt(document.getElementById('modalQuizDuration').value) || 20,
+                startTime: document.getElementById('modalQuizStartTime').value ? new Date(document.getElementById('modalQuizStartTime').value).toISOString() : null,
+                endTime: document.getElementById('modalQuizEndTime').value ? new Date(document.getElementById('modalQuizEndTime').value).toISOString() : null,
+                isActive: document.getElementById('modalQuizIsActive').checked
+            };
+
+            const url = isEdit ? '/Admin/UpdateQuiz' : '/Admin/CreateQuiz';
+
+            try {
+                Swal.fire({ title: 'جاري الحفظ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'تم بنجاح!', text: data.message, timer: 2000, showConfirmButton: false });
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.message || 'فشلت العملية' });
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'خطأ بالاتصال', text: err.message });
+            }
+        }
+
+        async function toggleQuizActive(id, isActive) {
+            try {
+                const res = await fetch('/Admin/ToggleQuizStatus', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `id=${id}&isActive=${isActive}`
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    Swal.fire({ icon: 'error', title: 'خطأ', text: 'فشل تغيير الحالة' });
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function deleteQuiz(id, title) {
+            const confirm = await Swal.fire({
+                title: 'تأكيد الحذف؟',
+                text: `هل أنت متأكد من حذف الكويز "${title}" وكافة الأسئلة والمحاولات المرتبطة به نهائياً؟`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                confirmButtonText: 'نعم، احذف',
+                cancelButtonText: 'إلغاء'
+            });
+
+            if (!confirm.isConfirmed) return;
+
+            try {
+                Swal.fire({ title: 'جاري الحذف...', didOpen: () => Swal.showLoading() });
+                const res = await fetch(`/Admin/DeleteQuiz?id=${id}`, { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'تم الحذف', text: data.message, timer: 1500, showConfirmButton: false });
+                    setTimeout(() => window.location.reload(), 1200);
+                } else {
+                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'خطأ', text: err.message });
+            }
+        }
+
+        // ------------------------------------------------------------
+        // Question Bank Modal & Interaction
+        // ------------------------------------------------------------
+        async function openQuestionsBankModal(quizId, quizTitle, categoryId, topicId) {
+            currentActiveQuizId = quizId;
+            document.getElementById('bankModalQuizTitle').innerText = `بنك أسئلة الكويز: ${quizTitle}`;
+            document.getElementById('questionsBankModal').classList.remove('hidden');
+            switchBankSubTab('assigned');
+
+            try {
+                const res = await fetch(`/Admin/GetQuizQuestions/${quizId}`);
+                const data = await res.json();
+
+                if (!data.success) {
+                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                    return;
+                }
+
+                currentAssignedQuestionsData = data.assignedQuestions || [];
+                currentAvailableQuestionsData = data.availableQuestions || [];
+                activeBankAssignedIds = new Set(currentAssignedQuestionsData.map(q => q.Id));
+
+                document.getElementById('bankModalQuizSubtitle').innerText =
+                    `الويف: ${data.quiz.WaveName || 'عام'} | التصنيف: ${data.quiz.CategoryName || 'عام'} | الدرجة: ${data.quiz.TotalPoints} نقطة`;
+
+                renderAssignedQuestions();
+                renderAvailableQuestions();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function closeQuestionsBankModal() {
+            document.getElementById('questionsBankModal').classList.add('hidden');
+        }
+
+        function switchBankSubTab(subTab) {
+            const tabs = ['assigned', 'available', 'quickadd'];
+            tabs.forEach(t => {
+                const panel = document.getElementById(`bankSubTab-${t}`);
+                const btn = document.getElementById(`subtab-${t}-btn`);
+                if (t === subTab) {
+                    panel.classList.remove('hidden');
+                    btn.className = "py-3 px-3 text-xs font-black border-b-2 text-purple-600 border-purple-600 dark:text-purple-400 dark:border-purple-400 flex items-center gap-1.5 cursor-pointer";
+                } else {
+                    panel.classList.add('hidden');
+                    btn.className = "py-3 px-3 text-xs font-black border-b-2 text-slate-500 border-transparent hover:text-slate-900 dark:text-slate-400 flex items-center gap-1.5 cursor-pointer";
+                }
+            });
+        }
+
+        function renderAssignedQuestions() {
+            const container = document.getElementById('assignedQuestionsList');
+            document.getElementById('bankAssignedCountBadge').innerText = activeBankAssignedIds.size;
+            document.getElementById('bankSelectedTotalCount').innerText = activeBankAssignedIds.size;
+
+            if (activeBankAssignedIds.size === 0) {
+                container.innerHTML = `
+                    <div class="p-8 text-center text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                        <i class="fas fa-question-circle text-3xl mb-2 text-slate-300"></i>
+                        <p class="font-bold text-xs">لم يتم ربط أي أسئلة بهذا الكويز بعد</p>
+                        <p class="text-[11px] text-slate-400 mt-1">انتقل لتبويب "الأسئلة المتوفرة" لإضافة أسئلة من بنك الأسئلة أو كتابة سؤال جديد.</p>
+                    </div>`;
+                return;
+            }
+
+            let html = '';
+            currentAssignedQuestionsData.forEach((q, idx) => {
+                if (!activeBankAssignedIds.has(q.Id)) return;
+                html += `
+                    <div class="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between gap-3">
+                        <div class="grow">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[10px] flex items-center justify-center">${idx + 1}</span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300">${q.Points || 5} نقاط</span>
+                                <span class="text-[10px] text-slate-400">${q.CategoryName || ''} ${q.TopicName ? '• ' + q.TopicName : ''}</span>
+                            </div>
+                            <p class="text-xs font-bold text-slate-900 dark:text-white">${q.QuestionText}</p>
+                        </div>
+                        <button type="button" onclick="removeQuestionFromQuiz(${q.Id})"
+                                class="shrink-0 p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-all" title="إزالة من الكويز">
+                            <i class="fas fa-trash-alt text-xs"></i>
+                        </button>
+                    </div>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function renderAvailableQuestions() {
+            const container = document.getElementById('availableQuestionsList');
+            document.getElementById('bankAvailableCountBadge').innerText = currentAvailableQuestionsData.length;
+
+            if (currentAvailableQuestionsData.length === 0) {
+                container.innerHTML = `
+                    <div class="p-8 text-center text-slate-400 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                        <p class="font-bold text-xs">لا توجد أسئلة أخرى متاحة في هذا التصنيف / التوبيك</p>
+                    </div>`;
+                return;
+            }
+
+            let html = '';
+            currentAvailableQuestionsData.forEach(q => {
+                const isAlreadyIn = activeBankAssignedIds.has(q.Id);
+                html += `
+                    <div class="p-3.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700 flex items-center justify-between gap-3 available-q-card"
+                         data-text="${q.QuestionText.toLowerCase()}">
+                        <div class="grow">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60">${q.Points || 5} نقاط</span>
+                                <span class="text-[10px] text-slate-400">${q.CategoryName || ''}</span>
+                            </div>
+                            <p class="text-xs font-medium text-slate-900 dark:text-white">${q.QuestionText}</p>
+                        </div>
+                        <button type="button" onclick="toggleAddQuestionFromBank(${q.Id})"
+                                class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${isAlreadyIn ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950' : 'bg-purple-600 text-white hover:bg-purple-700'}">
+                            ${isAlreadyIn ? '<i class="fas fa-check ml-1"></i> مضاف' : '<i class="fas fa-plus ml-1"></i> إضافة'}
+                        </button>
+                    </div>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function filterAvailableQuestions() {
+            const q = (document.getElementById('bankSearchInput').value || '').toLowerCase().trim();
+            document.querySelectorAll('.available-q-card').forEach(el => {
+                const text = el.getAttribute('data-text') || '';
+                el.style.display = (!q || text.includes(q)) ? '' : 'none';
+            });
+        }
+
+        function toggleAddQuestionFromBank(questionId) {
+            if (activeBankAssignedIds.has(questionId)) {
+                activeBankAssignedIds.delete(questionId);
+            } else {
+                activeBankAssignedIds.add(questionId);
+                // Also add to currentAssignedQuestionsData if not present
+                const found = currentAvailableQuestionsData.find(x => x.Id === questionId);
+                if (found && !currentAssignedQuestionsData.some(x => x.Id === questionId)) {
+                    currentAssignedQuestionsData.push(found);
+                }
+            }
+            renderAssignedQuestions();
+            renderAvailableQuestions();
+        }
+
+        function removeQuestionFromQuiz(questionId) {
+            activeBankAssignedIds.delete(questionId);
+            renderAssignedQuestions();
+            renderAvailableQuestions();
+        }
+
+        function removeAllQuizQuestions() {
+            activeBankAssignedIds.clear();
+            renderAssignedQuestions();
+            renderAvailableQuestions();
+        }
+
+        function addAllAvailableQuestions() {
+            currentAvailableQuestionsData.forEach(q => {
+                activeBankAssignedIds.add(q.Id);
+                if (!currentAssignedQuestionsData.some(x => x.Id === q.Id)) {
+                    currentAssignedQuestionsData.push(q);
+                }
+            });
+            renderAssignedQuestions();
+            renderAvailableQuestions();
+        }
+
+        async function saveQuizQuestionsSelection() {
+            if (!currentActiveQuizId) return;
+
+            const questionIds = Array.from(activeBankAssignedIds);
+
+            try {
+                Swal.fire({ title: 'جاري الحفظ...', didOpen: () => Swal.showLoading() });
+
+                const res = await fetch('/Admin/SaveQuizQuestions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ quizId: currentActiveQuizId, questionIds: questionIds })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'تم الحفظ!', text: data.message, timer: 1800, showConfirmButton: false });
+                    closeQuestionsBankModal();
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'خطأ', text: err.message });
+            }
+        }
+
+        async function submitQuickQuestion() {
+            const text = document.getElementById('quickQuestionText').value.trim();
+            if (!text) {
+                Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى كتابة نص السؤال.' });
+                return;
+            }
+
+            const choices = [];
+            const selectedCorrect = document.querySelector('input[name="quickCorrectChoice"]:checked')?.value || '1';
+
+            for (let i = 1; i <= 4; i++) {
+                const cText = document.getElementById(`quickChoiceText${i}`).value.trim();
+                if (cText) {
+                    choices.push({
+                        choiceText: cText,
+                        isCorrect: selectedCorrect == i.toString()
+                    });
+                }
+            }
+
+            if (choices.length < 2) {
+                Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى إدخال خيارين على الأقل.' });
+                return;
+            }
+
+            const catId = parseInt(document.getElementById('modalQuizCategoryId').value) || 1;
+            const topId = document.getElementById('modalQuizTopicId').value ? parseInt(document.getElementById('modalQuizTopicId').value) : null;
+
+            const payload = {
+                quizId: currentActiveQuizId,
+                categoryId: catId,
+                topicId: topId,
+                questionText: text,
+                points: parseInt(document.getElementById('quickQuestionPoints').value) || 5,
+                difficulty: parseInt(document.getElementById('quickQuestionDifficulty').value) || 1,
+                choices: choices
+            };
+
+            try {
+                Swal.fire({ title: 'جاري إنشاء السؤال...', didOpen: () => Swal.showLoading() });
+
+                const res = await fetch('/Admin/AddQuickQuestion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'تم بنجاح!', text: data.message, timer: 1500, showConfirmButton: false });
+                    // Refresh question lists
+                    openQuestionsBankModal(currentActiveQuizId, '', catId, topId);
+                } else {
+                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'خطأ', text: err.message });
+            }
+        }
+
+        // ------------------------------------------------------------
+        // View Quiz Attempts Modal
+        // ------------------------------------------------------------
+        async function openAttemptsModal(quizId, quizTitle) {
+            document.getElementById('attemptsModalTitle').innerText = `نتائج ومحاولات الكويز: ${quizTitle}`;
+            document.getElementById('attemptsModal').classList.remove('hidden');
+
+            try {
+                const res = await fetch(`/Admin/GetQuizAttempts/${quizId}`);
+                const data = await res.json();
+
+                if (!data.success) {
+                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                    return;
+                }
+
+                const attempts = data.attempts || [];
+                document.getElementById('attTotalAttempts').innerText = attempts.length;
+
+                if (attempts.length > 0) {
+                    const passed = attempts.filter(a => a.IsPassed == true).length;
+                    const passRate = Math.round((passed / attempts.length) * 100);
+                    const avgScore = Math.round(attempts.reduce((sum, a) => sum + (parseFloat(a.Score) || 0), 0) / attempts.length);
+
+                    document.getElementById('attPassRate').innerText = `${passRate}%`;
+                    document.getElementById('attAvgScore').innerText = `${avgScore}%`;
+                } else {
+                    document.getElementById('attPassRate').innerText = '0%';
+                    document.getElementById('attAvgScore').innerText = '0%';
+                }
+
+                const tbody = document.getElementById('attemptsTbody');
+                if (attempts.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">لا توجد محاولات مكتملة لهذا الكويز حتى الآن.</td></tr>`;
+                    return;
+                }
+
+                let rowsHtml = '';
+                attempts.forEach(a => {
+                    const passBadge = a.IsPassed == true
+                        ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">ناجح</span>'
+                        : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">لم يجتز</span>';
+
+                    rowsHtml += `
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                            <td class="p-3">
+                                <div class="font-bold text-slate-900 dark:text-white">${a.FullName || '-'}</div>
+                                <div class="text-[10px] text-slate-400">${a.UserCode || ''} • ${a.Email || ''}</div>
+                            </td>
+                            <td class="p-3">${a.BranchName || '-'}</td>
+                            <td class="p-3 text-center font-black text-purple-600">${a.Score || 0}%</td>
+                            <td class="p-3 text-center font-bold">${a.FinalScore || 0} / ${data.quiz.TotalPoints || 100}</td>
+                            <td class="p-3 text-center">${a.CorrectAnswers || 0} من ${a.TotalQuestions || 0}</td>
+                            <td class="p-3 text-center">${a.DurationInMinutes || 0} دقيقة</td>
+                            <td class="p-3 text-center">${passBadge}</td>
+                        </tr>`;
+                });
+
+                tbody.innerHTML = rowsHtml;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function closeAttemptsModal() {
+            document.getElementById('attemptsModal').classList.add('hidden');
+        }
+
+        // ------------------------------------------------------------
+        // Certification Automation & Gradebook Logic
+        // ------------------------------------------------------------
+        function updateWeightsUI() {
+            const qW = parseInt(document.getElementById('quizzesWeightInput').value) || 0;
+            const aW = parseInt(document.getElementById('assignmentsWeightInput').value) || 0;
+            const fW = parseInt(document.getElementById('finalExamWeightInput').value) || 0;
+            const passP = parseInt(document.getElementById('passingPercentageInput').value) || 60;
+
+            document.getElementById('quizzesWeightDisplay').innerText = `${qW}%`;
+            document.getElementById('assignmentsWeightDisplay').innerText = `${aW}%`;
+            document.getElementById('finalExamWeightDisplay').innerText = `${fW}%`;
+            document.getElementById('passingPercentageDisplay').innerText = `${passP}%`;
+
+            const sum = qW + aW + fW;
+            const sumBadge = document.getElementById('weightsSumBadge');
+            sumBadge.innerText = `${sum}%`;
+
+            if (sum === 100) {
+                sumBadge.className = "font-black text-sm text-emerald-600";
+            } else {
+                sumBadge.className = "font-black text-sm text-rose-600";
+            }
+        }
+
+        async function saveWaveWeights() {
+            const waveId = document.getElementById('automationWaveSelect').value;
+            if (!waveId) {
+                Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى اختيار الويف أولاً.' });
+                return;
+            }
+
+            const qW = parseInt(document.getElementById('quizzesWeightInput').value) || 0;
+            const aW = parseInt(document.getElementById('assignmentsWeightInput').value) || 0;
+            const fW = parseInt(document.getElementById('finalExamWeightInput').value) || 0;
+            const passP = parseInt(document.getElementById('passingPercentageInput').value) || 60;
+
+            if (qW + aW + fW !== 100) {
+                Swal.fire({ icon: 'warning', title: 'تنبيه بالأوزان', text: `مجموع الأوزان يجب أن يساوي 100% (المجموع الحالي: ${qW + aW + fW}%).` });
+                return;
+            }
+
+            try {
+                Swal.fire({ title: 'جاري الحفظ...', didOpen: () => Swal.showLoading() });
+
+                const res = await fetch('/Admin/SaveWaveScoreWeights', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        waveId: parseInt(waveId),
+                        quizzesWeight: qW,
+                        assignmentsWeight: aW,
+                        finalExamWeight: fW,
+                        passingPercentage: passP
+                    })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'تم الحفظ!', text: data.message, timer: 1500, showConfirmButton: false });
+                    loadWaveGradingSummary();
+                } else {
+                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.message });
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'خطأ', text: err.message });
+            }
+        }
+
+        let cachedTraineesGradebook = [];
+
+        async function loadWaveGradingSummary() {
+            const waveId = document.getElementById('automationWaveSelect').value;
+            if (!waveId) return;
+
+            const tbody = document.getElementById('gradebookTbody');
+            tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400"><i class="fas fa-spinner fa-spin ml-2"></i> جاري تحميل بيانات الويف والتقييمات...</td></tr>`;
+
+            try {
+                const res = await fetch(`/Admin/GetWaveGradingSummary?waveId=${waveId}`);
+                const data = await res.json();
+
+                if (!data.success) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-rose-500 font-bold">${data.message}</td></tr>`;
+                    return;
+                }
+
+                // Update weight inputs from DB
+                if (data.weights) {
+                    document.getElementById('quizzesWeightInput').value = data.weights.quizzesWeight;
+                    document.getElementById('assignmentsWeightInput').value = data.weights.assignmentsWeight;
+                    document.getElementById('finalExamWeightInput').value = data.weights.finalExamWeight;
+                    document.getElementById('passingPercentageInput').value = data.weights.passingPercentage;
+                    updateWeightsUI();
+                }
+
+                // Inventory card
+                if (data.breakdown) {
+                    document.getElementById('waveAssessmentInventory').classList.remove('hidden');
+                    document.getElementById('invQuizzesCount').innerText = `${data.breakdown.quizzesCount} كويز`;
+                    document.getElementById('invAssignmentsCount').innerText = `${data.breakdown.assignmentsCount} واجب`;
+                    document.getElementById('invFinalExamTitle').innerText = data.breakdown.hasFinalExam ? data.breakdown.finalExamTitle : 'لا يوجد امتحان فاينال مسجل';
+                }
+
+                cachedTraineesGradebook = data.trainees || [];
+                document.getElementById('gradebookCountBadge').innerText = `${cachedTraineesGradebook.length} متدرب`;
+                renderGradebookTable(cachedTraineesGradebook);
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-rose-500">حدث خطأ أثناء جلب البيانات: ${err.message}</td></tr>`;
+            }
+        }
+
+        function renderGradebookTable(trainees) {
+            const tbody = document.getElementById('gradebookTbody');
+            if (!trainees || trainees.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400">لا يوجد متدربين مسجلين في هذه الويف.</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            trainees.forEach(t => {
+                const passBadge = t.isPassed
+                    ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">مؤهل للاجتياز</span>'
+                    : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">يحتاج إعادة / تحت النسبة</span>';
+
+                const certScoreText = t.currentCertScore != null
+                    ? `<span class="font-bold text-slate-900 dark:text-white">${t.currentCertScore}%</span>`
+                    : '<span class="text-slate-400 text-[11px]">غير مسجل بعد</span>';
+
+                const certSerialText = t.certificateCode
+                    ? `<div class="text-[9px] text-purple-600 dark:text-purple-400 font-mono mt-0.5">${t.certificateCode}</div>`
+                    : '';
+
+                html += `
+                    <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 gradebook-row" data-name="${(t.fullName || '').toLowerCase()}" data-code="${(t.userCode || '').toLowerCase()}">
+                        <td class="p-3.5">
+                            <div class="font-bold text-slate-900 dark:text-white">${t.fullName || '-'}</div>
+                            <div class="text-[10px] text-slate-400 font-mono">${t.userCode || ''} • ${t.email || ''}</div>
+                        </td>
+                        <td class="p-3.5">
+                            <div class="font-medium">${t.branchName || '-'}</div>
+                            <span class="inline-block px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">${t.roleName || ''}</span>
+                        </td>
+                        <td class="p-3.5 text-center">
+                            <span class="font-black text-purple-600 dark:text-purple-400 text-xs">${t.quizzesAvgPercent}%</span>
+                            <div class="text-[9px] text-slate-400">(${t.quizzesTakenCount} من ${t.totalQuizzesCount})</div>
+                        </td>
+                        <td class="p-3.5 text-center">
+                            <span class="font-black text-blue-600 dark:text-blue-400 text-xs">${t.assignmentsAvgPercent}%</span>
+                            <div class="text-[9px] text-slate-400">(${t.assignmentsTakenCount} من ${t.totalAssignmentsCount})</div>
+                        </td>
+                        <td class="p-3.5 text-center">
+                            <span class="font-black text-emerald-600 dark:text-emerald-400 text-xs">${t.finalExamPercent}%</span>
+                            <div class="text-[9px] text-slate-400">${t.finalTaken ? 'تم التقديم' : 'لم يقدم'}</div>
+                        </td>
+                        <td class="p-3.5 text-center bg-purple-50/40 dark:bg-purple-950/20 font-black text-sm text-purple-700 dark:text-purple-300">
+                            ${t.compositeScore}%
+                        </td>
+                        <td class="p-3.5 text-center">
+                            ${certScoreText}
+                            ${certSerialText}
+                        </td>
+                        <td class="p-3.5 text-center">
+                            ${passBadge}
+                        </td>
+                    </tr>`;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        function filterGradebookTable() {
+            const q = (document.getElementById('gradebookSearch').value || '').toLowerCase().trim();
+            const filtered = cachedTraineesGradebook.filter(t => {
+                const name = (t.fullName || '').toLowerCase();
+                const code = (t.userCode || '').toLowerCase();
+                return !q || name.includes(q) || code.includes(q);
+            });
+            renderGradebookTable(filtered);
+            document.getElementById('gradebookCountBadge').innerText = `${filtered.length} من أصل ${cachedTraineesGradebook.length} متدرب`;
+        }
+
+        // ------------------------------------------------------------
+        // Run Certification Automation Engine
+        // ------------------------------------------------------------
+        async function runCertificationAutomation() {
+            const waveSelect = document.getElementById('automationWaveSelect');
+            const waveId = waveSelect.value;
+            const waveName = waveSelect.options[waveSelect.selectedIndex]?.text || '';
+
+            if (!waveId) {
+                Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'يرجى اختيار الويف المستهدفة أولاً لتشغيل الأتمتة.' });
+                return;
+            }
+
+            const qW = parseInt(document.getElementById('quizzesWeightInput').value) || 0;
+            const aW = parseInt(document.getElementById('assignmentsWeightInput').value) || 0;
+            const fW = parseInt(document.getElementById('finalExamWeightInput').value) || 0;
+            const passP = parseInt(document.getElementById('passingPercentageInput').value) || 60;
+
+            const confirm = await Swal.fire({
+                title: '⚡ تأكيد تشغيل الأتمتة واعتماد الدرجات؟',
+                html: `
+                    <div class="text-right text-xs space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <p>أنت على وشك تشغيل المحرك الذكي للأتمتة لـ <b>${waveName}</b>:</p>
+                        <ul class="list-disc pr-4 space-y-1">
+                            <li>احتساب النسبة الإجمالية لكل متدرب بناءً على الأوزان المحددة.</li>
+                            <li>تسجيل الدرجات في جدول الشهادات <code class="bg-slate-100 p-0.5 rounded text-purple-600">UserWaveCertificates.Score</code>.</li>
+                            <li>توليد أرقام السيريال للناجحين الذين حققوا نسبة الاجتياز (≥ ${passP}%).</li>
+                        </ul>
+                    </div>`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#7c3aed',
+                confirmButtonText: '⚡ تشغيل الأتمتة الآن',
+                cancelButtonText: 'إلغاء'
+            });
+
+            if (!confirm.isConfirmed) return;
+
+            try {
+                Swal.fire({
+                    title: 'جاري تشغيل الأتمتة وحساب الدرجات...',
+                    html: 'يرجى الانتظار بينما يتم احتساب متوسطات الكويزات والواجبات والفاينال واعتماد الشهادات.',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading()
+                });
+
+                const res = await fetch('/Admin/RunWaveCertificationAutomation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        waveId: parseInt(waveId),
+                        quizzesWeight: qW,
+                        assignmentsWeight: aW,
+                        finalExamWeight: fW,
+                        passingPercentage: passP
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: '⚡ اكتملت الأتمتة بنجاح!',
+                        text: data.message,
+                        confirmButtonText: 'ممتاز، تحديث سجل الدرجات'
+                    });
+                    loadWaveGradingSummary();
+                } else {
+                    Swal.fire({ icon: 'error', title: 'خطأ أثناء تشغيل الأتمتة', text: data.message });
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'خطأ بالاتصال', text: err.message });
+            }
+        }
+    </script>
+}
