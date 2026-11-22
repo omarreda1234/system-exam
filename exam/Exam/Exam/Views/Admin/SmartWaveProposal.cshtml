@@ -133,7 +133,7 @@
                         </label>
                     </div>
 
-                    <!-- Random Shift-Diversified Toggle Switch (الاختيار العشوائي متنوع الورديات - بدون سد عجز) -->
+                    <!-- Random Shift-Diversified Toggle Switch (الاختيار العشوائي متنوع الورديات) -->
                     <div class="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between flex-wrap gap-3 bg-white/70 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700">
                         <div class="flex items-center gap-3">
                             <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 flex items-center justify-center text-base font-black shadow-2xs">
@@ -144,7 +144,7 @@
                                     <span class="text-xs font-black text-slate-900 dark:text-white">Random Shift-Diversified Allocation (سحب عشوائي متنوع الورديات)</span>
                                     <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">خيار عشوائي</span>
                                 </div>
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">سحب عشوائي للمرشحين حصرياً من فروع المجموعة مع توزيعهم على شيفتات مختلفة (بدون إجبار سد العجز من الكول سنتر)</p>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">سحب عشوائي عادل للمرشحين وسد العجز من الكول سنتر مع توزيعهم على شيفتات مختلفة لتنويع الورديات</p>
                             </div>
                         </div>
                         <div class="flex items-center gap-3">
@@ -583,9 +583,9 @@
 </div>
 
 <!-- Modal: Training Mode & Fallback Configuration -->
-<div id="modeSettingsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm hidden animate-fade-in p-4">
-    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl space-y-6">
-        <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+<div id="modeSettingsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm hidden animate-fade-in p-3 md:p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-5 md:p-6 shadow-2xl flex flex-col max-h-[90vh] my-auto">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-2xl bg-brand-50 dark:bg-brand-950/50 text-brand-600 flex items-center justify-center text-lg font-black">
                     <i class="fas fa-gear"></i>
@@ -595,10 +595,10 @@
                     <p class="text-xs text-slate-500 dark:text-slate-400">تحكم بالمجموعة المحلية وفرع سد العجز والورديات المفضلة</p>
                 </div>
             </div>
-            <button onclick="closeModeSettingsModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            <button onclick="closeModeSettingsModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 flex items-center justify-center text-lg font-bold transition-colors">&times;</button>
         </div>
 
-        <div class="space-y-4 text-left">
+        <div class="flex-1 overflow-y-auto custom-scrollbar space-y-4 py-2 pr-1 text-left">
             <!-- 1. Local Cities / Branch Groups (Multi-select) -->
             <div class="space-y-2">
                 <div class="flex items-center justify-between">
@@ -634,7 +634,7 @@
                 </div>
 
                 <!-- Multi-select City Grid Container -->
-                <div class="max-h-44 overflow-y-auto space-y-1 p-2 bg-slate-50/50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700 rounded-xl custom-scrollbar" id="cityGroupsContainer">
+                <div class="max-h-40 overflow-y-auto space-y-1 p-2 bg-slate-50/50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700 rounded-xl custom-scrollbar" id="cityGroupsContainer">
                     @foreach (var c in cities)
                     {
                         int branchCnt = cityBranchCounts.ContainsKey(c) ? cityBranchCounts[c] : 0;
@@ -698,7 +698,7 @@
             </div>
         </div>
 
-        <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+        <div class="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
             <button type="button" onclick="resetModeSettingsDefaults()" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-bold transition-all">
                 استعادة الافتراضي
             </button>
@@ -710,8 +710,8 @@
 </div>
 
 <!-- Modal: Enroll in Wave -->
-<div id="enrollModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm hidden animate-fade-in p-4">
-    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl space-y-6">
+<div id="enrollModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm hidden animate-fade-in p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto my-auto custom-scrollbar">
         <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
             <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                 <i class="fas fa-user-plus text-brand-600"></i>
@@ -903,8 +903,8 @@
                       .removeClass('text-indigo-600 font-black')
                       .addClass('text-slate-500 font-bold');
             }
-            // Re-apply current mode to sync branch selection (e.g. exclude call center in offline)
-            setTrainingMode(currentTrainingMode);
+            // Re-apply current mode to sync branch selection
+            onTrainingModeChanged(currentTrainingMode);
         }
 
         function openModeSettingsModal() {
@@ -1041,21 +1041,11 @@
                 const chk = $(this).find('.chk-branch');
 
                 if (mode === 'Offline') {
-                    // Selected Local Cities
-                    if (isRandomDiverseShifts) {
-                        // Strict group selection without fallback deficit branch (e.g. Call Center)
-                        if (currentLocalCities.includes(city) && bId !== currentFallbackBranchId) {
-                            chk.prop('checked', true);
-                        } else {
-                            chk.prop('checked', false);
-                        }
+                    // Selected Local Cities + Fallback Deficit Branch (Call Center)
+                    if (currentLocalCities.includes(city) || bId === currentFallbackBranchId) {
+                        chk.prop('checked', true);
                     } else {
-                        // Standard offline: local cities + fallback branch
-                        if (currentLocalCities.includes(city) || bId === currentFallbackBranchId) {
-                            chk.prop('checked', true);
-                        } else {
-                            chk.prop('checked', false);
-                        }
+                        chk.prop('checked', false);
                     }
                 } else if (mode === 'Online') {
                     // Outside Selected Local Cities (exclude local cities and exclude fallback)

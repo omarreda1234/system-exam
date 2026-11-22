@@ -1111,27 +1111,127 @@ Eltarshoubi Training Academy Team";
                     }
                 }
 
-                // Strategy 1: Random Shift-Diversified Selection (strict within group, zero deficit fallback)
+                // Strategy 1: Random Shift-Diversified Selection
                 if (filter.RandomDiverseShifts)
                 {
                     if (trainingMode.Equals("Offline", StringComparison.OrdinalIgnoreCase))
                     {
-                        var localPool = allFresh.Concat(allResitters).Where(IsLocal).ToList();
-                        PickRandomShiftDiversified(localPool, capacity);
+                        // 1. One candidate from each local branch (randomized across shifts)
+                        var localBranchGroups = allFresh.Concat(allResitters)
+                            .Where(IsLocal)
+                            .Where(c => c.BranchId.HasValue)
+                            .GroupBy(c => c.BranchId!.Value)
+                            .OrderBy(_ => Random.Shared.Next())
+                            .ToList();
+
+                        foreach (var bg in localBranchGroups)
+                        {
+                            if (pickedUserIds.Count >= capacity) break;
+                            var cand = bg.Where(c => !pickedUserIds.Contains(c.UserId))
+                                         .OrderBy(c => c.CandidateType == "New" ? 0 : 1)
+                                         .ThenBy(_ => Random.Shared.Next())
+                                         .FirstOrDefault();
+                            if (cand != null)
+                            {
+                                PickCandidate(cand);
+                            }
+                        }
+
+                        // 2. Immediately fill deficit from Call Center (fallbackBranchId) diversified across shifts!
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            var fbPool = allFresh.Concat(allResitters).Where(IsFallback).ToList();
+                            PickRandomShiftDiversified(fbPool, capacity);
+                        }
+
+                        // 3. If Call Center had fewer candidates than the deficit, fill remaining from local branches
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            var localPool = allFresh.Concat(allResitters).Where(IsLocal).ToList();
+                            PickRandomShiftDiversified(localPool, capacity);
+                        }
+
+                        // 4. Any remaining from entire pool
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            var allPool = allFresh.Concat(allResitters).ToList();
+                            PickRandomShiftDiversified(allPool, capacity);
+                        }
                     }
                     else if (trainingMode.Equals("Online", StringComparison.OrdinalIgnoreCase))
                     {
                         var outsidePool = allFresh.Concat(allResitters).Where(IsOutside).ToList();
                         PickRandomShiftDiversified(outsidePool, capacity);
+
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            var fbPool = allFresh.Concat(allResitters).Where(IsFallback).ToList();
+                            PickRandomShiftDiversified(fbPool, capacity);
+                        }
+
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            var allPool = allFresh.Concat(allResitters).ToList();
+                            PickRandomShiftDiversified(allPool, capacity);
+                        }
                     }
                     else if (trainingMode.Equals("Hybrid", StringComparison.OrdinalIgnoreCase))
                     {
                         int localTarget = (int)Math.Round(capacity * (hybridLocalPct / 100.0));
-                        var localPool = allFresh.Concat(allResitters).Where(IsLocal).ToList();
-                        var outsidePool = allFresh.Concat(allResitters).Where(IsOutside).ToList();
+                        int outsideTarget = capacity - localTarget;
 
-                        PickRandomShiftDiversified(localPool, localTarget);
+                        // 1. Local portion: 1 per local branch first
+                        var localBranchGroups = allFresh.Concat(allResitters)
+                            .Where(IsLocal)
+                            .Where(c => c.BranchId.HasValue)
+                            .GroupBy(c => c.BranchId!.Value)
+                            .OrderBy(_ => Random.Shared.Next())
+                            .ToList();
+
+                        foreach (var bg in localBranchGroups)
+                        {
+                            if (pickedUserIds.Count >= localTarget) break;
+                            var cand = bg.Where(c => !pickedUserIds.Contains(c.UserId))
+                                         .OrderBy(c => c.CandidateType == "New" ? 0 : 1)
+                                         .ThenBy(_ => Random.Shared.Next())
+                                         .FirstOrDefault();
+                            if (cand != null)
+                            {
+                                PickCandidate(cand);
+                            }
+                        }
+
+                        // 2. Local portion deficit from Call Center
+                        if (pickedUserIds.Count < localTarget)
+                        {
+                            var fbPool = allFresh.Concat(allResitters).Where(IsFallback).ToList();
+                            PickRandomShiftDiversified(fbPool, localTarget);
+                        }
+
+                        // 3. Local portion remaining from local branches
+                        if (pickedUserIds.Count < localTarget)
+                        {
+                            var localPool = allFresh.Concat(allResitters).Where(IsLocal).ToList();
+                            PickRandomShiftDiversified(localPool, localTarget);
+                        }
+
+                        // 4. Outside portion
+                        var outsidePool = allFresh.Concat(allResitters).Where(IsOutside).ToList();
                         PickRandomShiftDiversified(outsidePool, capacity);
+
+                        // 5. Total deficit fallback to Call Center
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            var fbPool = allFresh.Concat(allResitters).Where(IsFallback).ToList();
+                            PickRandomShiftDiversified(fbPool, capacity);
+                        }
+
+                        // 6. Any remaining from all pool
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            var allPool = allFresh.Concat(allResitters).ToList();
+                            PickRandomShiftDiversified(allPool, capacity);
+                        }
                     }
                     else
                     {
@@ -1184,7 +1284,33 @@ Eltarshoubi Training Academy Team";
                             }
                         }
 
-                        // Phase 2: Fill remaining local capacity from local branches (balanced round-robin)
+                        // Phase 2: Deficit Fallback (Call Center) - IMMEDIATELY fill all remaining seats up to capacity from Call Center!
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            int deficit = capacity - pickedUserIds.Count;
+                            var fbEligible = allFresh.Concat(allResitters)
+                                .Where(c => IsFallback(c) && !pickedUserIds.Contains(c.UserId))
+                                .ToList();
+
+                            if (prefShiftId.HasValue)
+                            {
+                                fbEligible = fbEligible.OrderByDescending(c => c.ShiftId == prefShiftId.Value)
+                                                       .ThenByDescending(c => c.CandidateType == "New")
+                                                       .ToList();
+                            }
+                            else
+                            {
+                                fbEligible = fbEligible.OrderByDescending(c => c.CandidateType == "New")
+                                                       .ToList();
+                            }
+
+                            foreach (var c in fbEligible.Take(deficit))
+                            {
+                                PickCandidate(c);
+                            }
+                        }
+
+                        // Phase 3: Secondary Fallback - ONLY if Call Center had fewer candidates than the deficit, fill from local branches (round-robin)
                         if (pickedUserIds.Count < capacity)
                         {
                             var localBranchesRemaining = allFresh.Concat(allResitters)
@@ -1226,27 +1352,15 @@ Eltarshoubi Training Academy Team";
                             }
                         }
 
-                        // Phase 3: Deficit Fallback (Call Center)
+                        // Phase 4: Tertiary Fallback (any branch) if still under capacity
                         if (pickedUserIds.Count < capacity)
                         {
-                            int deficit = capacity - pickedUserIds.Count;
-                            var fbEligible = allFresh.Concat(allResitters)
-                                .Where(c => IsFallback(c) && !pickedUserIds.Contains(c.UserId))
-                                .ToList();
+                            var anyRemaining = allFresh.Concat(allResitters)
+                                .Where(c => !pickedUserIds.Contains(c.UserId))
+                                .OrderByDescending(c => c.CandidateType == "New")
+                                .Take(capacity - pickedUserIds.Count);
 
-                            if (prefShiftId.HasValue)
-                            {
-                                fbEligible = fbEligible.OrderByDescending(c => c.ShiftId == prefShiftId.Value)
-                                                       .ThenByDescending(c => c.CandidateType == "New")
-                                                       .ToList();
-                            }
-                            else
-                            {
-                                fbEligible = fbEligible.OrderByDescending(c => c.CandidateType == "New")
-                                                       .ToList();
-                            }
-
-                            foreach (var c in fbEligible.Take(deficit))
+                            foreach (var c in anyRemaining)
                             {
                                 PickCandidate(c);
                             }
@@ -1306,13 +1420,24 @@ Eltarshoubi Training Academy Team";
                                 PickCandidate(c);
                             }
                         }
+
+                        // Tertiary fallback
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            var anyRemaining = allFresh.Concat(allResitters)
+                                .Where(c => !pickedUserIds.Contains(c.UserId))
+                                .OrderByDescending(c => c.CandidateType == "New")
+                                .Take(capacity - pickedUserIds.Count);
+
+                            foreach (var c in anyRemaining) PickCandidate(c);
+                        }
                     }
                     else if (trainingMode.Equals("Hybrid", StringComparison.OrdinalIgnoreCase))
                     {
                         int localTarget = (int)Math.Round(capacity * (hybridLocalPct / 100.0));
                         int outsideTarget = capacity - localTarget;
 
-                        // 1. Local Half: 1 per branch first
+                        // 1. Local Half: 1 per local branch first
                         var localBranchIds = allFresh.Concat(allResitters)
                             .Where(IsLocal)
                             .Where(c => c.BranchId.HasValue)
@@ -1334,7 +1459,18 @@ Eltarshoubi Training Academy Team";
                             }
                         }
 
-                        // 2. Local Half: Fill remaining up to localTarget
+                        // 2. Local Half Deficit: Fill from Call Center immediately!
+                        if (pickedUserIds.Count < localTarget)
+                        {
+                            int def = localTarget - pickedUserIds.Count;
+                            var fb = allFresh.Concat(allResitters)
+                                .Where(c => IsFallback(c) && !pickedUserIds.Contains(c.UserId))
+                                .Take(def)
+                                .ToList();
+                            foreach (var c in fb) PickCandidate(c);
+                        }
+
+                        // 3. Local Half: If Call Center didn't have enough, fill remaining up to localTarget from local branches
                         if (pickedUserIds.Count < localTarget)
                         {
                             var localBranchesRemaining = allFresh.Concat(allResitters)
@@ -1361,17 +1497,6 @@ Eltarshoubi Training Academy Team";
                                     }
                                 }
                             }
-                        }
-
-                        // 3. Local Half Deficit: Fill from Call Center
-                        if (pickedUserIds.Count < localTarget)
-                        {
-                            int def = localTarget - pickedUserIds.Count;
-                            var fb = allFresh.Concat(allResitters)
-                                .Where(c => IsFallback(c) && !pickedUserIds.Contains(c.UserId))
-                                .Take(def)
-                                .ToList();
-                            foreach (var c in fb) PickCandidate(c);
                         }
 
                         int localPickedCount = pickedUserIds.Count;
@@ -1404,7 +1529,7 @@ Eltarshoubi Training Academy Team";
                             }
                         }
 
-                        // 5. Total Deficit fallback
+                        // 5. Total Deficit fallback to Call Center
                         if (pickedUserIds.Count < capacity)
                         {
                             int totalDef = capacity - pickedUserIds.Count;
@@ -1413,6 +1538,16 @@ Eltarshoubi Training Academy Team";
                                 .Take(totalDef)
                                 .ToList();
                             foreach (var c in fb) PickCandidate(c);
+                        }
+
+                        // 6. Final fallback from any remaining
+                        if (pickedUserIds.Count < capacity)
+                        {
+                            var anyRemaining = allFresh.Concat(allResitters)
+                                .Where(c => !pickedUserIds.Contains(c.UserId))
+                                .Take(capacity - pickedUserIds.Count)
+                                .ToList();
+                            foreach (var c in anyRemaining) PickCandidate(c);
                         }
                     }
                 }
