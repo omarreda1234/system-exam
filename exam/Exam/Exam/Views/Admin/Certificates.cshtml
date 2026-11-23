@@ -101,7 +101,7 @@
 
 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 overflow-hidden shadow-sm">
     <div class="overflow-x-auto">
-        <table id="certificatesTable" class="datatable saas-table">
+        <table id="certificatesTable" class="saas-table">
             <thead>
                 <tr>
                     <th class="min-w-[280px]">Personnel</th>
@@ -415,9 +415,20 @@
             const branchId = $('#branchFilter').val() || 0;
             const type = 0;
             const month = 0;
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'جاري تحميل الشهادات...',
+                    html: '<div class="flex flex-col items-center justify-center gap-3 p-4"><i class="fas fa-circle-notch animate-spin text-3xl text-brand-600"></i><span class="text-xs text-slate-500 font-bold">جاري تصفية وعرض بيانات الـ Wave المحددة فوراً</span></div>',
+                    allowOutsideClick: false,
+                    showConfirmButton: false,
+                    showCancelButton: false
+                });
+            }
+
             let newUrl = '/Admin/Certificates?waveId=' + waveId + '&typeId=' + type + '&year=' + year + '&month=' + month + '&branchId=' + branchId; 
             if (window.location.search.includes('iframe=true')) newUrl += '&iframe=true';
-            window.location = newUrl;
+            window.location.href = newUrl;
         });
 
         function exportCertificatesExcel() {
@@ -764,13 +775,16 @@
             let table;
             if ($.fn.DataTable.isDataTable('#certificatesTable')) {
                 table = $('#certificatesTable').DataTable();
+                table.search('').columns().search('').draw();
             } else {
                 table = $('#certificatesTable').DataTable({
                     responsive: true,
                     pageLength: 25,
                     ordering: true,
+                    stateSave: false,
+                    dom: '<"flex flex-col sm:flex-row justify-between items-center mb-4"lf>rt<"flex flex-col sm:flex-row justify-between items-center mt-4"ip>',
                     language: {
-                        search: "_INPUT_",
+                        search: "",
                         searchPlaceholder: "Search records..."
                     }
                 });

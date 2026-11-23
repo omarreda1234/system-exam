@@ -125,73 +125,83 @@ namespace Exam.Controllers
                     if (Directory.Exists(wDir))
                     {
                         var diskFiles = Directory.GetFiles(wDir, "*.pdf", SearchOption.TopDirectoryOnly);
-                        foreach (var df in diskFiles)
+                        if (diskFiles.Length > 0)
                         {
-                            try
+                            var alreadyUploadedUsers = (await conn.QueryAsync<string>(
+                                @"SELECT LTRIM(RTRIM(U.UserCode))
+                                  FROM dbo.UserWaveCertificates UWC
+                                  JOIN AspNetUsers U ON UWC.UserId = U.Id
+                                  WHERE UWC.WaveId = @WaveId AND (ISNULL(UWC.FileUploaded, 0) = 1 OR UWC.FileData IS NOT NULL)",
+                                new { WaveId = wId }
+                            )).Where(c => !string.IsNullOrEmpty(c)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                            foreach (var df in diskFiles)
                             {
-                                var fi = new FileInfo(df);
-                                if (fi.Length == 0) continue;
-                                string codeFromFile = Path.GetFileNameWithoutExtension(df).Trim();
-                                if (string.IsNullOrEmpty(codeFromFile)) continue;
-
-                                var matchedUser = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                                    SELECT TOP 1 U.Id, U.UserCode, UWC.Id AS CertRowId, UWC.FileUploaded, UWC.CertificateCode
-                                    FROM AspNetUsers U
-                                    LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = @WaveId
-                                    WHERE LTRIM(RTRIM(U.UserCode)) = @Code
-                                       OR (TRY_CAST(LTRIM(RTRIM(U.UserCode)) AS BIGINT) = TRY_CAST(@Code AS BIGINT) AND @Code NOT LIKE '%[^0-9]%')",
-                                    new { Code = codeFromFile, WaveId = wId });
-
-                                if (matchedUser != null)
+                                try
                                 {
-                                    string uid = (string)matchedUser.Id;
-                                    string uCodeStr = ((string)matchedUser.UserCode ?? codeFromFile).Trim();
-                                    var wObj = allWaves.FirstOrDefault(x => x.Id == wId);
-                                    string wName = wObj?.WaveName ?? "";
-                                    DateTime wDate = wObj?.StartDate ?? DateTime.Now;
-                                    string yearStr = wDate.Year.ToString();
-                                    var digits = new string(wName.Where(char.IsDigit).ToArray());
-                                    string waveNumStr = !string.IsNullOrEmpty(digits) ? digits.PadLeft(3, '0') : wId.ToString().PadLeft(3, '0');
-                                    bool isOnline = wObj?.IsOnline ?? (wName.ToLower().Contains("online") || wName.Contains("أونلاين") || wName.Contains("اونلاين"));
-                                    string modeCode = ExtractModeForSerial(wObj?.Mode, isOnline);
-                                    string serialCode = !string.IsNullOrWhiteSpace((string)matchedUser.CertificateCode)
-                                        ? (string)matchedUser.CertificateCode
-                                        : $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{uCodeStr}";
+                                    var fi = new FileInfo(df);
+                                    if (fi.Length == 0) continue;
+                                    string codeFromFile = Path.GetFileNameWithoutExtension(df).Trim();
+                                    if (string.IsNullOrEmpty(codeFromFile) || alreadyUploadedUsers.Contains(codeFromFile)) continue;
 
-                                    var uwRow = await conn.QueryFirstOrDefaultAsync<int?>(
-                                        "SELECT 1 FROM dbo.UserWaves WHERE UserId = @UserId AND WaveId = @WaveId",
-                                        new { UserId = uid, WaveId = wId });
-                                    if (uwRow == null)
+                                    var matchedUser = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                                        SELECT TOP 1 U.Id, U.UserCode, UWC.Id AS CertRowId, UWC.FileUploaded, UWC.CertificateCode
+                                        FROM AspNetUsers U
+                                        LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = @WaveId
+                                        WHERE LTRIM(RTRIM(U.UserCode)) = @Code",
+                                        new { Code = codeFromFile, WaveId = wId });
+
+                                    if (matchedUser != null)
                                     {
-                                        await conn.ExecuteAsync(
-                                            "INSERT INTO dbo.UserWaves (UserId, WaveId, JoinDate, IsActive) VALUES (@UserId, @WaveId, GETDATE(), 1)",
+                                        string uid = (string)matchedUser.Id;
+                                        string uCodeStr = ((string)matchedUser.UserCode ?? codeFromFile).Trim();
+                                        var wObj = allWaves.FirstOrDefault(x => x.Id == wId);
+                                        string wName = wObj?.WaveName ?? "";
+                                        DateTime wDate = wObj?.StartDate ?? DateTime.Now;
+                                        string yearStr = wDate.Year.ToString();
+                                        var digits = new string(wName.Where(char.IsDigit).ToArray());
+                                        string waveNumStr = !string.IsNullOrEmpty(digits) ? digits.PadLeft(3, '0') : wId.ToString().PadLeft(3, '0');
+                                        bool isOnline = wObj?.IsOnline ?? (wName.ToLower().Contains("online") || wName.Contains("أونلاين") || wName.Contains("اونلاين"));
+                                        string modeCode = ExtractModeForSerial(wObj?.Mode, isOnline);
+                                        string serialCode = !string.IsNullOrWhiteSpace((string)matchedUser.CertificateCode)
+                                            ? (string)matchedUser.CertificateCode
+                                            : $"WTTA-{yearStr}-{waveNumStr}-PB-{modeCode}-{uCodeStr}";
+
+                                        var uwRow = await conn.QueryFirstOrDefaultAsync<int?>(
+                                            "SELECT 1 FROM dbo.UserWaves WHERE UserId = @UserId AND WaveId = @WaveId",
                                             new { UserId = uid, WaveId = wId });
-                                    }
+                                        if (uwRow == null)
+                                        {
+                                            await conn.ExecuteAsync(
+                                                "INSERT INTO dbo.UserWaves (UserId, WaveId, JoinDate, IsActive) VALUES (@UserId, @WaveId, GETDATE(), 1)",
+                                                new { UserId = uid, WaveId = wId });
+                                        }
 
-                                    if (matchedUser.CertRowId == null)
-                                    {
-                                        byte[] bytes = await System.IO.File.ReadAllBytesAsync(df);
-                                        await conn.ExecuteAsync(@"
-                                            INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, EmailSent, Score, CreatedAt, FileUploaded, UploadedAt, FileName, FileData)
-                                            VALUES (@UserId, @WaveId, @CertCode, 0, NULL, @CreatedAt, 1, @CreatedAt, @FileName, @FileData)",
-                                            new { UserId = uid, WaveId = wId, CertCode = serialCode, CreatedAt = fi.LastWriteTime, FileName = fi.Name, FileData = bytes });
-                                    }
-                                    else if (matchedUser.FileUploaded == null || Convert.ToBoolean(matchedUser.FileUploaded) == false)
-                                    {
-                                        byte[] bytes = await System.IO.File.ReadAllBytesAsync(df);
-                                        await conn.ExecuteAsync(@"
-                                            UPDATE dbo.UserWaveCertificates
-                                            SET FileUploaded = 1,
-                                                UploadedAt = ISNULL(UploadedAt, @UploadedAt),
-                                                FileName = ISNULL(FileName, @FileName),
-                                                FileData = ISNULL(FileData, @FileData),
-                                                CertificateCode = ISNULL(NULLIF(CertificateCode, ''), @CertCode)
-                                            WHERE UserId = @UserId AND WaveId = @WaveId",
-                                            new { UploadedAt = fi.LastWriteTime, FileName = fi.Name, FileData = bytes, CertCode = serialCode, UserId = uid, WaveId = wId });
+                                        if (matchedUser.CertRowId == null)
+                                        {
+                                            byte[] bytes = await System.IO.File.ReadAllBytesAsync(df);
+                                            await conn.ExecuteAsync(@"
+                                                INSERT INTO dbo.UserWaveCertificates (UserId, WaveId, CertificateCode, EmailSent, Score, CreatedAt, FileUploaded, UploadedAt, FileName, FileData)
+                                                VALUES (@UserId, @WaveId, @CertCode, 0, NULL, @CreatedAt, 1, @CreatedAt, @FileName, @FileData)",
+                                                new { UserId = uid, WaveId = wId, CertCode = serialCode, CreatedAt = fi.LastWriteTime, FileName = fi.Name, FileData = bytes });
+                                        }
+                                        else if (matchedUser.FileUploaded == null || Convert.ToBoolean(matchedUser.FileUploaded) == false)
+                                        {
+                                            byte[] bytes = await System.IO.File.ReadAllBytesAsync(df);
+                                            await conn.ExecuteAsync(@"
+                                                UPDATE dbo.UserWaveCertificates
+                                                SET FileUploaded = 1,
+                                                    UploadedAt = ISNULL(UploadedAt, @UploadedAt),
+                                                    FileName = ISNULL(FileName, @FileName),
+                                                    FileData = ISNULL(FileData, @FileData),
+                                                    CertificateCode = ISNULL(NULLIF(CertificateCode, ''), @CertCode)
+                                                WHERE UserId = @UserId AND WaveId = @WaveId",
+                                                new { UploadedAt = fi.LastWriteTime, FileName = fi.Name, FileData = bytes, CertCode = serialCode, UserId = uid, WaveId = wId });
+                                        }
                                     }
                                 }
+                                catch { }
                             }
-                            catch { }
                         }
                     }
                 }
@@ -205,6 +215,26 @@ namespace Exam.Controllers
                         FROM AspNetUserRoles UR
                         JOIN AspNetRoles R ON UR.RoleId = R.Id
                         GROUP BY UR.UserId
+                    ),
+                    DistinctUserWaves AS (
+                        SELECT UserId, WaveId,
+                               ROW_NUMBER() OVER (PARTITION BY UserId, WaveId ORDER BY Id DESC) as rn
+                        FROM dbo.UserWaves
+                        WHERE WaveId IN @WaveIds AND IsActive = 1
+                    ),
+                    DistinctCertificates AS (
+                        SELECT *,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY UserId, WaveId 
+                                   ORDER BY 
+                                       CASE WHEN ISNULL(FileUploaded, 0) = 1 THEN 1 ELSE 2 END,
+                                       CASE WHEN CertificateCode IS NOT NULL AND CertificateCode <> '' THEN 1 ELSE 2 END,
+                                       ISNULL(Score, 0) DESC,
+                                       CreatedAt DESC,
+                                       Id DESC
+                               ) as rn
+                        FROM dbo.UserWaveCertificates
+                        WHERE WaveId IN @WaveIds
                     )
                     SELECT 
                         U.Id, 
@@ -239,13 +269,13 @@ namespace Exam.Controllers
                         ISNULL(UWC.IsDownloaded, 0) as IsDownloaded,
                         UWC.DownloadedAt as DownloadedAt,
                         ISNULL(UWC.DownloadCount, 0) as DownloadCount
-                    FROM dbo.UserWaves UW
+                    FROM DistinctUserWaves UW
                     INNER JOIN AspNetUsers U ON UW.UserId = U.Id
                     INNER JOIN TrainingWaves W ON UW.WaveId = W.Id
                     LEFT JOIN Branches B ON U.BranchId = B.Id
                     LEFT JOIN UserRoles UR ON U.Id = UR.UserId
-                    LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = UW.WaveId
-                    WHERE UW.WaveId IN @WaveIds AND UW.IsActive = 1";
+                    LEFT JOIN DistinctCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = UW.WaveId AND UWC.rn = 1
+                    WHERE UW.rn = 1";
 
                 var results = await conn.QueryAsync<Exam.DTOs.ExamResultRowDto>(fallbackSql, new { WaveIds = waveIds });
                 
@@ -274,6 +304,35 @@ namespace Exam.Controllers
                     }
                 }
 
+                var existingFilesByWave = new Dictionary<int, HashSet<string>>();
+                var rootCertFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                try
+                {
+                    if (Directory.Exists(certsBaseDir))
+                    {
+                        foreach (var file in Directory.EnumerateFiles(certsBaseDir, "*.pdf", SearchOption.TopDirectoryOnly))
+                        {
+                            rootCertFiles.Add(Path.GetFileNameWithoutExtension(file).Trim());
+                        }
+
+                        foreach (var wId in waveIds)
+                        {
+                            string wDir = Path.Combine(certsBaseDir, wId.ToString());
+                            if (Directory.Exists(wDir))
+                            {
+                                var waveSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                foreach (var file in Directory.EnumerateFiles(wDir, "*.pdf", SearchOption.TopDirectoryOnly))
+                                {
+                                    waveSet.Add(Path.GetFileNameWithoutExtension(file).Trim());
+                                }
+                                existingFilesByWave[wId] = waveSet;
+                            }
+                        }
+                    }
+                }
+                catch { }
+
                 foreach (var row in resultList)
                 {
                     if (row.Score > 100m && row.Score <= 1000m)
@@ -292,22 +351,24 @@ namespace Exam.Controllers
                     string uCode = string.IsNullOrWhiteSpace(row.UserCode) ? "0000" : row.UserCode.Trim();
                     int rowWId = row.WaveId ?? (selectedWaveId > 0 ? selectedWaveId : 0);
 
-                    // Verify physical file existence on disk as well
+                    // Verify physical file existence on disk via pre-cached file sets
                     if (!row.CertificateUploaded && !string.IsNullOrWhiteSpace(row.UserCode))
                     {
-                        string candidate1 = rowWId > 0 ? Path.Combine(certsBaseDir, rowWId.ToString(), $"{uCode}.pdf") : "";
-                        string candidate2 = Path.Combine(certsBaseDir, $"{uCode}.pdf");
-                        if (!string.IsNullOrEmpty(candidate1) && System.IO.File.Exists(candidate1) && new FileInfo(candidate1).Length > 0)
+                        bool fileFound = false;
+                        if (existingFilesByWave.TryGetValue(rowWId, out var waveSet) && waveSet.Contains(uCode))
                         {
-                            row.CertificateUploaded = true;
-                            row.UploadedFileName ??= $"{uCode}.pdf";
-                            row.UploadedAt ??= System.IO.File.GetLastWriteTime(candidate1);
+                            fileFound = true;
                         }
-                        else if (System.IO.File.Exists(candidate2) && new FileInfo(candidate2).Length > 0)
+                        else if (rootCertFiles.Contains(uCode))
+                        {
+                            fileFound = true;
+                        }
+
+                        if (fileFound)
                         {
                             row.CertificateUploaded = true;
                             row.UploadedFileName ??= $"{uCode}.pdf";
-                            row.UploadedAt ??= System.IO.File.GetLastWriteTime(candidate2);
+                            row.UploadedAt ??= DateTime.Now;
                         }
                     }
 
@@ -384,6 +445,26 @@ namespace Exam.Controllers
                         FROM AspNetUserRoles UR
                         JOIN AspNetRoles R ON UR.RoleId = R.Id
                         GROUP BY UR.UserId
+                    ),
+                    DistinctUserWaves AS (
+                        SELECT UserId, WaveId,
+                               ROW_NUMBER() OVER (PARTITION BY UserId, WaveId ORDER BY Id DESC) as rn
+                        FROM dbo.UserWaves
+                        WHERE WaveId = @WaveId AND IsActive = 1
+                    ),
+                    DistinctCertificates AS (
+                        SELECT *,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY UserId, WaveId 
+                                   ORDER BY 
+                                       CASE WHEN ISNULL(FileUploaded, 0) = 1 THEN 1 ELSE 2 END,
+                                       CASE WHEN CertificateCode IS NOT NULL AND CertificateCode <> '' THEN 1 ELSE 2 END,
+                                       ISNULL(Score, 0) DESC,
+                                       CreatedAt DESC,
+                                       Id DESC
+                               ) as rn
+                        FROM dbo.UserWaveCertificates
+                        WHERE WaveId = @WaveId
                     )
                     SELECT 
                         U.Id, 
@@ -396,13 +477,13 @@ namespace Exam.Controllers
                         W.WaveName,
                         COALESCE(UR.RoleName, 'User') as RoleName,
                         W.StartDate as ActualStartTime
-                    FROM dbo.UserWaves UW
+                    FROM DistinctUserWaves UW
                     INNER JOIN AspNetUsers U ON UW.UserId = U.Id
                     INNER JOIN TrainingWaves W ON UW.WaveId = W.Id
                     LEFT JOIN Branches B ON U.BranchId = B.Id
                     LEFT JOIN UserRoles UR ON U.Id = UR.UserId
-                    LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = UW.WaveId
-                    WHERE UW.WaveId = @WaveId AND UW.IsActive = 1";
+                    LEFT JOIN DistinctCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = UW.WaveId AND UWC.rn = 1
+                    WHERE UW.rn = 1";
                 
                 var results = (await conn.QueryAsync<dynamic>(resultsSql, new { WaveId = waveId })).ToList();
 
@@ -1703,6 +1784,26 @@ namespace Exam.Controllers
                     FROM AspNetUserRoles UR
                     JOIN AspNetRoles R ON UR.RoleId = R.Id
                     GROUP BY UR.UserId
+                ),
+                DistinctUserWaves AS (
+                    SELECT UserId, WaveId,
+                           ROW_NUMBER() OVER (PARTITION BY UserId, WaveId ORDER BY Id DESC) as rn
+                    FROM dbo.UserWaves
+                    WHERE WaveId IN @WaveIds AND IsActive = 1
+                ),
+                DistinctCertificates AS (
+                    SELECT *,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY UserId, WaveId 
+                               ORDER BY 
+                                   CASE WHEN ISNULL(FileUploaded, 0) = 1 THEN 1 ELSE 2 END,
+                                   CASE WHEN CertificateCode IS NOT NULL AND CertificateCode <> '' THEN 1 ELSE 2 END,
+                                   ISNULL(Score, 0) DESC,
+                                   CreatedAt DESC,
+                                   Id DESC
+                           ) as rn
+                    FROM dbo.UserWaveCertificates
+                    WHERE WaveId IN @WaveIds
                 )
                 SELECT 
                     U.Id, 
@@ -1722,13 +1823,13 @@ namespace Exam.Controllers
                     ISNULL(UWC.IsDownloaded, 0) as IsDownloaded,
                     UWC.DownloadedAt as DownloadedAt,
                     ISNULL(UWC.DownloadCount, 0) as DownloadCount
-                FROM dbo.UserWaves UW
+                FROM DistinctUserWaves UW
                 INNER JOIN AspNetUsers U ON UW.UserId = U.Id
                 INNER JOIN TrainingWaves W ON UW.WaveId = W.Id
                 LEFT JOIN Branches B ON U.BranchId = B.Id
                 LEFT JOIN UserRoles UR ON U.Id = UR.UserId
-                LEFT JOIN dbo.UserWaveCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = UW.WaveId
-                WHERE UW.WaveId IN @WaveIds AND UW.IsActive = 1";
+                LEFT JOIN DistinctCertificates UWC ON U.Id = UWC.UserId AND UWC.WaveId = UW.WaveId AND UWC.rn = 1
+                WHERE UW.rn = 1";
 
             var results = (await conn.QueryAsync<Exam.DTOs.ExamResultRowDto>(sql, new { WaveIds = waveIds })).ToList();
 
