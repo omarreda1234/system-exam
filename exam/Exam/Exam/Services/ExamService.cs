@@ -1671,17 +1671,38 @@ WHERE U.Id = @UserId;";
 
             using var conn = new SqlConnection(_connectionString);
             
-            // Fetch assignments for this student
+            // Auto-sync active wave exams/quizzes for this student
+            try
+            {
+                await conn.ExecuteAsync(@"
+                    INSERT INTO ExamAssignments (ExamId, StudentId, ScheduledStartTime, ScheduledEndTime, IsEmailSent)
+                    SELECT E.Id, @StudentId, ISNULL(E.StartTime, GETDATE()), ISNULL(E.EndTime, DATEADD(day, 30, GETDATE())), 0
+                    FROM Exams E WITH (NOLOCK)
+                    INNER JOIN dbo.UserWaves UW WITH (NOLOCK) ON E.WaveId = UW.WaveId AND UW.IsActive = 1
+                    WHERE UW.UserId = @StudentId AND E.IsActive = 1
+                      AND NOT EXISTS (
+                          SELECT 1 FROM ExamAssignments EA WITH (NOLOCK)
+                          WHERE EA.ExamId = E.Id AND EA.StudentId = @StudentId
+                      )", new { StudentId = studentId });
+            }
+            catch { }
+
+            // Fetch assignments for this student (both manual assignments and wave exams)
             var manualAssignments = await conn.QueryAsync<ExamDto>(@"
                 SELECT DISTINCT E.Id as ExamId, E.Title as ExamTitle, E.Description as ExamDescription, 
-                    ISNULL(A.ScheduledStartTime, E.StartTime) as ExamDate,
-                    ISNULL(A.ScheduledEndTime, E.EndTime) as EndTime,
+                    ISNULL(A.ScheduledStartTime, ISNULL(E.StartTime, GETDATE())) as ExamDate,
+                    ISNULL(A.ScheduledEndTime, ISNULL(E.EndTime, DATEADD(day, 30, GETDATE()))) as EndTime,
                     E.DurationInMinutes, E.PassPercentage, E.IsActive,
-                    (SELECT COUNT(*) FROM ExamAssignments WHERE StudentId = @StudentId AND ExamId = E.Id) as AssignmentCount
-                FROM ExamAssignments A
-                INNER JOIN Exams E ON A.ExamId = E.Id
-                WHERE A.StudentId = @StudentId AND E.IsActive = 1
-                AND A.Id = (SELECT TOP 1 Id FROM ExamAssignments WHERE StudentId = @StudentId AND ExamId = E.Id ORDER BY Id DESC)", 
+                    ISNULL((SELECT COUNT(*) FROM ExamAssignments WHERE StudentId = @StudentId AND ExamId = E.Id), 1) as AssignmentCount
+                FROM Exams E WITH (NOLOCK)
+                LEFT JOIN ExamAssignments A WITH (NOLOCK) ON A.ExamId = E.Id AND A.StudentId = @StudentId
+                WHERE E.IsActive = 1
+                  AND (
+                      A.StudentId = @StudentId
+                      OR
+                      (E.WaveId IS NOT NULL AND E.WaveId IN (SELECT WaveId FROM dbo.UserWaves WITH (NOLOCK) WHERE UserId = @StudentId AND IsActive = 1))
+                  )
+                  AND (A.Id IS NULL OR A.Id = (SELECT TOP 1 Id FROM ExamAssignments WHERE StudentId = @StudentId AND ExamId = E.Id ORDER BY Id DESC))", 
                 new { StudentId = studentId });
 
             var result = new List<ExamDto>();

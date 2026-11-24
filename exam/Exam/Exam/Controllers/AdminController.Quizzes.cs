@@ -75,6 +75,22 @@ namespace Exam.Controllers
             using var conn = new SqlConnection(_connectionString);
             await conn.OpenAsync();
 
+            // Auto-sync active wave trainees into ExamAssignments for any active wave-linked quiz
+            try
+            {
+                await conn.ExecuteAsync(@"
+                    INSERT INTO ExamAssignments (ExamId, StudentId, IsEmailSent, ScheduledStartTime, ScheduledEndTime)
+                    SELECT e.Id, uw.UserId, 0, ISNULL(e.StartTime, GETDATE()), ISNULL(e.EndTime, DATEADD(day, 30, GETDATE()))
+                    FROM Exams e WITH (NOLOCK)
+                    INNER JOIN dbo.UserWaves uw WITH (NOLOCK) ON e.WaveId = uw.WaveId AND uw.IsActive = 1
+                    WHERE e.WaveId IS NOT NULL AND e.IsActive = 1
+                      AND NOT EXISTS (
+                          SELECT 1 FROM dbo.ExamAssignments ea WITH (NOLOCK)
+                          WHERE ea.ExamId = e.Id AND ea.StudentId = uw.UserId
+                      )");
+            }
+            catch { }
+
             // Fetch Waves
             var waves = (await conn.QueryAsync<dynamic>(@"
                 SELECT Id, WaveName, StartDate, EndDate, IsOnline, Mode
@@ -106,14 +122,19 @@ namespace Exam.Controllers
                     e.IsActive,
                     e.IsGraded,
                     e.WaveId,
-                    ISNULL(w.WaveName, N'عام / غير محدد') AS WaveName,
+                    ISNULL(w.WaveName, 'General / All Waves') AS WaveName,
                     e.CategoryId,
-                    ISNULL(c.CategoryName, N'عام') AS CategoryName,
+                    ISNULL(c.CategoryName, 'General') AS CategoryName,
                     e.TopicId,
-                    ISNULL(t.TopicName, N'عام / غير محدد') AS TopicName,
+                    ISNULL(t.TopicName, 'General / Unspecified') AS TopicName,
                     ISNULL(e.TotalPoints, 100) AS TotalPoints,
                     (SELECT COUNT(1) FROM ExamQuestions eq WITH (NOLOCK) WHERE eq.ExamId = e.Id) AS QuestionCount,
-                    (SELECT COUNT(DISTINCT ea.StudentId) FROM ExamAssignments ea WITH (NOLOCK) WHERE ea.ExamId = e.Id) AS AssignedStudentsCount,
+                    (SELECT COUNT(DISTINCT uid) 
+                     FROM (
+                         SELECT ea.StudentId AS uid FROM dbo.ExamAssignments ea WITH (NOLOCK) WHERE ea.ExamId = e.Id
+                         UNION
+                         SELECT uw.UserId AS uid FROM dbo.UserWaves uw WITH (NOLOCK) WHERE uw.WaveId = e.WaveId AND uw.IsActive = 1
+                     ) combined) AS AssignedStudentsCount,
                     (SELECT COUNT(DISTINCT uea.UserId) FROM UserExamAttempts uea WITH (NOLOCK) WHERE uea.ExamId = e.Id AND uea.Status IN ('Completed', 'Fail_Timeout')) AS CompletedAttemptsCount,
                     (SELECT ISNULL(ROUND(AVG(CAST(uea.Score AS FLOAT)), 1), 0) FROM UserExamAttempts uea WITH (NOLOCK) WHERE uea.ExamId = e.Id AND uea.Status IN ('Completed', 'Fail_Timeout')) AS AverageScore
                 FROM Exams e WITH (NOLOCK)
@@ -625,6 +646,154 @@ namespace Exam.Controllers
                 quiz = quiz,
                 attempts = attempts
             });
+        }
+
+        // ==========================================
+        // 9b. Get Quiz Assigned Trainees
+        // ==========================================
+        [HttpGet]
+        public async Task<IActionResult> GetQuizAssignedTrainees(int id)
+        {
+            if (id <= 0) return Json(new { success = false, message = "Invalid Quiz ID." });
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                var quiz = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT e.Id, e.Title, e.WaveId, ISNULL(w.WaveName, 'General / All Waves') AS WaveName, e.TotalPoints, e.PassPercentage
+                    FROM Exams e WITH (NOLOCK)
+                    LEFT JOIN TrainingWaves w WITH (NOLOCK) ON e.WaveId = w.Id
+                    WHERE e.Id = @QuizId", new { QuizId = id });
+
+                if (quiz == null)
+                    return Json(new { success = false, message = "Quiz not found." });
+
+                // Auto-sync missing wave trainees into assignments
+                if (quiz.WaveId != null)
+                {
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO ExamAssignments (ExamId, StudentId, IsEmailSent, ScheduledStartTime, ScheduledEndTime)
+                        SELECT @QuizId, uw.UserId, 0, GETDATE(), DATEADD(day, 30, GETDATE())
+                        FROM dbo.UserWaves uw WITH (NOLOCK)
+                        WHERE uw.WaveId = @WaveId AND uw.IsActive = 1
+                          AND NOT EXISTS (
+                              SELECT 1 FROM dbo.ExamAssignments ea WITH (NOLOCK)
+                              WHERE ea.ExamId = @QuizId AND ea.StudentId = uw.UserId
+                          )", new { QuizId = id, WaveId = quiz.WaveId });
+                }
+
+                var trainees = (await conn.QueryAsync<dynamic>(@"
+                    WITH AssignedUsers AS (
+                        SELECT DISTINCT StudentId AS UserId FROM dbo.ExamAssignments WITH (NOLOCK) WHERE ExamId = @QuizId
+                        UNION
+                        SELECT DISTINCT uw.UserId FROM dbo.UserWaves uw WITH (NOLOCK)
+                        INNER JOIN dbo.Exams e WITH (NOLOCK) ON e.Id = @QuizId AND e.WaveId = uw.WaveId
+                        WHERE uw.IsActive = 1
+                    ),
+                    LatestAttempts AS (
+                        SELECT UserId, ExamId, Score, Status, StartTime, AttemptNumber,
+                               ROW_NUMBER() OVER (PARTITION BY UserId, ExamId ORDER BY AttemptNumber DESC, StartTime DESC) as rn
+                        FROM dbo.UserExamAttempts WITH (NOLOCK)
+                        WHERE ExamId = @QuizId
+                    ),
+                    UserRoles AS (
+                        SELECT ur.UserId, MAX(r.Name) as RoleName
+                        FROM AspNetUserRoles ur WITH (NOLOCK)
+                        JOIN AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id
+                        GROUP BY ur.UserId
+                    )
+                    SELECT 
+                        u.Id AS UserId,
+                        ISNULL(NULLIF(u.FullName, ''), u.UserName) AS StudentName,
+                        u.UserCode,
+                        u.Email,
+                        u.PhoneNumber,
+                        ISNULL(b.BranchName, '--') AS BranchName,
+                        ISNULL(s.ShiftName, 'Any Shift') AS ShiftName,
+                        COALESCE(ur.RoleName, 'Trainee') AS RoleName,
+                        CASE 
+                            WHEN la.Status = 'Completed' THEN 'Completed'
+                            WHEN la.Status = 'InProgress' THEN 'InProgress'
+                            WHEN la.Status = 'Fail_Timeout' THEN 'Timeout'
+                            ELSE 'Not Started'
+                        END AS AttemptStatus,
+                        la.Score AS Score,
+                        la.StartTime AS AttemptDate
+                    FROM AssignedUsers au
+                    INNER JOIN AspNetUsers u WITH (NOLOCK) ON au.UserId = u.Id
+                    LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                    LEFT JOIN Shifts s WITH (NOLOCK) ON u.ShiftId = s.Id
+                    LEFT JOIN UserRoles ur ON u.Id = ur.UserId
+                    LEFT JOIN LatestAttempts la ON u.Id = la.UserId AND la.rn = 1
+                    ORDER BY u.UserCode ASC", new { QuizId = id })).ToList();
+
+                int total = trainees.Count;
+                int completed = trainees.Count(t => (string)t.AttemptStatus == "Completed");
+                int notStarted = trainees.Count(t => (string)t.AttemptStatus == "Not Started");
+                int inProgress = trainees.Count(t => (string)t.AttemptStatus == "InProgress");
+
+                return Json(new
+                {
+                    success = true,
+                    quizId = quiz.Id,
+                    quizTitle = (string)quiz.Title,
+                    waveName = (string)quiz.WaveName,
+                    totalAssigned = total,
+                    completedCount = completed,
+                    notStartedCount = notStarted,
+                    inProgressCount = inProgress,
+                    trainees = trainees
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        // ==========================================
+        // 9c. Sync Wave Trainees to Quiz
+        // ==========================================
+        [HttpPost]
+        public async Task<IActionResult> SyncWaveTraineesToQuiz(int id)
+        {
+            if (id <= 0) return Json(new { success = false, message = "Invalid Quiz ID." });
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                var quiz = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                    "SELECT Id, Title, WaveId, StartTime, EndTime FROM Exams WHERE Id = @Id", new { Id = id });
+
+                if (quiz == null) return Json(new { success = false, message = "Quiz not found." });
+                if (quiz.WaveId == null) return Json(new { success = false, message = "This quiz is not linked to any Wave." });
+
+                int synced = await conn.ExecuteAsync(@"
+                    INSERT INTO ExamAssignments (ExamId, StudentId, IsEmailSent, ScheduledStartTime, ScheduledEndTime)
+                    SELECT @ExamId, uw.UserId, 0, @StartTime, @EndTime
+                    FROM dbo.UserWaves uw WITH (NOLOCK)
+                    WHERE uw.WaveId = @WaveId AND uw.IsActive = 1
+                      AND NOT EXISTS (
+                          SELECT 1 FROM dbo.ExamAssignments ea WITH (NOLOCK)
+                          WHERE ea.ExamId = @ExamId AND ea.StudentId = uw.UserId
+                      )", new
+                {
+                    ExamId = id,
+                    WaveId = (int)quiz.WaveId,
+                    StartTime = (DateTime?)quiz.StartTime ?? DateTime.Now,
+                    EndTime = (DateTime?)quiz.EndTime ?? DateTime.Now.AddDays(30)
+                });
+
+                return Json(new { success = true, message = $"Successfully synced {synced} new trainee(s) to this quiz.", count = synced });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
         }
 
         // ==========================================
