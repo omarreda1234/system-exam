@@ -147,6 +147,156 @@
     </div>
 </div>
 
+<!-- WAVE ENROLLED PERSONNEL & EMAIL MODAL -->
+<div id="wavePersonnelModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-[28px] max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden transition-all animate-in fade-in zoom-in duration-200">
+        <!-- Modal Header -->
+        <div class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+            <div>
+                <p class="text-[10px] font-bold text-brand-600 uppercase tracking-[0.2em] mb-0.5">Enrolled Personnel in</p>
+                <p class="text-2xl font-black italic uppercase text-slate-900 dark:text-white" id="wpModalWaveName">Wave Details</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" id="tabBtnEnrolledList" onclick="window.switchEnrolledModalTab('list')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-brand-600 text-white shadow-sm flex items-center gap-2">
+                    <i class="fas fa-users text-xs"></i> <span>Enrolled (<span id="wpHeaderEnrolledCount">0</span>)</span>
+                </button>
+                <button type="button" id="tabBtnEnrolledEmail" onclick="window.switchEnrolledModalTab('email')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 flex items-center gap-2">
+                    <i class="fas fa-envelope text-xs text-brand-500"></i> <span>Customize & Send Email</span>
+                    <span id="badgeTargetCount" class="bg-emerald-500 text-white px-2 py-0.5 rounded-full text-[9px] font-bold uppercase">All (0)</span>
+                </button>
+                <button type="button" onclick="closeWavePersonnelModal()" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-400 flex items-center justify-center transition-all ml-2" title="Close">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Modal Body (Scrollable) -->
+        <div class="p-6 overflow-y-auto flex-1 text-left">
+            <!-- Loading Indicator -->
+            <div id="wpModalLoading" class="py-16 text-center">
+                <i class="fas fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i>
+                <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Loading Personnel & Email Setup...</p>
+            </div>
+
+            <!-- Content Area -->
+            <div id="wpModalContent" class="hidden">
+                <!-- TAB 1: ENROLLED PERSONNEL LIST -->
+                <div id="enrolledTabList">
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+                        <div class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+                            <span class="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-brand-600 shadow-xs">
+                                Selected: <strong id="selectedEnrolledCounter">0</strong> of <span id="totalEnrolledCounter">0</span>
+                            </span>
+                            <span class="text-[11px] text-slate-400 font-normal">Select candidates to email specifically, or leave unselected to email all.</span>
+                        </div>
+                        <button type="button" onclick="window.switchEnrolledModalTab('email')" class="text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-200 hover:border-emerald-600 px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5">
+                            <i class="fas fa-paper-plane text-xs"></i> Customize & Send Email
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table id="swalWaveDetailsTable" class="saas-table display nowrap w-full text-xs">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="w-10"><input type="checkbox" id="selectAllEnrolledList" class="w-4 h-4 accent-brand-500"></th>
+                                    <th>User</th>
+                                    <th>Code</th>
+                                    <th>Role</th>
+                                    <th>Branch</th>
+                                    <th>Status</th>
+                                    <th class="text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wpTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="wpEmptyState" class="hidden p-12 text-center text-slate-400 font-bold uppercase tracking-widest">
+                        No personnel enrolled in this batch
+                    </div>
+                </div>
+
+                <!-- TAB 2: CUSTOMIZE & SEND EMAIL -->
+                <div id="enrolledTabEmail" class="hidden space-y-4">
+                    <div class="p-3.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center text-base">
+                                <i class="fas fa-envelope-open-text"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs font-black text-emerald-900 dark:text-emerald-200 uppercase tracking-wide">
+                                    Dispatch Target: <span id="enrolledEmailTargetDesc">All (0) Enrolled Personnel</span>
+                                </p>
+                                <p class="text-[11px] text-emerald-700/80 dark:text-emerald-400">
+                                    يمكنك إرسال وتخصيص الرسالة الآن لجميع متدربي الويف أو للمتدربين المحددين فقط.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subject -->
+                    <div>
+                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                            Email Subject / عنوان الرسالة:
+                        </label>
+                        <input type="text" id="enrolledEmailSubject" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all">
+                    </div>
+
+                    <!-- Placeholders Toolbar -->
+                    <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 p-3 rounded-xl">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                                <i class="fas fa-tags text-brand-500"></i> Placeholders (اضغط لإدراج المتغير التلقائي في الرسالة):
+                            </span>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5">
+                            <button type="button" onclick="window.insertEnrolledPlaceholder('{Name}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{Name} (اسم المتدرب)</button>
+                            <button type="button" onclick="window.insertEnrolledPlaceholder('{WaveName}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{WaveName} (اسم الويف)</button>
+                            <button type="button" onclick="window.insertEnrolledPlaceholder('{StartDate}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{StartDate} (تاريخ البدء)</button>
+                            <button type="button" onclick="window.insertEnrolledPlaceholder('{Location}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{Location} (مكان التدريب)</button>
+                            <button type="button" onclick="window.insertEnrolledPlaceholder('{PortalLink}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{PortalLink} (رابط المنصة)</button>
+                        </div>
+                    </div>
+
+                    <!-- Body Textarea -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                                Email Message Body / نص رسالة الإيميل:
+                            </label>
+                            <button type="button" onclick="window.toggleEnrolledEmailPreview()" id="toggleEnrolledPreviewBtn" class="text-xs font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400 flex items-center gap-1.5 transition-colors">
+                                <i class="fas fa-eye text-xs"></i> <span id="enrolledPreviewBtnText">Live Preview / معاينة الإيميل</span>
+                            </button>
+                        </div>
+                        <textarea id="enrolledEmailBody" rows="9" dir="auto" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 text-xs text-slate-800 dark:text-slate-100 font-sans focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all leading-relaxed"></textarea>
+
+                        <!-- Live Preview Render Box -->
+                        <div id="enrolledEmailPreviewBox" class="hidden p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl mt-2 text-xs leading-relaxed max-h-60 overflow-y-auto"></div>
+                    </div>
+
+                    <!-- Checkbox to Save as Default -->
+                    <div class="flex items-center gap-2 pt-1">
+                        <input type="checkbox" id="enrolledSaveDefaultCheck" class="w-4 h-4 accent-brand-500 rounded cursor-pointer" checked>
+                        <label for="enrolledSaveDefaultCheck" class="text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                            حفظ هذا القالب كقالب افتراضي لهذه الويف (Save as default template for this Wave)
+                        </label>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                        <button type="button" onclick="window.switchEnrolledModalTab('list')" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fas fa-arrow-left"></i> Back to Personnel List / العودة للقائمة
+                        </button>
+                        <button type="button" onclick="window.sendWavePersonnelEmail()" class="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider shadow-md shadow-emerald-600/20 hover:shadow-emerald-600/30 transition-all flex items-center gap-2">
+                            <i class="fas fa-paper-plane text-xs"></i> <span>Send Email Now / إرسال الإيميل الآن</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
@@ -2316,9 +2466,198 @@ Eltarshoubi Training Academy Team`
                 }
             });
 
+            let currentWaveUsers = [];
+            let currentWaveEmailData = null;
+            let currentWaveId = null;
+            let currentWaveName = '';
+
+            window.closeWavePersonnelModal = function() {
+                $('#wavePersonnelModal').addClass('hidden');
+                if (window._enrolledTable) {
+                    window._enrolledTable.destroy();
+                    window._enrolledTable = null;
+                }
+                $('#wpTableBody').empty();
+            };
+
+            $('#wavePersonnelModal').on('click', function(e) {
+                if ($(e.target).is('#wavePersonnelModal')) {
+                    closeWavePersonnelModal();
+                }
+            });
+
+            $(document).on('keydown.wpModal', function(e) {
+                if (e.key === 'Escape' && !$('#wavePersonnelModal').hasClass('hidden') && !Swal.isVisible()) {
+                    closeWavePersonnelModal();
+                }
+            });
+
+            function updateEnrolledSelectedCount() {
+                if (!window._enrolledTable) return;
+                const totalRemaining = window._enrolledTable.rows().count();
+                const selectedCount = window._enrolledTable.$('input.enrolled-user-cb:checked').length;
+                $('#selectedEnrolledCounter').text(selectedCount);
+                $('#totalEnrolledCounter').text(totalRemaining);
+                $('#wpHeaderEnrolledCount').text(totalRemaining);
+                if (selectedCount > 0) {
+                    $('#badgeTargetCount').text(`${selectedCount} Selected`);
+                    $('#enrolledEmailTargetDesc').text(`${selectedCount} Selected Candidate(s)`);
+                } else {
+                    $('#badgeTargetCount').text(`All (${totalRemaining})`);
+                    $('#enrolledEmailTargetDesc').text(`All (${totalRemaining}) Enrolled Personnel`);
+                }
+                if (totalRemaining === 0) {
+                    $('#wpEmptyState').removeClass('hidden');
+                } else {
+                    $('#wpEmptyState').addClass('hidden');
+                }
+            }
+
+            window.switchEnrolledModalTab = function(tabName) {
+                const listTab = document.getElementById('enrolledTabList');
+                const emailTab = document.getElementById('enrolledTabEmail');
+                const btnList = document.getElementById('tabBtnEnrolledList');
+                const btnEmail = document.getElementById('tabBtnEnrolledEmail');
+                if (!listTab || !emailTab) return;
+
+                if (tabName === 'email') {
+                    listTab.classList.add('hidden');
+                    emailTab.classList.remove('hidden');
+
+                    btnList.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 flex items-center gap-2';
+                    btnEmail.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-brand-600 text-white shadow-sm flex items-center gap-2';
+                } else {
+                    emailTab.classList.add('hidden');
+                    listTab.classList.remove('hidden');
+
+                    btnEmail.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 flex items-center gap-2';
+                    btnList.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-brand-600 text-white shadow-sm flex items-center gap-2';
+                }
+            };
+
+            window.insertEnrolledPlaceholder = function(token) {
+                const textarea = document.getElementById('enrolledEmailBody');
+                if (!textarea) return;
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const text = textarea.value;
+                textarea.value = text.substring(0, start) + token + text.substring(end);
+                textarea.focus();
+                textarea.selectionStart = textarea.selectionEnd = start + token.length;
+            };
+
+            window.toggleEnrolledEmailPreview = function() {
+                const previewBox = $('#enrolledEmailPreviewBox');
+                const textarea = $('#enrolledEmailBody');
+                const isHidden = previewBox.hasClass('hidden');
+
+                if (isHidden) {
+                    const rawText = textarea.val() || '';
+                    const sampleName = currentWaveUsers.length > 0 ? (currentWaveUsers[0].userName ?? currentWaveUsers[0].UserName) : 'Ahmed Mohamed';
+                    const waveTitle = currentWaveName;
+                    const sampleDate = currentWaveEmailData?.startDate || 'October 15, 2026 - 10:00 AM';
+                    const sampleLocation = currentWaveEmailData?.location || 'Offline in Main Branch';
+                    const sampleUrl = 'http://41.33.149.186:5208';
+
+                    let rendered = rawText
+                        .replace(/{Name}/g, sampleName)
+                        .replace(/{FullName}/g, sampleName)
+                        .replace(/{UserName}/g, sampleName)
+                        .replace(/{WaveName}/g, waveTitle)
+                        .replace(/{StartDate}/g, sampleDate)
+                        .replace(/{Location}/g, sampleLocation)
+                        .replace(/{PortalLink}/g, `<a href="${sampleUrl}" class="text-brand-600 underline" target="_blank">${sampleUrl}</a>`);
+
+                    rendered = rendered.replace(/\n/g, '<br/>');
+
+                    previewBox.html(`
+                        <div class="border-b border-slate-200 dark:border-slate-800 pb-2 mb-3">
+                            <p class="text-[10px] uppercase font-black tracking-widest text-slate-400">Preview with sample data (معاينة مع بيانات تجريبية):</p>
+                            <p class="font-bold text-slate-800 dark:text-white mt-1">Subject: ${$('#enrolledEmailSubject').val()}</p>
+                        </div>
+                        <div dir="auto" class="text-slate-700 dark:text-slate-200 font-sans">${rendered}</div>
+                    `);
+                    previewBox.removeClass('hidden');
+                    $('#enrolledPreviewBtnText').text('Hide Preview / إخفاء المعاينة');
+                } else {
+                    previewBox.addClass('hidden');
+                    $('#enrolledPreviewBtnText').text('Live Preview / معاينة الإيميل');
+                }
+            };
+
+            window.sendWavePersonnelEmail = async function() {
+                if (!window._enrolledTable) return;
+                const selectedIds = [];
+                window._enrolledTable.$('input.enrolled-user-cb:checked').each(function() {
+                    selectedIds.push($(this).val());
+                });
+
+                const totalRemaining = window._enrolledTable.rows().count();
+                const subject = $('#enrolledEmailSubject').val();
+                const body = $('#enrolledEmailBody').val();
+                const saveDefault = $('#enrolledSaveDefaultCheck').is(':checked');
+
+                const targetDesc = selectedIds.length > 0 
+                    ? `${selectedIds.length} متدرب محدد` 
+                    : `جميع متدربي الويف (${totalRemaining} متدرب)`;
+
+                const confirmResult = await Swal.fire({
+                    title: 'تأكيد إرسال الإيميل؟',
+                    text: `هل أنت متأكد من رغبتك في إرسال هذا الإيميل المخصص إلى ${targetDesc}؟`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'نعم، أرسل الآن',
+                    cancelButtonText: 'إلغاء',
+                    customClass: {
+                        confirmButton: 'bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-bold uppercase text-xs mr-2',
+                        cancelButton: 'text-slate-500 font-bold uppercase text-xs px-6 py-2.5'
+                    },
+                    buttonsStyling: false
+                });
+
+                if (!confirmResult.isConfirmed) return;
+
+                Swal.fire({
+                    title: 'Sending Emails...',
+                    text: 'Please wait while emails are being dispatched.',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading()
+                });
+
+                try {
+                    const response = await fetch(`/Admin/SendCustomEmailToWavePersonnel?waveId=${currentWaveId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userIds: selectedIds.length > 0 ? selectedIds : null,
+                            customSubject: subject,
+                            customBody: body,
+                            saveAsDefault: saveDefault
+                        })
+                    });
+
+                    const resData = await response.json();
+                    Swal.close();
+                    if (resData.success) {
+                        showToast(resData.message || 'Emails sent successfully.', 'success');
+                    } else {
+                        showToast(resData.message || 'Failed to send emails.', 'error');
+                    }
+                } catch(err) {
+                    Swal.close();
+                    showToast('An error occurred while communicating with the server.', 'error');
+                }
+            };
+
             async function viewWavePersonnel(wid, wname) {
-                Swal.fire({ title: 'Loading Personnel & Email Setup...', didOpen: () => Swal.showLoading() });
-                
+                currentWaveId = wid;
+                currentWaveName = wname;
+                $('#wpModalWaveName').text(wname);
+                $('#wavePersonnelModal').removeClass('hidden');
+                $('#wpModalLoading').removeClass('hidden');
+                $('#wpModalContent').addClass('hidden');
+                switchEnrolledModalTab('list');
+
                 try {
                     const [usersRes, emailRes] = await Promise.all([
                         fetch(`/Admin/GetUsersByWaveId?waveId=${wid}`),
@@ -2326,432 +2665,179 @@ Eltarshoubi Training Academy Team`
                     ]);
                     const users = await usersRes.json();
                     const emailData = emailRes.ok ? await emailRes.json() : null;
+                    currentWaveUsers = users || [];
+                    currentWaveEmailData = emailData;
 
                     const initialSubject = emailData?.customSubject || `Welcome to ${wname} - Registration Confirmed`;
                     const initialBody = emailData?.customBody || `Dear {Name},\n\nWelcome to {WaveName} of Pharmacy Basics Program — we’re glad to have you with us!\n\nYour registration has been successfully confirmed. Here are your session details:\n📅 Date & Time: {StartDate}\n📍 Location: {Location}\n\nA quick note before we start:\n• Please arrive 10–15 minutes early to ensure a smooth check-in.\n• Keep an eye on your email for any further updates or announcements.\n\nIf you have any questions or face any issues, feel free to reach out to us.\nLooking forward to seeing you and having a great Training Program together!\n\nBest regards,\nEltarshoubi Training Academy Team`;
 
-                    Swal.fire({
-                        title: `
-                            <div class="text-left border-b border-slate-100 dark:border-slate-800 pb-4">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-[10px] font-bold text-brand-600 uppercase tracking-[0.2em] mb-0.5">Enrolled Personnel in</p>
-                                        <p class="text-2xl font-black italic uppercase text-slate-900 dark:text-white">${wname}</p>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <button type="button" id="tabBtnEnrolledList" onclick="window.switchEnrolledModalTab('list')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-brand-600 text-white shadow-sm flex items-center gap-2">
-                                            <i class="fas fa-users text-xs"></i> <span>Enrolled (${users.length})</span>
-                                        </button>
-                                        <button type="button" id="tabBtnEnrolledEmail" onclick="window.switchEnrolledModalTab('email')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 flex items-center gap-2">
-                                            <i class="fas fa-envelope text-xs text-brand-500"></i> <span>Customize & Send Email</span>
-                                            <span id="badgeTargetCount" class="bg-emerald-500 text-white px-2 py-0.2 rounded-full text-[9px] font-bold uppercase">All (${users.length})</span>
-                                        </button>
-                                    </div>
+                    $('#enrolledEmailSubject').val(initialSubject);
+                    $('#enrolledEmailBody').val(initialBody);
+                    $('#wpHeaderEnrolledCount').text(users.length);
+                    $('#totalEnrolledCounter').text(users.length);
+                    $('#selectedEnrolledCounter').text('0');
+                    $('#badgeTargetCount').text(`All (${users.length})`);
+                    $('#enrolledEmailTargetDesc').text(`All (${users.length}) Enrolled Personnel`);
+                    $('#selectAllEnrolledList').prop('checked', false);
+
+                    if (window._enrolledTable) {
+                        window._enrolledTable.destroy();
+                        window._enrolledTable = null;
+                    }
+
+                    const rowsHtml = users.map(u => {
+                        const st = (u.approvalStatus || u.ApprovalStatus || 'Pending');
+                        const userWaveId = u.userWaveId || u.UserWaveId;
+                        return `
+                        <tr class="border-b border-slate-50 cursor-pointer">
+                            <td><input type="checkbox" class="enrolled-user-cb w-4 h-4 accent-brand-500" value="${u.id ?? u.Id}"></td>
+                            <td>
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-slate-900 dark:text-white">${u.userName ?? u.UserName}</span>
+                                    <span class="text-[10px] text-slate-400 font-medium">${u.email ?? u.Email}</span>
                                 </div>
-                            </div>
-                        `,
-                        html: `
-                            <div class="mt-4 text-left">
-                                <!-- TAB 1: ENROLLED PERSONNEL LIST -->
-                                <div id="enrolledTabList">
-                                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700">
-                                        <div class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-                                            <span class="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-brand-600 shadow-xs">
-                                                Selected: <strong id="selectedEnrolledCounter">0</strong> of ${users.length}
-                                            </span>
-                                            <span class="text-[11px] text-slate-400 font-normal">Select candidates to email specifically, or leave unselected to email all.</span>
-                                        </div>
-                                        <button type="button" onclick="window.switchEnrolledModalTab('email')" class="text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-200 hover:border-emerald-600 px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5">
-                                            <i class="fas fa-paper-plane text-xs"></i> Customize & Send Email
+                            </td>
+                            <td class="font-bold text-slate-500">${u.userCode ?? u.UserCode ?? '--'}</td>
+                            <td>
+                                <span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                                    ${u.roleName ?? u.RoleName ?? 'User'}
+                                </span>
+                            </td>
+                            <td class="font-bold text-slate-400 text-[10px] uppercase">${u.branchName ?? u.BranchName ?? 'N/A'}</td>
+                            <td>
+                                ${st === 'Approved' ? `
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200">
+                                        <i class="fas fa-check-circle text-[8px]"></i> Approved
+                                    </span>
+                                ` : st === 'Rejected' ? `
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200" title="${escapeHtmlAttr(u.rejectionReason || u.RejectionReason || 'Rejected')}">
+                                        <i class="fas fa-times-circle text-[8px]"></i> Rejected
+                                    </span>
+                                ` : st === 'Replaced' ? `
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400 border border-purple-200">
+                                        <i class="fas fa-sync text-[8px]"></i> Replaced
+                                    </span>
+                                ` : `
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200">
+                                        <i class="fas fa-clock text-[8px]"></i> Pending
+                                    </span>
+                                `}
+                            </td>
+                            <td class="text-right">
+                                <div class="flex items-center justify-end gap-1">
+                                    ${(st === 'Pending' && userWaveId) ? `
+                                        <button type="button" onclick="window.waveQuickAction(${userWaveId}, 'accept', '${escapeHtmlAttr(u.userName || u.UserName)}')" 
+                                                class="p-1.5 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-lg transition-all" title="Confirm / Approve Nomination">
+                                            <i class="fas fa-check"></i>
                                         </button>
-                                    </div>
-
-                                    <table id="swalWaveDetailsTable" class="saas-table display nowrap w-full text-xs">
-                                        <thead>
-                                            <tr class="bg-slate-50">
-                                                <th class="w-10"><input type="checkbox" id="selectAllEnrolledList" class="w-4 h-4 accent-brand-500"></th>
-                                                <th>User</th>
-                                                <th>Code</th>
-                                                <th>Role</th>
-                                                <th>Branch</th>
-                                                <th>Status</th>
-                                                <th class="text-right">Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            ${users.map(u => {
-                                                const st = (u.approvalStatus || u.ApprovalStatus || 'Pending');
-                                                const userWaveId = u.userWaveId || u.UserWaveId;
-                                                return `
-                                                <tr class="border-b border-slate-50 cursor-pointer">
-                                                    <td><input type="checkbox" class="enrolled-user-cb w-4 h-4 accent-brand-500" value="${u.id ?? u.Id}"></td>
-                                                    <td>
-                                                        <div class="flex flex-col">
-                                                            <span class="font-bold text-slate-900 dark:text-white">${u.userName ?? u.UserName}</span>
-                                                            <span class="text-[10px] text-slate-400 font-medium">${u.email ?? u.Email}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td class="font-bold text-slate-500">${u.userCode ?? u.UserCode ?? '--'}</td>
-                                                    <td>
-                                                        <span class="px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">
-                                                            ${u.roleName ?? u.RoleName ?? 'User'}
-                                                        </span>
-                                                    </td>
-                                                    <td class="font-bold text-slate-400 text-[10px] uppercase">${u.branchName ?? u.BranchName ?? 'N/A'}</td>
-                                                    <td>
-                                                        ${st === 'Approved' ? `
-                                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200">
-                                                                <i class="fas fa-check-circle text-[8px]"></i> Approved
-                                                            </span>
-                                                        ` : st === 'Rejected' ? `
-                                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200" title="${escapeHtmlAttr(u.rejectionReason || u.RejectionReason || 'Rejected')}">
-                                                                <i class="fas fa-times-circle text-[8px]"></i> Rejected
-                                                            </span>
-                                                        ` : st === 'Replaced' ? `
-                                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400 border border-purple-200">
-                                                                <i class="fas fa-sync text-[8px]"></i> Replaced
-                                                            </span>
-                                                        ` : `
-                                                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200">
-                                                                <i class="fas fa-clock text-[8px]"></i> Pending
-                                                            </span>
-                                                        `}
-                                                    </td>
-                                                    <td class="text-right">
-                                                        <div class="flex items-center justify-end gap-1">
-                                                            ${(st === 'Pending' && userWaveId) ? `
-                                                                <button type="button" onclick="window.waveQuickAction(${userWaveId}, 'accept', '${escapeHtmlAttr(u.userName || u.UserName)}')" 
-                                                                        class="p-1.5 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-lg transition-all" title="Confirm / Approve Nomination">
-                                                                    <i class="fas fa-check"></i>
-                                                                </button>
-                                                                <button type="button" onclick="window.waveQuickAction(${userWaveId}, 'reject', '${escapeHtmlAttr(u.userName || u.UserName)}')" 
-                                                                        class="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 rounded-lg transition-all" title="Reject Nomination with Reason">
-                                                                    <i class="fas fa-times"></i>
-                                                                </button>
-                                                                <button type="button" onclick="window.waveQuickReplace(${userWaveId}, '${escapeHtmlAttr(u.userName || u.UserName)}', ${u.branchId || u.BranchId || 0}, '${escapeHtmlAttr(u.branchName || u.BranchName || '')}', ${wid})" 
-                                                                        class="p-1.5 text-indigo-600 hover:text-white hover:bg-indigo-600 rounded-lg transition-all" title="Replace with Colleague from Branch">
-                                                                    <i class="fas fa-sync-alt"></i>
-                                                                </button>
-                                                            ` : ''}
-                                                            ${canDeleteWaveAssign ? `
-                                                                <button class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg remove-user-btn" 
-                                                                        data-waveid="${wid}" 
-                                                                        data-userid="${u.id ?? u.Id}"
-                                                                        data-username="${u.userName ?? u.UserName}" title="Remove from batch">
-                                                                    <i class="fas fa-trash-alt"></i>
-                                                                </button>
-                                                            ` : ''}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            `; }).join('')}
-                                        </tbody>
-                                    </table>
-                                    ${users.length === 0 ? '<div class="p-12 text-center text-slate-400 font-bold uppercase tracking-widest">No personnel enrolled in this batch</div>' : ''}
+                                        <button type="button" onclick="window.waveQuickAction(${userWaveId}, 'reject', '${escapeHtmlAttr(u.userName || u.UserName)}')" 
+                                                class="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 rounded-lg transition-all" title="Reject Nomination with Reason">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                        <button type="button" onclick="window.waveQuickReplace(${userWaveId}, '${escapeHtmlAttr(u.userName || u.UserName)}', ${u.branchId || u.BranchId || 0}, '${escapeHtmlAttr(u.branchName || u.BranchName || '')}', ${wid})" 
+                                                class="p-1.5 text-indigo-600 hover:text-white hover:bg-indigo-600 rounded-lg transition-all" title="Replace with Colleague from Branch">
+                                            <i class="fas fa-sync-alt"></i>
+                                        </button>
+                                    ` : ''}
+                                    ${canDeleteWaveAssign ? `
+                                        <button class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg remove-user-btn" 
+                                                data-waveid="${wid}" 
+                                                data-userid="${u.id ?? u.Id}"
+                                                data-username="${u.userName ?? u.UserName}" title="Remove from batch">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    ` : ''}
                                 </div>
+                            </td>
+                        </tr>
+                    `; }).join('');
 
-                                <!-- TAB 2: CUSTOMIZE & SEND EMAIL -->
-                                <div id="enrolledTabEmail" class="hidden space-y-4">
-                                    <div class="p-3.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl flex items-center justify-between">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center text-base">
-                                                <i class="fas fa-envelope-open-text"></i>
-                                            </div>
-                                            <div>
-                                                <p class="text-xs font-black text-emerald-900 dark:text-emerald-200 uppercase tracking-wide">
-                                                    Dispatch Target: <span id="enrolledEmailTargetDesc">All (${users.length}) Enrolled Personnel</span>
-                                                </p>
-                                                <p class="text-[11px] text-emerald-700/80 dark:text-emerald-400">
-                                                    يمكنك إرسال وتخصيص الرسالة الآن لجميع متدربي الويف أو للمتدربين المحددين فقط.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
+                    $('#wpTableBody').html(rowsHtml);
 
-                                    <!-- Subject -->
-                                    <div>
-                                        <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                                            Email Subject / عنوان الرسالة:
-                                        </label>
-                                        <input type="text" id="enrolledEmailSubject" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all" value="${escapeHtmlAttr(initialSubject)}">
-                                    </div>
+                    if (users.length === 0) {
+                        $('#wpEmptyState').removeClass('hidden');
+                    } else {
+                        $('#wpEmptyState').addClass('hidden');
+                    }
 
-                                    <!-- Placeholders Toolbar -->
-                                    <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 p-3 rounded-xl">
-                                        <div class="flex items-center justify-between mb-1.5">
-                                            <span class="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                                                <i class="fas fa-tags text-brand-500"></i> Placeholders (اضغط لإدراج المتغير التلقائي في الرسالة):
-                                            </span>
-                                        </div>
-                                        <div class="flex flex-wrap gap-1.5">
-                                            <button type="button" onclick="window.insertEnrolledPlaceholder('{Name}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{Name} (اسم المتدرب)</button>
-                                            <button type="button" onclick="window.insertEnrolledPlaceholder('{WaveName}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{WaveName} (اسم الويف)</button>
-                                            <button type="button" onclick="window.insertEnrolledPlaceholder('{StartDate}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{StartDate} (تاريخ البدء)</button>
-                                            <button type="button" onclick="window.insertEnrolledPlaceholder('{Location}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{Location} (مكان التدريب)</button>
-                                            <button type="button" onclick="window.insertEnrolledPlaceholder('{PortalLink}')" class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-mono font-bold transition-all shadow-xs">{PortalLink} (رابط المنصة)</button>
-                                        </div>
-                                    </div>
+                    $('#wpModalLoading').addClass('hidden');
+                    $('#wpModalContent').removeClass('hidden');
 
-                                    <!-- Body Textarea -->
-                                    <div>
-                                        <div class="flex items-center justify-between mb-1.5">
-                                            <label class="block text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                                                Email Message Body / نص رسالة الإيميل:
-                                            </label>
-                                            <button type="button" onclick="window.toggleEnrolledEmailPreview()" id="toggleEnrolledPreviewBtn" class="text-xs font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400 flex items-center gap-1.5 transition-colors">
-                                                <i class="fas fa-eye text-xs"></i> <span id="enrolledPreviewBtnText">Live Preview / معاينة الإيميل</span>
-                                            </button>
-                                        </div>
-                                        <textarea id="enrolledEmailBody" rows="9" dir="auto" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 text-xs text-slate-800 dark:text-slate-100 font-sans focus:ring-2 focus:ring-brand-500 focus:outline-none transition-all leading-relaxed">${escapeHtmlAttr(initialBody)}</textarea>
+                    window._enrolledTable = $('#swalWaveDetailsTable').DataTable({
+                        pageLength: 5,
+                        lengthMenu: [5, 10, 25, 50],
+                        language: { search: "", searchPlaceholder: "Filter personnel..." },
+                        columnDefs: [{ orderable: false, targets: 0 }]
+                    });
+                    $('.dataTables_filter input').addClass('bg-slate-50 border-slate-200 rounded-xl px-4 py-2 text-xs focus:ring-0 outline-none mb-4');
 
-                                        <!-- Live Preview Render Box -->
-                                        <div id="enrolledEmailPreviewBox" class="hidden p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl mt-2 text-xs leading-relaxed max-h-60 overflow-y-auto"></div>
-                                    </div>
+                    $('#selectAllEnrolledList').off('change').on('change', function() {
+                        if (!window._enrolledTable) return;
+                        const rows = window._enrolledTable.rows({ search: 'applied' }).nodes();
+                        $('input.enrolled-user-cb', rows).prop('checked', this.checked);
+                        updateEnrolledSelectedCount();
+                    });
 
-                                    <!-- Checkbox to Save as Default -->
-                                    <div class="flex items-center gap-2 pt-1">
-                                        <input type="checkbox" id="enrolledSaveDefaultCheck" class="w-4 h-4 accent-brand-500 rounded cursor-pointer" checked>
-                                        <label for="enrolledSaveDefaultCheck" class="text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
-                                            حفظ هذا القالب كقالب افتراضي لـ <b>${wname}</b> (Save as default template for this Wave)
-                                        </label>
-                                    </div>
+                    $('#swalWaveDetailsTable tbody').off('change', 'input.enrolled-user-cb').on('change', 'input.enrolled-user-cb', function() {
+                        updateEnrolledSelectedCount();
+                    });
 
-                                    <!-- Action Buttons -->
-                                    <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                                        <button type="button" onclick="window.switchEnrolledModalTab('list')" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
-                                            <i class="fas fa-arrow-left"></i> Back to Personnel List / العودة للقائمة
-                                        </button>
-                                        <button type="button" onclick="window.sendWavePersonnelEmail()" class="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider shadow-md shadow-emerald-600/20 hover:shadow-emerald-600/30 transition-all flex items-center gap-2">
-                                            <i class="fas fa-paper-plane text-xs"></i> <span>Send Email Now / إرسال الإيميل الآن</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        `,
-                        width: '1000px',
-                        showConfirmButton: false,
-                        showCloseButton: true,
-                        didOpen: () => {
-                            const table = $('#swalWaveDetailsTable').DataTable({
-                                pageLength: 5,
-                                lengthMenu: [5, 10, 25, 50],
-                                language: { search: "", searchPlaceholder: "Filter personnel..." },
-                                columnDefs: [{ orderable: false, targets: 0 }]
-                            });
-                            $('.dataTables_filter input').addClass('bg-slate-50 border-slate-200 rounded-xl px-4 py-2 text-xs focus:ring-0 outline-none mb-4');
-
-                            function updateEnrolledSelectedCount() {
-                                const selectedCount = table.$('input.enrolled-user-cb:checked').length;
-                                $('#selectedEnrolledCounter').text(selectedCount);
-                                if (selectedCount > 0) {
-                                    $('#badgeTargetCount').text(`${selectedCount} Selected`);
-                                    $('#enrolledEmailTargetDesc').text(`${selectedCount} Selected Candidate(s)`);
-                                } else {
-                                    $('#badgeTargetCount').text(`All (${users.length})`);
-                                    $('#enrolledEmailTargetDesc').text(`All (${users.length}) Enrolled Personnel`);
-                                }
-                            }
-
-                            $('#selectAllEnrolledList').on('change', function() {
-                                const rows = table.rows({ search: 'applied' }).nodes();
-                                $('input.enrolled-user-cb', rows).prop('checked', this.checked);
-                                updateEnrolledSelectedCount();
-                            });
-
-                            $('#swalWaveDetailsTable tbody').on('change', 'input.enrolled-user-cb', function() {
-                                updateEnrolledSelectedCount();
-                            });
-
-                            $('#swalWaveDetailsTable tbody').on('click', 'tr', function(e) {
-                                if ($(e.target).is('input[type="checkbox"]') || $(e.target).closest('button').length) return;
-                                const cb = $(this).find('input.enrolled-user-cb');
-                                if (cb.length) {
-                                    cb.prop('checked', !cb.prop('checked'));
-                                    updateEnrolledSelectedCount();
-                                }
-                            });
-
-                            // Tab switching
-                            window.switchEnrolledModalTab = function(tabName) {
-                                const listTab = document.getElementById('enrolledTabList');
-                                const emailTab = document.getElementById('enrolledTabEmail');
-                                const btnList = document.getElementById('tabBtnEnrolledList');
-                                const btnEmail = document.getElementById('tabBtnEnrolledEmail');
-
-                                if (tabName === 'email') {
-                                    listTab.classList.add('hidden');
-                                    emailTab.classList.remove('hidden');
-
-                                    btnList.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 flex items-center gap-2';
-                                    btnEmail.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-brand-600 text-white shadow-sm flex items-center gap-2';
-                                } else {
-                                    emailTab.classList.add('hidden');
-                                    listTab.classList.remove('hidden');
-
-                                    btnEmail.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 flex items-center gap-2';
-                                    btnList.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all bg-brand-600 text-white shadow-sm flex items-center gap-2';
-                                }
-                            };
-
-                            // Placeholders helper
-                            window.insertEnrolledPlaceholder = function(token) {
-                                const textarea = document.getElementById('enrolledEmailBody');
-                                if (!textarea) return;
-                                const start = textarea.selectionStart;
-                                const end = textarea.selectionEnd;
-                                const text = textarea.value;
-                                textarea.value = text.substring(0, start) + token + text.substring(end);
-                                textarea.focus();
-                                textarea.selectionStart = textarea.selectionEnd = start + token.length;
-                            };
-
-                            // Toggle preview
-                            window.toggleEnrolledEmailPreview = function() {
-                                const previewBox = $('#enrolledEmailPreviewBox');
-                                const textarea = $('#enrolledEmailBody');
-                                const isHidden = previewBox.hasClass('hidden');
-
-                                if (isHidden) {
-                                    const rawText = textarea.val() || '';
-                                    const sampleName = users.length > 0 ? (users[0].userName ?? users[0].UserName) : 'Ahmed Mohamed';
-                                    const waveTitle = wname;
-                                    const sampleDate = emailData?.startDate || 'October 15, 2026 - 10:00 AM';
-                                    const sampleLocation = emailData?.location || 'Offline in Main Branch';
-                                    const sampleUrl = 'http://41.33.149.186:5208';
-
-                                    let rendered = rawText
-                                        .replace(/{Name}/g, sampleName)
-                                        .replace(/{FullName}/g, sampleName)
-                                        .replace(/{UserName}/g, sampleName)
-                                        .replace(/{WaveName}/g, waveTitle)
-                                        .replace(/{StartDate}/g, sampleDate)
-                                        .replace(/{Location}/g, sampleLocation)
-                                        .replace(/{PortalLink}/g, `<a href="${sampleUrl}" class="text-brand-600 underline" target="_blank">${sampleUrl}</a>`);
-
-                                    rendered = rendered.replace(/\n/g, '<br/>');
-
-                                    previewBox.html(`
-                                        <div class="border-b border-slate-200 dark:border-slate-800 pb-2 mb-3">
-                                            <p class="text-[10px] uppercase font-black tracking-widest text-slate-400">Preview with sample data (معاينة مع بيانات تجريبية):</p>
-                                            <p class="font-bold text-slate-800 dark:text-white mt-1">Subject: ${$('#enrolledEmailSubject').val()}</p>
-                                        </div>
-                                        <div dir="auto" class="text-slate-700 dark:text-slate-200 font-sans">${rendered}</div>
-                                    `);
-                                    previewBox.removeClass('hidden');
-                                    $('#enrolledPreviewBtnText').text('Hide Preview / إخفاء المعاينة');
-                                } else {
-                                    previewBox.addClass('hidden');
-                                    $('#enrolledPreviewBtnText').text('Live Preview / معاينة الإيميل');
-                                }
-                            };
-
-                            // Send email logic
-                            window.sendWavePersonnelEmail = async function() {
-                                const selectedIds = [];
-                                table.$('input.enrolled-user-cb:checked').each(function() {
-                                    selectedIds.push($(this).val());
-                                });
-
-                                const subject = $('#enrolledEmailSubject').val();
-                                const body = $('#enrolledEmailBody').val();
-                                const saveDefault = $('#enrolledSaveDefaultCheck').is(':checked');
-
-                                const targetDesc = selectedIds.length > 0 
-                                    ? `${selectedIds.length} متدرب محدد` 
-                                    : `جميع متدربي الويف (${users.length} متدرب)`;
-
-                                const confirmResult = await Swal.fire({
-                                    title: 'تأكيد إرسال الإيميل؟',
-                                    text: `هل أنت متأكد من رغبتك في إرسال هذا الإيميل المخصص إلى ${targetDesc}؟`,
-                                    icon: 'question',
-                                    showCancelButton: true,
-                                    confirmButtonText: 'نعم، أرسل الآن',
-                                    cancelButtonText: 'إلغاء',
-                                    customClass: {
-                                        confirmButton: 'bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-bold uppercase text-xs mr-2',
-                                        cancelButton: 'text-slate-500 font-bold uppercase text-xs px-6 py-2.5'
-                                    },
-                                    buttonsStyling: false
-                                });
-
-                                if (!confirmResult.isConfirmed) return;
-
-                                Swal.showLoading();
-                                try {
-                                    const response = await fetch(`/Admin/SendCustomEmailToWavePersonnel?waveId=${wid}`, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                            userIds: selectedIds.length > 0 ? selectedIds : null,
-                                            customSubject: subject,
-                                            customBody: body,
-                                            saveAsDefault: saveDefault
-                                        })
-                                    });
-
-                                    const resData = await response.json();
-                                    if (resData.success) {
-                                        showToast(resData.message || 'Emails sent successfully.', 'success');
-                                        Swal.close();
-                                    } else {
-                                        showToast(resData.message || 'Failed to send emails.', 'error');
-                                        Swal.hideLoading();
-                                    }
-                                } catch(err) {
-                                    showToast('An error occurred while communicating with the server.', 'error');
-                                    Swal.hideLoading();
-                                }
-                            };
-                            
-                            // Remove logic
-                            $(document).off('click', '.remove-user-btn').on('click', '.remove-user-btn', function() {
-                                const uid = $(this).data('userid');
-                                const uname = $(this).data('username');
-                                const waveId = $(this).data('waveid');
-                                
-                                Swal.fire({
-                                    title: 'Remove User?',
-                                    text: `Remove ${uname} from this batch?`,
-                                    icon: 'warning',
-                                    showCancelButton: true,
-                                    confirmButtonText: 'Yes, Remove',
-                                    customClass: {
-                                        popup: 'rounded-[28px]',
-                                        confirmButton: 'bg-rose-600 text-white px-6 py-2 rounded-lg font-bold mr-2',
-                                        cancelButton: 'bg-slate-200 text-slate-700 px-6 py-2 rounded-lg font-bold'
-                                    },
-                                    buttonsStyling: false
-                                }).then(async (r) => {
-                                    if(r.isConfirmed) {
-                                        try {
-                                            const res = await fetch('/Admin/RemoveUserFromWave', {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                                                body: `waveId=${waveId}&userId=${uid}`
-                                            });
-                                            const data = await res.json();
-                                            if(data.success) {
-                                                table.row($(`button[data-userid="${uid}"]`).parents('tr')).remove().draw();
-                                                showToast('Candidate removed successfully', 'success');
-                                                updateEnrolledSelectedCount();
-                                            } else {
-                                                showToast(data.message || 'Failed to remove candidate', 'error');
-                                            }
-                                        } catch(e) {
-                                            showToast('An error occurred while communicating with the server', 'error');
-                                        }
-                                    }
-                                });
-                            });
-                        },
-                        didClose: () => {
-                            delete window.switchEnrolledModalTab;
-                            delete window.insertEnrolledPlaceholder;
-                            delete window.toggleEnrolledEmailPreview;
-                            delete window.sendWavePersonnelEmail;
+                    $('#swalWaveDetailsTable tbody').off('click', 'tr').on('click', 'tr', function(e) {
+                        if ($(e.target).is('input[type="checkbox"]') || $(e.target).closest('button').length) return;
+                        const cb = $(this).find('input.enrolled-user-cb');
+                        if (cb.length) {
+                            cb.prop('checked', !cb.prop('checked'));
+                            updateEnrolledSelectedCount();
                         }
                     });
+
+                    // Remove logic - stays inside the modal without closing it!
+                    $(document).off('click', '.remove-user-btn').on('click', '.remove-user-btn', function(e) {
+                        e.stopPropagation();
+                        const $btn = $(this);
+                        const uid = $btn.data('userid');
+                        const uname = $btn.data('username');
+                        const waveId = $btn.data('waveid');
+                        
+                        Swal.fire({
+                            title: 'Remove User?',
+                            text: `Remove ${uname} from this batch?`,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Yes, Remove',
+                            cancelButtonText: 'Cancel',
+                            customClass: {
+                                popup: 'rounded-[28px]',
+                                confirmButton: 'bg-rose-600 text-white px-6 py-2 rounded-lg font-bold mr-2',
+                                cancelButton: 'bg-slate-200 text-slate-700 px-6 py-2 rounded-lg font-bold'
+                            },
+                            buttonsStyling: false
+                        }).then(async (r) => {
+                            if (r.isConfirmed) {
+                                try {
+                                    const res = await fetch('/Admin/RemoveUserFromWave', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                        body: `waveId=${waveId}&userId=${uid}`
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        if (window._enrolledTable) {
+                                            window._enrolledTable.row($btn.closest('tr')).remove().draw(false);
+                                        }
+                                        showToast('Candidate removed successfully', 'success');
+                                        updateEnrolledSelectedCount();
+                                    } else {
+                                        showToast(data.message || 'Failed to remove candidate', 'error');
+                                    }
+                                } catch(e) {
+                                    showToast('An error occurred while communicating with the server', 'error');
+                                }
+                            }
+                        });
+                    });
                 } catch (err) {
+                    $('#wpModalLoading').addClass('hidden');
                     showToast('Failed to load candidate list.', 'error');
                 }
             }
@@ -2797,8 +2883,27 @@ Eltarshoubi Training Academy Team`
                 const data = await res.json();
                 if (data.success) {
                     showToast(action === 'accept' ? `Nomination for ${name} approved successfully ✅` : `Nomination for ${name} rejected ❌`, 'success');
-                    Swal.close();
-                    setTimeout(() => location.reload(), 1000);
+                    const $tr = $(`button[onclick*="waveQuickAction(${userWaveId}"]`).closest('tr');
+                    if ($tr.length && !$('#wavePersonnelModal').hasClass('hidden')) {
+                        const $statusTd = $tr.find('td:nth-child(6)');
+                        const $actionTd = $tr.find('td:nth-child(7)');
+                        if (action === 'accept') {
+                            $statusTd.html(`
+                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200">
+                                    <i class="fas fa-check-circle text-[8px]"></i> Approved
+                                </span>
+                            `);
+                        } else {
+                            $statusTd.html(`
+                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200" title="${escapeHtmlAttr(reason || 'Rejected')}">
+                                    <i class="fas fa-times-circle text-[8px]"></i> Rejected
+                                </span>
+                            `);
+                        }
+                        $actionTd.find('button[onclick*="waveQuickAction"]').remove();
+                    } else {
+                        setTimeout(() => location.reload(), 1000);
+                    }
                 } else {
                     showToast(data.message || 'Operation could not be completed.', 'error');
                 }
@@ -2808,7 +2913,6 @@ Eltarshoubi Training Academy Team`
         };
 
         window.waveQuickReplace = function(userWaveId, name, branchId, branchName, waveId, userCode = '', userId = '') {
-            Swal.close();
             if (window.openReplaceModal) {
                 window.openReplaceModal(userWaveId, waveId, branchId, name, branchName, userCode, userId);
             } else {
