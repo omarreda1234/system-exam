@@ -26,7 +26,7 @@ namespace Exam.Controllers
             public int CategoryId { get; set; }
             public int? TopicId { get; set; }
             public int TotalPoints { get; set; } = 100;
-            public decimal PassPercentage { get; set; } = 60;
+            public decimal PassPercentage { get; set; } = 0; // Quizzes are formative/marks-only (no pass/fail threshold)
             public int DurationInMinutes { get; set; } = 20;
             public DateTime? StartTime { get; set; }
             public DateTime? EndTime { get; set; }
@@ -97,17 +97,20 @@ namespace Exam.Controllers
                 FROM TrainingWaves WITH (NOLOCK)
                 ORDER BY Id DESC")).ToList();
 
-            // Fetch Categories
+            // Fetch Categories (Strictly Wave Categories - ExamTypeId = 2)
             var categories = (await conn.QueryAsync<dynamic>(@"
                 SELECT Id, CategoryName
                 FROM Categories WITH (NOLOCK)
+                WHERE ExamTypeId = 2
                 ORDER BY CategoryName ASC")).ToList();
 
-            // Fetch Topics
+            // Fetch Topics (Strictly Topics belonging to Wave Categories)
             var topics = (await conn.QueryAsync<dynamic>(@"
-                SELECT Id, TopicName, CategoryId
-                FROM Topics WITH (NOLOCK)
-                ORDER BY TopicName ASC")).ToList();
+                SELECT t.Id, t.TopicName, t.CategoryId
+                FROM Topics t WITH (NOLOCK)
+                INNER JOIN Categories c WITH (NOLOCK) ON t.CategoryId = c.Id
+                WHERE c.ExamTypeId = 2
+                ORDER BY t.TopicName ASC")).ToList();
 
             // Fetch Quizzes List
             var sql = @"
@@ -217,7 +220,7 @@ namespace Exam.Controllers
                     StartTime = startTime,
                     EndTime = endTime,
                     DurationInMinutes = model.DurationInMinutes > 0 ? model.DurationInMinutes : 20,
-                    PassPercentage = model.PassPercentage > 0 ? model.PassPercentage : 60,
+                    PassPercentage = model.PassPercentage, // Formative assessment / no pass or fail
                     IsActive = model.IsActive,
                     ExamTypeId = 9,
                     WaveId = model.WaveId,
@@ -316,7 +319,7 @@ namespace Exam.Controllers
                 StartTime = startTime,
                 EndTime = endTime,
                 DurationInMinutes = model.DurationInMinutes > 0 ? model.DurationInMinutes : 20,
-                PassPercentage = model.PassPercentage > 0 ? model.PassPercentage : 60,
+                PassPercentage = model.PassPercentage,
                 IsActive = model.IsActive,
                 WaveId = model.WaveId,
                 CategoryId = model.CategoryId,
@@ -594,6 +597,275 @@ namespace Exam.Controllers
             {
                 tx.Rollback();
                 return Json(new { success = false, message = "حدث خطأ أثناء إضافة السؤال: " + ex.Message });
+            }
+        }
+
+        // ==========================================
+        // 8b. Download Quiz Questions Excel Template
+        // ==========================================
+        [HttpGet]
+        public IActionResult DownloadQuizQuestionsTemplate()
+        {
+            using var workbook = new XLWorkbook();
+            var ws = workbook.Worksheets.Add("QuizQuestions");
+
+            // Header labels
+            var headers = new[]
+            {
+                "QuestionText",      // نص السؤال
+                "Points",            // درجة السؤال (افتراضي 5)
+                "Difficulty",        // مستوى الصعوبة (1=سهل, 2=متوسط, 3=صعب)
+                "Choice1",           // الخيار الأول
+                "Choice2",           // الخيار الثاني
+                "Choice3",           // الخيار الثالث
+                "Choice4",           // الخيار الرابع
+                "CorrectChoice"      // رقم الإجابة الصحيحة (1 أو 2 أو 3 أو 4)
+            };
+
+            for (int i = 0; i < headers.Length; i++)
+            {
+                var cell = ws.Cell(1, i + 1);
+                cell.Value = headers[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Font.FontColor = XLColor.White;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#7C3AED"); // Purple
+                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            }
+
+            // Sample Row 1
+            ws.Cell(2, 1).Value = "ما هي الخطوة الأولى الموصى بها في روتين العناية بالبشرة؟";
+            ws.Cell(2, 2).Value = 5;
+            ws.Cell(2, 3).Value = 1; // Easy
+            ws.Cell(2, 4).Value = "استخدام الغسول المناسب (Cleanser)";
+            ws.Cell(2, 5).Value = "وضع واقي الشمس مباشرة";
+            ws.Cell(2, 6).Value = "استخدام المقشر الكيميائي";
+            ws.Cell(2, 7).Value = "وضع كريم الترطيب بدون تنظيف";
+            ws.Cell(2, 8).Value = 1;
+
+            // Sample Row 2
+            ws.Cell(3, 1).Value = "أي من المكونات التالية يعتبر مضاد أكسدة فعال ومرطب للبشرة؟";
+            ws.Cell(3, 2).Value = 5;
+            ws.Cell(3, 3).Value = 2; // Medium
+            ws.Cell(3, 4).Value = "فيتامين سي مع حمض الهيالورونيك";
+            ws.Cell(3, 5).Value = "الكحول النقي";
+            ws.Cell(3, 6).Value = "الزيوت المعدنية الثقيلة فقط";
+            ws.Cell(3, 7).Value = "حمض الكبريتيك";
+            ws.Cell(3, 8).Value = 1;
+
+            ws.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            stream.Position = 0;
+
+            return File(
+                stream.ToArray(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "Quiz_Questions_Template.xlsx");
+        }
+
+        // ==========================================
+        // 8c. Upload Quiz Questions from Excel
+        // ==========================================
+        [HttpPost]
+        public async Task<IActionResult> UploadQuizQuestionsExcel(int quizId, IFormFile excelFile)
+        {
+            if (quizId <= 0)
+                return Json(new { success = false, message = "معرّف الكويز غير صالح." });
+
+            if (excelFile == null || excelFile.Length == 0)
+                return Json(new { success = false, message = "يرجى اختيار ملف إكسيل صالح." });
+
+            using var conn = new SqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            var quiz = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                SELECT Id, Title, CategoryId, TopicId, WaveId 
+                FROM Exams WITH (NOLOCK) 
+                WHERE Id = @Id", new { Id = quizId });
+
+            if (quiz == null)
+                return Json(new { success = false, message = "لم يتم العثور على الكويز المحدد." });
+
+            int quizCategoryId = quiz.CategoryId != null ? (int)quiz.CategoryId : 2013;
+            int? quizTopicId = quiz.TopicId != null ? (int?)quiz.TopicId : null;
+
+            try
+            {
+                using var memoryStream = new MemoryStream();
+                await excelFile.CopyToAsync(memoryStream);
+                memoryStream.Position = 0;
+
+                using var workbook = new XLWorkbook(memoryStream);
+                var worksheet = workbook.Worksheets.FirstOrDefault();
+                if (worksheet == null)
+                    return Json(new { success = false, message = "ملف الإكسيل لا يحتوي على أوراق عمل." });
+
+                var headerRow = worksheet.Row(1);
+                var colMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                for (int c = 1; c <= worksheet.ColumnsUsed().Count(); c++)
+                {
+                    string h = headerRow.Cell(c).GetString()?.Trim().ToLower()
+                        .Replace(" ", "").Replace("_", "").Replace("-", "");
+                    if (!string.IsNullOrEmpty(h)) colMap[h] = c;
+                }
+
+                int GetCol(params string[] names)
+                {
+                    foreach (var n in names)
+                    {
+                        string key = n.ToLower().Replace(" ", "").Replace("_", "").Replace("-", "");
+                        if (colMap.ContainsKey(key)) return colMap[key];
+                    }
+                    return -1;
+                }
+
+                int qCol = GetCol("questiontext", "question", "text", "السؤال", "نصالسؤال");
+                int ptsCol = GetCol("points", "point", "score", "الدرجة", "درجة", "النقاط");
+                int diffCol = GetCol("difficulty", "diffculty", "الصعوبة", "مستوىالصعوبة");
+                int topCol = GetCol("topicid", "topic", "التوبيك", "الموضوع");
+
+                int c1Col = GetCol("choice1", "option1", "الخيار1", "الاختيار1", "خيار1");
+                int c2Col = GetCol("choice2", "option2", "الخيار2", "الاختيار2", "خيار2");
+                int c3Col = GetCol("choice3", "option3", "الخيار3", "الاختيار3", "خيار3");
+                int c4Col = GetCol("choice4", "option4", "الخيار4", "الاختيار4", "خيار4");
+                int corrCol = GetCol("correctchoice", "correctoption", "correct", "الخيارالصحيح", "الإجابةالصحيحة", "الصح");
+
+                if (qCol == -1)
+                    return Json(new { success = false, message = "لم يتم العثور على عمود نص السؤال (QuestionText) في ملف الإكسيل." });
+
+                var rows = worksheet.RowsUsed().Skip(1);
+                int successCount = 0;
+                int skippedCount = 0;
+
+                using var tx = conn.BeginTransaction();
+                try
+                {
+                    foreach (var row in rows)
+                    {
+                        string qText = row.Cell(qCol).GetString()?.Trim();
+                        if (string.IsNullOrWhiteSpace(qText))
+                        {
+                            skippedCount++;
+                            continue;
+                        }
+
+                        // Points
+                        int points = 5;
+                        if (ptsCol != -1)
+                        {
+                            var pCell = row.Cell(ptsCol);
+                            if (pCell.DataType == XLDataType.Number) points = (int)pCell.GetDouble();
+                            else if (int.TryParse(pCell.GetString()?.Trim(), out int parsedPts) && parsedPts > 0) points = parsedPts;
+                        }
+
+                        // Difficulty
+                        int difficulty = 1;
+                        if (diffCol != -1)
+                        {
+                            string diffStr = row.Cell(diffCol).GetString()?.Trim().ToLower();
+                            if (diffStr == "2" || diffStr == "medium" || diffStr == "mid" || diffStr == "متوسط") difficulty = 2;
+                            else if (diffStr == "3" || diffStr == "hard" || diffStr == "صعب") difficulty = 3;
+                        }
+
+                        // TopicId
+                        int? rowTopicId = quizTopicId;
+                        if (topCol != -1)
+                        {
+                            string tStr = row.Cell(topCol).GetString()?.Trim();
+                            if (!string.IsNullOrEmpty(tStr) && int.TryParse(tStr, out int parsedTid) && parsedTid > 0)
+                                rowTopicId = parsedTid;
+                        }
+
+                        // Insert Question
+                        string insertQSql = @"
+                            INSERT INTO Questions (QuestionText, Points, Difficulty, IsActive, CategoryId, TopicId)
+                            VALUES (@QuestionText, @Points, @Difficulty, 1, @CategoryId, @TopicId);
+                            SELECT CAST(SCOPE_IDENTITY() AS INT);";
+
+                        int questionId = await conn.QuerySingleAsync<int>(insertQSql, new
+                        {
+                            QuestionText = qText,
+                            Points = points,
+                            Difficulty = difficulty,
+                            CategoryId = quizCategoryId,
+                            TopicId = rowTopicId
+                        }, transaction: tx);
+
+                        // Correct choice index (1 to 4)
+                        int correctIdx = 1;
+                        if (corrCol != -1)
+                        {
+                            var corrCell = row.Cell(corrCol);
+                            if (corrCell.DataType == XLDataType.Number)
+                            {
+                                correctIdx = (int)corrCell.GetDouble();
+                            }
+                            else
+                            {
+                                string cStr = corrCell.GetString()?.Trim().ToLower();
+                                if (int.TryParse(cStr, out int cVal)) correctIdx = cVal;
+                                else if (cStr == "b" || cStr == "2") correctIdx = 2;
+                                else if (cStr == "c" || cStr == "3") correctIdx = 3;
+                                else if (cStr == "d" || cStr == "4") correctIdx = 4;
+                            }
+                        }
+
+                        // Collect choices
+                        var choiceCols = new[] { c1Col, c2Col, c3Col, c4Col };
+                        for (int i = 0; i < choiceCols.Length; i++)
+                        {
+                            int colIdx = choiceCols[i];
+                            string choiceText = colIdx != -1 ? row.Cell(colIdx).GetString()?.Trim() : "";
+                            if (string.IsNullOrWhiteSpace(choiceText)) continue;
+
+                            bool isCorrect = (i + 1 == correctIdx);
+
+                            await conn.ExecuteAsync(@"
+                                INSERT INTO Choices (QuestionId, ChoiceText, IsCorrect)
+                                VALUES (@QuestionId, @ChoiceText, @IsCorrect)",
+                                new
+                                {
+                                    QuestionId = questionId,
+                                    ChoiceText = choiceText,
+                                    IsCorrect = isCorrect
+                                }, transaction: tx);
+                        }
+
+                        // Link Question to Exam/Quiz
+                        await conn.ExecuteAsync(@"
+                            IF NOT EXISTS (SELECT 1 FROM ExamQuestions WHERE ExamId = @ExamId AND QuestionId = @QuestionId)
+                                INSERT INTO ExamQuestions (ExamId, QuestionId) VALUES (@ExamId, @QuestionId)",
+                            new { ExamId = quizId, QuestionId = questionId }, transaction: tx);
+
+                        successCount++;
+                    }
+
+                    // Update TotalQuestionsToShow in Exams
+                    await conn.ExecuteAsync(@"
+                        UPDATE Exams 
+                        SET TotalQuestionsToShow = (SELECT COUNT(1) FROM ExamQuestions WHERE ExamId = @ExamId)
+                        WHERE Id = @ExamId", new { ExamId = quizId }, transaction: tx);
+
+                    tx.Commit();
+
+                    return Json(new
+                    {
+                        success = true,
+                        count = successCount,
+                        skipped = skippedCount,
+                        message = $"تم بنجاح رفع واستيراد {successCount} سؤال وإضافتها لبنك أسئلة الكويز."
+                    });
+                }
+                catch (Exception ex)
+                {
+                    tx.Rollback();
+                    return Json(new { success = false, message = "حدث خطأ أثناء معالجة شيت الأسئلة: " + ex.Message });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "فشل في قراءة ملف الإكسيل: " + ex.Message });
             }
         }
 

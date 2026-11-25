@@ -176,7 +176,7 @@
                             <th class="p-3.5">Quiz Details</th>
                             <th class="p-3.5">Target Wave</th>
                             <th class="p-3.5">Category & Topic</th>
-                            <th class="p-3.5 text-center">Points & Pass</th>
+                            <th class="p-3.5 text-center">Total Points (الدرجة)</th>
                             <th class="p-3.5 text-center">Duration & Questions</th>
                             <th class="p-3.5 text-center">Attempts & Trainees</th>
                             <th class="p-3.5 text-center">Status</th>
@@ -232,10 +232,10 @@
                                     <td class="p-3.5 text-center">
                                         <div class="inline-flex flex-col items-center">
                                             <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
-                                                @q.TotalPoints Pts
+                                                @q.TotalPoints Marks
                                             </span>
                                             <span class="text-[10px] text-slate-400 mt-0.5 font-bold">
-                                                Pass: @q.PassPercentage%
+                                                No Pass/Fail (رصد درجات)
                                             </span>
                                         </div>
                                     </td>
@@ -291,12 +291,17 @@
                                                     class="p-2 rounded-xl text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-all cursor-pointer">
                                                 <i class="fas fa-question-circle text-xs"></i>
                                             </button>
+                                            <button type="button" onclick="openQuestionsBankModal(@q.Id, '@q.Title', @q.CategoryId, @(q.TopicId ?? 0), 'excel')"
+                                                    title="Upload Questions Excel (رفع شيت أسئلة)"
+                                                    class="p-2 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all cursor-pointer">
+                                                <i class="fas fa-file-excel text-xs"></i>
+                                            </button>
                                             <button type="button" onclick="openAttemptsModal(@q.Id, '@q.Title')"
                                                     title="View Trainee Results"
-                                                    class="p-2 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all cursor-pointer">
+                                                    class="p-2 rounded-xl text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-all cursor-pointer">
                                                 <i class="fas fa-chart-bar text-xs"></i>
                                             </button>
-                                            <button type="button" onclick="openEditQuizModal(@q.Id, '@q.Title', '@(q.Description ?? "")', @q.WaveId, @q.CategoryId, @(q.TopicId ?? 0), @q.TotalPoints, @q.PassPercentage, @q.DurationInMinutes, '@(q.StartTime != null ? ((DateTime)q.StartTime).ToString("yyyy-MM-ddTHH:mm") : "")', '@(q.EndTime != null ? ((DateTime)q.EndTime).ToString("yyyy-MM-ddTHH:mm") : "")', @(q.IsActive == true ? "true" : "false"))"
+                                            <button type="button" onclick="openEditQuizModal(@q.Id, '@q.Title', '@(q.Description ?? "")', @q.WaveId, @q.CategoryId, @(q.TopicId ?? 0), @q.TotalPoints, @q.DurationInMinutes, '@(q.StartTime != null ? ((DateTime)q.StartTime).ToString("yyyy-MM-ddTHH:mm") : "")', '@(q.EndTime != null ? ((DateTime)q.EndTime).ToString("yyyy-MM-ddTHH:mm") : "")', @(q.IsActive == true ? "true" : "false"))"
                                                     title="Edit Quiz"
                                                     class="p-2 rounded-xl text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/50 transition-all cursor-pointer">
                                                 <i class="fas fa-pen text-xs"></i>
@@ -559,30 +564,21 @@
             </div>
 
             <div>
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Topic / Lesson (Optional)</label>
-                <select id="modalQuizTopicId"
-                        class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden">
-                    <option value="">-- General / No Topic --</option>
-                    @foreach (var t in topics)
-                    {
-                        <option value="@t.Id" data-category="@t.CategoryId">@t.TopicName</option>
-                    }
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Topic / Lesson (موضوع المحاضرة / اختياري)</label>
+                <select id="modalQuizTopicId" disabled
+                        class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed">
+                    <option value="">-- Please select a Category first --</option>
                 </select>
             </div>
 
-            <div class="grid grid-cols-3 gap-3">
+            <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Total Points *</label>
-                    <input type="number" id="modalQuizTotalPoints" required min="10" max="1000" value="100"
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Total Points (درجة الكويز الكلية) *</label>
+                    <input type="number" id="modalQuizTotalPoints" required min="1" max="1000" value="100"
                            class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden" />
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Pass % *</label>
-                    <input type="number" id="modalQuizPassPercent" required min="30" max="100" value="60"
-                           class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden" />
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Duration (Mins) *</label>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Duration (Mins - المدة بالدقائق) *</label>
                     <input type="number" id="modalQuizDuration" required min="1" max="300" value="20"
                            class="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:outline-hidden" />
                 </div>
@@ -664,8 +660,13 @@
             </button>
             <button type="button" onclick="switchBankSubTab('quickadd')" id="subtab-quickadd-btn"
                     class="py-3 px-3 text-xs font-black border-b-2 text-slate-500 border-transparent hover:text-slate-900 dark:text-slate-400 flex items-center gap-1.5 cursor-pointer">
-                <i class="fas fa-plus-circle text-emerald-500"></i>
+                <i class="fas fa-plus-circle text-purple-500"></i>
                 <span>+ Create New Question</span>
+            </button>
+            <button type="button" onclick="switchBankSubTab('excel')" id="subtab-excel-btn"
+                    class="py-3 px-3 text-xs font-black border-b-2 text-slate-500 border-transparent hover:text-slate-900 dark:text-slate-400 flex items-center gap-1.5 cursor-pointer">
+                <i class="fas fa-file-excel text-emerald-500"></i>
+                <span>Upload Excel Sheet (رفع شيت الأسئلة)</span>
             </button>
         </div>
 
@@ -743,6 +744,44 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 4. Upload Questions Excel -->
+            <div id="bankSubTab-excel" class="space-y-4 hidden">
+                <div class="bg-emerald-50/50 dark:bg-emerald-950/30 p-5 rounded-2xl border border-emerald-200/60 dark:border-emerald-800/40 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h4 class="text-sm font-black text-emerald-900 dark:text-emerald-300 flex items-center gap-2">
+                                <i class="fas fa-file-excel text-emerald-600"></i>
+                                <span>Upload Questions via Excel Sheet (رفع بنك الأسئلة من ملف إكسيل)</span>
+                            </h4>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                قم بتحميل النموذج الجاهز وتعبئة الأسئلة والخيارات ثم رفع الملف لإضافتها فوراً إلى الكويز وبنك الأسئلة.
+                            </p>
+                        </div>
+                        <a href="@Url.Action("DownloadQuizQuestionsTemplate", "Admin")"
+                           class="px-4 py-2.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-slate-700 transition-all flex items-center gap-2 shrink-0 shadow-2xs">
+                            <i class="fas fa-download"></i>
+                            <span>Download Excel Template (تحميل النموذج)</span>
+                        </a>
+                    </div>
+
+                    <div class="p-5 bg-white dark:bg-slate-800/80 rounded-2xl border border-dashed border-emerald-300 dark:border-emerald-700 space-y-3">
+                        <div class="text-center py-4">
+                            <i class="fas fa-cloud-arrow-up text-4xl text-emerald-500 mb-2"></i>
+                            <p class="text-xs font-bold text-slate-700 dark:text-slate-200">اختر ملف إكسيل (.xlsx أو .xls)</p>
+                            <p class="text-[11px] text-slate-400 mt-0.5">يجب أن يحتوي الملف على أعمدة: QuestionText, Points, Difficulty, Choice1, Choice2, Choice3, Choice4, CorrectChoice</p>
+                            <input type="file" id="bankExcelFileInput" accept=".xlsx,.xls" class="mt-4 block mx-auto text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer" />
+                        </div>
+                        <div class="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-700">
+                            <button type="button" onclick="submitBankExcelUpload()" id="btnUploadQuizExcel"
+                                    class="px-6 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-2">
+                                <i class="fas fa-upload"></i>
+                                <span>Upload & Import Questions (رفع وإضافة الأسئلة)</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
@@ -787,8 +826,8 @@
                     <h4 id="attTotalAttempts" class="text-lg font-black text-slate-900 dark:text-white">0</h4>
                 </div>
                 <div class="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40">
-                    <p class="text-[11px] text-emerald-600 font-bold">Pass Rate</p>
-                    <h4 id="attPassRate" class="text-lg font-black text-emerald-600">0%</h4>
+                    <p class="text-[11px] text-emerald-600 font-bold">Completed Submissions</p>
+                    <h4 id="attCompletedCount" class="text-lg font-black text-emerald-600">0</h4>
                 </div>
                 <div class="p-3 rounded-2xl bg-purple-50 dark:bg-purple-950/40">
                     <p class="text-[11px] text-purple-600 font-bold">Average Score</p>
@@ -968,6 +1007,9 @@
             document.getElementById('visibleQuizzesCount').innerText = visibleCount;
         }
 
+        // Wave Categories & Topics Dynamic Mapping (Strictly Wave Topics)
+        const allWaveTopics = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(topics));
+
         // ------------------------------------------------------------
         // Create / Edit Quiz Modal
         // ------------------------------------------------------------
@@ -976,8 +1018,9 @@
             document.getElementById('quizModalTitle').innerHTML = '<i class="fas fa-spell-check text-purple-600"></i><span>Add New Wave Quiz</span>';
             document.getElementById('modalQuizSubmitBtn').innerText = 'Create Quiz';
             document.getElementById('quizForm').reset();
+            document.getElementById('modalQuizCategoryId').value = '';
+            onCategoryChangeInModal();
             document.getElementById('modalQuizTotalPoints').value = 100;
-            document.getElementById('modalQuizPassPercent').value = 60;
             document.getElementById('modalQuizDuration').value = 20;
             document.getElementById('modalQuizIsActive').checked = true;
 
@@ -994,7 +1037,7 @@
             document.getElementById('quizModal').classList.remove('hidden');
         }
 
-        function openEditQuizModal(id, title, desc, waveId, catId, topId, totalPoints, passPercent, duration, startTime, endTime, isActive) {
+        function openEditQuizModal(id, title, desc, waveId, catId, topId, totalPoints, duration, startTime, endTime, isActive) {
             document.getElementById('modalQuizId').value = id;
             document.getElementById('quizModalTitle').innerHTML = '<i class="fas fa-pen text-blue-600"></i><span>Edit Wave Quiz</span>';
             document.getElementById('modalQuizSubmitBtn').innerText = 'Save Changes';
@@ -1006,7 +1049,6 @@
             onCategoryChangeInModal(topId);
 
             document.getElementById('modalQuizTotalPoints').value = totalPoints || 100;
-            document.getElementById('modalQuizPassPercent').value = passPercent || 60;
             document.getElementById('modalQuizDuration').value = duration || 20;
             if (startTime) document.getElementById('modalQuizStartTime').value = startTime;
             if (endTime) document.getElementById('modalQuizEndTime').value = endTime;
@@ -1023,18 +1065,24 @@
             const catId = document.getElementById('modalQuizCategoryId').value;
             const topicSelect = document.getElementById('modalQuizTopicId');
 
-            Array.from(topicSelect.options).forEach(opt => {
-                if (!opt.value) {
-                    opt.style.display = '';
-                    return;
-                }
-                const optCat = opt.getAttribute('data-category');
-                if (!catId || optCat == catId) {
-                    opt.style.display = '';
-                } else {
-                    opt.style.display = 'none';
-                }
-            });
+            if (!catId) {
+                topicSelect.innerHTML = '<option value="">-- Please select a Category first --</option>';
+                topicSelect.disabled = true;
+                topicSelect.value = '';
+                return;
+            }
+
+            topicSelect.disabled = false;
+            let optionsHtml = '<option value="">-- General / No Topic (عام بدون توبيك) --</option>';
+            const matched = allWaveTopics.filter(t => t.CategoryId == catId);
+            if (matched.length === 0) {
+                optionsHtml = '<option value="">-- No specific topics in this category --</option>';
+            } else {
+                matched.forEach(t => {
+                    optionsHtml += `<option value="${t.Id}">${t.TopicName}</option>`;
+                });
+            }
+            topicSelect.innerHTML = optionsHtml;
 
             if (selectedTopicId) {
                 topicSelect.value = selectedTopicId;
@@ -1056,7 +1104,7 @@
                 categoryId: parseInt(document.getElementById('modalQuizCategoryId').value),
                 topicId: document.getElementById('modalQuizTopicId').value ? parseInt(document.getElementById('modalQuizTopicId').value) : null,
                 totalPoints: parseInt(document.getElementById('modalQuizTotalPoints').value) || 100,
-                passPercentage: parseFloat(document.getElementById('modalQuizPassPercent').value) || 60,
+                passPercentage: 0, // Formative quizzes have no pass/fail percentage
                 durationInMinutes: parseInt(document.getElementById('modalQuizDuration').value) || 20,
                 startTime: document.getElementById('modalQuizStartTime').value ? new Date(document.getElementById('modalQuizStartTime').value).toISOString() : null,
                 endTime: document.getElementById('modalQuizEndTime').value ? new Date(document.getElementById('modalQuizEndTime').value).toISOString() : null,
@@ -1134,11 +1182,11 @@
         // ------------------------------------------------------------
         // Question Bank Modal & Interaction
         // ------------------------------------------------------------
-        async function openQuestionsBankModal(quizId, quizTitle, categoryId, topicId) {
+        async function openQuestionsBankModal(quizId, quizTitle, categoryId, topicId, initialSubTab = 'assigned') {
             currentActiveQuizId = quizId;
-            document.getElementById('bankModalQuizTitle').innerText = `Question Bank: ${quizTitle}`;
+            if (quizTitle) document.getElementById('bankModalQuizTitle').innerText = `Question Bank: ${quizTitle}`;
             document.getElementById('questionsBankModal').classList.remove('hidden');
-            switchBankSubTab('assigned');
+            switchBankSubTab(initialSubTab);
 
             try {
                 const res = await fetch(`/Admin/GetQuizQuestions/${quizId}`);
@@ -1154,7 +1202,7 @@
                 activeBankAssignedIds = new Set(currentAssignedQuestionsData.map(q => q.Id));
 
                 document.getElementById('bankModalQuizSubtitle').innerText =
-                    `Wave: ${data.quiz.WaveName || 'General'} | Category: ${data.quiz.CategoryName || 'General'} | Total Points: ${data.quiz.TotalPoints} Pts`;
+                    `Wave: ${data.quiz.WaveName || 'General'} | Category: ${data.quiz.CategoryName || 'General'} | Total Points: ${data.quiz.TotalPoints} Marks`;
 
                 renderAssignedQuestions();
                 renderAvailableQuestions();
@@ -1168,7 +1216,7 @@
         }
 
         function switchBankSubTab(subTab) {
-            const tabs = ['assigned', 'available', 'quickadd'];
+            const tabs = ['assigned', 'available', 'quickadd', 'excel'];
             tabs.forEach(t => {
                 const panel = document.getElementById(`bankSubTab-${t}`);
                 const btn = document.getElementById(`subtab-${t}-btn`);
@@ -1180,6 +1228,47 @@
                     btn.className = "py-3 px-3 text-xs font-black border-b-2 text-slate-500 border-transparent hover:text-slate-900 dark:text-slate-400 flex items-center gap-1.5 cursor-pointer";
                 }
             });
+        }
+
+        async function submitBankExcelUpload() {
+            const fileInput = document.getElementById('bankExcelFileInput');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                Swal.fire({ icon: 'warning', title: 'ملف مطلوب', text: 'يرجى اختيار ملف إكسيل (.xlsx أو .xls) أولاً.' });
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('quizId', currentActiveQuizId);
+            formData.append('excelFile', fileInput.files[0]);
+
+            const btn = document.getElementById('btnUploadQuizExcel');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> <span>جاري الرفع والمعالجة...</span>';
+
+            try {
+                const res = await fetch('/Admin/UploadQuizQuestionsExcel', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'تم الرفع بنجاح!',
+                        text: data.message
+                    });
+                    fileInput.value = '';
+                    await openQuestionsBankModal(currentActiveQuizId, '', null, null, 'assigned');
+                } else {
+                    Swal.fire({ icon: 'error', title: 'خطأ في الرفع', text: data.message });
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'خطأ', text: err.message });
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-upload mr-1"></i> <span>Upload & Import Questions (رفع وإضافة الأسئلة)</span>';
+            }
         }
 
         function renderAssignedQuestions() {
@@ -1405,14 +1494,11 @@
                 document.getElementById('attTotalAttempts').innerText = attempts.length;
 
                 if (attempts.length > 0) {
-                    const passed = attempts.filter(a => a.IsPassed == true).length;
-                    const passRate = Math.round((passed / attempts.length) * 100);
                     const avgScore = Math.round(attempts.reduce((sum, a) => sum + (parseFloat(a.Score) || 0), 0) / attempts.length);
-
-                    document.getElementById('attPassRate').innerText = `${passRate}%`;
+                    document.getElementById('attCompletedCount').innerText = attempts.length;
                     document.getElementById('attAvgScore').innerText = `${avgScore}%`;
                 } else {
-                    document.getElementById('attPassRate').innerText = '0%';
+                    document.getElementById('attCompletedCount').innerText = '0';
                     document.getElementById('attAvgScore').innerText = '0%';
                 }
 
@@ -1424,9 +1510,7 @@
 
                 let rowsHtml = '';
                 attempts.forEach(a => {
-                    const passBadge = a.IsPassed == true
-                        ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Passed</span>'
-                        : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">Failed</span>';
+                    const statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">Recorded (تم الرصد)</span>`;
 
                     rowsHtml += `
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
@@ -1439,7 +1523,7 @@
                             <td class="p-3 text-center font-bold">${a.FinalScore || 0} / ${data.quiz.TotalPoints || 100}</td>
                             <td class="p-3 text-center">${a.CorrectAnswers || 0} of ${a.TotalQuestions || 0}</td>
                             <td class="p-3 text-center">${a.DurationInMinutes || 0} mins</td>
-                            <td class="p-3 text-center">${passBadge}</td>
+                            <td class="p-3 text-center">${statusBadge}</td>
                         </tr>`;
                 });
 
