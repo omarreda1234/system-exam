@@ -178,7 +178,7 @@ namespace Exam.Services
                     int totalTargetForRule = rule.HardCount + rule.MediumCount + rule.EasyCount;
                     if (allRuleIds.Count < totalTargetForRule)
                     {
-                        // Deficit fallback: if specific difficulty counts were not met (e.g. topic has no Easy/Medium), fill remaining from same topic/category
+                        // Deficit fallback 1: if specific difficulty counts were not met in this topic, fill remaining from same topic
                         int deficit = totalTargetForRule - allRuleIds.Count;
                         var fallbackSql = @"
                             SELECT TOP (@Limit) Q.Id
@@ -190,6 +190,21 @@ namespace Exam.Services
                         var extraIds = (await conn.QueryAsync<int>(fallbackSql, new { Limit = deficit, CategoryId = rule.CategoryId, TopicId = rule.TopicId, Excluded = ruleExcluded })).ToList();
                         allRuleIds.AddRange(extraIds);
                         ruleExcluded.AddRange(extraIds);
+
+                        // Deficit fallback 2: if topic itself didn't have enough questions, fill remaining from the category
+                        if (allRuleIds.Count < totalTargetForRule)
+                        {
+                            int catDeficit = totalTargetForRule - allRuleIds.Count;
+                            var catFallbackSql = @"
+                                SELECT TOP (@Limit) Q.Id
+                                FROM Questions Q
+                                WHERE Q.CategoryId = @CategoryId
+                                AND Q.Id NOT IN @Excluded
+                                ORDER BY NEWID()";
+                            var catExtraIds = (await conn.QueryAsync<int>(catFallbackSql, new { Limit = catDeficit, CategoryId = rule.CategoryId, Excluded = ruleExcluded })).ToList();
+                            allRuleIds.AddRange(catExtraIds);
+                            ruleExcluded.AddRange(catExtraIds);
+                        }
                     }
                     if (allRuleIds.Any())
                     {
@@ -206,9 +221,44 @@ namespace Exam.Services
                 }
             }
 
-            // 4. Fallback: Only fill if no specific rules were applied for this role
-            // This allows different roles to have different total question counts based on their blueprint rules.
-            if (!hasSpecificRules)
+            // 4. Role target safety check and Fallback
+            if (hasSpecificRules && exam.GenerationRules != null)
+            {
+                int targetQuestionsForRole = exam.GenerationRules
+                    .Where(r => r.TargetRole == "All" || string.Equals(r.TargetRole, userRole, StringComparison.OrdinalIgnoreCase))
+                    .Sum(r => r.HardCount + r.MediumCount + r.EasyCount);
+
+                if (targetQuestionsForRole > 0 && selected.Count < targetQuestionsForRole)
+                {
+                    // Deficit fallback 3: Fill from general exam pool so candidate always gets full questions/points
+                    int generalDeficit = targetQuestionsForRole - selected.Count;
+                    var finalExcluded = seenIds.Concat(selected.Select(q => q.QuestionId)).ToList();
+                    if (!finalExcluded.Any()) finalExcluded.Add(-1);
+
+                    var fallbackIds = await conn.QueryAsync<int>(@"
+                        SELECT TOP (@Limit) Q.Id FROM Questions Q
+                        INNER JOIN Categories C ON Q.CategoryId = C.Id
+                        WHERE Q.Id NOT IN @Excluded 
+                        AND C.ExamTypeId = @ExamTypeId
+                        ORDER BY NEWID()", new { Limit = generalDeficit, Excluded = finalExcluded, ExamTypeId = exam.ExamTypeId });
+
+                    if (fallbackIds.Any())
+                    {
+                        var fallbackRows = await conn.QueryAsync<dynamic>(@"
+                            SELECT Q.Id as QuestionId, Q.QuestionText, Q.Points, Q.CategoryId as QuestionTypeId, Q.Difficulty, Q.TopicId,
+                                   C.CategoryName as CategoryName, T.TopicName, CH.Id as ChoiceId, CH.ChoiceText, CH.IsCorrect
+                            FROM Questions Q
+                            LEFT JOIN Categories C ON Q.CategoryId = C.Id
+                            LEFT JOIN Topics T ON Q.TopicId = T.Id
+                            LEFT JOIN Choices CH ON Q.Id = CH.QuestionId
+                            WHERE Q.Id IN @Ids", new { Ids = fallbackIds });
+                        selected.AddRange(MapToQuestionList(fallbackRows));
+                    }
+                }
+
+                totalToShow = selected.Count;
+            }
+            else if (!hasSpecificRules)
             {
                 int needed = totalToShow - selected.Count;
                 if (needed > 0)
@@ -236,11 +286,6 @@ namespace Exam.Services
                         selected.AddRange(MapToQuestionList(fallbackRows));
                     }
                 }
-            }
-            else
-            {
-                // If we have specific rules, the total count is determined by those rules
-                totalToShow = selected.Count;
             }
 
             // Shuffle final set

@@ -123,15 +123,39 @@
         <p class="text-slate-400 text-xs font-semibold">Try adjusting your filters or search keywords.</p>
     </div>
 
+    <!-- Pagination Bar (Top) -->
+    <div id="topPaginationBar" class="flex flex-wrap items-center justify-between gap-4 px-4 py-3 mb-6 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl">
+        <div class="flex items-center gap-3">
+            <span class="text-xs font-bold text-slate-500 dark:text-slate-400">
+                Showing <span id="pageStartCount" class="font-black text-brand-600 dark:text-brand-400">0</span> - <span id="pageEndCount" class="font-black text-brand-600 dark:text-brand-400">0</span> of <span id="pageTotalCount" class="font-black">@Model.Questions.Count</span> Questions
+            </span>
+            <div class="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 hidden sm:block"></div>
+            <div class="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                <span class="hidden sm:inline">Per page:</span>
+                <select id="pageSizeSelect" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none cursor-pointer">
+                    <option value="15" selected>15</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="0">All</option>
+                </select>
+            </div>
+        </div>
+        <div class="pagination-controls flex items-center gap-1">
+        </div>
+    </div>
+
     <div class="space-y-8 px-4 pb-8">
         @foreach (var q in Model.Questions)
         {
+            var rawSearch = $"{q.QuestionId} {q.QuestionText} {string.Join(" ", q.Choices.Select(c => c.ChoiceText))}".ToLower();
             <div class="question-panel bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-[32px] overflow-hidden group/q hover:border-brand-500/30 transition-all"
                  data-question-id="@q.QuestionId"
                  data-category-id="@q.CategoryId"
                  data-topic-id="@(q.TopicId?.ToString() ?? "")"
                  data-difficulty="@(q.Difficulty == 0 ? 1 : q.Difficulty)"
-                 data-points="@q.Points">
+                 data-points="@q.Points"
+                 data-search-text="@rawSearch">
                 <div class="p-8">
                     <form class="update-question-form relative">
                         @Html.AntiForgeryToken()
@@ -169,6 +193,10 @@
                                 <label class="block text-[9px] font-bold text-emerald-500 uppercase tracking-widest mb-3 px-1">Topic / Lecture</label>
                                 <select name="topicId" class="topic-selector block w-full bg-slate-50 dark:bg-slate-950 border border-emerald-500/20 rounded-[20px] px-5 py-4 text-[10px] font-bold text-slate-700 dark:text-slate-300 focus:border-brand-500 outline-none transition-all">
                                     <option value="">ALL TOPICS</option>
+                                    @if (q.TopicId.HasValue && q.TopicId.Value > 0 && !string.IsNullOrWhiteSpace(q.TopicName))
+                                    {
+                                        <option value="@q.TopicId.Value" selected>@q.TopicName.ToUpper()</option>
+                                    }
                                 </select>
                             </div>
                             <div class="col-span-12 md:col-span-3">
@@ -236,6 +264,15 @@
             </div>
         }
     </div>
+
+    <!-- Pagination Bar (Bottom) -->
+    <div id="bottomPaginationBar" class="flex flex-wrap items-center justify-between gap-4 px-4 py-3 mt-6 mb-8 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl">
+        <div class="text-xs font-bold text-slate-500 dark:text-slate-400">
+            Page <span class="currentPageNum font-black text-brand-600 dark:text-brand-400">1</span> of <span class="totalPageNum font-black">1</span>
+        </div>
+        <div class="pagination-controls flex items-center gap-1">
+        </div>
+    </div>
 </div>
 
 <script>
@@ -243,9 +280,10 @@
         var examId = @Model.ExamId;
         $(document).off('focusin.bs.modal');
 
+        function antiForgery() { return $('input[name="__RequestVerificationToken"]').first().val(); }
+
         const topicCache = {};
         const pendingTopicRequests = {};
-
         let allFilterTopics = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(distinctTopics.Select(t => new { id = t.TopicId.ToString(), name = t.TopicName, categoryId = t.CategoryId.ToString() })));
 
         function updateTopicFilterDropdown() {
@@ -265,13 +303,11 @@
             });
 
             unique.sort((a, b) => a.name.localeCompare(b.name));
-            
             unique.forEach(t => {
                 html += `<option value="${t.id}">${t.name.toUpperCase()}</option>`;
             });
             
             $('#topicFilter').html(html);
-            
             if (currentSelectedTopic && unique.some(t => t.id.toString() === currentSelectedTopic)) {
                 $('#topicFilter').val(currentSelectedTopic);
             } else {
@@ -322,80 +358,78 @@
             }
         }
 
-        // Initialize existing question topics efficiently
-        const catGroups = {};
-        $('.cat-selector').each(function() {
-            const catId = $(this).val();
+        // Lazy load full topics for a question's selector when clicked/focused
+        $(document).on('focus click', '.topic-selector', function() {
+            const $top = $(this);
+            if ($top.data('populated')) return;
+            const $panel = $top.closest('.question-panel');
+            const catId = $panel.find('.cat-selector').val() || $panel.attr('data-category-id');
+            const currentVal = $top.val() || $panel.attr('data-topic-id') || '';
             if (catId) {
-                if (!catGroups[catId]) catGroups[catId] = [];
-                catGroups[catId].push(this);
+                loadTopicsForSelector($panel.find('.cat-selector'), $top, currentVal).then(() => {
+                    $top.data('populated', true);
+                });
             }
         });
-
-        for (const catId in catGroups) {
-            $.get(`/Admin/GetTopicsByCategoryId?categoryId=${catId}`).then(topics => {
-                let optionsHtml = '<option value="">ALL TOPICS</option>';
-                if (topics && Array.isArray(topics)) {
-                    topics.forEach(t => {
-                        const tId = (t.id !== undefined ? t.id : t.Id)?.toString();
-                        const tName = t.topicName || t.TopicName || "Unnamed Topic";
-                        optionsHtml += `<option value="${tId}">${tName.toUpperCase()}</option>`;
-
-                        if (tId && !allFilterTopics.some(x => x.id === tId)) {
-                            allFilterTopics.push({ id: tId, name: tName, categoryId: catId.toString() });
-                        }
-                    });
-                    updateTopicFilterDropdown();
-                }
-                
-                catGroups[catId].forEach(catEl => {
-                    const topEl = catEl.closest('.grid').querySelector('.topic-selector');
-                    const currentTopic = catEl.getAttribute('data-current-topic');
-                    if (topEl) {
-                        topEl.innerHTML = optionsHtml;
-                        if (currentTopic) {
-                            topEl.value = currentTopic;
-                        }
-                    }
-                });
-            }).catch(err => console.error("Failed to batch load topics", err));
-        }
 
         // Keep question panel data attributes in sync with inputs
         $(document).on('change', '.cat-selector', function() {
             const $cat = $(this);
             const $panel = $cat.closest('.question-panel');
-            $panel.attr('data-category-id', $cat.val());
+            const catVal = $cat.val() || '';
+            $panel.attr('data-category-id', catVal);
+            const qId = $panel.attr('data-question-id');
+            const qIdx = questionData.findIndex(q => q.id === qId);
+            if (qIdx !== -1) questionData[qIdx].catId = catVal;
+
             const $top = $cat.closest('.grid').find('.topic-selector');
+            $top.data('populated', false);
             loadTopicsForSelector($cat, $top, null);
+
             if ($('#categoryFilter').val()) {
-                filterQuestions();
+                filterAndPaginate(1);
             }
         });
 
         $(document).on('change', '.topic-selector', function() {
-            const val = $(this).val();
-            $(this).closest('.question-panel').attr('data-topic-id', val || '');
+            const val = $(this).val() || '';
+            const $panel = $(this).closest('.question-panel');
+            $panel.attr('data-topic-id', val);
+            const qId = $panel.attr('data-question-id');
+            const qIdx = questionData.findIndex(q => q.id === qId);
+            if (qIdx !== -1) questionData[qIdx].topicId = val;
+
             if ($('#topicFilter').val()) {
-                filterQuestions();
+                filterAndPaginate(1);
             }
         });
 
         $(document).on('input change', 'input[name="points"]', function() {
-            $(this).closest('.question-panel').attr('data-points', $(this).val() || '');
+            const val = $(this).val() || '';
+            const $panel = $(this).closest('.question-panel');
+            $panel.attr('data-points', val);
+            const qId = $panel.attr('data-question-id');
+            const qIdx = questionData.findIndex(q => q.id === qId);
+            if (qIdx !== -1) questionData[qIdx].points = val;
+
             if ($('#pointsFilter').val()) {
-                filterQuestions();
+                filterAndPaginate(1);
             }
         });
 
         $(document).on('change', 'input[name="difficulty"]', function() {
-            $(this).closest('.question-panel').attr('data-difficulty', $(this).val() || '');
+            const val = $(this).val() || '';
+            const $panel = $(this).closest('.question-panel');
+            $panel.attr('data-difficulty', val);
+            const qId = $panel.attr('data-question-id');
+            const qIdx = questionData.findIndex(q => q.id === qId);
+            if (qIdx !== -1) questionData[qIdx].diff = val;
+
             if ($('#difficultyFilter').val()) {
-                filterQuestions();
+                filterAndPaginate(1);
             }
         });
 
-        function antiForgery() { return $('input[name="__RequestVerificationToken"]').first().val(); }
         function triggerRefresh(scrollToBottom) {
             var $body = $('#qModalBody');
             var scrollPos = $body.scrollTop();
@@ -417,7 +451,7 @@
             });
         }
 
-        // In-modal non-intrusive toast notification (does not dismiss the Swal modal)
+        // In-modal non-intrusive toast notification
         function showInModalToast(message, type) {
             $('.in-modal-toast-notice').remove();
             var isSuccess = type === 'success';
@@ -442,10 +476,225 @@
             }, 2200);
         }
 
+        // --- Fast In-Memory Indexing & Client-Side Pagination ---
+        let currentPage = 1;
+        let pageSize = 15;
+        let questionData = [];
+        let filteredIndices = [];
+
+        const $allPanels = $('.question-panel');
+        $allPanels.each(function(idx) {
+            const $p = $(this);
+            questionData.push({
+                index: idx,
+                el: this,
+                id: ($p.attr('data-question-id') || '').toString(),
+                catId: ($p.attr('data-category-id') || '').toString(),
+                topicId: ($p.attr('data-topic-id') || '').toString(),
+                diff: ($p.attr('data-difficulty') || '1').toString(),
+                points: ($p.attr('data-points') || '').toString(),
+                searchText: ($p.attr('data-search-text') || '').toLowerCase()
+            });
+        });
+
+        function renderPaginationControls(startItem, endItem, totalFiltered, totalPages) {
+            $('#pageStartCount').text(totalFiltered > 0 ? startItem : 0);
+            $('#pageEndCount').text(endItem);
+            $('#pageTotalCount').text(totalFiltered);
+            $('.currentPageNum').text(currentPage);
+            $('.totalPageNum').text(totalPages || 1);
+
+            if (totalPages <= 1) {
+                $('.pagination-controls').html('');
+                return;
+            }
+
+            let btnsHtml = '';
+            // Prev
+            btnsHtml += `<button type="button" class="page-btn-prev px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${currentPage === 1 ? 'opacity-40 pointer-events-none border-slate-200 dark:border-slate-800 text-slate-400' : 'hover:bg-brand-500 hover:text-white border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'}"><i class="fas fa-chevron-left text-[10px]"></i></button>`;
+
+            // Page numbers
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            if (endPage - startPage < maxVisiblePages - 1) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            if (startPage > 1) {
+                btnsHtml += `<button type="button" class="page-num-btn px-2.5 py-1 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-800 hover:bg-brand-500 hover:text-white" data-page="1">1</button>`;
+                if (startPage > 2) btnsHtml += `<span class="px-1 text-slate-400 text-xs font-bold">...</span>`;
+            }
+
+            for (let p = startPage; p <= endPage; p++) {
+                const isActive = p === currentPage;
+                const activeClass = isActive 
+                    ? 'bg-brand-600 text-white border-brand-600 shadow-sm' 
+                    : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-brand-500 hover:text-white';
+                btnsHtml += `<button type="button" class="page-num-btn px-2.5 py-1 rounded-lg text-xs font-bold border ${activeClass} transition-all" data-page="${p}">${p}</button>`;
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) btnsHtml += `<span class="px-1 text-slate-400 text-xs font-bold">...</span>`;
+                btnsHtml += `<button type="button" class="page-num-btn px-2.5 py-1 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-800 hover:bg-brand-500 hover:text-white" data-page="${totalPages}">${totalPages}</button>`;
+            }
+
+            // Next
+            btnsHtml += `<button type="button" class="page-btn-next px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${currentPage === totalPages ? 'opacity-40 pointer-events-none border-slate-200 dark:border-slate-800 text-slate-400' : 'hover:bg-brand-500 hover:text-white border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'}"><i class="fas fa-chevron-right text-[10px]"></i></button>`;
+
+            $('.pagination-controls').html(btnsHtml);
+        }
+
+        function filterAndPaginate(targetPage = 1, scrollToTop = false) {
+            currentPage = targetPage;
+            const term = ($('#questionSearch').val() || '').toLowerCase().trim();
+            const selectedCat = ($('#categoryFilter').val() || '').toString();
+            const selectedTopic = ($('#topicFilter').val() || '').toString();
+            const selectedDiff = ($('#difficultyFilter').val() || '').toString();
+            const selectedPoints = ($('#pointsFilter').val() || '').toString();
+
+            const hasActiveFilters = term !== '' || selectedCat !== '' || selectedTopic !== '' || selectedDiff !== '' || selectedPoints !== '';
+            if (hasActiveFilters) {
+                $('#resetFiltersBtn').removeClass('hidden');
+            } else {
+                $('#resetFiltersBtn').addClass('hidden');
+            }
+
+            filteredIndices = [];
+            for (let i = 0; i < questionData.length; i++) {
+                const q = questionData[i];
+                if (term && !q.searchText.includes(term)) continue;
+                if (selectedCat && q.catId !== selectedCat) continue;
+                if (selectedTopic && q.topicId !== selectedTopic) continue;
+                if (selectedDiff && q.diff !== selectedDiff) continue;
+                if (selectedPoints && q.points !== selectedPoints) continue;
+                filteredIndices.push(i);
+            }
+
+            const totalFiltered = filteredIndices.length;
+            const totalCount = questionData.length;
+
+            if (totalFiltered === 0 && totalCount > 0) {
+                $('#noQuestionsMatchNotice').removeClass('hidden');
+                $allPanels.hide();
+                renderPaginationControls(0, 0, 0, 0);
+            } else {
+                $('#noQuestionsMatchNotice').addClass('hidden');
+
+                const effPageSize = pageSize <= 0 ? totalFiltered : pageSize;
+                const totalPages = effPageSize > 0 ? Math.ceil(totalFiltered / effPageSize) : 1;
+                if (currentPage > totalPages) currentPage = totalPages;
+                if (currentPage < 1) currentPage = 1;
+
+                const startIdx = (currentPage - 1) * effPageSize;
+                const endIdx = Math.min(startIdx + effPageSize, totalFiltered);
+
+                const visibleSet = new Set();
+                for (let j = startIdx; j < endIdx; j++) {
+                    visibleSet.add(filteredIndices[j]);
+                }
+
+                $allPanels.each(function(idx) {
+                    if (visibleSet.has(idx)) {
+                        this.style.display = '';
+                    } else {
+                        this.style.display = 'none';
+                    }
+                });
+
+                renderPaginationControls(startIdx + 1, endIdx, totalFiltered, totalPages);
+            }
+
+            if (totalCount > 0) {
+                $('#filterCountBadge').text(hasActiveFilters ? `Showing ${totalFiltered} of ${totalCount}` : `${totalCount} Questions`);
+                if (hasActiveFilters && totalFiltered < totalCount) {
+                    $('#deleteAllBtnText').text(`Delete Filtered (${totalFiltered})`);
+                } else {
+                    $('#deleteAllBtnText').text('Delete All');
+                }
+            }
+
+            if (scrollToTop) {
+                $('#qModalBody').animate({ scrollTop: 0 }, 150);
+            }
+        }
+
+        // Pagination Navigation Click Handlers
+        $(document).on('click', '.page-num-btn', function() {
+            const p = parseInt($(this).data('page'));
+            if (p && p !== currentPage) {
+                filterAndPaginate(p, true);
+            }
+        });
+
+        $(document).on('click', '.page-btn-prev', function() {
+            if (currentPage > 1) {
+                filterAndPaginate(currentPage - 1, true);
+            }
+        });
+
+        $(document).on('click', '.page-btn-next', function() {
+            const effPageSize = pageSize <= 0 ? filteredIndices.length : pageSize;
+            const totalPages = Math.ceil(filteredIndices.length / effPageSize);
+            if (currentPage < totalPages) {
+                filterAndPaginate(currentPage + 1, true);
+            }
+        });
+
+        $('#pageSizeSelect').on('change', function() {
+            pageSize = parseInt($(this).val()) || 15;
+            filterAndPaginate(1, true);
+        });
+
+        // Debounced Search Input (prevents freezes during fast typing)
+        let searchDebounceTimer = null;
+        $('#questionSearch').on('input', function() {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(function() {
+                filterAndPaginate(1);
+            }, 180);
+        });
+
+        $('#categoryFilter').on('change', function() {
+            const catId = $(this).val();
+            if (catId && !allFilterTopics.some(t => t.categoryId === catId.toString())) {
+                $.get(`/Admin/GetTopicsByCategoryId?categoryId=${catId}`).then(topics => {
+                    if (topics && Array.isArray(topics)) {
+                        topics.forEach(t => {
+                            const tId = (t.id !== undefined ? t.id : t.Id)?.toString();
+                            const tName = t.topicName || t.TopicName || "Unnamed Topic";
+                            if (tId && !allFilterTopics.some(x => x.id === tId)) {
+                                allFilterTopics.push({ id: tId, name: tName, categoryId: catId.toString() });
+                            }
+                        });
+                        updateTopicFilterDropdown();
+                    }
+                });
+            }
+            updateTopicFilterDropdown();
+            filterAndPaginate(1);
+        });
+
+        $('#topicFilter, #difficultyFilter, #pointsFilter').on('change', function() {
+            filterAndPaginate(1);
+        });
+
+        $('#resetFiltersBtn').on('click', function() {
+            $('#categoryFilter').val('');
+            $('#difficultyFilter').val('');
+            $('#pointsFilter').val('');
+            $('#questionSearch').val('');
+            updateTopicFilterDropdown();
+            $('#topicFilter').val('');
+            filterAndPaginate(1);
+        });
+
+        // Question / Choice Actions
         $(document).on('click', '.save-question', function () {
             var $btn = $(this);
             var $form = $btn.closest('form');
             var $panel = $btn.closest('.question-panel');
+            var qId = $panel.attr('data-question-id');
             var origHtml = $btn.html();
             
             $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Saving...');
@@ -461,6 +710,17 @@
                     $panel.attr('data-topic-id', topVal);
                     $panel.attr('data-difficulty', diffVal);
                     $panel.attr('data-points', ptsVal);
+
+                    var qIdx = questionData.findIndex(q => q.id === qId);
+                    if (qIdx !== -1) {
+                        questionData[qIdx].catId = catVal;
+                        questionData[qIdx].topicId = topVal;
+                        questionData[qIdx].diff = diffVal;
+                        questionData[qIdx].points = ptsVal;
+                        var qText = $form.find('textarea[name="questionText"]').val() || '';
+                        var cText = $panel.find('.choices input[name="choiceText"]').map(function(){ return $(this).val(); }).get().join(' ');
+                        questionData[qIdx].searchText = (qId + ' ' + qText + ' ' + cText).toLowerCase();
+                    }
 
                     $btn.removeClass('bg-brand-50 text-brand-600 border-brand-500/10 hover:bg-brand-600')
                         .addClass('bg-emerald-600 text-white border-emerald-600 shadow-md')
@@ -482,11 +742,11 @@
                 });
         });
 
-        // Textarea height initialization skipped for performance on large exams
-
         $(document).on('click', '.save-choice', function () {
             var $btn = $(this);
             var form = $btn.closest('form');
+            var $panel = $btn.closest('.question-panel');
+            var qId = $panel.attr('data-question-id');
             var isChecked = form.find('input[name="isCorrect"]').is(':checked');
             var data = form.serializeArray();
             data = data.filter(function(item) { return item.name !== 'isCorrect'; });
@@ -501,6 +761,13 @@
                         .addClass('text-emerald-600 bg-emerald-50 dark:bg-emerald-950')
                         .html('<i class="fas fa-check text-xs"></i>');
                     
+                    var qIdx = questionData.findIndex(q => q.id === qId);
+                    if (qIdx !== -1) {
+                        var qText = $panel.find('textarea[name="questionText"]').val() || '';
+                        var cText = $panel.find('.choices input[name="choiceText"]').map(function(){ return $(this).val(); }).get().join(' ');
+                        questionData[qIdx].searchText = (qId + ' ' + qText + ' ' + cText).toLowerCase();
+                    }
+
                     showInModalToast('Choice saved', 'success');
 
                     setTimeout(function() {
@@ -520,12 +787,22 @@
         $(document).on('click', '.delete-choice', function () {
             var $btn = $(this);
             var $choiceForm = $btn.closest('.update-choice-form');
+            var $panel = $btn.closest('.question-panel');
+            var qId = $panel.attr('data-question-id');
             var cId = $btn.data('choice-id');
             
             $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin text-xs"></i>');
             $.post('@Url.Action("DeleteChoice", "Exams")', { choiceId: cId, __RequestVerificationToken: antiForgery() })
                 .done(function() { 
-                    $choiceForm.fadeOut(250, function() { $(this).remove(); });
+                    $choiceForm.fadeOut(200, function() { 
+                        $(this).remove(); 
+                        var qIdx = questionData.findIndex(q => q.id === qId);
+                        if (qIdx !== -1) {
+                            var qText = $panel.find('textarea[name="questionText"]').val() || '';
+                            var cText = $panel.find('.choices input[name="choiceText"]').map(function(){ return $(this).val(); }).get().join(' ');
+                            questionData[qIdx].searchText = (qId + ' ' + qText + ' ' + cText).toLowerCase();
+                        }
+                    });
                     showInModalToast('Choice removed', 'success');
                 })
                 .fail(function() {
@@ -548,9 +825,11 @@
                 if (result.isConfirmed) {
                     $.post('@Url.Action("DeleteQuestion", "Exams")', { questionId: qId, __RequestVerificationToken: antiForgery() })
                         .done(function() {
-                            $panel.fadeOut(300, function() { 
+                            $panel.fadeOut(250, function() { 
                                 $(this).remove(); 
-                                filterQuestions();
+                                const qIdx = questionData.findIndex(q => q.id === qId.toString());
+                                if (qIdx !== -1) questionData.splice(qIdx, 1);
+                                filterAndPaginate(currentPage);
                             });
                             showInModalToast('Question deleted successfully', 'success');
                         })
@@ -563,6 +842,7 @@
 
         $(document).on('click', '.add-choice', function () {
             var qId = $(this).data('question-id');
+            var $panel = $(this).closest('.question-panel');
             var $choicesContainer = $(this).closest('.p-8').find('.choices');
             var choiceText = prompt("Enter new choice text:");
             if (choiceText && choiceText.trim() !== '') {
@@ -600,6 +880,12 @@
                             </form>
                         `;
                         $choicesContainer.append(newChoiceHtml);
+                        var qIdx = questionData.findIndex(q => q.id === qId.toString());
+                        if (qIdx !== -1) {
+                            var qText = $panel.find('textarea[name="questionText"]').val() || '';
+                            var cText = $panel.find('.choices input[name="choiceText"]').map(function(){ return $(this).val(); }).get().join(' ');
+                            questionData[qIdx].searchText = (qId + ' ' + qText + ' ' + cText).toLowerCase();
+                        }
                         showInModalToast('Choice added successfully', 'success');
                     } else {
                         showInModalToast(res.message || 'Failed to add choice', 'error');
@@ -669,7 +955,6 @@
                     setDiff(btns[0]);
                     btns.forEach(b => b.onclick = () => setDiff(b));
 
-                    // Topic Sync in Modal
                     const $qType = $('#q-type');
                     const $qTopic = $('#q-topic');
                     $qType.on('change', () => loadTopicsForSelector($qType, $qTopic, null));
@@ -682,122 +967,30 @@
                     if (!tid || !txt) { Swal.showValidationMessage('Incomplete parameters detected.'); return false; }
                     return { tid, txt, pts: document.getElementById('q-points').value, diff: document.getElementById('q-difficulty').value, topicId: topicId };
                 }
-            }).then((r) => { if (r.isConfirmed) $.post('@Url.Action("AddQuestion", "Exams")', { examId: examId, questionText: r.value.txt, points: r.value.pts, questionTypeId: r.value.tid, difficulty: r.value.diff, topicId: r.value.topicId, __RequestVerificationToken: antiForgery() }).done(function() { triggerRefresh(true); }); });
-        });
-
-        // Search & Multi-filter Logic
-        function filterQuestions() {
-            var term = ($('#questionSearch').val() || '').toLowerCase().trim();
-            var selectedCat = ($('#categoryFilter').val() || '').toString();
-            var selectedTopic = ($('#topicFilter').val() || '').toString();
-            var selectedDiff = ($('#difficultyFilter').val() || '').toString();
-            var selectedPoints = ($('#pointsFilter').val() || '').toString();
-
-            var hasActiveFilters = term !== '' || selectedCat !== '' || selectedTopic !== '' || selectedDiff !== '' || selectedPoints !== '';
-            if (hasActiveFilters) {
-                $('#resetFiltersBtn').removeClass('hidden');
-            } else {
-                $('#resetFiltersBtn').addClass('hidden');
-            }
-
-            var visibleCount = 0;
-            var $panels = $('.question-panel');
-            var totalCount = $panels.length;
-
-            $panels.each(function() {
-                var $panel = $(this);
-                
-                // Question Text & Choices & ID Match
-                var qText = ($panel.find('textarea[name="questionText"]').val() || '').toLowerCase();
-                var cText = $panel.find('.choices input[name="choiceText"]').map(function(){ return $(this).val().toLowerCase(); }).get().join(" ");
-                var qIdText = ($panel.attr('data-question-id') || $panel.find('.delete-question').data('question-id') || '').toString();
-                
-                var textMatch = !term || qText.includes(term) || cText.includes(term) || qIdText.includes(term);
-
-                // Category match
-                var qCat = ($panel.find('select[name="categoryId"]').val() || $panel.attr('data-category-id') || '').toString();
-                var catMatch = !selectedCat || (qCat === selectedCat);
-
-                // Topic match
-                var qTopic = ($panel.find('select[name="topicId"]').val() || $panel.attr('data-topic-id') || '').toString();
-                var topicMatch = !selectedTopic || (qTopic === selectedTopic);
-
-                // Difficulty match
-                var qDiff = ($panel.find('input[name="difficulty"]:checked').val() || $panel.attr('data-difficulty') || '1').toString();
-                if (qDiff === '0') qDiff = '1';
-                var diffMatch = !selectedDiff || (qDiff === selectedDiff);
-
-                // Points match
-                var qPoints = ($panel.find('input[name="points"]').val() || $panel.attr('data-points') || '').toString();
-                var pointsMatch = !selectedPoints || (qPoints === selectedPoints);
-
-                if (textMatch && catMatch && topicMatch && diffMatch && pointsMatch) {
-                    $panel.show();
-                    visibleCount++;
-                } else {
-                    $panel.hide();
-                }
+            }).then((r) => { 
+                if (r.isConfirmed) {
+                    $.post('@Url.Action("AddQuestion", "Exams")', { 
+                        examId: examId, 
+                        questionText: r.value.txt, 
+                        points: r.value.pts, 
+                        questionTypeId: r.value.tid, 
+                        difficulty: r.value.diff, 
+                        topicId: r.value.topicId, 
+                        __RequestVerificationToken: antiForgery() 
+                    }).done(function() { 
+                        triggerRefresh(true); 
+                    }); 
+                } 
             });
-
-            if (visibleCount === 0 && totalCount > 0) {
-                $('#noQuestionsMatchNotice').removeClass('hidden');
-            } else {
-                $('#noQuestionsMatchNotice').addClass('hidden');
-            }
-
-            if (totalCount > 0) {
-                $('#filterCountBadge').text(hasActiveFilters ? `Showing ${visibleCount} of ${totalCount}` : `${totalCount} Questions`);
-                if (hasActiveFilters && visibleCount < totalCount) {
-                    $('#deleteAllBtnText').text(`Delete Filtered (${visibleCount})`);
-                } else {
-                    $('#deleteAllBtnText').text('Delete All');
-                }
-            }
-        }
-
-        $('#questionSearch').on('input', filterQuestions);
-        
-        $('#categoryFilter').on('change', function() {
-            const catId = $(this).val();
-            if (catId && !allFilterTopics.some(t => t.categoryId === catId.toString())) {
-                $.get(`/Admin/GetTopicsByCategoryId?categoryId=${catId}`).then(topics => {
-                    if (topics && Array.isArray(topics)) {
-                        topics.forEach(t => {
-                            const tId = (t.id !== undefined ? t.id : t.Id)?.toString();
-                            const tName = t.topicName || t.TopicName || "Unnamed Topic";
-                            if (tId && !allFilterTopics.some(x => x.id === tId)) {
-                                allFilterTopics.push({ id: tId, name: tName, categoryId: catId.toString() });
-                            }
-                        });
-                        updateTopicFilterDropdown();
-                    }
-                });
-            }
-            updateTopicFilterDropdown();
-            filterQuestions();
         });
 
-        $('#topicFilter').on('change', filterQuestions);
-        $('#difficultyFilter').on('change', filterQuestions);
-        $('#pointsFilter').on('change', filterQuestions);
-
-        $('#resetFiltersBtn').on('click', function() {
-            $('#categoryFilter').val('');
-            $('#difficultyFilter').val('');
-            $('#pointsFilter').val('');
-            $('#questionSearch').val('');
-            updateTopicFilterDropdown();
-            $('#topicFilter').val('');
-            filterQuestions();
-        });
-
-        // Delete Questions (All or Filtered) Logic
+        // Delete Filtered or All Questions
         $('#deleteAllQuestionsBtn').on('click', function() {
-            var visiblePanels = $('.question-panel:visible');
             var visibleIds = [];
-            visiblePanels.each(function() {
-                var qId = $(this).attr('data-question-id') || $(this).data('question-id');
-                if (qId) visibleIds.push(qId);
+            filteredIndices.forEach(idx => {
+                if (questionData[idx] && questionData[idx].id) {
+                    visibleIds.push(questionData[idx].id);
+                }
             });
 
             if (visibleIds.length === 0) {
@@ -811,11 +1004,11 @@
                 return;
             }
 
-            var totalCount = $('.question-panel').length;
+            var totalCount = questionData.length;
             var isFiltered = visibleIds.length < totalCount;
             var confirmTitle = isFiltered ? `Delete ${visibleIds.length} Filtered Question(s)?` : 'Are you absolutely sure?';
             var confirmText = isFiltered 
-                ? `This will permanently delete ONLY the ${visibleIds.length} currently filtered questions from this exam!`
+                ? `This will permanently delete ONLY the ${visibleIds.length} currently filtered questions from this exam across all pages!`
                 : "This will wipe ALL questions and choices from this exam permanently!";
             var confirmBtnText = isFiltered
                 ? `<i class="fas fa-trash-alt mr-2"></i> Yes, Delete (${visibleIds.length}) Questions`
@@ -856,5 +1049,8 @@
                 }
             });
         });
+
+        // Initial Filter & Pagination Run
+        filterAndPaginate(1);
     })();
 </script>

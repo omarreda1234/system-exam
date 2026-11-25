@@ -675,6 +675,132 @@ namespace Exam.Controllers
             );
             return Json(rules);
         }
+
+        [HttpGet]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> AuditExamInjectionRules(int examId)
+        {
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                var rules = (await conn.QueryAsync<dynamic>(@"
+                    SELECT r.Id, r.ExamId, r.TargetRole, r.CategoryId, c.CategoryName, 
+                           r.TopicId, t.TopicName, r.EasyCount, r.MediumCount, r.HardCount
+                    FROM ExamGenerationRules r
+                    LEFT JOIN Categories c ON r.CategoryId = c.Id
+                    LEFT JOIN Topics t ON r.TopicId = t.Id
+                    WHERE r.ExamId = @ExamId
+                    ORDER BY r.TargetRole, c.CategoryName, t.TopicName",
+                    new { ExamId = examId })).ToList();
+
+                if (!rules.Any())
+                {
+                    return Json(new {
+                        success = true,
+                        hasRules = false,
+                        message = "No dynamic injection rules are configured for this exam."
+                    });
+                }
+
+                var examInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                    "SELECT Id, Title, TotalQuestionsToShow FROM Exams WHERE Id = @ExamId", new { ExamId = examId });
+
+                var ruleAudits = new List<object>();
+                int totalShortages = 0;
+
+                var roleStats = new Dictionary<string, (int required, int available, int deficit)>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var r in rules)
+                {
+                    int catId = (int)r.CategoryId;
+                    int? topicId = r.TopicId != null ? (int?)r.TopicId : null;
+                    string targetRole = string.IsNullOrWhiteSpace((string)r.TargetRole) ? "All" : (string)r.TargetRole;
+                    string catName = (string)r.CategoryName ?? "Unknown Category";
+                    string topicName = (string)r.TopicName ?? "All Topics";
+                    int easyReq = (int)r.EasyCount;
+                    int medReq = (int)r.MediumCount;
+                    int hardReq = (int)r.HardCount;
+                    int totalReq = easyReq + medReq + hardReq;
+
+                    var counts = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                        SELECT 
+                            ISNULL(SUM(CASE WHEN Difficulty = 1 OR Difficulty = 0 THEN 1 ELSE 0 END), 0) AS EasyAvail,
+                            ISNULL(SUM(CASE WHEN Difficulty = 2 THEN 1 ELSE 0 END), 0) AS MedAvail,
+                            ISNULL(SUM(CASE WHEN Difficulty = 3 THEN 1 ELSE 0 END), 0) AS HardAvail,
+                            COUNT(1) AS TotalAvail
+                        FROM Questions WITH (NOLOCK)
+                        WHERE CategoryId = @CatId
+                          AND (@TopicId IS NULL OR TopicId = @TopicId)",
+                        new { CatId = catId, TopicId = topicId });
+
+                    int easyAvail = counts != null ? (int)counts.EasyAvail : 0;
+                    int medAvail = counts != null ? (int)counts.MedAvail : 0;
+                    int hardAvail = counts != null ? (int)counts.HardAvail : 0;
+                    int totalAvail = counts != null ? (int)counts.TotalAvail : 0;
+
+                    int easyDeficit = Math.Max(0, easyReq - easyAvail);
+                    int medDeficit = Math.Max(0, medReq - medAvail);
+                    int hardDeficit = Math.Max(0, hardReq - hardAvail);
+                    int ruleDeficit = easyDeficit + medDeficit + hardDeficit;
+
+                    totalShortages += ruleDeficit;
+
+                    if (!roleStats.ContainsKey(targetRole))
+                        roleStats[targetRole] = (0, 0, 0);
+
+                    var current = roleStats[targetRole];
+                    roleStats[targetRole] = (
+                        current.required + totalReq,
+                        current.available + Math.Min(totalReq, totalAvail),
+                        current.deficit + ruleDeficit
+                    );
+
+                    ruleAudits.Add(new {
+                        ruleId = (int)r.Id,
+                        targetRole,
+                        categoryName = catName,
+                        topicName,
+                        easyReq,
+                        easyAvail,
+                        easyDeficit,
+                        medReq,
+                        medAvail,
+                        medDeficit,
+                        hardReq,
+                        hardAvail,
+                        hardDeficit,
+                        totalReq,
+                        totalAvail,
+                        ruleDeficit,
+                        isHealthy = ruleDeficit == 0
+                    });
+                }
+
+                var roleSummaryList = roleStats.Select(kvp => new {
+                    role = kvp.Key,
+                    totalRequired = kvp.Value.required,
+                    totalPoints = kvp.Value.required * 2,
+                    totalAvailable = kvp.Value.available,
+                    deficit = kvp.Value.deficit,
+                    isHealthy = kvp.Value.deficit == 0
+                }).ToList();
+
+                return Json(new {
+                    success = true,
+                    hasRules = true,
+                    examId,
+                    examTitle = (string)(examInfo?.Title ?? ""),
+                    isHealthy = totalShortages == 0,
+                    totalShortages,
+                    roleSummaries = roleSummaryList,
+                    rules = ruleAudits
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "Audit failed: " + ex.Message });
+            }
+        }
         [HttpGet]
         public async Task<IActionResult> ExportAllStudentsToExcel()
         {
@@ -2004,7 +2130,7 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
 
             if (!string.IsNullOrEmpty(searchValue))
             {
-                sqlBase += " AND (No_ LIKE @Search OR Description LIKE @Search OR [Description 2] LIKE @Search OR [Item Definition] LIKE @Search OR CustomDefinition LIKE @Search OR Color LIKE @Search)";
+                sqlBase += " AND (No_ LIKE @Search OR Description LIKE @Search OR [Description 2] LIKE @Search OR [Item Definition] LIKE @Search OR CustomDefinition LIKE @Search OR Color LIKE @Search OR [Active Ingredient] LIKE @Search OR [Manufacturer Name] LIKE @Search OR [Form Type] LIKE @Search OR [Original Vendor Item No_] LIKE @Search)";
                 parameters.Add("Search", $"%{searchValue}%");
             }
 
@@ -2019,13 +2145,18 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
             if (orderColumnIndex == "0") sortColumn = "No_";
             else if (orderColumnIndex == "1") sortColumn = "Description";
             else if (orderColumnIndex == "2") sortColumn = "[Description 2]";
-            else if (orderColumnIndex == "3") sortColumn = "[Item Definition]";
-            else if (orderColumnIndex == "4") sortColumn = "[Storage Instructions]";
-            else if (orderColumnIndex == "5") sortColumn = "[Incentive value]";
-            else if (orderColumnIndex == "6") sortColumn = "Color";
-            else if (orderColumnIndex == "7") sortColumn = "[Date Created]";
-            else if (orderColumnIndex == "8") sortColumn = "[Last Date Modified]";
-            else if (orderColumnIndex == "9") sortColumn = "LastSyncedAt";
+            else if (orderColumnIndex == "3") sortColumn = "[Active Ingredient]";
+            else if (orderColumnIndex == "4") sortColumn = "[Manufacturer Name]";
+            else if (orderColumnIndex == "5") sortColumn = "[Form Type]";
+            else if (orderColumnIndex == "6") sortColumn = "[Item Definition]";
+            else if (orderColumnIndex == "7") sortColumn = "[Original Vendor Item No_]";
+            else if (orderColumnIndex == "8") sortColumn = "[Unit Price]";
+            else if (orderColumnIndex == "9") sortColumn = "[Storage Instructions]";
+            else if (orderColumnIndex == "10") sortColumn = "[Incentive value]";
+            else if (orderColumnIndex == "11") sortColumn = "Color";
+            else if (orderColumnIndex == "12") sortColumn = "[Date Created]";
+            else if (orderColumnIndex == "13") sortColumn = "[Last Date Modified]";
+            else if (orderColumnIndex == "14") sortColumn = "LastSyncedAt";
 
             string sortDirection = (orderDir == "asc") ? "ASC" : "DESC";
 
@@ -2035,6 +2166,11 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                     No_ AS No_,
                     Description AS Description,
                     [Description 2] AS Description2,
+                    [Active Ingredient] AS ActiveIngredient,
+                    [Manufacturer Name] AS ManufacturerName,
+                    [Form Type] AS FormType,
+                    [Original Vendor Item No_] AS OriginalVendorItemNo,
+                    [Unit Price] AS UnitPrice,
                     [Storage Instructions] AS StorageInstructions,
                     [Incentive value] AS IncentiveValue,
                     Color AS Color,
@@ -2060,6 +2196,11 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                     no_ = item.No_ ?? "",
                     description = item.Description ?? "",
                     description2 = item.Description2 ?? "",
+                    activeIngredient = item.ActiveIngredient ?? "",
+                    manufacturerName = item.ManufacturerName ?? "",
+                    formType = item.FormType ?? "",
+                    originalVendorItemNo = item.OriginalVendorItemNo ?? "",
+                    unitPrice = item.UnitPrice.HasValue ? item.UnitPrice.Value.ToString("N2") : "-",
                     itemDefinition = item.ItemDefinition ?? "",
                     storageInstructions = item.StorageInstructions ?? "",
                     incentiveValue = item.IncentiveValue ?? "",
@@ -2137,7 +2278,12 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                         Color AS Color, 
                         [Item Definition] AS [Item Definition], 
                         [Date Created] AS [Date Created], 
-                        [Last Date Modified] AS [Last Date Modified]
+                        [Last Date Modified] AS [Last Date Modified],
+                        [Active Ingredient] AS [Active Ingredient],
+                        [Manufacturer Name] AS [Manufacturer Name],
+                        [Form Type] AS [Form Type],
+                        [Original Vendor Item No_] AS [Original Vendor Item No_],
+                        [Unit Price] AS [Unit Price]
                     FROM [Tarshobi-Live$Item] WITH (NOLOCK)
                 ";
 
@@ -2169,7 +2315,12 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                         Color NVARCHAR(1000) NULL,
                         [Item Definition] NVARCHAR(MAX) NULL,
                         [Date Created] DATETIME NULL,
-                        [Last Date Modified] DATETIME NULL
+                        [Last Date Modified] DATETIME NULL,
+                        [Active Ingredient] NVARCHAR(1000) NULL,
+                        [Manufacturer Name] NVARCHAR(500) NULL,
+                        [Form Type] NVARCHAR(200) NULL,
+                        [Original Vendor Item No_] NVARCHAR(100) NULL,
+                        [Unit Price] DECIMAL(18, 4) NULL
                     )
                 ", localConn))
                 {
@@ -2192,6 +2343,11 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                     bulkCopy.ColumnMappings.Add("Item Definition", "Item Definition");
                     bulkCopy.ColumnMappings.Add("Date Created", "Date Created");
                     bulkCopy.ColumnMappings.Add("Last Date Modified", "Last Date Modified");
+                    bulkCopy.ColumnMappings.Add("Active Ingredient", "Active Ingredient");
+                    bulkCopy.ColumnMappings.Add("Manufacturer Name", "Manufacturer Name");
+                    bulkCopy.ColumnMappings.Add("Form Type", "Form Type");
+                    bulkCopy.ColumnMappings.Add("Original Vendor Item No_", "Original Vendor Item No_");
+                    bulkCopy.ColumnMappings.Add("Unit Price", "Unit Price");
 
                     await bulkCopy.WriteToServerAsync(reader);
                 }
@@ -2230,10 +2386,15 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                             target.[Item Definition] = source.[Item Definition],
                             target.[Date Created] = source.[Date Created],
                             target.[Last Date Modified] = source.[Last Date Modified],
+                            target.[Active Ingredient] = source.[Active Ingredient],
+                            target.[Manufacturer Name] = source.[Manufacturer Name],
+                            target.[Form Type] = source.[Form Type],
+                            target.[Original Vendor Item No_] = source.[Original Vendor Item No_],
+                            target.[Unit Price] = source.[Unit Price],
                             target.LastSyncedAt = GETDATE()
                     WHEN NOT MATCHED THEN
-                        INSERT (No_, Description, [Description 2], [Storage Instructions], [Incentive value], Color, [Item Definition], [Date Created], [Last Date Modified], LastSyncedAt)
-                        VALUES (source.No_, source.Description, source.[Description 2], source.[Storage Instructions], source.[Incentive value], source.Color, source.[Item Definition], source.[Date Created], source.[Last Date Modified], GETDATE());
+                        INSERT (No_, Description, [Description 2], [Storage Instructions], [Incentive value], Color, [Item Definition], [Date Created], [Last Date Modified], [Active Ingredient], [Manufacturer Name], [Form Type], [Original Vendor Item No_], [Unit Price], LastSyncedAt)
+                        VALUES (source.No_, source.Description, source.[Description 2], source.[Storage Instructions], source.[Incentive value], source.Color, source.[Item Definition], source.[Date Created], source.[Last Date Modified], source.[Active Ingredient], source.[Manufacturer Name], source.[Form Type], source.[Original Vendor Item No_], source.[Unit Price], GETDATE());
                 ";
 
                 using (var mergeCmd = new SqlCommand(mergeSql, localConn))
@@ -9733,196 +9894,6 @@ ORDER BY U.UserName ASC";
 
             int recordsTotal = await conn.ExecuteScalarAsync<int>("SELECT COUNT(1) FROM dbo.Assignments");
             int recordsFiltered = await conn.ExecuteScalarAsync<int>(countQuery, parameters);
-
-            string dataQuery = $@"
-                SELECT a.Id, a.Title, w.WaveName, a.PharmacistMaxScore, a.AssistantMaxScore, 
-                       a.ScheduledStartTime, a.ScheduledEndTime, a.CreatedAt
-                FROM dbo.Assignments a
-                INNER JOIN dbo.TrainingWaves w ON a.WaveId = w.Id
-                {searchFilter}
-                ORDER BY a.Id DESC
-                OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY";
-
-            parameters.Add("Skip", skip);
-            parameters.Add("Take", pageSize);
-
-            var list = await conn.QueryAsync<dynamic>(dataQuery, parameters);
-
-            var result = list.Select(x => new {
-                id = x.Id,
-                title = x.Title,
-                waveName = x.WaveName,
-                pharmacistMaxScore = x.PharmacistMaxScore,
-                assistantMaxScore = x.AssistantMaxScore,
-                scheduledStartTime = x.ScheduledStartTime != null ? ((DateTime)x.ScheduledStartTime).ToString("yyyy-MM-dd HH:mm:ss") : null,
-                scheduledEndTime = x.ScheduledEndTime != null ? ((DateTime)x.ScheduledEndTime).ToString("yyyy-MM-dd HH:mm:ss") : null,
-                createdAt = x.CreatedAt != null ? ((DateTime)x.CreatedAt).ToString("yyyy-MM-dd HH:mm:ss") : null
-            });
-
-            return Json(new
-            {
-                draw = draw,
-                recordsTotal = recordsTotal,
-                recordsFiltered = recordsFiltered,
-                data = result
-            });
-        }
-
-        [HttpGet("Admin/GetAppCategories")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> GetAppCategories()
-        {
-            using var conn = new SqlConnection(_connectionString);
-            var categories = await conn.QueryAsync<dynamic>("SELECT DISTINCT Categories AS categories, Groups AS groups, Subcategories AS subcategories FROM dbo.[App Categories ] ORDER BY categories, groups, subcategories");
-            return Json(categories);
-        }
-
-        [HttpGet("Admin/SearchItems")]
-        [Authorize]
-        public async Task<IActionResult> SearchItems(string q)
-        {
-            if (string.IsNullOrWhiteSpace(q)) return Json(new List<object>());
-            using var conn = new SqlConnection(_connectionString);
-            var items = await conn.QueryAsync<dynamic>("dbo.sp_GetItemsForSearch", new { SearchQuery = q }, commandType: CommandType.StoredProcedure);
-            
-            var result = items.Select(x => new {
-                itemCode = x.ItemCode,
-                description = x.Description,
-                descriptionAr = x.DescriptionAr,
-                category = x.Category,
-                group = x.Group,
-                subcategory = x.Subcategory,
-                itemDefinition = x.ItemDefinition
-            });
-            
-            return Json(result);
-        }
-
-        [HttpPost("Admin/CreateAssignment")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> CreateAssignment([FromBody] CreateAssignmentDto model)
-        {
-            if (model == null || string.IsNullOrWhiteSpace(model.Title) || model.WaveId <= 0)
-            {
-                return Json(new { success = false, message = "Invalid data. Please fill required fields." });
-            }
-
-            using var conn = new SqlConnection(_connectionString);
-            await conn.OpenAsync();
-            using var transaction = conn.BeginTransaction();
-            try
-            {
-                // Insert Assignment
-                string insertAssignSql = @"
-                    INSERT INTO dbo.Assignments (Title, WaveId, PharmacistMaxScore, AssistantMaxScore, ScheduledStartTime, ScheduledEndTime, CreatedAt)
-                    OUTPUT INSERTED.Id
-                    VALUES (@Title, @WaveId, @PharmacistMaxScore, @AssistantMaxScore, @ScheduledStartTime, @ScheduledEndTime, GETDATE());";
-
-                int assignmentId = await conn.QuerySingleAsync<int>(insertAssignSql, new
-                {
-                    model.Title,
-                    model.WaveId,
-                    model.PharmacistMaxScore,
-                    model.AssistantMaxScore,
-                    model.ScheduledStartTime,
-                    model.ScheduledEndTime
-                }, transaction: transaction);
-
-                // Insert Questions
-                if (model.Questions != null && model.Questions.Any())
-                {
-                    string insertQuestionSql = @"
-                        INSERT INTO dbo.AssignmentQuestions (AssignmentId, QuestionType, TargetRole, Points, CategoryName, GroupName, SubcategoryName, RequiredItemsCount, ItemDefinition, CorrectItemNo)
-                        VALUES (@AssignmentId, @QuestionType, @TargetRole, @Points, @CategoryName, @GroupName, @SubcategoryName, @RequiredItemsCount, @ItemDefinition, @CorrectItemNo);";
-
-                    foreach (var q in model.Questions)
-                    {
-                        await conn.ExecuteAsync(insertQuestionSql, new
-                        {
-                            AssignmentId = assignmentId,
-                            q.QuestionType,
-                            q.TargetRole,
-                            q.Points,
-                            q.CategoryName,
-                            q.GroupName,
-                            q.SubcategoryName,
-                            q.RequiredItemsCount,
-                            q.ItemDefinition,
-                            q.CorrectItemNo
-                        }, transaction: transaction);
-                    }
-                }
-
-                transaction.Commit();
-                return Json(new { success = true, message = "Assignment created successfully!" });
-            }
-            catch (Exception ex)
-            {
-                transaction.Rollback();
-                return Json(new { success = false, message = "Error: " + ex.Message });
-            }
-        }
-
-        [HttpPost("Admin/DeleteAssignment/{id}")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> DeleteAssignment(int id)
-        {
-            using var conn = new SqlConnection(_connectionString);
-            try
-            {
-                await conn.ExecuteAsync("DELETE FROM dbo.Assignments WHERE Id = @Id", new { Id = id });
-                return Json(new { success = true, message = "Assignment deleted successfully." });
-            }
-            catch (Exception ex)
-            {
-                return Json(new { success = false, message = "Error: " + ex.Message });
-            }
-        }
-
-        [HttpGet("Admin/GetAssignmentQuestions/{id}")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> GetAssignmentQuestions(int id)
-        {
-            using var conn = new SqlConnection(_connectionString);
-            try
-            {
-                var sql = "SELECT * FROM dbo.AssignmentQuestions WHERE AssignmentId = @AssignmentId";
-                var questions = (await conn.QueryAsync<dynamic>(sql, new { AssignmentId = id })).ToList();
-                return Json(questions);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest("Error: " + ex.Message);
-            }
-        }
-
-        [HttpGet("Admin/GetAssignmentDetails/{id}")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> GetAssignmentDetails(int id)
-        {
-            using var conn = new SqlConnection(_connectionString);
-            try
-            {
-                var assignSql = "SELECT * FROM dbo.Assignments WHERE Id = @Id";
-                var assignment = await conn.QueryFirstOrDefaultAsync<dynamic>(assignSql, new { Id = id });
-                if (assignment == null)
-                {
-                    return Json(new { success = false, message = "Assignment not found." });
-                }
-
-                var qSql = "SELECT * FROM dbo.AssignmentQuestions WHERE AssignmentId = @AssignmentId ORDER BY Id ASC";
-                var questions = (await conn.QueryAsync<dynamic>(qSql, new { AssignmentId = id })).ToList();
-
-                return Json(new
-                {
-                    success = true,
-                    assignment = new
-                    {
-                        id = assignment.Id,
-                        title = assignment.Title,
-                        waveId = assignment.WaveId,
-                        pharmacistMaxScore = assignment.PharmacistMaxScore,
-                        assistantMaxScore = assignment.AssistantMaxScore,
                         scheduledStartTime = assignment.ScheduledStartTime != null ? ((DateTime)assignment.ScheduledStartTime).ToString("yyyy-MM-ddTHH:mm") : null,
                         scheduledEndTime = assignment.ScheduledEndTime != null ? ((DateTime)assignment.ScheduledEndTime).ToString("yyyy-MM-ddTHH:mm") : null
                     },
@@ -10837,6 +10808,11 @@ ORDER BY U.UserName ASC";
         public string No_ { get; set; }
         public string Description { get; set; }
         public string Description2 { get; set; }
+        public string ActiveIngredient { get; set; }
+        public string ManufacturerName { get; set; }
+        public string FormType { get; set; }
+        public string OriginalVendorItemNo { get; set; }
+        public decimal? UnitPrice { get; set; }
         public string StorageInstructions { get; set; }
         public string IncentiveValue { get; set; }
         public string Color { get; set; }

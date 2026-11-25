@@ -169,9 +169,14 @@
                             <h3 class="text-xs font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">Blueprint Console</h3>
                             <p class="text-[10px] font-bold text-slate-400 uppercase">Define rules for dynamic question injection</p>
                         </div>
-                        <button type="button" id="addRuleBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/20">
-                            <i class="fas fa-magic"></i> Add Smart Injection Rule
-                        </button>
+                        <div class="flex items-center gap-3">
+                            <button type="button" id="scanRulesBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95">
+                                <i class="fas fa-search-plus"></i> Scan & Verify Rules
+                            </button>
+                            <button type="button" id="addRuleBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/20">
+                                <i class="fas fa-magic"></i> Add Smart Injection Rule
+                            </button>
+                        </div>
                     </div>
                     
                     <div id="rulesContainer" class="grid grid-cols-1 gap-4">
@@ -631,6 +636,124 @@
                         });
                     }
                 });
+            });
+
+            $('#scanRulesBtn').on('click', function() {
+                var $btn = $(this);
+                var origText = $btn.html();
+                $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i> Scanning...');
+
+                $.get('/Admin/AuditExamInjectionRules?examId=@Model.Id')
+                    .done(function(res) {
+                        $btn.prop('disabled', false).html(origText);
+                        if (!res || !res.success) {
+                            Swal.fire('Scan Failed', res ? res.message : 'Unknown error', 'error');
+                            return;
+                        }
+
+                        if (!res.hasRules) {
+                            Swal.fire({
+                                icon: 'info',
+                                title: 'No Rules Defined',
+                                text: 'There are no injection rules defined for this exam yet.',
+                                confirmButtonColor: '#2a766f'
+                            });
+                            return;
+                        }
+
+                        var isHealthy = res.isHealthy;
+                        var totalShortages = res.totalShortages;
+                        
+                        var rolesHtml = '';
+                        if (res.roleSummaries && res.roleSummaries.length > 0) {
+                            rolesHtml = '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">';
+                            res.roleSummaries.forEach(function(rs) {
+                                var badgeBg = rs.isHealthy ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300' 
+                                                           : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300';
+                                var statusIcon = rs.isHealthy ? '<i class="fas fa-check-circle text-emerald-500"></i>' : '<i class="fas fa-exclamation-triangle text-rose-500"></i>';
+                                rolesHtml += `
+                                    <div class="border rounded-2xl p-4 text-left ${badgeBg}">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="font-black text-xs uppercase tracking-wider">${rs.role}</span>
+                                            ${statusIcon}
+                                        </div>
+                                        <div class="text-xs space-y-1 font-semibold">
+                                            <div>Required: <span class="font-bold">${rs.totalRequired} Qs</span> (${rs.totalPoints} Pts)</div>
+                                            <div>Available: <span class="font-bold">${rs.totalAvailable} Qs</span></div>
+                                            ${rs.deficit > 0 ? `<div class="text-rose-600 font-bold">Deficit Shortage: -${rs.deficit} Qs (-${rs.deficit * 2} Pts)</div>` : '<div class="text-emerald-600 font-bold">100% Ready</div>'}
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                            rolesHtml += '</div>';
+                        }
+
+                        var shortagesHtml = '';
+                        var shortageRules = (res.rules || []).filter(function(r) { return !r.isHealthy; });
+
+                        if (shortageRules.length > 0) {
+                            shortagesHtml = `
+                                <div class="mt-4 text-left">
+                                    <h5 class="text-xs font-black uppercase text-rose-600 tracking-wider mb-2 flex items-center gap-2">
+                                        <i class="fas fa-exclamation-circle"></i> Shortages Breakdown (${shortageRules.length} Topics Affected)
+                                    </h5>
+                                    <div class="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                            `;
+
+                            shortageRules.forEach(function(sr) {
+                                var details = [];
+                                if (sr.easyDeficit > 0) details.push(`Easy: <b>${sr.easyAvail} / ${sr.easyReq}</b> (Deficit: -${sr.easyDeficit})`);
+                                if (sr.medDeficit > 0) details.push(`Med: <b>${sr.medAvail} / ${sr.medReq}</b> (Deficit: -${sr.medDeficit})`);
+                                if (sr.hardDeficit > 0) details.push(`Hard: <b>${sr.hardAvail} / ${sr.hardReq}</b> (Deficit: -${sr.hardDeficit})`);
+
+                                shortagesHtml += `
+                                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs">
+                                        <div class="flex items-center justify-between font-bold mb-1">
+                                            <span class="text-slate-900 dark:text-white">${sr.topicName} <span class="text-slate-400 font-normal">(${sr.categoryName})</span></span>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-indigo-50 dark:bg-indigo-950 text-indigo-600">${sr.targetRole}</span>
+                                        </div>
+                                        <div class="text-rose-600 dark:text-rose-400 text-[11px]">
+                                            ${details.join(' | ')}
+                                        </div>
+                                    </div>
+                                `;
+                            });
+
+                            shortagesHtml += `
+                                    </div>
+                                    <div class="mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300">
+                                        <i class="fas fa-lightbulb mr-1"></i> <b>تنبيه هام:</b> يرجى إضافة الأسئلة الناقصة إلى بنك الأسئلة أو تعديل مستويات صعوبة الأسئلة الحالية لضمان حصول المتدربين على الامتحان كاملاً (100 درجة).
+                                    </div>
+                                </div>
+                            `;
+                        }
+
+                        var modalTitle = isHealthy ? '<span class="text-emerald-600 font-black flex items-center justify-center gap-2"><i class="fas fa-check-circle"></i> Question Bank Ready (100%)</span>' 
+                                                   : `<span class="text-rose-600 font-black flex items-center justify-center gap-2"><i class="fas fa-exclamation-triangle"></i> Shortages Detected (${totalShortages} Missing)</span>`;
+
+                        Swal.fire({
+                            title: modalTitle,
+                            html: `
+                                <div class="py-2">
+                                    <p class="text-xs text-slate-500 mb-4">${isHealthy ? 'All dynamic injection rules are 100% matched with existing questions in the bank.' : 'Some dynamic injection rules require more questions than are currently available in the question bank.'}</p>
+                                    ${rolesHtml}
+                                    ${shortagesHtml}
+                                </div>
+                            `,
+                            width: '650px',
+                            confirmButtonText: 'Understood',
+                            confirmButtonColor: isHealthy ? '#059669' : '#dc2626',
+                            background: document.documentElement.classList.contains('dark') ? '#0f172a' : '#fff',
+                            color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+                            customClass: {
+                                popup: 'rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-2xl'
+                            }
+                        });
+                    })
+                    .fail(function() {
+                        $btn.prop('disabled', false).html(origText);
+                        Swal.fire('Scan Failed', 'Unable to reach the server to audit injection rules.', 'error');
+                    });
             });
         });
     </script>

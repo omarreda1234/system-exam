@@ -31,9 +31,13 @@
             <thead>
                 <tr>
                     <th class="min-w-[120px]">Item No</th>
-                    <th class="min-w-[200px]">Description</th>
-                    <th class="min-w-[150px]">Description 2</th>
-                    <th class="min-w-[180px]">Item Definition</th>
+                    <th class="min-w-[180px]">Description</th>
+                    <th class="min-w-[150px]">Active Ingredient</th>
+                    <th class="min-w-[140px]">Manufacturer</th>
+                    <th class="min-w-[110px]">Form Type</th>
+                    <th class="min-w-[110px]">Vendor Item No</th>
+                    <th class="min-w-[90px]">Unit Price</th>
+                    <th class="min-w-[160px]">Item Definition</th>
                     <th>Storage</th>
                     <th>Incentive</th>
                     <th>Color</th>
@@ -64,8 +68,51 @@
                 },
                 columns: [
                     { data: 'no_', className: 'font-mono font-bold text-brand-600 dark:text-brand-400' },
-                    { data: 'description', className: 'font-semibold' },
-                    { data: 'description2', className: 'text-slate-500 dark:text-slate-400' },
+                    { 
+                        data: 'description', 
+                        className: 'font-semibold',
+                        render: function(data, type, row) {
+                            var desc2 = row.description2 ? '<div class="text-[11px] text-slate-400 font-normal">' + escapeQuote(row.description2) + '</div>' : '';
+                            return '<div><div class="font-bold text-slate-900 dark:text-white">' + (data || '') + '</div>' + desc2 + '</div>';
+                        }
+                    },
+                    { 
+                        data: 'activeIngredient', 
+                        className: 'text-xs text-slate-600 dark:text-slate-300 max-w-[150px] truncate',
+                        render: function(data) {
+                            if (!data) return '<span class="text-slate-300 dark:text-slate-600">-</span>';
+                            return '<span title="' + escapeQuote(data) + '" class="font-medium">' + data + '</span>';
+                        }
+                    },
+                    { 
+                        data: 'manufacturerName', 
+                        className: 'text-xs text-slate-600 dark:text-slate-300 max-w-[140px] truncate',
+                        render: function(data) {
+                            if (!data) return '<span class="text-slate-300 dark:text-slate-600">-</span>';
+                            return '<span title="' + escapeQuote(data) + '">' + data + '</span>';
+                        }
+                    },
+                    { 
+                        data: 'formType', 
+                        className: 'text-xs',
+                        render: function(data) {
+                            if (!data) return '<span class="text-slate-300 dark:text-slate-600">-</span>';
+                            return '<span class="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-semibold text-[10px]">' + data + '</span>';
+                        }
+                    },
+                    { 
+                        data: 'originalVendorItemNo', 
+                        className: 'font-mono text-xs text-slate-500',
+                        render: function(data) { return data || '-'; }
+                    },
+                    { 
+                        data: 'unitPrice', 
+                        className: 'font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs',
+                        render: function(data) { 
+                            if (!data || data === '-') return '<span class="text-slate-300 dark:text-slate-600">-</span>';
+                            return data + ' <span class="text-[9px] font-normal text-slate-400">EGP</span>';
+                        }
+                    },
                     { 
                         data: 'itemDefinition',
                         render: function(data, type, row) {
