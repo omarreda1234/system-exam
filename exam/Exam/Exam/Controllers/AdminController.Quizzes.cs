@@ -1048,7 +1048,7 @@ namespace Exam.Controllers
             decimal totalWeights = model.QuizzesWeight + model.AssignmentsWeight + model.FinalExamWeight;
             if (Math.Abs(totalWeights - 100m) > 0.01m)
             {
-                return Json(new { success = false, message = $"مجموع الأوزان يجب أن يساوي 100% (المجموع الحالي: {totalWeights}%)." });
+                return Json(new { success = false, message = $"مجموع الدرجات يجب أن يساوي 100 درجة (المجموع الحالي: {totalWeights} درجة)." });
             }
 
             using var conn = new SqlConnection(_connectionString);
@@ -1077,7 +1077,7 @@ namespace Exam.Controllers
                 PassingPercentage = model.PassingPercentage > 0 ? model.PassingPercentage : 60m
             });
 
-            return Json(new { success = true, message = "تم حفظ وتحديث أوزان احتساب الدرجة النهائية بنجاح." });
+            return Json(new { success = true, message = "تم حفظ وتحديث توزيع درجات الشهادة بنجاح." });
         }
 
         // ==========================================
