@@ -362,7 +362,12 @@ namespace Exam.Controllers
             {
                 // Delete user answers & attempts
                 await conn.ExecuteAsync(@"
-                    DELETE FROM dbo.UserExamAnswers 
+                    DELETE FROM dbo.StudentQuestionDetails 
+                    WHERE UserExamAttemptId IN (SELECT Id FROM dbo.UserExamAttempts WHERE ExamId = @Id)",
+                    new { Id = id }, transaction: tx);
+
+                await conn.ExecuteAsync(@"
+                    DELETE FROM dbo.UserSeenQuestions 
                     WHERE AttemptId IN (SELECT Id FROM dbo.UserExamAttempts WHERE ExamId = @Id)",
                     new { Id = id }, transaction: tx);
 

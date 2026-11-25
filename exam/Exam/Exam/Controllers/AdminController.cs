@@ -2260,9 +2260,15 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                 using var liveConn = new SqlConnection(liveConnectionString);
                 using var localConn = new SqlConnection(_connectionString);
 
-                // 1. Get last sync date from local Items database
-                var lastSyncDate = await localConn.QueryFirstOrDefaultAsync<DateTime?>(
-                    "SELECT MAX([Last Date Modified]) FROM dbo.Items"
+                // 1. Check if we need full backfill of new ERP columns (Block Reason, Unit Price, Manufacturer Name, etc.)
+                var missingNewFieldsCount = await localConn.QueryFirstOrDefaultAsync<int>(
+                    "SELECT COUNT(*) FROM dbo.Items WHERE [Block Reason] IS NULL AND [Manufacturer Name] IS NULL AND [Unit Price] IS NULL"
+                );
+
+                bool requiresFullSync = missingNewFieldsCount > 1000;
+
+                var lastSyncDate = requiresFullSync ? (DateTime?)null : await localConn.QueryFirstOrDefaultAsync<DateTime?>(
+                    "SELECT MAX([Last Date Modified]) FROM dbo.Items WHERE [Block Reason] IS NOT NULL"
                 );
 
                 // 2. Query data from live database using SqlDataReader (stream directly)
@@ -2317,7 +2323,7 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                         [Last Date Modified] DATETIME NULL,
                         [Active Ingredient] NVARCHAR(MAX) NULL,
                         [Manufacturer Name] NVARCHAR(500) NULL,
-                        [Form Type] NVARCHAR(500) NULL,
+                        [Form Type] NVARCHAR(MAX) NULL,
                         [Original Vendor Item No_] NVARCHAR(MAX) NULL,
                         [Block Reason] NVARCHAR(MAX) NULL,
                         [Unit Price] DECIMAL(18,2) NULL
