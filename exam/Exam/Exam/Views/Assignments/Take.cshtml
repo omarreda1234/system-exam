@@ -47,6 +47,10 @@
                         {
                             <span>Classify Products (Type 1)</span>
                         }
+                        else if ((string)q.QuestionType == "CriteriaMatch")
+                        {
+                            <span class="text-purple-600 font-bold">Smart Criteria Rule (Type 3)</span>
+                        }
                         else
                         {
                             <span>Match Definition (Type 2)</span>
@@ -76,6 +80,76 @@
                             <input type="text" 
                                    class="search-input w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all text-left" 
                                    placeholder="Search product by name or code to add..." 
+                                   oninput="searchProductsForQuestion(@q.Id)" />
+                            
+                            <!-- Dropdown Results -->
+                            <div class="search-results hidden absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto mt-1 text-left"></div>
+                        </div>
+
+                        <!-- Selected items list (Pills) -->
+                        <div>
+                            <p class="text-xs font-bold text-slate-400 mb-2 text-left">Selected Products:</p>
+                            <div class="selected-pills flex flex-wrap gap-2 justify-start" data-saved="@savedVal">
+                                <!-- Dynamic JS injection -->
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if ((string)q.QuestionType == "CriteriaMatch")
+                {
+                    <div class="mb-6">
+                        <p class="text-base font-bold text-slate-800 leading-relaxed text-left">
+                            Find and select <span class="text-purple-600 font-black underline">@q.RequiredItemsCount</span> product(s) matching the following specifications / criteria:
+                        </p>
+
+                        <div class="flex flex-wrap gap-2.5 mt-3 justify-start">
+                            @if (!string.IsNullOrEmpty((string)q.CriteriaActiveIngredient))
+                            {
+                                <span class="bg-purple-50 text-purple-700 border border-purple-200 rounded-xl px-3.5 py-2 text-xs font-bold flex items-center gap-1.5">
+                                    <i class="fas fa-flask text-purple-500"></i> Active Ingredient: @q.CriteriaActiveIngredient
+                                </span>
+                            }
+                            @if (!string.IsNullOrEmpty((string)q.CriteriaManufacturer))
+                            {
+                                <span class="bg-slate-50 text-slate-700 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold flex items-center gap-1.5">
+                                    <i class="fas fa-industry text-slate-500"></i> Manufacturer: @q.CriteriaManufacturer
+                                </span>
+                            }
+                            @if (!string.IsNullOrEmpty((string)q.CriteriaProductForm))
+                            {
+                                <span class="bg-slate-50 text-slate-700 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold flex items-center gap-1.5">
+                                    <i class="fas fa-capsules text-slate-500"></i> Product Form: @q.CriteriaProductForm
+                                </span>
+                            }
+                            @if (q.CriteriaPriceMin != null)
+                            {
+                                string pOp = (string)q.CriteriaPriceOp ?? ">=";
+                                string priceText = pOp == "BETWEEN" ? $"{q.CriteriaPriceMin} - {q.CriteriaPriceMax} EGP" : $"{pOp} {q.CriteriaPriceMin} EGP";
+                                <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl px-3.5 py-2 text-xs font-bold font-mono flex items-center gap-1.5">
+                                    <i class="fas fa-tag text-emerald-500"></i> Price: @priceText
+                                </span>
+                            }
+                            @if (!string.IsNullOrEmpty((string)q.CriteriaKeyFeature))
+                            {
+                                <span class="bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl px-3.5 py-2 text-xs font-bold flex items-center gap-1.5">
+                                    <i class="fas fa-star text-indigo-500"></i> Key Feature: @q.CriteriaKeyFeature
+                                </span>
+                            }
+                            @if (!string.IsNullOrEmpty((string)q.CriteriaHowToUse))
+                            {
+                                <span class="bg-amber-50 text-amber-700 border border-amber-200 rounded-xl px-3.5 py-2 text-xs font-bold flex items-center gap-1.5">
+                                    <i class="fas fa-info-circle text-amber-500"></i> How to Use: @q.CriteriaHowToUse
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Type 3 Interactive Search & Selection -->
+                    <div class="space-y-4">
+                        <div class="relative">
+                            <input type="text" 
+                                   class="search-input w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all text-left" 
+                                   placeholder="Search products by code, name, active ingredient, manufacturer..." 
                                    oninput="searchProductsForQuestion(@q.Id)" />
                             
                             <!-- Dropdown Results -->
@@ -161,13 +235,13 @@
                 const qId = $(this).data('id');
                 const qType = $(this).data('type');
 
-                if (qType === 'CategorySelect') {
+                if (qType === 'CategorySelect' || qType === 'CriteriaMatch') {
                     const $pills = $(this).find('.selected-pills');
                     const savedVal = $pills.data('saved');
                     answersState[qId] = [];
 
                     if (savedVal) {
-                        const codes = savedVal.split(',');
+                        const codes = (savedVal + '').split(',');
                         codes.forEach(code => {
                             if (code) {
                                 // Fetch description briefly or just display code
@@ -212,11 +286,19 @@
                     data.forEach(item => {
                         const code = item.itemCode || item.ItemCode || '';
                         const desc = item.description || item.Description || '';
-                        const category = item.category || item.Category || '';
+                        const activeIng = item.activeIngredient || item.ActiveIngredient || '';
+                        const form = item.productForm || item.ProductForm || '';
+                        const price = item.unitPrice || item.UnitPrice || '';
+                        
                         const row = `
-                            <div onclick="selectProduct(${qId}, '${code}', '${escapeQuote(desc)}')" class="p-3 text-xs hover:bg-slate-50 cursor-pointer border-b border-slate-100 text-left">
-                                <span class="font-black text-brand-600">${code}</span> - 
-                                <span class="font-bold text-slate-700">${desc}</span>
+                            <div onclick="selectProduct(${qId}, '${code}', '${escapeQuote(desc)}')" class="p-3 text-xs hover:bg-slate-50 cursor-pointer border-b border-slate-100 text-left flex justify-between items-center">
+                                <div>
+                                    <span class="font-black text-brand-600">${code}</span> - 
+                                    <span class="font-bold text-slate-700">${desc}</span>
+                                    ${activeIng ? `<span class="ml-2 text-[10px] text-purple-600 font-semibold">[${activeIng}]</span>` : ''}
+                                    ${form ? `<span class="ml-1 text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">${form}</span>` : ''}
+                                </div>
+                                ${price ? `<span class="font-bold text-emerald-600 font-mono text-xs">${price} EGP</span>` : ''}
                             </div>
                         `;
                         $results.append(row);
@@ -240,8 +322,8 @@
             $card.find('.search-results').empty().hide();
             $card.find('.search-input').val('');
 
-            if (qType === 'CategorySelect') {
-                const reqCount = parseInt($card.data('req-count')) || 0;
+            if (qType === 'CategorySelect' || qType === 'CriteriaMatch') {
+                const reqCount = parseInt($card.data('req-count')) || 1;
                 if (answersState[qId].includes(code)) {
                     Swal.fire('Warning', 'This product is already added to this answer.', 'warning');
                     return;
@@ -301,8 +383,8 @@
                 const qId = $(this).data('id');
                 const qType = $(this).data('type');
 
-                if (qType === 'CategorySelect') {
-                    const reqCount = parseInt($(this).data('req-count')) || 0;
+                if (qType === 'CategorySelect' || qType === 'CriteriaMatch') {
+                    const reqCount = parseInt($(this).data('req-count')) || 1;
                     if (!answersState[qId] || answersState[qId].length < reqCount) {
                         incompleteCount++;
                     }

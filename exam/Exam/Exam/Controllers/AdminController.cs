@@ -2123,7 +2123,7 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
 
             if (!string.IsNullOrEmpty(searchValue))
             {
-                sqlBase += " AND (No_ LIKE @Search OR Description LIKE @Search OR [Description 2] LIKE @Search OR [Item Definition] LIKE @Search OR CustomDefinition LIKE @Search OR Color LIKE @Search OR [Active Ingredient] LIKE @Search OR [Manufacturer Name] LIKE @Search OR [Form Type] LIKE @Search OR [Original Vendor Item No_] LIKE @Search)";
+                sqlBase += " AND (No_ LIKE @Search OR Description LIKE @Search OR [Description 2] LIKE @Search OR [Item Definition] LIKE @Search OR CustomDefinition LIKE @Search OR Color LIKE @Search OR [Active Ingredient] LIKE @Search OR [Manufacturer Name] LIKE @Search OR [Form Type] LIKE @Search OR [Original Vendor Item No_] LIKE @Search OR [Block Reason] LIKE @Search)";
                 parameters.Add("Search", $"%{searchValue}%");
             }
 
@@ -2137,11 +2137,11 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
             string sortColumn = "[Last Date Modified]";
             if (orderColumnIndex == "0") sortColumn = "No_";
             else if (orderColumnIndex == "1") sortColumn = "Description";
-            else if (orderColumnIndex == "2") sortColumn = "[Description 2]";
-            else if (orderColumnIndex == "3") sortColumn = "[Active Ingredient]";
-            else if (orderColumnIndex == "4") sortColumn = "[Manufacturer Name]";
-            else if (orderColumnIndex == "5") sortColumn = "[Form Type]";
-            else if (orderColumnIndex == "6") sortColumn = "[Original Vendor Item No_]";
+            else if (orderColumnIndex == "2") sortColumn = "[Active Ingredient]";
+            else if (orderColumnIndex == "3") sortColumn = "[Manufacturer Name]";
+            else if (orderColumnIndex == "4") sortColumn = "[Form Type]";
+            else if (orderColumnIndex == "5") sortColumn = "[Original Vendor Item No_]";
+            else if (orderColumnIndex == "6") sortColumn = "[Block Reason]";
             else if (orderColumnIndex == "7") sortColumn = "[Unit Price]";
             else if (orderColumnIndex == "8") sortColumn = "[Item Definition]";
             else if (orderColumnIndex == "9") sortColumn = "[Storage Instructions]";
@@ -2163,6 +2163,7 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                     [Manufacturer Name] AS ManufacturerName,
                     [Form Type] AS FormType,
                     [Original Vendor Item No_] AS OriginalVendorItemNo,
+                    [Block Reason] AS BlockReason,
                     [Unit Price] AS UnitPrice,
                     [Storage Instructions] AS StorageInstructions,
                     [Incentive value] AS IncentiveValue,
@@ -2191,8 +2192,12 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                     description2 = item.Description2 ?? "",
                     activeIngredient = item.ActiveIngredient ?? "",
                     manufacturerName = item.ManufacturerName ?? "",
+                    productForm = item.FormType ?? "",
                     formType = item.FormType ?? "",
+                    howToUse = item.OriginalVendorItemNo ?? "",
                     originalVendorItemNo = item.OriginalVendorItemNo ?? "",
+                    keyFeature = item.BlockReason ?? "",
+                    blockReason = item.BlockReason ?? "",
                     unitPrice = item.UnitPrice.HasValue ? item.UnitPrice.Value.ToString("N2") : "-",
                     itemDefinition = item.ItemDefinition ?? "",
                     storageInstructions = item.StorageInstructions ?? "",
@@ -2271,7 +2276,13 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                         Color AS Color, 
                         [Item Definition] AS [Item Definition], 
                         [Date Created] AS [Date Created], 
-                        [Last Date Modified] AS [Last Date Modified]
+                        [Last Date Modified] AS [Last Date Modified],
+                        [Active Ingredient] AS [Active Ingredient],
+                        [Manufacturer Name] AS [Manufacturer Name],
+                        [Form Type] AS [Form Type],
+                        [Original Vendor Item No_] AS [Original Vendor Item No_],
+                        [Block Reason] AS [Block Reason],
+                        [Unit Price] AS [Unit Price]
                     FROM [Tarshobi-Live$Item] WITH (NOLOCK)
                 ";
 
@@ -2303,7 +2314,13 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                         Color NVARCHAR(1000) NULL,
                         [Item Definition] NVARCHAR(MAX) NULL,
                         [Date Created] DATETIME NULL,
-                        [Last Date Modified] DATETIME NULL
+                        [Last Date Modified] DATETIME NULL,
+                        [Active Ingredient] NVARCHAR(MAX) NULL,
+                        [Manufacturer Name] NVARCHAR(500) NULL,
+                        [Form Type] NVARCHAR(500) NULL,
+                        [Original Vendor Item No_] NVARCHAR(MAX) NULL,
+                        [Block Reason] NVARCHAR(MAX) NULL,
+                        [Unit Price] DECIMAL(18,2) NULL
                     )
                 ", localConn))
                 {
@@ -2326,6 +2343,12 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                     bulkCopy.ColumnMappings.Add("Item Definition", "Item Definition");
                     bulkCopy.ColumnMappings.Add("Date Created", "Date Created");
                     bulkCopy.ColumnMappings.Add("Last Date Modified", "Last Date Modified");
+                    bulkCopy.ColumnMappings.Add("Active Ingredient", "Active Ingredient");
+                    bulkCopy.ColumnMappings.Add("Manufacturer Name", "Manufacturer Name");
+                    bulkCopy.ColumnMappings.Add("Form Type", "Form Type");
+                    bulkCopy.ColumnMappings.Add("Original Vendor Item No_", "Original Vendor Item No_");
+                    bulkCopy.ColumnMappings.Add("Block Reason", "Block Reason");
+                    bulkCopy.ColumnMappings.Add("Unit Price", "Unit Price");
 
                     await bulkCopy.WriteToServerAsync(reader);
                 }
@@ -2364,10 +2387,16 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                             target.[Item Definition] = source.[Item Definition],
                             target.[Date Created] = source.[Date Created],
                             target.[Last Date Modified] = source.[Last Date Modified],
+                            target.[Active Ingredient] = source.[Active Ingredient],
+                            target.[Manufacturer Name] = source.[Manufacturer Name],
+                            target.[Form Type] = source.[Form Type],
+                            target.[Original Vendor Item No_] = source.[Original Vendor Item No_],
+                            target.[Block Reason] = source.[Block Reason],
+                            target.[Unit Price] = source.[Unit Price],
                             target.LastSyncedAt = GETDATE()
                     WHEN NOT MATCHED THEN
-                        INSERT (No_, Description, [Description 2], [Storage Instructions], [Incentive value], Color, [Item Definition], [Date Created], [Last Date Modified], LastSyncedAt)
-                        VALUES (source.No_, source.Description, source.[Description 2], source.[Storage Instructions], source.[Incentive value], source.Color, source.[Item Definition], source.[Date Created], source.[Last Date Modified], GETDATE());
+                        INSERT (No_, Description, [Description 2], [Storage Instructions], [Incentive value], Color, [Item Definition], [Date Created], [Last Date Modified], [Active Ingredient], [Manufacturer Name], [Form Type], [Original Vendor Item No_], [Block Reason], [Unit Price], LastSyncedAt)
+                        VALUES (source.No_, source.Description, source.[Description 2], source.[Storage Instructions], source.[Incentive value], source.Color, source.[Item Definition], source.[Date Created], source.[Last Date Modified], source.[Active Ingredient], source.[Manufacturer Name], source.[Form Type], source.[Original Vendor Item No_], source.[Block Reason], source.[Unit Price], GETDATE());
                 ";
 
                 using (var mergeCmd = new SqlCommand(mergeSql, localConn))
@@ -9926,7 +9955,13 @@ ORDER BY U.UserName ASC";
                 category = x.Category,
                 group = x.Group,
                 subcategory = x.Subcategory,
-                itemDefinition = x.ItemDefinition
+                itemDefinition = x.ItemDefinition,
+                activeIngredient = x.ActiveIngredient,
+                manufacturerName = x.ManufacturerName,
+                productForm = x.ProductForm,
+                howToUse = x.HowToUse,
+                keyFeature = x.KeyFeature,
+                unitPrice = x.UnitPrice
             });
             
             return Json(result);
@@ -9966,8 +10001,17 @@ ORDER BY U.UserName ASC";
                 if (model.Questions != null && model.Questions.Any())
                 {
                     string insertQuestionSql = @"
-                        INSERT INTO dbo.AssignmentQuestions (AssignmentId, QuestionType, TargetRole, Points, CategoryName, GroupName, SubcategoryName, RequiredItemsCount, ItemDefinition, CorrectItemNo)
-                        VALUES (@AssignmentId, @QuestionType, @TargetRole, @Points, @CategoryName, @GroupName, @SubcategoryName, @RequiredItemsCount, @ItemDefinition, @CorrectItemNo);";
+                        INSERT INTO dbo.AssignmentQuestions (
+                            AssignmentId, QuestionType, TargetRole, Points, CategoryName, GroupName, SubcategoryName, 
+                            RequiredItemsCount, ItemDefinition, CorrectItemNo,
+                            CriteriaActiveIngredient, CriteriaManufacturer, CriteriaProductForm, 
+                            CriteriaPriceMin, CriteriaPriceMax, CriteriaPriceOp, CriteriaKeyFeature, CriteriaHowToUse
+                        ) VALUES (
+                            @AssignmentId, @QuestionType, @TargetRole, @Points, @CategoryName, @GroupName, @SubcategoryName, 
+                            @RequiredItemsCount, @ItemDefinition, @CorrectItemNo,
+                            @CriteriaActiveIngredient, @CriteriaManufacturer, @CriteriaProductForm, 
+                            @CriteriaPriceMin, @CriteriaPriceMax, @CriteriaPriceOp, @CriteriaKeyFeature, @CriteriaHowToUse
+                        );";
 
                     foreach (var q in model.Questions)
                     {
@@ -9982,7 +10026,15 @@ ORDER BY U.UserName ASC";
                             q.SubcategoryName,
                             q.RequiredItemsCount,
                             q.ItemDefinition,
-                            q.CorrectItemNo
+                            q.CorrectItemNo,
+                            q.CriteriaActiveIngredient,
+                            q.CriteriaManufacturer,
+                            q.CriteriaProductForm,
+                            q.CriteriaPriceMin,
+                            q.CriteriaPriceMax,
+                            q.CriteriaPriceOp,
+                            q.CriteriaKeyFeature,
+                            q.CriteriaHowToUse
                         }, transaction: transaction);
                     }
                 }
@@ -10111,8 +10163,17 @@ ORDER BY U.UserName ASC";
                 if (model.Questions != null && model.Questions.Any())
                 {
                     string insertQuestionSql = @"
-                        INSERT INTO dbo.AssignmentQuestions (AssignmentId, QuestionType, TargetRole, Points, CategoryName, GroupName, SubcategoryName, RequiredItemsCount, ItemDefinition, CorrectItemNo)
-                        VALUES (@AssignmentId, @QuestionType, @TargetRole, @Points, @CategoryName, @GroupName, @SubcategoryName, @RequiredItemsCount, @ItemDefinition, @CorrectItemNo);";
+                        INSERT INTO dbo.AssignmentQuestions (
+                            AssignmentId, QuestionType, TargetRole, Points, CategoryName, GroupName, SubcategoryName, 
+                            RequiredItemsCount, ItemDefinition, CorrectItemNo,
+                            CriteriaActiveIngredient, CriteriaManufacturer, CriteriaProductForm, 
+                            CriteriaPriceMin, CriteriaPriceMax, CriteriaPriceOp, CriteriaKeyFeature, CriteriaHowToUse
+                        ) VALUES (
+                            @AssignmentId, @QuestionType, @TargetRole, @Points, @CategoryName, @GroupName, @SubcategoryName, 
+                            @RequiredItemsCount, @ItemDefinition, @CorrectItemNo,
+                            @CriteriaActiveIngredient, @CriteriaManufacturer, @CriteriaProductForm, 
+                            @CriteriaPriceMin, @CriteriaPriceMax, @CriteriaPriceOp, @CriteriaKeyFeature, @CriteriaHowToUse
+                        );";
 
                     foreach (var q in model.Questions)
                     {
@@ -10127,7 +10188,15 @@ ORDER BY U.UserName ASC";
                             q.SubcategoryName,
                             q.RequiredItemsCount,
                             q.ItemDefinition,
-                            q.CorrectItemNo
+                            q.CorrectItemNo,
+                            q.CriteriaActiveIngredient,
+                            q.CriteriaManufacturer,
+                            q.CriteriaProductForm,
+                            q.CriteriaPriceMin,
+                            q.CriteriaPriceMax,
+                            q.CriteriaPriceOp,
+                            q.CriteriaKeyFeature,
+                            q.CriteriaHowToUse
                         }, transaction: transaction);
                     }
                 }
@@ -10950,7 +11019,7 @@ ORDER BY U.UserName ASC";
 
     public class CreateAssignmentQuestionDto
     {
-        public string QuestionType { get; set; } // "CategorySelect" or "ItemDefinitionMatch"
+        public string QuestionType { get; set; } // "CategorySelect", "ItemDefinitionMatch", or "CriteriaMatch"
         public string TargetRole { get; set; } // "Pharmacist", "Assistant", "All"
         public decimal Points { get; set; }
         public string CategoryName { get; set; }
@@ -10959,6 +11028,16 @@ ORDER BY U.UserName ASC";
         public int? RequiredItemsCount { get; set; }
         public string ItemDefinition { get; set; }
         public string CorrectItemNo { get; set; }
+
+        // Smart Criteria Match (Type 3) filters
+        public string CriteriaActiveIngredient { get; set; }
+        public string CriteriaManufacturer { get; set; }
+        public string CriteriaProductForm { get; set; }
+        public decimal? CriteriaPriceMin { get; set; }
+        public decimal? CriteriaPriceMax { get; set; }
+        public string CriteriaPriceOp { get; set; }
+        public string CriteriaKeyFeature { get; set; }
+        public string CriteriaHowToUse { get; set; }
     }
 
     public class SyncRequest
@@ -10974,7 +11053,11 @@ ORDER BY U.UserName ASC";
         public string ActiveIngredient { get; set; }
         public string ManufacturerName { get; set; }
         public string FormType { get; set; }
+        public string ProductForm { get; set; }
         public string OriginalVendorItemNo { get; set; }
+        public string HowToUse { get; set; }
+        public string BlockReason { get; set; }
+        public string KeyFeature { get; set; }
         public decimal? UnitPrice { get; set; }
         public string StorageInstructions { get; set; }
         public string IncentiveValue { get; set; }

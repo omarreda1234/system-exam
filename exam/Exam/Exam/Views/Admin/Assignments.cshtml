@@ -330,6 +330,28 @@
                             Swal.fire('Error', 'Please fill category criteria and item count for CategorySelect question.', 'warning');
                             return false;
                         }
+                    } else if (qType === 'CriteriaMatch') {
+                        q.CriteriaActiveIngredient = ($(this).find('.criteria-active-ing').val() || '').trim();
+                        q.CriteriaManufacturer = ($(this).find('.criteria-mfr').val() || '').trim();
+                        q.CriteriaProductForm = ($(this).find('.criteria-form').val() || '').trim();
+                        q.CriteriaKeyFeature = ($(this).find('.criteria-key-feature').val() || '').trim();
+                        q.CriteriaHowToUse = ($(this).find('.criteria-how-to-use').val() || '').trim();
+                        q.CriteriaPriceOp = $(this).find('.criteria-price-op').val() || '';
+                        
+                        const pMin = $(this).find('.criteria-price-min').val();
+                        q.CriteriaPriceMin = pMin ? parseFloat(pMin) : null;
+                        const pMax = $(this).find('.criteria-price-max').val();
+                        q.CriteriaPriceMax = pMax ? parseFloat(pMax) : null;
+                        
+                        q.RequiredItemsCount = parseInt($(this).find('.criteria-req-count').val()) || 1;
+
+                        const hasFilter = q.CriteriaActiveIngredient || q.CriteriaManufacturer || q.CriteriaProductForm || 
+                                          q.CriteriaKeyFeature || q.CriteriaHowToUse || (q.CriteriaPriceOp && q.CriteriaPriceMin !== null);
+                        if (!hasFilter) {
+                            valid = false;
+                            Swal.fire('Error', 'Please set at least one criteria rule or filter for Smart Criteria Rule (Type 3).', 'warning');
+                            return false;
+                        }
                     } else {
                         q.CorrectItemNo = $(this).find('.correct-item-no').val();
                         q.ItemDefinition = $(this).find('.item-def').val();
@@ -504,6 +526,7 @@
                             <select class="q-type bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold w-full outline-none focus:border-brand-500 transition-all" onchange="toggleQuestionTypeFields(${id})">
                                 <option value="CategorySelect">Category Select (Type 1)</option>
                                 <option value="ItemDefinitionMatch">Item Definition Match (Type 2)</option>
+                                <option value="CriteriaMatch">Smart Criteria Rule (Type 3) - البحث بالمواصفات</option>
                             </select>
                         </div>
 
@@ -590,6 +613,89 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Type 3 (CriteriaMatch) Fields -->
+                    <div class="type3-fields hidden space-y-4 mt-4">
+                        <div class="p-4 bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/40 rounded-2xl space-y-4">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-black text-purple-700 dark:text-purple-300 uppercase tracking-wider flex items-center gap-2">
+                                    <i class="fas fa-filter text-purple-600"></i> Smart Criteria Filters (شروط ومواصفات الأصناف المطلوبة)
+                                </span>
+                                <span class="text-[10px] text-slate-500 font-medium">حدد معياراً واحداً أو أكثر للتحقق من إجابة الطالب تلقائياً</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div class="space-y-1">
+                                    <label class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Active Ingredient (المادة الفعالة)</label>
+                                    <input type="text" class="criteria-active-ing bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-purple-500 transition-all" placeholder="e.g. Bergamot, Panthenol..." oninput="updateCriteriaRulePreview(${id})" />
+                                </div>
+
+                                <div class="space-y-1">
+                                    <label class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Manufacturer (اسم الشركة)</label>
+                                    <input type="text" class="criteria-mfr bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-purple-500 transition-all" placeholder="e.g. Mash, Eva, Biomed..." oninput="updateCriteriaRulePreview(${id})" />
+                                </div>
+
+                                <div class="space-y-1">
+                                    <label class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Product Form (شكل المستحضر)</label>
+                                    <input type="text" class="criteria-form bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-purple-500 transition-all" placeholder="e.g. Tablet, Gel, Cream, Ampoule..." oninput="updateCriteriaRulePreview(${id})" />
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div class="space-y-1">
+                                    <label class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Key Feature (المميزات / Block Reason)</label>
+                                    <input type="text" class="criteria-key-feature bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-purple-500 transition-all" placeholder="e.g. مضاد للأكسدة، مرطب، تفتيح..." oninput="updateCriteriaRulePreview(${id})" />
+                                </div>
+
+                                <div class="space-y-1">
+                                    <label class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">How to Use (طريقة الاستخدام / Vendor No)</label>
+                                    <input type="text" class="criteria-how-to-use bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-purple-500 transition-all" placeholder="e.g. دهان مرتين يومياً، قرص بعد الأكل..." oninput="updateCriteriaRulePreview(${id})" />
+                                </div>
+                            </div>
+
+                            <!-- Price Filter & Count Row -->
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2 border-t border-purple-200/40 dark:border-purple-900/30">
+                                <div class="space-y-1">
+                                    <label class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Price Filter Condition (شرط السعر)</label>
+                                    <select class="criteria-price-op bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-purple-500 transition-all font-semibold" onchange="togglePriceRangeInputs(${id}); updateCriteriaRulePreview(${id});">
+                                        <option value="">No Price Filter (بدون شرط سعر)</option>
+                                        <option value=">=">&gt;= (أكبر من أو يساوي)</option>
+                                        <option value="<=">&lt;= (أقل من أو يساوي)</option>
+                                        <option value="=">= (يساوي بالضبط)</option>
+                                        <option value=">">&gt; (أكبر من قطعي)</option>
+                                        <option value="<">&lt; (أقل من قطعي)</option>
+                                        <option value="BETWEEN">Between (بين سعرين)</option>
+                                    </select>
+                                </div>
+
+                                <div class="space-y-1 criteria-min-price-box">
+                                    <label class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Unit Price (Min / السعر) EGP</label>
+                                    <input type="number" step="0.01" class="criteria-price-min bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-purple-500 transition-all font-mono" placeholder="e.g. 500" oninput="updateCriteriaRulePreview(${id})" />
+                                </div>
+
+                                <div class="space-y-1 criteria-max-price-box hidden">
+                                    <label class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Max Price (الحد الأقصى) EGP</label>
+                                    <input type="number" step="0.01" class="criteria-price-max bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-purple-500 transition-all font-mono" placeholder="e.g. 1000" oninput="updateCriteriaRulePreview(${id})" />
+                                </div>
+
+                                <div class="space-y-1">
+                                    <label class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Req. Items Count (عدد الأصناف المطلوبة)</label>
+                                    <input type="number" min="1" value="1" class="criteria-req-count bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs w-full outline-none focus:border-purple-500 transition-all font-bold text-purple-700" oninput="updateCriteriaRulePreview(${id})" />
+                                </div>
+                            </div>
+
+                            <!-- Live Rule Summary -->
+                            <div class="criteria-preview-box bg-white dark:bg-slate-900 border border-purple-200/70 dark:border-purple-800/40 rounded-xl p-3 text-xs flex items-start gap-2.5">
+                                <span class="w-6 h-6 rounded-lg bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 flex items-center justify-center shrink-0 mt-0.5">
+                                    <i class="fas fa-bullseye text-xs"></i>
+                                </span>
+                                <div class="space-y-1 text-left flex-1">
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Live Rule Preview (ما سيظهر للطالب بالسؤال):</span>
+                                    <p class="criteria-rule-text font-bold text-purple-900 dark:text-purple-200">اختر 1 صنف يطابق المواصفات المحددة أعلاه.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
 
@@ -624,6 +730,23 @@
                     $block.find('.req-count').val(requiredItemsCount);
                     $block.find('.type1-fields').show();
                     $block.find('.type2-fields').hide();
+                    $block.find('.type3-fields').hide();
+                } else if (qType === 'CriteriaMatch') {
+                    $block.find('.criteria-active-ing').val(qData.criteriaActiveIngredient || qData.CriteriaActiveIngredient || '');
+                    $block.find('.criteria-mfr').val(qData.criteriaManufacturer || qData.CriteriaManufacturer || '');
+                    $block.find('.criteria-form').val(qData.criteriaProductForm || qData.CriteriaProductForm || '');
+                    $block.find('.criteria-key-feature').val(qData.criteriaKeyFeature || qData.CriteriaKeyFeature || '');
+                    $block.find('.criteria-how-to-use').val(qData.criteriaHowToUse || qData.CriteriaHowToUse || '');
+                    const op = qData.criteriaPriceOp || qData.CriteriaPriceOp || '';
+                    $block.find('.criteria-price-op').val(op);
+                    $block.find('.criteria-price-min').val(qData.criteriaPriceMin ?? qData.CriteriaPriceMin ?? '');
+                    $block.find('.criteria-price-max').val(qData.criteriaPriceMax ?? qData.CriteriaPriceMax ?? '');
+                    $block.find('.criteria-req-count').val(qData.requiredItemsCount !== undefined ? qData.requiredItemsCount : (qData.RequiredItemsCount !== undefined ? qData.RequiredItemsCount : 1));
+                    togglePriceRangeInputs(id);
+                    updateCriteriaRulePreview(id);
+                    $block.find('.type1-fields').hide();
+                    $block.find('.type2-fields').hide();
+                    $block.find('.type3-fields').show();
                 } else {
                     const itemDefinition = qData.itemDefinition || qData.ItemDefinition || '';
                     const correctItemNo = qData.correctItemNo || qData.CorrectItemNo || '';
@@ -633,6 +756,7 @@
                     $block.find('.prod-search').val(correctItemNo ? `Item Code: ${correctItemNo}` : '');
                     $block.find('.type1-fields').hide();
                     $block.find('.type2-fields').show();
+                    $block.find('.type3-fields').hide();
                 }
             }
         }
@@ -647,10 +771,63 @@
             if (type === 'CategorySelect') {
                 $block.find('.type1-fields').show();
                 $block.find('.type2-fields').hide();
+                $block.find('.type3-fields').hide();
+            } else if (type === 'CriteriaMatch') {
+                $block.find('.type1-fields').hide();
+                $block.find('.type2-fields').hide();
+                $block.find('.type3-fields').show();
+                updateCriteriaRulePreview(id);
             } else {
                 $block.find('.type1-fields').hide();
                 $block.find('.type2-fields').show();
+                $block.find('.type3-fields').hide();
             }
+        }
+
+        function togglePriceRangeInputs(id) {
+            const $block = $(`.question-block[data-id="${id}"]`);
+            const op = $block.find('.criteria-price-op').val();
+            if (op === 'BETWEEN') {
+                $block.find('.criteria-max-price-box').removeClass('hidden');
+            } else {
+                $block.find('.criteria-max-price-box').addClass('hidden');
+                $block.find('.criteria-price-max').val('');
+            }
+        }
+
+        function updateCriteriaRulePreview(id) {
+            const $block = $(`.question-block[data-id="${id}"]`);
+            const count = parseInt($block.find('.criteria-req-count').val()) || 1;
+            const activeIng = ($block.find('.criteria-active-ing').val() || '').trim();
+            const mfr = ($block.find('.criteria-mfr').val() || '').trim();
+            const form = ($block.find('.criteria-form').val() || '').trim();
+            const keyFeature = ($block.find('.criteria-key-feature').val() || '').trim();
+            const howToUse = ($block.find('.criteria-how-to-use').val() || '').trim();
+            const op = $block.find('.criteria-price-op').val();
+            const pMin = $block.find('.criteria-price-min').val();
+            const pMax = $block.find('.criteria-price-max').val();
+
+            const filters = [];
+            if (activeIng) filters.push(`المادة الفعالة: "${activeIng}"`);
+            if (mfr) filters.push(`الشركة: "${mfr}"`);
+            if (form) filters.push(`الشكل: "${form}"`);
+            if (op && pMin) {
+                if (op === 'BETWEEN' && pMax) {
+                    filters.push(`السعر بين ${pMin} ج و ${pMax} ج`);
+                } else {
+                    filters.push(`السعر ${op} ${pMin} ج`);
+                }
+            }
+            if (keyFeature) filters.push(`المميزات: "${keyFeature}"`);
+            if (howToUse) filters.push(`طريقة الاستخدام: "${howToUse}"`);
+
+            let text = `اختر ${count} صنف`;
+            if (filters.length > 0) {
+                text += ` يطابق الشروط: [ ${filters.join(' | ')} ]`;
+            } else {
+                text += ` (حدد شرطاً واحداً على الأقل للمواصفات أعلاه)`;
+            }
+            $block.find('.criteria-rule-text').text(text);
         }
 
         function toggleQuestionCustomDef(id) {
@@ -898,7 +1075,9 @@
 
                         const typeLabel = qType === 'CategorySelect' 
                             ? '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/20 dark:text-indigo-400 uppercase tracking-wider border border-indigo-100 dark:border-indigo-900/30">Category Select (Type 1)</span>'
-                            : '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 uppercase tracking-wider border border-emerald-100 dark:border-emerald-900/30">Item Definition Match (Type 2)</span>';
+                            : qType === 'CriteriaMatch'
+                                ? '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-50 text-purple-600 dark:bg-purple-950/20 dark:text-purple-400 uppercase tracking-wider border border-purple-100 dark:border-purple-900/30">Smart Criteria Rule (Type 3)</span>'
+                                : '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 uppercase tracking-wider border border-emerald-100 dark:border-emerald-900/30">Item Definition Match (Type 2)</span>';
 
                         const roleColor = targetRole === 'Pharmacist' 
                             ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-800/30'
@@ -928,6 +1107,58 @@
                                     <div class="bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/50 flex flex-col justify-center">
                                         <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Req. Items Count</span>
                                         <span class="font-black text-brand-600 dark:text-brand-400 font-mono text-base leading-none">${requiredItemsCount || 0}</span>
+                                    </div>
+                                </div>
+                            `;
+                        } else if (qType === 'CriteriaMatch') {
+                            const actIng = q.criteriaActiveIngredient || q.CriteriaActiveIngredient || '';
+                            const mfr = q.criteriaManufacturer || q.CriteriaManufacturer || '';
+                            const pForm = q.criteriaProductForm || q.CriteriaProductForm || '';
+                            const keyFeat = q.criteriaKeyFeature || q.CriteriaKeyFeature || '';
+                            const howUse = q.criteriaHowToUse || q.CriteriaHowToUse || '';
+                            const pOp = q.criteriaPriceOp || q.CriteriaPriceOp || '';
+                            const pMin = q.criteriaPriceMin ?? q.CriteriaPriceMin;
+                            const pMax = q.criteriaPriceMax ?? q.CriteriaPriceMax;
+                            const reqCnt = q.requiredItemsCount !== undefined ? q.requiredItemsCount : (q.RequiredItemsCount !== undefined ? q.RequiredItemsCount : 1);
+
+                            let priceConditionStr = '<span class="text-slate-300 font-normal">No Filter</span>';
+                            if (pOp && pMin !== null && pMin !== undefined) {
+                                if (pOp === 'BETWEEN' && pMax !== null && pMax !== undefined) {
+                                    priceConditionStr = `${pMin} - ${pMax} EGP`;
+                                } else {
+                                    priceConditionStr = `${pOp} ${pMin} EGP`;
+                                }
+                            }
+
+                            contentHtml = `
+                                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+                                    <div class="bg-purple-50/40 dark:bg-purple-950/20 p-3 rounded-xl border border-purple-100 dark:border-purple-900/30">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Active Ingredient</span>
+                                        <span class="font-bold text-purple-700 dark:text-purple-300">${actIng || '<span class="text-slate-300 font-normal">Any</span>'}</span>
+                                    </div>
+                                    <div class="bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/50">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Manufacturer</span>
+                                        <span class="font-bold text-slate-700 dark:text-slate-300">${mfr || '<span class="text-slate-300 font-normal">Any</span>'}</span>
+                                    </div>
+                                    <div class="bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/50">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Product Form</span>
+                                        <span class="font-bold text-slate-700 dark:text-slate-300">${pForm || '<span class="text-slate-300 font-normal">Any</span>'}</span>
+                                    </div>
+                                    <div class="bg-emerald-50/40 dark:bg-emerald-950/20 p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Price Rule</span>
+                                        <span class="font-bold text-emerald-700 dark:text-emerald-300 font-mono">${priceConditionStr}</span>
+                                    </div>
+                                    <div class="bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/50">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Key Feature</span>
+                                        <span class="font-bold text-slate-700 dark:text-slate-300 truncate block" title="${escapeQuote(keyFeat)}">${keyFeat || '<span class="text-slate-300 font-normal">Any</span>'}</span>
+                                    </div>
+                                    <div class="bg-slate-50/50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-100 dark:border-slate-800/50">
+                                        <span class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">How to Use</span>
+                                        <span class="font-bold text-slate-700 dark:text-slate-300 truncate block" title="${escapeQuote(howUse)}">${howUse || '<span class="text-slate-300 font-normal">Any</span>'}</span>
+                                    </div>
+                                    <div class="col-span-2 bg-purple-50/40 dark:bg-purple-950/20 p-3 rounded-xl border border-purple-100 dark:border-purple-900/30 flex items-center justify-between">
+                                        <span class="text-[9px] font-bold text-purple-700 uppercase tracking-wider">Required Items Count</span>
+                                        <span class="font-black text-purple-700 dark:text-purple-300 font-mono text-base leading-none">${reqCnt} Products</span>
                                     </div>
                                 </div>
                             `;

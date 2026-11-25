@@ -123,7 +123,9 @@ namespace Exam.Controllers
 
             // Get questions for assignment matching student's role or 'All'
             var questions = (await conn.QueryAsync<dynamic>(@"
-                SELECT Id, QuestionType, Points, CategoryName, GroupName, SubcategoryName, RequiredItemsCount, ItemDefinition
+                SELECT Id, QuestionType, Points, CategoryName, GroupName, SubcategoryName, RequiredItemsCount, ItemDefinition,
+                       CriteriaActiveIngredient, CriteriaManufacturer, CriteriaProductForm, 
+                       CriteriaPriceMin, CriteriaPriceMax, CriteriaPriceOp, CriteriaKeyFeature, CriteriaHowToUse
                 FROM dbo.AssignmentQuestions
                 WHERE AssignmentId = @AssignmentId AND (TargetRole = @Role OR TargetRole = 'All')",
                 new { AssignmentId = id, Role = studentRole })).ToList();
@@ -264,6 +266,8 @@ namespace Exam.Controllers
             // Fetch questions and student answers
             var details = await conn.QueryAsync<dynamic>(@"
                 SELECT q.Id AS QuestionId, q.QuestionType, q.Points, q.CategoryName, q.GroupName, q.SubcategoryName, q.RequiredItemsCount, q.ItemDefinition, q.CorrectItemNo,
+                       q.CriteriaActiveIngredient, q.CriteriaManufacturer, q.CriteriaProductForm, 
+                       q.CriteriaPriceMin, q.CriteriaPriceMax, q.CriteriaPriceOp, q.CriteriaKeyFeature, q.CriteriaHowToUse,
                        ans.SelectedItemNos, ans.IsCorrect, ans.EarnedPoints
                 FROM dbo.AssignmentQuestions q
                 LEFT JOIN dbo.StudentAssignmentAnswers ans ON q.Id = ans.QuestionId AND ans.AttemptId = @AttemptId
@@ -290,7 +294,13 @@ namespace Exam.Controllers
                 category = x.Category,
                 group = x.Group,
                 subcategory = x.Subcategory,
-                itemDefinition = x.ItemDefinition
+                itemDefinition = x.ItemDefinition,
+                activeIngredient = x.ActiveIngredient,
+                manufacturerName = x.ManufacturerName,
+                productForm = x.ProductForm,
+                howToUse = x.HowToUse,
+                keyFeature = x.KeyFeature,
+                unitPrice = x.UnitPrice
             });
             
             return Json(result);
