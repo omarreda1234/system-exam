@@ -979,12 +979,14 @@ namespace Exam.Controllers
                     SELECT 
                         u.Id AS UserId,
                         ISNULL(NULLIF(u.FullName, ''), u.UserName) AS StudentName,
+                        u.FullName,
+                        u.UserName,
                         u.UserCode,
                         u.Email,
                         u.PhoneNumber,
                         ISNULL(b.BranchName, '--') AS BranchName,
                         ISNULL(s.ShiftName, 'Any Shift') AS ShiftName,
-                        COALESCE(ur.RoleName, 'Trainee') AS RoleName,
+                        COALESCE(NULLIF(u.RoleName, ''), ur.RoleName, 'Trainee') AS RoleName,
                         CASE 
                             WHEN la.Status = 'Completed' THEN 'Completed'
                             WHEN la.Status = 'InProgress' THEN 'InProgress'
@@ -1001,10 +1003,26 @@ namespace Exam.Controllers
                     LEFT JOIN LatestAttempts la ON u.Id = la.UserId AND la.rn = 1
                     ORDER BY u.UserCode ASC", new { QuizId = id })).ToList();
 
-                int total = trainees.Count;
-                int completed = trainees.Count(t => (string)t.AttemptStatus == "Completed");
-                int notStarted = trainees.Count(t => (string)t.AttemptStatus == "Not Started");
-                int inProgress = trainees.Count(t => (string)t.AttemptStatus == "InProgress");
+                var traineeList = trainees.Select(t => new
+                {
+                    userId = (string)(t.UserId?.ToString() ?? ""),
+                    studentName = (string)(t.StudentName ?? t.FullName ?? t.UserName ?? "-"),
+                    fullName = (string)(t.FullName ?? t.StudentName ?? t.UserName ?? "-"),
+                    userCode = (string)(t.UserCode ?? ""),
+                    email = (string)(t.Email ?? ""),
+                    phoneNumber = (string)(t.PhoneNumber ?? ""),
+                    branchName = (string)(t.BranchName ?? "--"),
+                    shiftName = (string)(t.ShiftName ?? "Any Shift"),
+                    roleName = (string)(t.RoleName ?? "Trainee"),
+                    attemptStatus = (string)(t.AttemptStatus ?? "Not Started"),
+                    score = t.Score != null ? (decimal?)Convert.ToDecimal(t.Score) : null,
+                    attemptDate = t.AttemptDate != null ? ((DateTime)t.AttemptDate).ToString("yyyy-MM-dd HH:mm") : null
+                }).ToList();
+
+                int total = traineeList.Count;
+                int completed = traineeList.Count(t => t.attemptStatus == "Completed");
+                int notStarted = traineeList.Count(t => t.attemptStatus == "Not Started");
+                int inProgress = traineeList.Count(t => t.attemptStatus == "InProgress");
 
                 return Json(new
                 {
@@ -1016,7 +1034,7 @@ namespace Exam.Controllers
                     completedCount = completed,
                     notStartedCount = notStarted,
                     inProgressCount = inProgress,
-                    trainees = trainees
+                    trainees = traineeList
                 });
             }
             catch (Exception ex)

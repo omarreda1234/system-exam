@@ -1601,36 +1601,46 @@
 
             let html = '';
             list.forEach((t, idx) => {
+                const sName = t.studentName || t.StudentName || t.fullName || t.FullName || t.userName || t.UserName || '-';
+                const uCode = t.userCode || t.UserCode || '';
+                const mail = t.email || t.Email || '';
+                const bName = t.branchName || t.BranchName || '--';
+                const rName = t.roleName || t.RoleName || 'Trainee';
+                const sShift = t.shiftName || t.ShiftName || 'Any Shift';
+                const aStatus = t.attemptStatus || t.AttemptStatus || 'Not Started';
+                const aScore = (t.score !== undefined && t.score !== null) ? t.score : ((t.Score !== undefined && t.Score !== null) ? t.Score : null);
+                const aDate = t.attemptDate || t.AttemptDate;
+
                 let statusBadge = '';
-                if (t.attemptStatus === 'Completed') {
+                if (aStatus === 'Completed') {
                     statusBadge = '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Completed</span>';
-                } else if (t.attemptStatus === 'InProgress') {
+                } else if (aStatus === 'InProgress') {
                     statusBadge = '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse">In Progress</span>';
-                } else if (t.attemptStatus === 'Timeout') {
+                } else if (aStatus === 'Timeout') {
                     statusBadge = '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">Timeout</span>';
                 } else {
                     statusBadge = '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">Not Started</span>';
                 }
 
-                const scoreText = (t.score != null && t.attemptStatus === 'Completed')
-                    ? `<span class="font-black text-xs text-purple-600 dark:text-purple-400">${t.score}%</span>`
+                const scoreText = (aScore != null && aStatus === 'Completed')
+                    ? `<span class="font-black text-xs text-purple-600 dark:text-purple-400">${aScore}%</span>`
                     : '<span class="text-slate-400 text-xs font-mono">--</span>';
 
-                const dateText = t.attemptDate
-                    ? new Date(t.attemptDate).toLocaleDateString() + ' ' + new Date(t.attemptDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                const dateText = aDate
+                    ? (typeof aDate === 'string' && aDate.includes('-') && !aDate.includes('T') ? aDate : (new Date(aDate).toLocaleDateString() + ' ' + new Date(aDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })))
                     : '<span class="text-slate-400 text-[11px]">--</span>';
 
                 html += `
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800 trainee-row" data-name="${(t.studentName || '').toLowerCase()}" data-code="${(t.userCode || '').toLowerCase()}" data-branch="${(t.branchName || '').toLowerCase()}">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800 trainee-row" data-name="${sName.toLowerCase()}" data-code="${uCode.toLowerCase()}" data-branch="${bName.toLowerCase()}">
                         <td class="p-3 text-slate-400 font-bold">${idx + 1}</td>
                         <td class="p-3">
-                            <div class="font-bold text-slate-900 dark:text-white">${t.studentName || '-'}</div>
-                            <div class="text-[10px] text-slate-400 font-mono">${t.userCode || ''} • ${t.email || ''}</div>
+                            <div class="font-bold text-slate-900 dark:text-white">${sName}</div>
+                            <div class="text-[10px] text-slate-400 font-mono">${uCode ? uCode : ''}${uCode && mail ? ' • ' : ''}${mail ? mail : ''}</div>
                         </td>
-                        <td class="p-3">${t.branchName || '--'}</td>
+                        <td class="p-3">${bName}</td>
                         <td class="p-3">
-                            <div class="font-bold text-[11px] text-slate-700 dark:text-slate-300">${t.roleName || 'Trainee'}</div>
-                            <div class="text-[10px] text-slate-400">${t.shiftName || 'Any Shift'}</div>
+                            <div class="font-bold text-[11px] text-slate-700 dark:text-slate-300">${rName}</div>
+                            <div class="text-[10px] text-slate-400">${sShift}</div>
                         </td>
                         <td class="p-3 text-center">${statusBadge}</td>
                         <td class="p-3 text-center">${scoreText}</td>
@@ -1644,9 +1654,9 @@
         function filterAssignedTraineesTable() {
             const query = (document.getElementById('assignedTraineeSearch').value || '').toLowerCase().trim();
             const filtered = cachedAssignedTrainees.filter(t => {
-                const name = (t.studentName || '').toLowerCase();
-                const code = (t.userCode || '').toLowerCase();
-                const branch = (t.branchName || '').toLowerCase();
+                const name = (t.studentName || t.StudentName || t.fullName || t.FullName || t.userName || t.UserName || '').toLowerCase();
+                const code = (t.userCode || t.UserCode || '').toLowerCase();
+                const branch = (t.branchName || t.BranchName || '').toLowerCase();
                 return !query || name.includes(query) || code.includes(query) || branch.includes(query);
             });
             renderAssignedTraineesTable(filtered);
