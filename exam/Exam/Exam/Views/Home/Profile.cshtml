@@ -108,6 +108,18 @@
                     </span>
                 </button>
 
+                <!-- Tab: My Quizzes -->
+                <button type="button" 
+                        onclick="switchProfileTab('quizzes')" 
+                        id="tabBtn-quizzes"
+                        class="profile-tab-btn px-4 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 text-slate-600 hover:text-slate-900 hover:bg-white/60">
+                    <i class="fas fa-bolt text-sm text-purple-600"></i>
+                    <span>كويزاتي (My Quizzes)</span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700">
+                        @(Model.Quizzes?.Count() ?? 0)
+                    </span>
+                </button>
+
                 <!-- Tab 3: My Assignments -->
                 <button type="button" 
                         onclick="switchProfileTab('assignments')" 
@@ -470,6 +482,173 @@
         </div>
     </div>
 
+    <!-- TAB CONTENT: MY QUIZZES -->
+    <div id="tabContent-quizzes" class="profile-tab-content hidden space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fas fa-bolt text-purple-600"></i>
+                        <span>كويزاتي التدريبية (Wave Quizzes)</span>
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">الاختبارات القصيرة والتقييمات السريعة لقياس استيعاب المحتوى التدريبي ومواد الدورة.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    @if (!string.IsNullOrEmpty(Model.ActiveWaveName))
+                    {
+                        <span class="text-xs font-bold bg-purple-50 text-purple-700 px-3 py-1.5 rounded-xl border border-purple-200/50">
+                            <i class="fas fa-water mr-1"></i> @Model.ActiveWaveName
+                        </span>
+                    }
+                    <span class="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl">
+                        @(Model.Quizzes?.Count() ?? 0) كويز
+                    </span>
+                </div>
+            </div>
+
+            @if (Model.UserShift != null && Model.UserShift.ShiftId > 0)
+            {
+                <div class="bg-blue-50/60 border border-blue-200/60 rounded-xl p-3 flex items-center justify-between gap-3 text-xs">
+                    <div class="flex items-center gap-2 text-blue-800">
+                        <i class="fas fa-business-time text-blue-500"></i>
+                        <span class="font-bold text-blue-900">شفت العمل المسجل: <strong>@Model.UserShift.ShiftName</strong> (@Model.UserShift.StartTime.ToString(@"hh\:mm") - @Model.UserShift.EndTime.ToString(@"hh\:mm"))</span>
+                    </div>
+                    <span class="text-[11px] text-blue-700 bg-white/80 px-2.5 py-0.5 rounded-lg border border-blue-200/50">Shift Restriction Active</span>
+                </div>
+            }
+
+            @if (Model.Quizzes == null || !Model.Quizzes.Any())
+            {
+                <div class="py-12 text-center text-slate-400 text-xs font-medium space-y-2">
+                    <i class="fas fa-bolt text-3xl text-purple-200 block"></i>
+                    <p class="text-sm font-bold text-slate-700">لا توجد كويزات مسندة لك حالياً</p>
+                    <p class="text-slate-400">ستظهر هنا أي كويزات سريعة فور جدولتها لويفك التدريبي من إدارة التدريب.</p>
+                </div>
+            }
+            else
+            {
+                var now = DateTime.Now;
+                var currentTime = now.TimeOfDay;
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    @foreach (var q in Model.Quizzes)
+                    {
+                        DateTime startTime = q.StartTime != null ? (DateTime)q.StartTime : DateTime.MinValue;
+                        DateTime endTime = q.EndTime != null ? (DateTime)q.EndTime : DateTime.MaxValue;
+                        var inQuizWindow = now >= startTime && now <= endTime;
+                        var inShift = true;
+
+                        if (Model.UserShift != null && Model.UserShift.ShiftId > 0)
+                        {
+                            var sStart = Model.UserShift.StartTime;
+                            var sEnd = Model.UserShift.EndTime;
+                            inShift = (sStart <= sEnd) 
+                                ? (currentTime >= sStart && currentTime <= sEnd) 
+                                : (currentTime >= sStart || currentTime <= sEnd);
+                        }
+
+                        bool isCompleted = q.AttemptStatus != null && q.AttemptStatus.ToString() == "Completed";
+                        var canStart = !isCompleted && inQuizWindow && inShift;
+
+                        <div class="bg-slate-50/60 border border-slate-200/80 rounded-2xl p-5 hover:border-purple-500/30 hover:bg-white hover:shadow-md transition-all flex flex-col justify-between space-y-4">
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-2.5">
+                                    <span class="text-[10px] font-mono font-bold bg-white text-slate-600 px-2 py-0.5 rounded border border-slate-200">#@q.Id</span>
+                                    @if (isCompleted)
+                                    {
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center gap-1 shadow-xs">
+                                            <i class="fas fa-check-circle text-emerald-500"></i> تم الإكمال @(q.AttemptScore != null ? $"({q.AttemptScore}/{q.TotalPoints})" : "")
+                                        </span>
+                                    }
+                                    else if (canStart)
+                                    {
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200/60 flex items-center gap-1 shadow-xs">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse"></span> متاح للحل الآن
+                                        </span>
+                                    }
+                                    else if (now < startTime)
+                                    {
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60">
+                                            <i class="far fa-clock mr-1"></i> سيبدأ قريباً
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
+                                            مغلق / منتهي
+                                        </span>
+                                    }
+                                </div>
+                                <h3 class="text-sm font-bold text-slate-900 line-clamp-1">@q.Title</h3>
+                                <p class="text-xs text-slate-500 mt-1 line-clamp-2">@(string.IsNullOrEmpty(q.Description?.ToString()) ? "كويز تدريبي سريع لقياس استيعاب المحاضرة" : q.Description)</p>
+                                
+                                <div class="flex flex-wrap items-center gap-1.5 mt-2">
+                                    @if (!string.IsNullOrEmpty(q.CategoryName?.ToString()))
+                                    {
+                                        <span class="text-[10px] font-medium bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded">
+                                            <i class="fas fa-folder text-[9px] mr-0.5"></i> @q.CategoryName
+                                        </span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(q.TopicName?.ToString()))
+                                    {
+                                        <span class="text-[10px] font-medium bg-sky-50 text-sky-600 px-2 py-0.5 rounded">
+                                            <i class="fas fa-tag text-[9px] mr-0.5"></i> @q.TopicName
+                                        </span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(q.WaveName?.ToString()))
+                                    {
+                                        <span class="text-[10px] font-medium bg-purple-50 text-purple-600 px-2 py-0.5 rounded">
+                                            <i class="fas fa-water text-[9px] mr-0.5"></i> @q.WaveName
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="bg-white rounded-xl p-3 text-xs space-y-2 border border-slate-100 shadow-xs">
+                                <div class="flex items-center justify-between text-slate-500 text-[11px]">
+                                    <span><i class="far fa-clock mr-1 text-slate-400"></i>مدة الكويز:</span>
+                                    <strong class="text-slate-800 font-mono">@q.DurationInMinutes دقيقة</strong>
+                                </div>
+                                <div class="flex items-center justify-between text-slate-500 text-[11px]">
+                                    <span><i class="fas fa-star-half-alt mr-1 text-slate-400"></i>إجمالي الدرجات:</span>
+                                    <span class="text-purple-700 font-bold font-mono">@q.TotalPoints درجة</span>
+                                </div>
+                                <div class="flex items-center justify-between text-slate-500 text-[11px]">
+                                    <span><i class="far fa-calendar-alt mr-1 text-slate-400"></i>متاح حتى:</span>
+                                    <span class="text-slate-700 font-medium">@(endTime != DateTime.MaxValue ? endTime.ToString("dd/MM hh:mm tt") : "مفتوح")</span>
+                                </div>
+                            </div>
+
+                            @if (isCompleted)
+                            {
+                                <div class="w-full py-2.5 rounded-xl bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center gap-2 border border-emerald-200">
+                                    <i class="fas fa-check-double text-emerald-600"></i>
+                                    <span>تم تسليم الكويز بنجاح</span>
+                                </div>
+                            }
+                            else if (canStart)
+                            {
+                                <a href="@Url.Action("Start", "Exams", new { id = q.Id })" 
+                                   class="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow-sm transition-all">
+                                    <span>بدء الكويز الآن</span>
+                                    <i class="fas fa-play text-[10px]"></i>
+                                </a>
+                            }
+                            else
+                            {
+                                <button type="button" disabled 
+                                        class="w-full py-2.5 rounded-xl bg-slate-100 text-slate-400 font-bold text-xs cursor-not-allowed flex items-center justify-center gap-2">
+                                    <i class="fas fa-lock text-[10px]"></i>
+                                    <span>الكويز غير متاح حالياً</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
     <!-- 6. TAB CONTENT 4: MY ASSIGNMENTS -->
     <div id="tabContent-assignments" class="profile-tab-content hidden space-y-4">
         <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
@@ -788,7 +967,7 @@
         const queryTab = urlParams.get('tab');
         const hashTab = window.location.hash.replace('#', '');
         const targetTab = queryTab || hashTab;
-        const validTabs = ['certificates', 'exams', 'assignments', 'mywaves', 'mycompanies', 'waveform', 'program'];
+        const validTabs = ['certificates', 'exams', 'quizzes', 'assignments', 'mywaves', 'mycompanies', 'waveform', 'program'];
         
         if (targetTab && validTabs.includes(targetTab.toLowerCase())) {
             switchProfileTab(targetTab.toLowerCase());

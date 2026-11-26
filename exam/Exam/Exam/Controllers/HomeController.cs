@@ -403,12 +403,58 @@ namespace Exam.Controllers
 
             profile.Certificates = finalCerts;
 
-            // 3. Fetch Student Assigned Exams
+            // 3. Fetch Student Assigned Exams & Quizzes
             try
             {
-                var exams = await _examService.GetStudentExamsByStudentIdAsync(userId);
-                profile.Exams = exams ?? new List<ExamDto>();
+                var allExams = (await _examService.GetStudentExamsByStudentIdAsync(userId))?.ToList() ?? new List<ExamDto>();
+                profile.Exams = allExams.Where(e => !e.ExamTitle.Contains("Quiz", StringComparison.OrdinalIgnoreCase)).ToList();
                 profile.UserShift = await _examService.GetUserShiftAsync(userId);
+
+                // Fetch Quizzes for student (from enrolled wave or direct exam assignments)
+                var quizzes = (await conn.QueryAsync<dynamic>(@"
+                    SELECT 
+                        e.Id,
+                        e.Title,
+                        e.Description,
+                        ISNULL(a.ScheduledStartTime, ISNULL(e.StartTime, GETDATE())) AS StartTime,
+                        ISNULL(a.ScheduledEndTime, ISNULL(e.EndTime, DATEADD(day, 30, GETDATE()))) AS EndTime,
+                        e.DurationInMinutes,
+                        e.PassPercentage,
+                        e.IsActive,
+                        e.WaveId,
+                        ISNULL(w.WaveName, N'عام / كل الويفات') AS WaveName,
+                        e.CategoryId,
+                        ISNULL(c.CategoryName, N'عام') AS CategoryName,
+                        e.TopicId,
+                        ISNULL(t.TopicName, N'موضوع عام') AS TopicName,
+                        ISNULL(e.TotalPoints, 10) AS TotalPoints,
+                        (SELECT COUNT(1) FROM dbo.ExamQuestions eq WITH (NOLOCK) WHERE eq.ExamId = e.Id) AS QuestionCount,
+                        uea.Status AS AttemptStatus,
+                        uea.Score AS AttemptScore,
+                        uea.Id AS AttemptId,
+                        uea.AttemptDate
+                    FROM dbo.Exams e WITH (NOLOCK)
+                    LEFT JOIN dbo.ExamAssignments a WITH (NOLOCK) ON a.ExamId = e.Id AND a.StudentId = @UserId
+                    LEFT JOIN dbo.TrainingWaves w WITH (NOLOCK) ON e.WaveId = w.Id
+                    LEFT JOIN dbo.Categories c WITH (NOLOCK) ON e.CategoryId = c.Id
+                    LEFT JOIN dbo.Topics t WITH (NOLOCK) ON e.TopicId = t.Id
+                    LEFT JOIN (
+                        SELECT ExamId, UserId, Status, Score, Id, AttemptDate,
+                               ROW_NUMBER() OVER (PARTITION BY ExamId, UserId ORDER BY CASE WHEN Status = 'Completed' THEN 1 ELSE 2 END, Id DESC) as rn
+                        FROM dbo.UserExamAttempts WITH (NOLOCK)
+                        WHERE UserId = @UserId
+                    ) uea ON e.Id = uea.ExamId AND uea.rn = 1
+                    WHERE e.IsActive = 1
+                      AND (e.IsQuiz = 1 OR e.ExamTypeId = 9 OR e.Title LIKE '%Quiz%')
+                      AND (
+                          a.StudentId = @UserId
+                          OR
+                          (e.WaveId IS NOT NULL AND e.WaveId IN (SELECT WaveId FROM dbo.UserWaves WITH (NOLOCK) WHERE UserId = @UserId AND (IsDeactivated IS NULL OR IsDeactivated = 0)))
+                      )
+                    ORDER BY e.StartTime DESC, e.Id DESC",
+                    new { UserId = userId })).ToList();
+
+                profile.Quizzes = quizzes;
             }
             catch { }
 

@@ -28,6 +28,7 @@ namespace Exam.DTOs
 
         // Trainee Hub Navigation Sections
         public IEnumerable<ExamDto> Exams { get; set; } = new List<ExamDto>();
+        public IEnumerable<dynamic> Quizzes { get; set; } = new List<dynamic>();
         public UserShiftDto? UserShift { get; set; }
         public IEnumerable<dynamic> Assignments { get; set; } = new List<dynamic>();
         public string? ActiveWaveName { get; set; }
