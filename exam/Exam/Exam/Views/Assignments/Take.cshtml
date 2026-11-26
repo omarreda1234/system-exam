@@ -148,12 +148,12 @@
                     <div class="space-y-4">
                         <div class="relative">
                             <input type="text" 
-                                   class="search-input w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 transition-all text-left" 
-                                   placeholder="Search products by code, name, active ingredient, manufacturer..." 
+                                   class="search-input w-full bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-600 transition-all text-left shadow-xs placeholder-slate-400" 
+                                   placeholder="Search products by code or name..." 
                                    oninput="searchProductsForQuestion(@q.Id)" />
                             
                             <!-- Dropdown Results -->
-                            <div class="search-results hidden absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto mt-1 text-left"></div>
+                            <div class="search-results hidden absolute top-full left-0 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-30 max-h-64 overflow-y-auto mt-1.5 text-left"></div>
                         </div>
 
                         <!-- Selected items list (Pills) -->
@@ -181,12 +181,12 @@
                     <div class="space-y-4">
                         <div class="relative select-single-wrapper">
                             <input type="text" 
-                                   class="search-input w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all text-left" 
+                                   class="search-input w-full bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all text-left shadow-xs placeholder-slate-400" 
                                    placeholder="Search and select the matching product..." 
                                    oninput="searchProductsForQuestion(@q.Id)" />
                             
                             <!-- Dropdown Results -->
-                            <div class="search-results hidden absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto mt-1 text-left"></div>
+                            <div class="search-results hidden absolute top-full left-0 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-30 max-h-64 overflow-y-auto mt-1.5 text-left"></div>
                         </div>
 
                         <!-- Match Selection Details -->
@@ -286,19 +286,12 @@
                     data.forEach(item => {
                         const code = item.itemCode || item.ItemCode || '';
                         const desc = item.description || item.Description || '';
-                        const activeIng = item.activeIngredient || item.ActiveIngredient || '';
-                        const form = item.productForm || item.ProductForm || '';
-                        const price = item.unitPrice || item.UnitPrice || '';
                         
                         const row = `
-                            <div onclick="selectProduct(${qId}, '${code}', '${escapeQuote(desc)}')" class="p-3 text-xs hover:bg-slate-50 cursor-pointer border-b border-slate-100 text-left flex justify-between items-center">
-                                <div>
-                                    <span class="font-black text-brand-600">${code}</span> - 
-                                    <span class="font-bold text-slate-700">${desc}</span>
-                                    ${activeIng ? `<span class="ml-2 text-[10px] text-purple-600 font-semibold">[${activeIng}]</span>` : ''}
-                                    ${form ? `<span class="ml-1 text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">${form}</span>` : ''}
-                                </div>
-                                ${price ? `<span class="font-bold text-emerald-600 font-mono text-xs">${price} EGP</span>` : ''}
+                            <div onclick="selectProduct(${qId}, '${code}', '${escapeQuote(desc)}')" class="px-4 py-3 text-xs hover:bg-purple-50 dark:hover:bg-slate-800 cursor-pointer border-b border-slate-100 dark:border-slate-800 text-left flex items-center gap-2 transition-colors">
+                                <span class="font-mono font-black text-brand-600 dark:text-brand-400 shrink-0">${code}</span>
+                                <span class="text-slate-300 dark:text-slate-600 font-bold">-</span>
+                                <span class="font-bold text-slate-800 dark:text-slate-100">${desc}</span>
                             </div>
                         `;
                         $results.append(row);

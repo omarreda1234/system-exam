@@ -439,13 +439,16 @@ namespace Exam.Controllers
                 {
                     profile.ActiveWaveName = activeWave.WaveName;
                     int waveId = activeWave.WaveId;
-                    var assignments = await conn.QueryAsync<dynamic>(@"
-                        SELECT a.*, 
-                               (SELECT COUNT(*) FROM dbo.AssignmentSubmissions s WITH (NOLOCK) WHERE s.AssignmentId = a.Id AND s.UserId = @UserId) as SubmissionsCount
-                        FROM dbo.ContinuousAssignments a WITH (NOLOCK)
-                        WHERE a.WaveId = @WaveId AND a.IsActive = 1
-                        ORDER BY a.ScheduledEndTime DESC",
-                        new { WaveId = waveId, UserId = userId });
+                    var assignments = (await conn.QueryAsync<dynamic>(@"
+                        SELECT a.Id, a.Title, a.ScheduledStartTime, a.ScheduledEndTime, a.CreatedAt,
+                               a.PharmacistMaxScore, a.AssistantMaxScore,
+                               att.Status AS AttemptStatus, att.Score AS AttemptScore, att.Id AS AttemptId,
+                               (CASE WHEN att.Status = 'Completed' THEN 1 ELSE 0 END) AS SubmissionsCount
+                        FROM dbo.Assignments a WITH (NOLOCK)
+                        LEFT JOIN dbo.StudentAssignmentAttempts att WITH (NOLOCK) ON a.Id = att.AssignmentId AND att.UserId = @UserId
+                        WHERE a.WaveId = @WaveId
+                        ORDER BY a.ScheduledStartTime DESC",
+                        new { WaveId = waveId, UserId = userId })).ToList();
                     profile.Assignments = assignments;
                 }
 

@@ -548,9 +548,9 @@
                             </div>
 
                             <div>
-                                <a href="@Url.Action("Details", "Assignments", new { id = a.Id })" 
-                                   class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
-                                    <span>@(isSubmitted ? "عرض الإجابات المسلمة" : "فتح وحل التكليف")</span>
+                                <a href="@(isSubmitted ? (a.AttemptId != null ? Url.Action("Result", "Assignments", new { id = a.AttemptId }) : Url.Action("Index", "Assignments")) : Url.Action("Take", "Assignments", new { id = a.Id }))" 
+                                   class="w-full py-2.5 rounded-xl @(isSubmitted ? "bg-emerald-600 hover:bg-emerald-700" : "bg-indigo-600 hover:bg-indigo-700") text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
+                                    <span>@(isSubmitted ? "عرض النتيجة والإجابات" : "فتح وحل التكليف")</span>
                                     <i class="fas fa-arrow-left text-[10px]"></i>
                                 </a>
                             </div>
