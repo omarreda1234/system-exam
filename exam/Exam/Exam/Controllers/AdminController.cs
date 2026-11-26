@@ -1,4 +1,4 @@
-﻿using ClosedXML.Excel;
+using ClosedXML.Excel;
 using Exam.Services;
 using Exam.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -2105,9 +2105,15 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
             var draw = Request.Form["draw"].FirstOrDefault();
             var startStr = Request.Form["start"].FirstOrDefault();
             var lengthStr = Request.Form["length"].FirstOrDefault();
-            var searchValue = Request.Form["search[value]"].FirstOrDefault();
+            var searchValue = Request.Form["search[value]"].FirstOrDefault()?.Trim();
             var orderColumnIndex = Request.Form["order[0][column]"].FirstOrDefault();
             var orderDir = Request.Form["order[0][dir]"].FirstOrDefault();
+
+            // Column-specific filter parameters
+            var filterColumn = Request.Form["filterColumn"].FirstOrDefault()?.Trim();
+            var filterOp = Request.Form["filterOp"].FirstOrDefault()?.Trim();
+            var filterValue = Request.Form["filterValue"].FirstOrDefault()?.Trim();
+            var filterRulesJson = Request.Form["filterRules"].FirstOrDefault()?.Trim();
 
             int start = string.IsNullOrEmpty(startStr) ? 0 : int.Parse(startStr);
             int length = string.IsNullOrEmpty(lengthStr) ? 10 : int.Parse(lengthStr);
@@ -2120,8 +2126,153 @@ LEFT JOIN dbo.Shifts S WITH(NOLOCK) ON S.Id = U.ShiftId";
                 WHERE 1 = 1";
 
             var parameters = new DynamicParameters();
+            int filterParamIndex = 0;
 
-            if (!string.IsNullOrEmpty(searchValue))
+            // Collect filter rules
+            var rules = new List<ItemColumnFilterRule>();
+
+            // 1. JSON Multi-rules if provided
+            if (!string.IsNullOrWhiteSpace(filterRulesJson))
+            {
+                try
+                {
+                    var parsed = System.Text.Json.JsonSerializer.Deserialize<List<ItemColumnFilterRule>>(
+                        filterRulesJson,
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                    );
+                    if (parsed != null)
+                    {
+                        rules.AddRange(parsed.Where(r => !string.IsNullOrWhiteSpace(r.Col) && !string.IsNullOrWhiteSpace(r.Val)));
+                    }
+                }
+                catch { }
+            }
+
+            // 2. Primary / Quick column filter if provided
+            if (!string.IsNullOrWhiteSpace(filterColumn) && filterColumn != "all")
+            {
+                var val = !string.IsNullOrWhiteSpace(filterValue) ? filterValue : searchValue;
+                if (!string.IsNullOrWhiteSpace(val))
+                {
+                    if (!rules.Any(r => string.Equals(r.Col, filterColumn, StringComparison.OrdinalIgnoreCase) && r.Val == val))
+                    {
+                        rules.Add(new ItemColumnFilterRule
+                        {
+                            Col = filterColumn,
+                            Op = !string.IsNullOrWhiteSpace(filterOp) ? filterOp : "contains",
+                            Val = val
+                        });
+                    }
+                }
+            }
+
+            // Apply all column filter rules
+            foreach (var rule in rules)
+            {
+                if (string.IsNullOrWhiteSpace(rule.Col)) continue;
+                string colKey = rule.Col.Trim().ToLowerInvariant();
+                string op = (rule.Op ?? "contains").Trim().ToLowerInvariant();
+                string val = rule.Val?.Trim() ?? "";
+                if (string.IsNullOrEmpty(val)) continue;
+
+                filterParamIndex++;
+                string pName = $"@pCol_{filterParamIndex}";
+
+                switch (colKey)
+                {
+                    case "no_":
+                    case "no":
+                    case "itemno":
+                    case "item_no":
+                        if (op == "equals" || op == "=") { sqlBase += $" AND No_ = {pName}"; parameters.Add(pName, val); }
+                        else if (op == "startswith") { sqlBase += $" AND No_ LIKE {pName}"; parameters.Add(pName, $"{val}%"); }
+                        else if (op == "endswith") { sqlBase += $" AND No_ LIKE {pName}"; parameters.Add(pName, $"%{val}"); }
+                        else { sqlBase += $" AND No_ LIKE {pName}"; parameters.Add(pName, $"%{val}%"); }
+                        break;
+
+                    case "description":
+                        if (op == "equals" || op == "=") { sqlBase += $" AND (Description = {pName} OR [Description 2] = {pName})"; parameters.Add(pName, val); }
+                        else if (op == "startswith") { sqlBase += $" AND (Description LIKE {pName} OR [Description 2] LIKE {pName})"; parameters.Add(pName, $"{val}%"); }
+                        else { sqlBase += $" AND (Description LIKE {pName} OR [Description 2] LIKE {pName})"; parameters.Add(pName, $"%{val}%"); }
+                        break;
+
+                    case "activeingredient":
+                    case "active_ingredient":
+                        if (op == "equals" || op == "=") { sqlBase += $" AND [Active Ingredient] = {pName}"; parameters.Add(pName, val); }
+                        else if (op == "startswith") { sqlBase += $" AND [Active Ingredient] LIKE {pName}"; parameters.Add(pName, $"{val}%"); }
+                        else if (op == "endswith") { sqlBase += $" AND [Active Ingredient] LIKE {pName}"; parameters.Add(pName, $"%{val}"); }
+                        else { sqlBase += $" AND [Active Ingredient] LIKE {pName}"; parameters.Add(pName, $"%{val}%"); }
+                        break;
+
+                    case "manufacturer":
+                    case "manufacturername":
+                    case "manufacturer_name":
+                        if (op == "equals" || op == "=") { sqlBase += $" AND [Manufacturer Name] = {pName}"; parameters.Add(pName, val); }
+                        else { sqlBase += $" AND [Manufacturer Name] LIKE {pName}"; parameters.Add(pName, $"%{val}%"); }
+                        break;
+
+                    case "productform":
+                    case "formtype":
+                    case "form_type":
+                        if (op == "equals" || op == "=") { sqlBase += $" AND [Form Type] = {pName}"; parameters.Add(pName, val); }
+                        else { sqlBase += $" AND [Form Type] LIKE {pName}"; parameters.Add(pName, $"%{val}%"); }
+                        break;
+
+                    case "howtouse":
+                    case "originalvendoritemno":
+                    case "original_vendor_item_no":
+                        if (op == "equals" || op == "=") { sqlBase += $" AND [Original Vendor Item No_] = {pName}"; parameters.Add(pName, val); }
+                        else { sqlBase += $" AND [Original Vendor Item No_] LIKE {pName}"; parameters.Add(pName, $"%{val}%"); }
+                        break;
+
+                    case "keyfeature":
+                    case "blockreason":
+                    case "block_reason":
+                        if (op == "equals" || op == "=") { sqlBase += $" AND [Block Reason] = {pName}"; parameters.Add(pName, val); }
+                        else { sqlBase += $" AND [Block Reason] LIKE {pName}"; parameters.Add(pName, $"%{val}%"); }
+                        break;
+
+                    case "unitprice":
+                    case "unit_price":
+                    case "price":
+                        if (decimal.TryParse(val, out var decVal))
+                        {
+                            if (op == ">" || op == "gt") { sqlBase += $" AND [Unit Price] > {pName}"; parameters.Add(pName, decVal); }
+                            else if (op == ">=" || op == "gte") { sqlBase += $" AND [Unit Price] >= {pName}"; parameters.Add(pName, decVal); }
+                            else if (op == "<" || op == "lt") { sqlBase += $" AND [Unit Price] < {pName}"; parameters.Add(pName, decVal); }
+                            else if (op == "<=" || op == "lte") { sqlBase += $" AND [Unit Price] <= {pName}"; parameters.Add(pName, decVal); }
+                            else if (op == "equals" || op == "=") { sqlBase += $" AND [Unit Price] = {pName}"; parameters.Add(pName, decVal); }
+                            else { sqlBase += $" AND CAST([Unit Price] AS NVARCHAR(50)) LIKE {pName}"; parameters.Add(pName, $"%{val}%"); }
+                        }
+                        else
+                        {
+                            sqlBase += $" AND CAST([Unit Price] AS NVARCHAR(50)) LIKE {pName}";
+                            parameters.Add(pName, $"%{val}%");
+                        }
+                        break;
+
+                    case "itemdefinition":
+                    case "item_definition":
+                        sqlBase += $" AND ([Item Definition] LIKE {pName} OR CustomDefinition LIKE {pName})";
+                        parameters.Add(pName, $"%{val}%");
+                        break;
+
+                    case "storageinstructions":
+                    case "storage_instructions":
+                    case "storage":
+                        sqlBase += $" AND [Storage Instructions] LIKE {pName}";
+                        parameters.Add(pName, $"%{val}%");
+                        break;
+
+                    case "color":
+                        sqlBase += $" AND Color LIKE {pName}";
+                        parameters.Add(pName, $"%{val}%");
+                        break;
+                }
+            }
+
+            // Global search fallback (if searchValue is set and filterColumn is "all" or empty and no rules)
+            if (!string.IsNullOrEmpty(searchValue) && (filterColumn == "all" || string.IsNullOrEmpty(filterColumn)) && rules.Count == 0)
             {
                 sqlBase += " AND (No_ LIKE @Search OR Description LIKE @Search OR [Description 2] LIKE @Search OR [Item Definition] LIKE @Search OR CustomDefinition LIKE @Search OR Color LIKE @Search OR [Active Ingredient] LIKE @Search OR [Manufacturer Name] LIKE @Search OR [Form Type] LIKE @Search OR [Original Vendor Item No_] LIKE @Search OR [Block Reason] LIKE @Search)";
                 parameters.Add("Search", $"%{searchValue}%");
@@ -11081,6 +11232,13 @@ ORDER BY U.UserName ASC";
         public string ItemNo { get; set; }
         public bool IsCustomDefinition { get; set; }
         public string CustomDefinition { get; set; }
+    }
+
+    public class ItemColumnFilterRule
+    {
+        public string? Col { get; set; }
+        public string? Op { get; set; }
+        public string? Val { get; set; }
     }
 }
 

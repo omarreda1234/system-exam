@@ -26,6 +26,118 @@
 </div>
 
 <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-6 overflow-hidden shadow-sm">
+    <!-- Advanced Column Filter & Search Control Panel -->
+    <div class="mb-6 p-4 rounded-2xl bg-slate-50/90 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div class="flex items-center gap-2.5">
+                <span class="w-8 h-8 rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center text-sm shadow-xs">
+                    <i class="fas fa-filter"></i>
+                </span>
+                <div>
+                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        Filter By Column (تصفية وبحث بحسب العمود)
+                        <span id="activeFilterBadge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-600 text-white">0 Active</span>
+                    </span>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">حدد العمود أولاً ثم ادخل القيمة للتصفية المباشرة والدقيقة، أو أضف فلاتر أخرى متعددة</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button type="button" id="btnAddFilterRule" class="px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
+                    <i class="fas fa-plus-circle text-xs"></i> + Add Column Filter (إضافة فلتر بعمود)
+                </button>
+                <button type="button" id="btnClearAllFilters" class="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer">
+                    <i class="fas fa-redo-alt text-xs"></i> Reset (إعادة تعيين)
+                </button>
+            </div>
+        </div>
+
+        <!-- Primary Column-First Filter Controls -->
+        <div class="flex flex-col md:flex-row items-stretch md:items-center gap-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl p-2 shadow-xs">
+            <!-- 1. Select Column First -->
+            <div class="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl shrink-0 border border-slate-200 dark:border-slate-700">
+                <i class="fas fa-columns text-brand-600 dark:text-brand-400 text-xs"></i>
+                <label for="quickFilterCol" class="text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">العمود / Column:</label>
+                <select id="quickFilterCol" class="bg-transparent text-xs font-bold text-brand-600 dark:text-brand-400 focus:outline-none cursor-pointer">
+                    <option value="activeIngredient" selected>🧪 Active Ingredient (المادة الفعالة)</option>
+                    <option value="description">📦 Description (اسم الصنف)</option>
+                    <option value="manufacturerName">🏭 Manufacturer (الشركة المصنعة)</option>
+                    <option value="productForm">💊 Product Form (شكل المستحضر)</option>
+                    <option value="howToUse">📖 How to Use (طريقة الاستخدام)</option>
+                    <option value="keyFeature">⭐ Key Feature (المميزات)</option>
+                    <option value="no_">🔢 Item No (كود الصنف)</option>
+                    <option value="unitPrice">💰 Unit Price (السعر)</option>
+                    <option value="itemDefinition">📝 Item Definition (تعريف الصنف)</option>
+                    <option value="all">🌐 All Columns (بحث شامل في كل الأعمدة)</option>
+                </select>
+            </div>
+
+            <!-- 2. Condition Operator -->
+            <div class="hidden sm:flex items-center px-2 py-2 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
+                <select id="quickFilterOp" class="bg-transparent text-xs font-semibold text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer">
+                    <option value="contains">Contains (يحتوي على)</option>
+                    <option value="equals">Exact (مطابق تماماً)</option>
+                    <option value="startsWith">Starts With (يبدأ بـ)</option>
+                    <option value="endsWith">Ends With (ينتهي بـ)</option>
+                </select>
+            </div>
+
+            <!-- 3. Value Input -->
+            <div class="relative flex-1">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs">
+                    <i class="fas fa-search"></i>
+                </div>
+                <input type="text" id="quickFilterVal" placeholder="ادخل المادة الفعالة للفلترة (مثال: Polysiloxane)..." class="w-full bg-transparent pl-8 pr-9 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none">
+                <button type="button" id="btnClearQuickFilter" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hidden cursor-pointer">
+                    <i class="fas fa-times-circle text-sm"></i>
+                </button>
+            </div>
+
+            <!-- 4. Action Filter Button -->
+            <button type="button" id="btnApplyFilter" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold tracking-wide uppercase transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0 cursor-pointer">
+                <i class="fas fa-search text-xs"></i> Filter (بحث)
+            </button>
+        </div>
+
+        <!-- Quick Shortcut Column Chips -->
+        <div class="flex flex-wrap items-center gap-1.5 mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/60">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1 flex items-center gap-1">
+                <i class="fas fa-bolt text-amber-500"></i> Quick Select:
+            </span>
+            <button type="button" class="btn-quick-col-chip px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-all cursor-pointer shadow-2xs" data-col="activeIngredient">
+                🧪 Active Ingredient
+            </button>
+            <button type="button" class="btn-quick-col-chip px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-all cursor-pointer shadow-2xs" data-col="manufacturerName">
+                🏭 Manufacturer
+            </button>
+            <button type="button" class="btn-quick-col-chip px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-all cursor-pointer shadow-2xs" data-col="productForm">
+                💊 Product Form
+            </button>
+            <button type="button" class="btn-quick-col-chip px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-all cursor-pointer shadow-2xs" data-col="howToUse">
+                📖 How to Use
+            </button>
+            <button type="button" class="btn-quick-col-chip px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-all cursor-pointer shadow-2xs" data-col="keyFeature">
+                ⭐ Key Feature
+            </button>
+            <button type="button" class="btn-quick-col-chip px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-all cursor-pointer shadow-2xs" data-col="unitPrice">
+                💰 Unit Price
+            </button>
+            <button type="button" class="btn-quick-col-chip px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-all cursor-pointer shadow-2xs" data-col="description">
+                📦 Description
+            </button>
+        </div>
+
+        <!-- Dynamic Multi-Filter Rules List -->
+        <div id="filterRulesContainer" class="mt-3 space-y-2 hidden">
+            <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-1">
+                <i class="fas fa-layer-group text-brand-500"></i> Additional Column Filters (شروط إضافية):
+            </div>
+            <div id="rulesList" class="space-y-2">
+                <!-- Dynamically injected rules -->
+            </div>
+        </div>
+    </div>
+
     <div id="tableWrapper" class="overflow-x-auto">
         <table id="itemsTable" class="saas-table">
             <thead>
@@ -56,16 +168,33 @@
 @section Scripts {
     <script>
         $(document).ready(function () {
-            // Initialize DataTable with server-side processing for high performance
-            $('#itemsTable').DataTable({
+            // Initialize DataTable with server-side processing and custom dom
+            var table = $('#itemsTable').DataTable({
                 serverSide: true,
                 processing: true,
-                stateSave: true, // Persistent search, pagination, and sorting
+                stateSave: false, // Don't cache stale state so filters always reflect accurately
                 deferRender: true,
                 autoWidth: false,
+                dom: '<"flex flex-wrap items-center justify-between gap-4 mb-4"l>rt<"flex flex-wrap items-center justify-between gap-4 mt-6"ip>',
                 ajax: {
                     url: '/Admin/GetItemsPaged',
-                    type: 'POST'
+                    type: 'POST',
+                    data: function(d) {
+                        d.filterColumn = $('#quickFilterCol').val();
+                        d.filterOp = $('#quickFilterOp').val();
+                        d.filterValue = $('#quickFilterVal').val();
+
+                        var rules = [];
+                        $('.filter-rule-row').each(function() {
+                            var col = $(this).find('.rule-col').val();
+                            var op = $(this).find('.rule-op').val();
+                            var val = $(this).find('.rule-val').val();
+                            if (val && val.trim() !== '') {
+                                rules.push({ col: col, op: op, val: val.trim() });
+                            }
+                        });
+                        d.filterRules = JSON.stringify(rules);
+                    }
                 },
                 columns: [
                     { data: 'no_', className: 'font-mono font-bold text-brand-600 dark:text-brand-400' },
@@ -165,8 +294,6 @@
                 pageLength: 10,
                 lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
                 language: {
-                    search: "_INPUT_",
-                    searchPlaceholder: "Search items matrix...",
                     lengthMenu: "Show _MENU_ records",
                     info: "Showing _START_ to _END_ of _TOTAL_ items",
                     paginate: {
@@ -177,6 +304,156 @@
                     }
                 }
             });
+
+            // Debounced filter trigger
+            var filterDebounceTimer = null;
+            function triggerTableFilter() {
+                clearTimeout(filterDebounceTimer);
+                filterDebounceTimer = setTimeout(function() {
+                    updateFilterBadge();
+                    table.ajax.reload(null, true);
+                }, 300);
+            }
+
+            // Quick Filter Input
+            $('#quickFilterVal').on('input', function() {
+                var val = $(this).val();
+                if (val && val.length > 0) {
+                    $('#btnClearQuickFilter').removeClass('hidden');
+                } else {
+                    $('#btnClearQuickFilter').addClass('hidden');
+                }
+                triggerTableFilter();
+            });
+
+            // Quick Filter Column / Operator Change
+            $('#quickFilterCol, #quickFilterOp').on('change', function() {
+                updatePlaceholder();
+                triggerTableFilter();
+            });
+
+            // Clear Quick Filter
+            $('#btnClearQuickFilter').on('click', function() {
+                $('#quickFilterVal').val('').focus();
+                $(this).addClass('hidden');
+                triggerTableFilter();
+            });
+
+            // Shortcut Chips Click
+            $('.btn-quick-col-chip').on('click', function() {
+                var col = $(this).data('col');
+                $('#quickFilterCol').val(col).trigger('change');
+                $('#quickFilterVal').focus();
+            });
+
+            // Apply Button
+            $('#btnApplyFilter').on('click', function() {
+                updateFilterBadge();
+                table.ajax.reload(null, true);
+            });
+
+            // Enter key trigger
+            $(document).on('keypress', '#quickFilterVal, .rule-val', function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    updateFilterBadge();
+                    table.ajax.reload(null, true);
+                }
+            });
+
+            // Multi-rule dynamic addition
+            function addFilterRuleRow(defaultCol) {
+                $('#filterRulesContainer').removeClass('hidden');
+                var col = defaultCol || 'manufacturerName';
+                var rowHtml = `
+                    <div class="filter-rule-row flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xs">
+                        <span class="px-2 py-0.5 rounded-md bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 text-[10px] font-mono uppercase font-bold">AND</span>
+                        <select class="rule-col bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-brand-600 dark:text-brand-400 focus:outline-none cursor-pointer">
+                            <option value="activeIngredient" ${col === 'activeIngredient' ? 'selected' : ''}>🧪 Active Ingredient (المادة الفعالة)</option>
+                            <option value="description" ${col === 'description' ? 'selected' : ''}>📦 Description (اسم الصنف)</option>
+                            <option value="manufacturerName" ${col === 'manufacturerName' ? 'selected' : ''}>🏭 Manufacturer (الشركة المصنعة)</option>
+                            <option value="productForm" ${col === 'productForm' ? 'selected' : ''}>💊 Product Form (شكل المستحضر)</option>
+                            <option value="howToUse" ${col === 'howToUse' ? 'selected' : ''}>📖 How to Use (طريقة الاستخدام)</option>
+                            <option value="keyFeature" ${col === 'keyFeature' ? 'selected' : ''}>⭐ Key Feature (المميزات)</option>
+                            <option value="no_" ${col === 'no_' ? 'selected' : ''}>🔢 Item No (كود الصنف)</option>
+                            <option value="unitPrice" ${col === 'unitPrice' ? 'selected' : ''}>💰 Unit Price (السعر)</option>
+                        </select>
+                        <select class="rule-op bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer">
+                            <option value="contains">Contains (يحتوي على)</option>
+                            <option value="equals">Exact (مطابق تماماً)</option>
+                            <option value="startsWith">Starts With (يبدأ بـ)</option>
+                            <option value="endsWith">Ends With (ينتهي بـ)</option>
+                        </select>
+                        <input type="text" class="rule-val flex-1 min-w-[150px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none" placeholder="ادخل القيمة لهذا العمود...">
+                        <button type="button" class="btn-remove-rule px-2.5 py-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer" title="حذف هذا الفلتر">
+                            <i class="fas fa-trash-alt text-xs"></i>
+                        </button>
+                    </div>
+                `;
+                $('#rulesList').append(rowHtml);
+                updateFilterBadge();
+            }
+
+            $('#btnAddFilterRule').on('click', function() {
+                addFilterRuleRow();
+            });
+
+            $(document).on('click', '.btn-remove-rule', function() {
+                $(this).closest('.filter-rule-row').remove();
+                if ($('.filter-rule-row').length === 0) {
+                    $('#filterRulesContainer').addClass('hidden');
+                }
+                triggerTableFilter();
+            });
+
+            $(document).on('input', '.rule-val', function() {
+                triggerTableFilter();
+            });
+
+            $(document).on('change', '.rule-col, .rule-op', function() {
+                triggerTableFilter();
+            });
+
+            // Clear all filters
+            $('#btnClearAllFilters').on('click', function() {
+                $('#quickFilterVal').val('');
+                $('#quickFilterCol').val('activeIngredient');
+                $('#quickFilterOp').val('contains');
+                $('#btnClearQuickFilter').addClass('hidden');
+                $('.filter-rule-row').remove();
+                $('#rulesList').empty();
+                $('#filterRulesContainer').addClass('hidden');
+                updatePlaceholder();
+                triggerTableFilter();
+            });
+
+            function updateFilterBadge() {
+                var count = 0;
+                if ($('#quickFilterVal').val().trim() !== '') count++;
+                $('.filter-rule-row').each(function() {
+                    if ($(this).find('.rule-val').val().trim() !== '') count++;
+                });
+                if (count > 0) {
+                    $('#activeFilterBadge').text(count + ' Active Filter' + (count > 1 ? 's' : '')).removeClass('hidden');
+                } else {
+                    $('#activeFilterBadge').addClass('hidden');
+                }
+            }
+
+            function updatePlaceholder() {
+                var col = $('#quickFilterCol').val();
+                var ph = "ادخل القيمة للفلترة...";
+                if (col === 'activeIngredient') ph = "ادخل المادة الفعالة للفلترة (مثال: Polysiloxane)...";
+                else if (col === 'manufacturerName') ph = "ادخل اسم الشركة المصنعة (مثال: نيوهوريزون)...";
+                else if (col === 'productForm') ph = "ادخل شكل المستحضر (مثال: Gel, Tablets)...";
+                else if (col === 'howToUse') ph = "ادخل طريقة الاستخدام (مثال: مرتين يومياً)...";
+                else if (col === 'keyFeature') ph = "ادخل ميزة الصنف (مثال: تقليل الندبات)...";
+                else if (col === 'no_') ph = "ادخل كود الصنف (مثال: 62065)...";
+                else if (col === 'unitPrice') ph = "ادخل السعر (مثال: 150)...";
+                else if (col === 'description') ph = "ادخل اسم الصنف للبحث (مثال: Kemagel)...";
+                else if (col === 'all') ph = "بحث شامل في جميع الأعمدة والمعلومات...";
+                $('#quickFilterVal').attr('placeholder', ph);
+            }
 
             // Sync Button Action with SweetAlert2 password authorization
             $('#btnSync').on('click', function () {
