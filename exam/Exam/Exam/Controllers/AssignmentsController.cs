@@ -22,6 +22,25 @@ namespace Exam.Controllers
             _connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
         }
 
+        private static bool _assignmentFeedbackColumnsEnsured = false;
+        private async Task EnsureAssignmentFeedbackColumnsAsync(SqlConnection conn)
+        {
+            if (_assignmentFeedbackColumnsEnsured) return;
+            try
+            {
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.StudentAssignmentAttempts') AND name = 'TrainerComment')
+                        ALTER TABLE dbo.StudentAssignmentAttempts ADD TrainerComment NVARCHAR(MAX) NULL;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.StudentAssignmentAttempts') AND name = 'TrainerCommentUpdatedAt')
+                        ALTER TABLE dbo.StudentAssignmentAttempts ADD TrainerCommentUpdatedAt DATETIME NULL;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.StudentAssignmentAttempts') AND name = 'TrainerCommentBy')
+                        ALTER TABLE dbo.StudentAssignmentAttempts ADD TrainerCommentBy NVARCHAR(256) NULL;
+                ");
+                _assignmentFeedbackColumnsEnsured = true;
+            }
+            catch { }
+        }
+
         private string GetStudentRole()
         {
             var roleClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value ?? "All";
@@ -63,7 +82,7 @@ namespace Exam.Controllers
             var list = await conn.QueryAsync<dynamic>(@"
                 SELECT a.Id, a.Title, a.ScheduledStartTime, a.ScheduledEndTime, a.CreatedAt,
                        a.PharmacistMaxScore, a.AssistantMaxScore,
-                       att.Status AS AttemptStatus, att.Score AS AttemptScore, att.Id AS AttemptId
+                       att.Status AS AttemptStatus, att.Score AS AttemptScore, att.Id AS AttemptId, att.TrainerComment
                 FROM dbo.Assignments a
                 LEFT JOIN dbo.StudentAssignmentAttempts att ON a.Id = att.AssignmentId AND att.UserId = @UserId
                 WHERE a.WaveId = @WaveId AND (att.Status IS NULL OR att.Status <> 'Completed')
@@ -222,7 +241,7 @@ namespace Exam.Controllers
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId)) return Challenge();
 
-            // Restrict Result view to Admin/HR/Branch Manager/Branch Supervisor roles
+            // Check if user is staff/admin
             var isAdmin = User.IsInRole("Admin") || 
                           User.IsInRole("HR") || 
                           User.IsInRole("Human Resources") || 
@@ -230,12 +249,8 @@ namespace Exam.Controllers
                           User.IsInRole("Branch Supervisor") || 
                           User.IsInRole("SoftSkills Specialist");
 
-            if (!isAdmin)
-            {
-                return Forbid();
-            }
-
             using var conn = new SqlConnection(_connectionString);
+            await EnsureAssignmentFeedbackColumnsAsync(conn);
 
             var attempt = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                 SELECT att.*, a.Title, a.PharmacistMaxScore, a.AssistantMaxScore, u.FullName AS StudentName
@@ -246,6 +261,12 @@ namespace Exam.Controllers
                 new { Id = id });
 
             if (attempt == null) return NotFound();
+
+            // Allow the trainee who completed this assignment OR Admin/Supervisor
+            if (!isAdmin && (string)attempt.UserId != userId)
+            {
+                return Forbid();
+            }
 
             // Find the student's role in the database rather than using the current Admin's identity claims
             string studentRole = "All";
@@ -276,8 +297,50 @@ namespace Exam.Controllers
 
             ViewBag.Attempt = attempt;
             ViewBag.StudentRole = studentRole;
+            ViewBag.IsAdmin = isAdmin;
+            ViewBag.CurrentUserId = userId;
 
             return View(details);
+        }
+
+        public class SaveAssignmentFeedbackDto
+        {
+            public int AttemptId { get; set; }
+            public string? Comment { get; set; }
+        }
+
+        [HttpPost("Assignments/SaveFeedback")]
+        [Authorize(Roles = "Admin,HR,Human Resources,Branch Manager,Branch Supervisor,SoftSkills Specialist")]
+        public async Task<IActionResult> SaveFeedback([FromBody] SaveAssignmentFeedbackDto model)
+        {
+            if (model == null || model.AttemptId <= 0)
+                return BadRequest(new { success = false, message = "بيانات غير صالحة." });
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await EnsureAssignmentFeedbackColumnsAsync(conn);
+
+                var userName = User.Identity?.Name ?? User.FindFirst(ClaimTypes.Name)?.Value ?? "Admin";
+
+                int rows = await conn.ExecuteAsync(@"
+                    UPDATE dbo.StudentAssignmentAttempts
+                    SET TrainerComment = @Comment,
+                        TrainerCommentUpdatedAt = GETDATE(),
+                        TrainerCommentBy = @Trainer
+                    WHERE Id = @AttemptId",
+                    new { Comment = model.Comment?.Trim(), Trainer = userName, AttemptId = model.AttemptId });
+
+                if (rows > 0)
+                {
+                    return Json(new { success = true, message = "تم حفظ ملاحظات وتوجيهات المدرب بنجاح." });
+                }
+                return Json(new { success = false, message = "لم يتم العثور على محاولة التكليف." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "حدث خطأ: " + ex.Message });
+            }
         }
 
         [HttpGet("Assignments/SearchItems")]

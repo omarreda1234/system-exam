@@ -9875,6 +9875,27 @@ ORDER BY U.UserName ASC";
             return false;
         }
 
+        private static bool _assignmentFeedbackColumnsEnsured = false;
+        private async Task EnsureAssignmentFeedbackColumnsAsync(SqlConnection conn)
+        {
+            if (_assignmentFeedbackColumnsEnsured) return;
+            try
+            {
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.StudentAssignmentAttempts') AND name = 'TrainerComment')
+                        ALTER TABLE dbo.StudentAssignmentAttempts ADD TrainerComment NVARCHAR(MAX) NULL;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.StudentAssignmentAttempts') AND name = 'TrainerCommentUpdatedAt')
+                        ALTER TABLE dbo.StudentAssignmentAttempts ADD TrainerCommentUpdatedAt DATETIME NULL;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.StudentAssignmentAttempts') AND name = 'TrainerCommentBy')
+                        ALTER TABLE dbo.StudentAssignmentAttempts ADD TrainerCommentBy NVARCHAR(256) NULL;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.UserExamAttempts') AND name = 'TrainerComment')
+                        ALTER TABLE dbo.UserExamAttempts ADD TrainerComment NVARCHAR(MAX) NULL;
+                ");
+                _assignmentFeedbackColumnsEnsured = true;
+            }
+            catch { }
+        }
+
         [HttpGet("Admin/Assignments")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Assignments()
@@ -9891,6 +9912,7 @@ ORDER BY U.UserName ASC";
         public async Task<IActionResult> GetAssignmentAttempts(int id)
         {
             using var conn = new SqlConnection(_connectionString);
+            await EnsureAssignmentFeedbackColumnsAsync(conn);
 
             var assignment = await conn.QueryFirstOrDefaultAsync<dynamic>(
                 "SELECT WaveId FROM dbo.Assignments WHERE Id = @AssignmentId", new { AssignmentId = id });
@@ -9900,6 +9922,7 @@ ORDER BY U.UserName ASC";
             var attempts = await conn.QueryAsync<dynamic>(@"
                 WITH LatestAttempts AS (
                     SELECT Id AS AttemptId, Score, Status, StartTime, EndTime, UserId, AssignmentId,
+                           TrainerComment, TrainerCommentUpdatedAt, TrainerCommentBy,
                            ROW_NUMBER() OVER (PARTITION BY UserId, AssignmentId ORDER BY CASE WHEN Status = 'Completed' THEN 1 WHEN Status = 'InProgress' THEN 2 ELSE 3 END, Id DESC) AS rn
                     FROM dbo.StudentAssignmentAttempts
                     WHERE AssignmentId = @AssignmentId
@@ -9907,6 +9930,7 @@ ORDER BY U.UserName ASC";
                 SELECT att.AttemptId, att.Score, 
                        COALESCE(att.Status, 'Not Started') AS Status, 
                        att.StartTime, att.EndTime, 
+                       att.TrainerComment, att.TrainerCommentUpdatedAt, att.TrainerCommentBy,
                        u.FullName, u.Email, u.UserName, u.UserCode,
                        r.Name AS RoleName,
                        b.BranchName
@@ -9928,11 +9952,54 @@ ORDER BY U.UserName ASC";
                 userCode = x.UserCode,
                 score = x.Score,
                 status = x.Status,
+                trainerComment = (string)(x.TrainerComment ?? ""),
+                trainerCommentUpdatedAt = x.TrainerCommentUpdatedAt != null ? ((DateTime)x.TrainerCommentUpdatedAt).ToString("yyyy-MM-dd HH:mm") : null,
+                trainerCommentBy = (string)(x.TrainerCommentBy ?? ""),
                 startTime = x.StartTime != null ? ((DateTime)x.StartTime).ToString("yyyy-MM-dd HH:mm:ss") : null,
                 endTime = x.EndTime != null ? ((DateTime)x.EndTime).ToString("yyyy-MM-dd HH:mm:ss") : null
             });
 
             return Json(result);
+        }
+
+        public class AdminSaveAssignmentFeedbackDto
+        {
+            public int AttemptId { get; set; }
+            public string? Comment { get; set; }
+        }
+
+        [HttpPost("Admin/SaveAssignmentAttemptFeedback")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> SaveAssignmentAttemptFeedback([FromBody] AdminSaveAssignmentFeedbackDto model)
+        {
+            if (model == null || model.AttemptId <= 0)
+                return BadRequest(new { success = false, message = "بيانات غير صالحة." });
+
+            try
+            {
+                using var conn = new SqlConnection(_connectionString);
+                await EnsureAssignmentFeedbackColumnsAsync(conn);
+
+                var userName = User.Identity?.Name ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "Admin";
+
+                int rows = await conn.ExecuteAsync(@"
+                    UPDATE dbo.StudentAssignmentAttempts
+                    SET TrainerComment = @Comment,
+                        TrainerCommentUpdatedAt = GETDATE(),
+                        TrainerCommentBy = @Trainer
+                    WHERE Id = @AttemptId",
+                    new { Comment = model.Comment?.Trim(), Trainer = userName, AttemptId = model.AttemptId });
+
+                if (rows > 0)
+                {
+                    return Json(new { success = true, message = "تم حفظ ملاحظات وتوجيهات المدرب بنجاح." });
+                }
+                return Json(new { success = false, message = "لم يتم العثور على محاولة التكليف." });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = "خطأ: " + ex.Message });
+            }
         }
 
         [HttpGet("Admin/ExportAssignmentAttemptsToExcel/{id}")]
@@ -9942,6 +10009,7 @@ ORDER BY U.UserName ASC";
             try
             {
                 using var conn = new SqlConnection(_connectionString);
+                await EnsureAssignmentFeedbackColumnsAsync(conn);
                 
                 var assignment = await conn.QueryFirstOrDefaultAsync<dynamic>(
                     "SELECT Title, WaveId FROM dbo.Assignments WHERE Id = @Id", new { Id = id });
@@ -9952,6 +10020,7 @@ ORDER BY U.UserName ASC";
                 var attempts = await conn.QueryAsync<dynamic>(@"
                     WITH LatestAttempts AS (
                         SELECT Id AS AttemptId, Score, Status, StartTime, EndTime, UserId, AssignmentId,
+                               TrainerComment, TrainerCommentUpdatedAt, TrainerCommentBy,
                                ROW_NUMBER() OVER (PARTITION BY UserId, AssignmentId ORDER BY CASE WHEN Status = 'Completed' THEN 1 WHEN Status = 'InProgress' THEN 2 ELSE 3 END, Id DESC) AS rn
                         FROM dbo.StudentAssignmentAttempts
                         WHERE AssignmentId = @AssignmentId
@@ -9959,6 +10028,7 @@ ORDER BY U.UserName ASC";
                     SELECT att.AttemptId, att.Score, 
                            COALESCE(att.Status, 'Not Started') AS Status, 
                            att.StartTime, att.EndTime, 
+                           att.TrainerComment, att.TrainerCommentUpdatedAt, att.TrainerCommentBy,
                            u.FullName, u.Email, u.UserName, u.UserCode,
                            r.Name AS RoleName,
                            b.BranchName
@@ -9984,7 +10054,7 @@ ORDER BY U.UserName ASC";
                     worksheet.Cell(currentRow, 2).Value = DateTime.Now.ToString("g");
                     currentRow += 2;
 
-                    string[] headers = { "Student Name", "Email", "User Code", "Role", "Status", "Start Time", "Submit Time", "Score" };
+                    string[] headers = { "Student Name", "Email", "User Code", "Role", "Status", "Start Time", "Submit Time", "Score", "Trainer Feedback & Focus Points" };
                     for (int i = 0; i < headers.Length; i++)
                     {
                         var cell = worksheet.Cell(currentRow, i + 1);
@@ -10005,6 +10075,7 @@ ORDER BY U.UserName ASC";
                         worksheet.Cell(currentRow, 6).Value = att.StartTime != null ? ((DateTime)att.StartTime).ToString("yyyy-MM-dd HH:mm:ss") : "";
                         worksheet.Cell(currentRow, 7).Value = att.EndTime != null ? ((DateTime)att.EndTime).ToString("yyyy-MM-dd HH:mm:ss") : "";
                         worksheet.Cell(currentRow, 8).Value = att.Status == "Completed" ? $"{att.Score} pts" : "--";
+                        worksheet.Cell(currentRow, 9).Value = (string)(att.TrainerComment ?? "");
                     }
 
                     worksheet.Columns().AdjustToContents();

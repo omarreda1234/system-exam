@@ -714,6 +714,12 @@
                                             <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> قيد الحل
                                         </span>
                                     }
+                                    @if (!string.IsNullOrEmpty((string)a.TrainerComment))
+                                    {
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/70 flex items-center gap-1 shadow-2xs" title="توجد ملاحظات وتوجيهات من المدرب">
+                                            <i class="fas fa-comment-dots text-amber-500"></i> ملاحظات المدرب
+                                        </span>
+                                    }
                                 </div>
                                 <h3 class="text-sm font-bold text-slate-900 line-clamp-1">@a.Title</h3>
                                 <p class="text-xs text-slate-500 mt-1 line-clamp-2">@(string.IsNullOrEmpty((string)a.Description) ? "تكليف أكاديمي دوري مطلوب تسليمه" : a.Description)</p>

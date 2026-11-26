@@ -14,10 +14,13 @@
 
 <div class="max-w-4xl mx-auto px-6 py-12">
     <!-- Header Back Button -->
-    <div class="mb-8">
-        <a href="@Url.Action("Index", "Assignments")" class="text-xs font-black text-slate-400 hover:text-brand-600 transition-colors uppercase tracking-widest flex items-center gap-2">
-            <i class="fas fa-arrow-left"></i> Back to Assignments
+    <div class="flex items-center justify-between mb-8">
+        <a href="@(ViewBag.IsAdmin == true ? Url.Action("Assignments", "Admin") : Url.Action("Profile", "Home", new { tab = "assignments" }))" class="text-xs font-black text-slate-400 hover:text-brand-600 transition-colors uppercase tracking-widest flex items-center gap-2">
+            <i class="fas fa-arrow-left"></i> @(ViewBag.IsAdmin == true ? "Back to Admin Assignments" : "العودة إلى تكليفاتي (My Profile)")
         </a>
+        <span class="text-xs font-bold text-slate-500">
+            المتدرب: <strong class="text-slate-800 font-bold">@attempt.StudentName</strong>
+        </span>
     </div>
 
     <!-- Results Overview Card -->
@@ -60,6 +63,77 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Trainer Feedback & Focus Notes (Visible to Trainee & Editable by Admin) -->
+    @{
+        bool isAdminViewer = ViewBag.IsAdmin != null && (bool)ViewBag.IsAdmin;
+        string trainerComment = (string)(attempt.TrainerComment ?? "");
+    }
+
+    <div class="bg-gradient-to-r from-amber-50/90 via-orange-50/50 to-amber-50/90 border-2 border-amber-200/90 rounded-[28px] p-6 sm:p-8 mb-8 shadow-sm relative overflow-hidden text-right" dir="rtl">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200/70 pb-4 mb-4">
+            <div class="flex items-center gap-3 text-amber-950 font-bold">
+                <div class="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md">
+                    <i class="fas fa-chalkboard-teacher text-xl"></i>
+                </div>
+                <div>
+                    <h4 class="text-base font-black text-amber-950">توجيهات وملاحظات المدرب الأكاديمي (Trainer Feedback)</h4>
+                    <p class="text-xs text-amber-800 font-medium mt-0.5">النقاط التي يجب التركيز عليها، وتوضيح الأخطاء المرتكبة لتفاديها في التكليفات القادمة</p>
+                </div>
+            </div>
+            @if (attempt.TrainerCommentUpdatedAt != null)
+            {
+                <span class="text-[11px] text-amber-800 font-mono bg-white/90 px-3 py-1.5 rounded-xl border border-amber-200/60 self-start sm:self-auto flex items-center gap-1.5 shadow-2xs">
+                    <i class="far fa-clock text-amber-600"></i>
+                    <span>@(((DateTime)attempt.TrainerCommentUpdatedAt).ToString("dd/MM/yyyy hh:mm tt"))</span>
+                </span>
+            }
+        </div>
+
+        @if (isAdminViewer)
+        {
+            <!-- Admin / Evaluator Editor -->
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <label class="block text-xs font-bold text-amber-950">
+                        كتابة أو تعديل الملاحظات ونقاط التركيز للمتدرب (@attempt.StudentName):
+                    </label>
+                    <span class="text-[10px] text-amber-700 font-bold bg-amber-100/70 px-2 py-0.5 rounded-lg">وضع تقييم المدرب (Admin Mode)</span>
+                </div>
+                <textarea id="resultTrainerCommentText" rows="4" 
+                          class="w-full rounded-2xl border border-amber-300 bg-white p-4 text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all text-slate-800 shadow-inner"
+                          placeholder="اكتب هنا التوجيهات للمتدرب: ما الذي يجب أن يركز عليه، الأخطاء التي وقع فيها، نصائح لتحسين الدقة والسرعة...">@trainerComment</textarea>
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
+                    <div class="flex flex-wrap gap-1.5">
+                        <button type="button" onclick="appendResultFeedback('يرجى مراجعة المواد الفعالة بدقة.')" class="px-2.5 py-1 rounded-lg bg-amber-100/70 hover:bg-amber-200 text-[10px] font-bold text-amber-900 transition-all">+ المواد الفعالة</button>
+                        <button type="button" onclick="appendResultFeedback('التركيز على شروط نطاق الأسعار.')" class="px-2.5 py-1 rounded-lg bg-amber-100/70 hover:bg-amber-200 text-[10px] font-bold text-amber-900 transition-all">+ الأسعار</button>
+                        <button type="button" onclick="appendResultFeedback('التأكد من شكل الدواء (Form Type) المناسب.')" class="px-2.5 py-1 rounded-lg bg-amber-100/70 hover:bg-amber-200 text-[10px] font-bold text-amber-900 transition-all">+ شكل الدواء</button>
+                    </div>
+                    <button onclick="saveResultTrainerFeedback(@attempt.Id)" id="btnSaveResultFeedback" type="button" 
+                            class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black shadow-md transition-all">
+                        <i class="fas fa-save"></i>
+                        <span>حفظ توجيهات المدرب</span>
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Trainee View -->
+            if (!string.IsNullOrEmpty(trainerComment))
+            {
+                <div class="bg-white/95 rounded-2xl p-5 border border-amber-200/80 text-slate-800 text-sm leading-relaxed whitespace-pre-line font-medium shadow-2xs">
+                    @trainerComment
+                </div>
+            }
+            else
+            {
+                <div class="bg-white/60 rounded-2xl p-5 border border-amber-200/40 text-amber-800/80 text-xs italic text-center">
+                    <i class="fas fa-hourglass-half ml-1"></i> بانتظار مراجعة المدرب وإضافة التوجيهات والملاحظات الخاصة بك.
+                </div>
+            }
+        }
     </div>
 
     <!-- Question Breakdown -->
@@ -247,3 +321,45 @@
         }
     </div>
 </div>
+
+@if (isAdminViewer)
+{
+    <script>
+        function appendResultFeedback(text) {
+            const $txt = $('#resultTrainerCommentText');
+            const current = $txt.val().trim();
+            if (current.length > 0) {
+                $txt.val(current + '\n' + text);
+            } else {
+                $txt.val(text);
+            }
+            $txt.focus();
+        }
+
+        function saveResultTrainerFeedback(attemptId) {
+            const comment = $('#resultTrainerCommentText').val().trim();
+            const $btn = $('#btnSaveResultFeedback');
+
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...');
+
+            $.ajax({
+                url: '/Assignments/SaveFeedback',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ attemptId: attemptId, comment: comment }),
+                success: function(res) {
+                    $btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span>حفظ توجيهات المدرب</span>');
+                    if (res.success) {
+                        alert(res.message);
+                    } else {
+                        alert(res.message || 'فشل الحفظ.');
+                    }
+                },
+                error: function() {
+                    $btn.prop('disabled', false).html('<i class="fas fa-save"></i> <span>حفظ توجيهات المدرب</span>');
+                    alert('حدث خطأ أثناء حفظ الملاحظات.');
+                }
+            });
+        }
+    </script>
+}

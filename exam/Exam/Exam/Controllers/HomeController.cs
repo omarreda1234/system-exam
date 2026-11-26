@@ -489,6 +489,7 @@ namespace Exam.Controllers
                         SELECT a.Id, a.Title, a.ScheduledStartTime, a.ScheduledEndTime, a.CreatedAt,
                                a.PharmacistMaxScore, a.AssistantMaxScore,
                                att.Status AS AttemptStatus, att.Score AS AttemptScore, att.Id AS AttemptId,
+                               att.TrainerComment,
                                (CASE WHEN att.Status = 'Completed' THEN 1 ELSE 0 END) AS SubmissionsCount
                         FROM dbo.Assignments a WITH (NOLOCK)
                         LEFT JOIN dbo.StudentAssignmentAttempts att WITH (NOLOCK) ON a.Id = att.AssignmentId AND att.UserId = @UserId

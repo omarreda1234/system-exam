@@ -86,6 +86,12 @@
                                     <span class="px-3 py-1 rounded-xl text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center gap-1.5">
                                         <i class="fas fa-check-circle"></i> Completed
                                     </span>
+                                    @if (!string.IsNullOrEmpty((string)a.TrainerComment))
+                                    {
+                                        <span class="mt-1 px-2.5 py-0.5 rounded-lg text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1 shadow-2xs">
+                                            <i class="fas fa-comment-dots text-amber-500"></i> ملاحظات المدرب
+                                        </span>
+                                    }
                                 }
                                 else if (a.AttemptStatus == "InProgress")
                                 {
