@@ -480,22 +480,51 @@ namespace Exam.Controllers
 
                 profile.MyWaves = myWaves;
 
-                var activeWave = myWaves.FirstOrDefault(w => w.ApprovalStatus == "Approved") ?? myWaves.FirstOrDefault();
-                if (activeWave != null)
+                var waveIds = myWaves.Select(w => w.WaveId).Distinct().ToList();
+                var activeWaveNames = myWaves
+                    .Where(w => string.IsNullOrEmpty(w.ApprovalStatus) || w.ApprovalStatus.Equals("Approved", StringComparison.OrdinalIgnoreCase))
+                    .Select(w => w.WaveName)
+                    .Distinct()
+                    .ToList();
+
+                if (!activeWaveNames.Any())
+                    activeWaveNames = myWaves.Select(w => w.WaveName).Distinct().ToList();
+
+                profile.ActiveWaveName = activeWaveNames.Count == 1 ? activeWaveNames.First() : string.Join(" | ", activeWaveNames);
+
+                if (waveIds.Any())
                 {
-                    profile.ActiveWaveName = activeWave.WaveName;
-                    int waveId = activeWave.WaveId;
                     var assignments = (await conn.QueryAsync<dynamic>(@"
-                        SELECT a.Id, a.Title, a.ScheduledStartTime, a.ScheduledEndTime, a.CreatedAt,
-                               a.PharmacistMaxScore, a.AssistantMaxScore,
+                        SELECT a.Id, a.Title, a.Description, a.ScheduledStartTime, a.ScheduledEndTime, a.CreatedAt,
+                               a.PharmacistMaxScore, a.AssistantMaxScore, a.WaveId,
+                               ISNULL(w.WaveName, N'غير محدد') AS WaveName,
                                att.Status AS AttemptStatus, att.Score AS AttemptScore, att.Id AS AttemptId,
                                att.TrainerComment,
                                (CASE WHEN att.Status = 'Completed' THEN 1 ELSE 0 END) AS SubmissionsCount
                         FROM dbo.Assignments a WITH (NOLOCK)
+                        LEFT JOIN dbo.TrainingWaves w WITH (NOLOCK) ON a.WaveId = w.Id
                         LEFT JOIN dbo.StudentAssignmentAttempts att WITH (NOLOCK) ON a.Id = att.AssignmentId AND att.UserId = @UserId
-                        WHERE a.WaveId = @WaveId
-                        ORDER BY a.ScheduledStartTime DESC",
-                        new { WaveId = waveId, UserId = userId })).ToList();
+                        WHERE (a.WaveId IN @WaveIds OR a.Id IN (SELECT AssignmentId FROM dbo.StudentAssignmentAttempts WITH (NOLOCK) WHERE UserId = @UserId))
+                        ORDER BY a.ScheduledStartTime DESC, a.Id DESC",
+                        new { WaveIds = waveIds, UserId = userId })).ToList();
+
+                    profile.Assignments = assignments;
+                }
+                else
+                {
+                    var assignments = (await conn.QueryAsync<dynamic>(@"
+                        SELECT a.Id, a.Title, a.Description, a.ScheduledStartTime, a.ScheduledEndTime, a.CreatedAt,
+                               a.PharmacistMaxScore, a.AssistantMaxScore, a.WaveId,
+                               ISNULL(w.WaveName, N'غير محدد') AS WaveName,
+                               att.Status AS AttemptStatus, att.Score AS AttemptScore, att.Id AS AttemptId,
+                               att.TrainerComment,
+                               (CASE WHEN att.Status = 'Completed' THEN 1 ELSE 0 END) AS SubmissionsCount
+                        FROM dbo.Assignments a WITH (NOLOCK)
+                        LEFT JOIN dbo.TrainingWaves w WITH (NOLOCK) ON a.WaveId = w.Id
+                        INNER JOIN dbo.StudentAssignmentAttempts att WITH (NOLOCK) ON a.Id = att.AssignmentId AND att.UserId = @UserId
+                        ORDER BY a.ScheduledStartTime DESC, a.Id DESC",
+                        new { UserId = userId })).ToList();
+
                     profile.Assignments = assignments;
                 }
 

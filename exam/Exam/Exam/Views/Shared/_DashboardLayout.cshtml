@@ -486,7 +486,7 @@
                         bool isGroup3Active = currentController == "admin" && (currentAction == "allusers" || currentAction == "traineeprofile" || currentAction == "pendingrequests" || currentAction == "deactivatedusers");
                         bool isGroup4Active = (currentController == "admin" && (currentAction == "structure" || currentAction == "items")) || (currentController == "skilltracks" && currentAction == "index");
                         bool isGroup5Active = currentController == "admin" && (currentAction == "getallcategories" || currentAction == "getallexamtypes" || currentAction == "weeklyexams" || currentAction == "waveexams" || currentAction == "exams" || currentAction == "manageinstructions");
-                        bool isGroup6Active = currentController == "admin" && (currentAction == "waves" || currentAction == "assignments" || currentAction == "quizzes" || currentAction == "livemonitor" || currentAction == "smartwaveproposal" || currentAction == "nominationhistory");
+                        bool isGroup6Active = currentController == "admin" && (currentAction == "waves" || currentAction == "assignments" || currentAction == "quizzes" || currentAction == "wavecurriculumflow" || currentAction == "livemonitor" || currentAction == "smartwaveproposal" || currentAction == "nominationhistory");
                         bool isGroup7Active = (currentController == "admin" && (currentAction == "weeklyresults" || currentAction == "waveyresults" || currentAction == "students" || currentAction == "certificates")) || (currentController == "attendance" && currentAction == "analytics");
                     }
 
@@ -830,6 +830,13 @@
                                             <i class="fas fa-spell-check w-4 text-center text-purple-500"></i>
                                             <span>Wave Quizzes</span>
                                             <span class="ml-auto px-1.5 py-0.5 rounded-md text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">Quiz</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="@Url.Action("WaveCurriculumFlow", "Admin")" class="@linkClass(currentController == "admin" && currentAction == "wavecurriculumflow")">
+                                            <i class="fas fa-project-diagram w-4 text-center text-indigo-500"></i>
+                                            <span>Curriculum Flow</span>
+                                            <span class="ml-auto px-1.5 py-0.5 rounded-md text-[9px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">Flow</span>
                                         </a>
                                     </li>
                                 }

@@ -60,34 +60,44 @@ namespace Exam.Controllers
 
             using var conn = new SqlConnection(_connectionString);
             
-            // Get active wave for student
-            var wave = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            // Get all enrolled waves for student
+            var waves = (await conn.QueryAsync<dynamic>(@"
                 SELECT uw.WaveId, w.WaveName 
                 FROM dbo.UserWaves uw
                 INNER JOIN dbo.TrainingWaves w ON uw.WaveId = w.Id
-                WHERE uw.UserId = @UserId AND uw.IsActive = 1", 
-                new { UserId = userId });
+                WHERE uw.UserId = @UserId", 
+                new { UserId = userId })).ToList();
 
-            if (wave == null)
+            var waveIds = waves.Select(w => (int)w.WaveId).Distinct().ToList();
+
+            if (!waveIds.Any())
             {
-                ViewBag.NoWave = true;
-                return View(new List<dynamic>());
+                var hasAnyAttempts = await conn.ExecuteScalarAsync<int>(@"
+                    SELECT COUNT(1) FROM dbo.StudentAssignmentAttempts WHERE UserId = @UserId", new { UserId = userId });
+                if (hasAnyAttempts == 0)
+                {
+                    ViewBag.NoWave = true;
+                    return View(new List<dynamic>());
+                }
             }
 
             ViewBag.NoWave = false;
-            ViewBag.WaveName = wave.WaveName;
+            var waveNames = waves.Select(w => (string)w.WaveName).Distinct().ToList();
+            ViewBag.WaveName = waveNames.Any() ? (waveNames.Count == 1 ? waveNames.First() : string.Join(" | ", waveNames)) : "All Batches";
             ViewBag.StudentRole = studentRole;
 
-            // List active assignments for this wave
+            // List assignments for student across all enrolled waves, plus any with existing attempts
             var list = await conn.QueryAsync<dynamic>(@"
-                SELECT a.Id, a.Title, a.ScheduledStartTime, a.ScheduledEndTime, a.CreatedAt,
-                       a.PharmacistMaxScore, a.AssistantMaxScore,
+                SELECT a.Id, a.Title, a.Description, a.ScheduledStartTime, a.ScheduledEndTime, a.CreatedAt,
+                       a.PharmacistMaxScore, a.AssistantMaxScore, a.WaveId,
+                       ISNULL(w.WaveName, N'غير محدد') AS WaveName,
                        att.Status AS AttemptStatus, att.Score AS AttemptScore, att.Id AS AttemptId, att.TrainerComment
                 FROM dbo.Assignments a
+                LEFT JOIN dbo.TrainingWaves w ON a.WaveId = w.Id
                 LEFT JOIN dbo.StudentAssignmentAttempts att ON a.Id = att.AssignmentId AND att.UserId = @UserId
-                WHERE a.WaveId = @WaveId AND (att.Status IS NULL OR att.Status <> 'Completed')
-                ORDER BY a.ScheduledStartTime DESC",
-                new { WaveId = (int)wave.WaveId, UserId = userId });
+                WHERE (a.WaveId IN @WaveIds OR a.Id IN (SELECT AssignmentId FROM dbo.StudentAssignmentAttempts WHERE UserId = @UserId))
+                ORDER BY a.ScheduledStartTime DESC, a.Id DESC",
+                new { WaveIds = waveIds.Any() ? waveIds : new List<int> { -1 }, UserId = userId });
 
             return View(list);
         }

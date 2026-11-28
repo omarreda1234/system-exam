@@ -1107,6 +1107,32 @@ namespace Exam.Controllers
             return Json(topics);
         }
 
+        private static bool _waveScoreWeightsTableEnsured = false;
+        private async Task EnsureWaveScoreWeightsTableAsync(SqlConnection conn)
+        {
+            if (_waveScoreWeightsTableEnsured) return;
+            try
+            {
+                await conn.ExecuteAsync(@"
+                    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'WaveScoreWeights')
+                    BEGIN
+                        CREATE TABLE dbo.WaveScoreWeights (
+                            Id INT IDENTITY(1,1) PRIMARY KEY,
+                            WaveId INT NOT NULL,
+                            QuizzesWeight DECIMAL(5,2) NOT NULL DEFAULT 30,
+                            AssignmentsWeight DECIMAL(5,2) NOT NULL DEFAULT 20,
+                            FinalExamWeight DECIMAL(5,2) NOT NULL DEFAULT 50,
+                            PassingPercentage DECIMAL(5,2) NOT NULL DEFAULT 60,
+                            UpdatedAt DATETIME NULL DEFAULT GETDATE(),
+                            CONSTRAINT UQ_WaveScoreWeights_WaveId UNIQUE (WaveId)
+                        );
+                    END
+                ");
+                _waveScoreWeightsTableEnsured = true;
+            }
+            catch { }
+        }
+
         // ==========================================
         // 11. Wave Curriculum Grading Summary (Gradebook)
         // ==========================================
@@ -1115,220 +1141,228 @@ namespace Exam.Controllers
         {
             if (waveId <= 0) return Json(new { success = false, message = "معرّف الويف غير صالح." });
 
-            using var conn = new SqlConnection(_connectionString);
-            await conn.OpenAsync();
-
-            // 1. Weights
-            var weights = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                SELECT QuizzesWeight, AssignmentsWeight, FinalExamWeight, PassingPercentage
-                FROM WaveScoreWeights WITH (NOLOCK)
-                WHERE WaveId = @WaveId", new { WaveId = waveId });
-
-            decimal quizzesWeight = weights != null ? (decimal)weights.QuizzesWeight : 30m;
-            decimal assignmentsWeight = weights != null ? (decimal)weights.AssignmentsWeight : 20m;
-            decimal finalExamWeight = weights != null ? (decimal)weights.FinalExamWeight : 50m;
-            decimal passingPercentage = weights != null ? (decimal)weights.PassingPercentage : 60m;
-
-            // 2. Wave Quizzes
-            var waveQuizzes = (await conn.QueryAsync<dynamic>(@"
-                SELECT Id, Title, PassPercentage, ISNULL(TotalPoints, 100) AS TotalPoints
-                FROM Exams WITH (NOLOCK)
-                WHERE WaveId = @WaveId AND (IsQuiz = 1 OR ExamTypeId = 9 OR Title LIKE '%Quiz%')
-                ORDER BY Id ASC", new { WaveId = waveId })).ToList();
-
-            // 3. Wave Assignments
-            var waveAssignments = (await conn.QueryAsync<dynamic>(@"
-                SELECT Id, Title, ISNULL(PharmacistMaxScore, 10) AS PharmacistMaxScore, ISNULL(AssistantMaxScore, 10) AS AssistantMaxScore
-                FROM Assignments WITH (NOLOCK)
-                WHERE WaveId = @WaveId
-                ORDER BY Id ASC", new { WaveId = waveId })).ToList();
-
-            // 4. Wave Final Exam
-            var waveFinalExam = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                SELECT TOP 1 Id, Title, PassPercentage, ISNULL(TotalPoints, 100) AS TotalPoints
-                FROM Exams WITH (NOLOCK)
-                WHERE WaveId = @WaveId 
-                  AND (IsFinalExam = 1 OR ExamTypeId = 8 OR Title LIKE '%Final%')
-                  AND IsQuiz = 0
-                ORDER BY Id DESC", new { WaveId = waveId });
-
-            // 5. Enrolled Trainees
-            var trainees = (await conn.QueryAsync<dynamic>(@"
-                SELECT 
-                    u.Id AS UserId,
-                    u.UserCode,
-                    u.FullName,
-                    u.Email,
-                    u.RoleName,
-                    ISNULL(b.BranchName, N'غير محدد') AS BranchName,
-                    uwc.Score AS CurrentCertScore,
-                    uwc.CertificateCode,
-                    uwc.FileUploaded
-                FROM UserWaves uw WITH (NOLOCK)
-                JOIN AspNetUsers u WITH (NOLOCK) ON uw.UserId = u.Id
-                LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
-                LEFT JOIN UserWaveCertificates uwc WITH (NOLOCK) ON uw.UserId = uwc.UserId AND uwc.WaveId = @WaveId
-                WHERE uw.WaveId = @WaveId AND uw.IsActive = 1
-                ORDER BY u.FullName ASC", new { WaveId = waveId })).ToList();
-
-            // 6. Pre-fetch attempts
-            var quizAttempts = (await conn.QueryAsync<dynamic>(@"
-                SELECT uea.UserId, uea.ExamId, MAX(uea.Score) AS BestScore
-                FROM UserExamAttempts uea WITH (NOLOCK)
-                JOIN Exams e WITH (NOLOCK) ON uea.ExamId = e.Id
-                WHERE e.WaveId = @WaveId AND (e.IsQuiz = 1 OR e.ExamTypeId = 9 OR e.Title LIKE '%Quiz%')
-                  AND uea.Status IN ('Completed', 'Fail_Timeout')
-                GROUP BY uea.UserId, uea.ExamId", new { WaveId = waveId })).ToList();
-
-            var assignmentAttempts = (await conn.QueryAsync<dynamic>(@"
-                SELECT saa.UserId, saa.AssignmentId, MAX(saa.Score) AS BestScore
-                FROM StudentAssignmentAttempts saa WITH (NOLOCK)
-                JOIN Assignments a WITH (NOLOCK) ON saa.AssignmentId = a.Id
-                WHERE a.WaveId = @WaveId AND saa.Status = 'Completed'
-                GROUP BY saa.UserId, saa.AssignmentId", new { WaveId = waveId })).ToList();
-
-            var finalExamAttempts = waveFinalExam != null ? (await conn.QueryAsync<dynamic>(@"
-                SELECT uea.UserId, MAX(uea.Score) AS BestScore
-                FROM UserExamAttempts uea WITH (NOLOCK)
-                WHERE uea.ExamId = @FinalExamId
-                  AND uea.Status IN ('Completed', 'Fail_Timeout')
-                GROUP BY uea.UserId", new { FinalExamId = (int)waveFinalExam.Id })).ToList() : new List<dynamic>();
-
-            // Quick lookup dictionaries
-            var quizMap = quizAttempts.ToLookup(x => (string)x.UserId, x => new { ExamId = (int)x.ExamId, BestScore = (decimal)x.BestScore });
-            var assignMap = assignmentAttempts.ToLookup(x => (string)x.UserId, x => new { AssignmentId = (int)x.AssignmentId, BestScore = (decimal)x.BestScore });
-            var finalMap = finalExamAttempts.ToDictionary(x => (string)x.UserId, x => (decimal)x.BestScore);
-
-            // Compute effective normalized weights if some components do not exist
-            decimal activeWeightSum = 0m;
-            if (waveQuizzes.Any()) activeWeightSum += quizzesWeight;
-            if (waveAssignments.Any()) activeWeightSum += assignmentsWeight;
-            if (waveFinalExam != null) activeWeightSum += finalExamWeight;
-
-            var studentRows = new List<object>();
-
-            foreach (var t in trainees)
+            try
             {
-                string uid = (string)t.UserId;
+                using var conn = new SqlConnection(_connectionString);
+                await conn.OpenAsync();
+                await EnsureWaveScoreWeightsTableAsync(conn);
 
-                // 1. Quizzes Average %
-                decimal quizzesAvgPercent = 0m;
-                int quizzesTakenCount = 0;
-                if (waveQuizzes.Any())
+                // 1. Weights
+                var weights = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT QuizzesWeight, AssignmentsWeight, FinalExamWeight, PassingPercentage
+                    FROM WaveScoreWeights WITH (NOLOCK)
+                    WHERE WaveId = @WaveId", new { WaveId = waveId });
+
+                decimal quizzesWeight = weights != null ? (decimal)weights.QuizzesWeight : 30m;
+                decimal assignmentsWeight = weights != null ? (decimal)weights.AssignmentsWeight : 20m;
+                decimal finalExamWeight = weights != null ? (decimal)weights.FinalExamWeight : 50m;
+                decimal passingPercentage = weights != null ? (decimal)weights.PassingPercentage : 60m;
+
+                // 2. Wave Quizzes
+                var waveQuizzes = (await conn.QueryAsync<dynamic>(@"
+                    SELECT Id, Title, PassPercentage, ISNULL(TotalPoints, 100) AS TotalPoints
+                    FROM Exams WITH (NOLOCK)
+                    WHERE WaveId = @WaveId AND (IsQuiz = 1 OR ExamTypeId = 9 OR Title LIKE '%Quiz%')
+                    ORDER BY Id ASC", new { WaveId = waveId })).ToList();
+
+                // 3. Wave Assignments
+                var waveAssignments = (await conn.QueryAsync<dynamic>(@"
+                    SELECT Id, Title, ISNULL(PharmacistMaxScore, 10) AS PharmacistMaxScore, ISNULL(AssistantMaxScore, 10) AS AssistantMaxScore
+                    FROM Assignments WITH (NOLOCK)
+                    WHERE WaveId = @WaveId
+                    ORDER BY Id ASC", new { WaveId = waveId })).ToList();
+
+                // 4. Wave Final Exam
+                var waveFinalExam = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                    SELECT TOP 1 Id, Title, PassPercentage, ISNULL(TotalPoints, 100) AS TotalPoints
+                    FROM Exams WITH (NOLOCK)
+                    WHERE WaveId = @WaveId 
+                      AND (IsFinalExam = 1 OR ExamTypeId = 8 OR Title LIKE '%Final%')
+                      AND IsQuiz = 0
+                    ORDER BY Id DESC", new { WaveId = waveId });
+
+                // 5. Enrolled Trainees
+                var trainees = (await conn.QueryAsync<dynamic>(@"
+                    SELECT 
+                        u.Id AS UserId,
+                        u.UserCode,
+                        u.FullName,
+                        u.Email,
+                        u.RoleName,
+                        ISNULL(b.BranchName, N'غير محدد') AS BranchName,
+                        uwc.Score AS CurrentCertScore,
+                        uwc.CertificateCode,
+                        uwc.FileUploaded
+                    FROM UserWaves uw WITH (NOLOCK)
+                    JOIN AspNetUsers u WITH (NOLOCK) ON uw.UserId = u.Id
+                    LEFT JOIN Branches b WITH (NOLOCK) ON u.BranchId = b.Id
+                    LEFT JOIN UserWaveCertificates uwc WITH (NOLOCK) ON uw.UserId = uwc.UserId AND uwc.WaveId = @WaveId
+                    WHERE uw.WaveId = @WaveId AND (uw.IsActive = 1 OR uw.IsActive IS NULL)
+                    ORDER BY u.FullName ASC", new { WaveId = waveId })).ToList();
+
+                // 6. Pre-fetch attempts
+                var quizAttempts = (await conn.QueryAsync<dynamic>(@"
+                    SELECT uea.UserId, uea.ExamId, MAX(uea.Score) AS BestScore
+                    FROM UserExamAttempts uea WITH (NOLOCK)
+                    JOIN Exams e WITH (NOLOCK) ON uea.ExamId = e.Id
+                    WHERE e.WaveId = @WaveId AND (e.IsQuiz = 1 OR e.ExamTypeId = 9 OR e.Title LIKE '%Quiz%')
+                      AND uea.Status IN ('Completed', 'Fail_Timeout')
+                    GROUP BY uea.UserId, uea.ExamId", new { WaveId = waveId })).ToList();
+
+                var assignmentAttempts = (await conn.QueryAsync<dynamic>(@"
+                    SELECT saa.UserId, saa.AssignmentId, MAX(saa.Score) AS BestScore
+                    FROM StudentAssignmentAttempts saa WITH (NOLOCK)
+                    JOIN Assignments a WITH (NOLOCK) ON saa.AssignmentId = a.Id
+                    WHERE a.WaveId = @WaveId AND saa.Status = 'Completed'
+                    GROUP BY saa.UserId, saa.AssignmentId", new { WaveId = waveId })).ToList();
+
+                var finalExamAttempts = waveFinalExam != null ? (await conn.QueryAsync<dynamic>(@"
+                    SELECT uea.UserId, MAX(uea.Score) AS BestScore
+                    FROM UserExamAttempts uea WITH (NOLOCK)
+                    WHERE uea.ExamId = @FinalExamId
+                      AND uea.Status IN ('Completed', 'Fail_Timeout')
+                    GROUP BY uea.UserId", new { FinalExamId = (int)waveFinalExam.Id })).ToList() : new List<dynamic>();
+
+                // Quick lookup dictionaries
+                var quizMap = quizAttempts.ToLookup(x => (string)x.UserId, x => new { ExamId = (int)x.ExamId, BestScore = (decimal)x.BestScore });
+                var assignMap = assignmentAttempts.ToLookup(x => (string)x.UserId, x => new { AssignmentId = (int)x.AssignmentId, BestScore = (decimal)x.BestScore });
+                var finalMap = finalExamAttempts.ToDictionary(x => (string)x.UserId, x => (decimal)x.BestScore);
+
+                // Compute effective normalized weights if some components do not exist
+                decimal activeWeightSum = 0m;
+                if (waveQuizzes.Any()) activeWeightSum += quizzesWeight;
+                if (waveAssignments.Any()) activeWeightSum += assignmentsWeight;
+                if (waveFinalExam != null) activeWeightSum += finalExamWeight;
+
+                var studentRows = new List<object>();
+
+                foreach (var t in trainees)
                 {
-                    decimal totalQScore = 0m;
-                    var userQAttempts = quizMap[uid].ToDictionary(x => x.ExamId, x => x.BestScore);
-                    foreach (var q in waveQuizzes)
+                    string uid = (string)t.UserId;
+
+                    // 1. Quizzes Average %
+                    decimal quizzesAvgPercent = 0m;
+                    int quizzesTakenCount = 0;
+                    if (waveQuizzes.Any())
                     {
-                        int qId = (int)q.Id;
-                        if (userQAttempts.TryGetValue(qId, out decimal s))
+                        decimal totalQScore = 0m;
+                        var userQAttempts = quizMap[uid].ToDictionary(x => x.ExamId, x => x.BestScore);
+                        foreach (var q in waveQuizzes)
                         {
-                            totalQScore += s;
-                            quizzesTakenCount++;
+                            int qId = (int)q.Id;
+                            if (userQAttempts.TryGetValue(qId, out decimal s))
+                            {
+                                totalQScore += s;
+                                quizzesTakenCount++;
+                            }
+                        }
+                        quizzesAvgPercent = Math.Round(totalQScore / waveQuizzes.Count, 2);
+                    }
+
+                    // 2. Assignments Average %
+                    decimal assignmentsAvgPercent = 0m;
+                    int assignmentsTakenCount = 0;
+                    if (waveAssignments.Any())
+                    {
+                        decimal totalAScore = 0m;
+                        var userAAttempts = assignMap[uid].ToDictionary(x => x.AssignmentId, x => x.BestScore);
+                        string role = (string)(t.RoleName ?? "");
+                        bool isPharm = role.ToLower().Contains("pharm");
+
+                        foreach (var a in waveAssignments)
+                        {
+                            int aId = (int)a.Id;
+                            decimal maxScore = isPharm ? (decimal)a.PharmacistMaxScore : (decimal)a.AssistantMaxScore;
+                            if (maxScore <= 0) maxScore = 10m;
+
+                            if (userAAttempts.TryGetValue(aId, out decimal earned))
+                            {
+                                decimal p = Math.Min(100m, (earned / maxScore) * 100m);
+                                totalAScore += p;
+                                assignmentsTakenCount++;
+                            }
+                        }
+                        assignmentsAvgPercent = Math.Round(totalAScore / waveAssignments.Count, 2);
+                    }
+
+                    // 3. Final Exam %
+                    decimal finalExamPercent = 0m;
+                    bool finalTaken = false;
+                    if (waveFinalExam != null)
+                    {
+                        if (finalMap.TryGetValue(uid, out decimal fs))
+                        {
+                            finalExamPercent = Math.Round(fs, 2);
+                            finalTaken = true;
                         }
                     }
-                    quizzesAvgPercent = Math.Round(totalQScore / waveQuizzes.Count, 2);
-                }
 
-                // 2. Assignments Average %
-                decimal assignmentsAvgPercent = 0m;
-                int assignmentsTakenCount = 0;
-                if (waveAssignments.Any())
-                {
-                    decimal totalAScore = 0m;
-                    var userAAttempts = assignMap[uid].ToDictionary(x => x.AssignmentId, x => x.BestScore);
-                    string role = (string)(t.RoleName ?? "");
-                    bool isPharm = role.ToLower().Contains("pharm");
+                    // 4. Composite Final Degree %
+                    decimal rawComposite = 0m;
+                    if (waveQuizzes.Any()) rawComposite += (quizzesAvgPercent * (quizzesWeight / 100m));
+                    if (waveAssignments.Any()) rawComposite += (assignmentsAvgPercent * (assignmentsWeight / 100m));
+                    if (waveFinalExam != null) rawComposite += (finalExamPercent * (finalExamWeight / 100m));
 
-                    foreach (var a in waveAssignments)
+                    decimal compositeScore = rawComposite;
+                    if (activeWeightSum > 0 && activeWeightSum < 100m)
                     {
-                        int aId = (int)a.Id;
-                        decimal maxScore = isPharm ? (decimal)a.PharmacistMaxScore : (decimal)a.AssistantMaxScore;
-                        if (maxScore <= 0) maxScore = 10m;
-
-                        if (userAAttempts.TryGetValue(aId, out decimal earned))
-                        {
-                            decimal p = Math.Min(100m, (earned / maxScore) * 100m);
-                            totalAScore += p;
-                            assignmentsTakenCount++;
-                        }
+                        compositeScore = Math.Round((rawComposite / activeWeightSum) * 100m, 2);
                     }
-                    assignmentsAvgPercent = Math.Round(totalAScore / waveAssignments.Count, 2);
-                }
-
-                // 3. Final Exam %
-                decimal finalExamPercent = 0m;
-                bool finalTaken = false;
-                if (waveFinalExam != null)
-                {
-                    if (finalMap.TryGetValue(uid, out decimal fs))
+                    else
                     {
-                        finalExamPercent = Math.Round(fs, 2);
-                        finalTaken = true;
+                        compositeScore = Math.Round(compositeScore, 2);
                     }
+
+                    bool isPassed = compositeScore >= passingPercentage;
+
+                    studentRows.Add(new
+                    {
+                        userId = uid,
+                        userCode = (string)t.UserCode,
+                        fullName = (string)t.FullName,
+                        email = (string)t.Email,
+                        branchName = (string)t.BranchName,
+                        roleName = (string)t.RoleName,
+                        quizzesAvgPercent = quizzesAvgPercent,
+                        quizzesTakenCount = quizzesTakenCount,
+                        totalQuizzesCount = waveQuizzes.Count,
+                        assignmentsAvgPercent = assignmentsAvgPercent,
+                        assignmentsTakenCount = assignmentsTakenCount,
+                        totalAssignmentsCount = waveAssignments.Count,
+                        finalExamPercent = finalExamPercent,
+                        finalTaken = finalTaken,
+                        compositeScore = compositeScore,
+                        currentCertScore = t.CurrentCertScore != null ? (decimal)t.CurrentCertScore : (decimal?)null,
+                        certificateCode = (string)t.CertificateCode,
+                        fileUploaded = t.FileUploaded != null && (bool)t.FileUploaded,
+                        isPassed = isPassed
+                    });
                 }
 
-                // 4. Composite Final Degree %
-                decimal rawComposite = 0m;
-                if (waveQuizzes.Any()) rawComposite += (quizzesAvgPercent * (quizzesWeight / 100m));
-                if (waveAssignments.Any()) rawComposite += (assignmentsAvgPercent * (assignmentsWeight / 100m));
-                if (waveFinalExam != null) rawComposite += (finalExamPercent * (finalExamWeight / 100m));
-
-                decimal compositeScore = rawComposite;
-                if (activeWeightSum > 0 && activeWeightSum < 100m)
+                return Json(new
                 {
-                    compositeScore = Math.Round((rawComposite / activeWeightSum) * 100m, 2);
-                }
-                else
-                {
-                    compositeScore = Math.Round(compositeScore, 2);
-                }
-
-                bool isPassed = compositeScore >= passingPercentage;
-
-                studentRows.Add(new
-                {
-                    userId = uid,
-                    userCode = (string)t.UserCode,
-                    fullName = (string)t.FullName,
-                    email = (string)t.Email,
-                    branchName = (string)t.BranchName,
-                    roleName = (string)t.RoleName,
-                    quizzesAvgPercent = quizzesAvgPercent,
-                    quizzesTakenCount = quizzesTakenCount,
-                    totalQuizzesCount = waveQuizzes.Count,
-                    assignmentsAvgPercent = assignmentsAvgPercent,
-                    assignmentsTakenCount = assignmentsTakenCount,
-                    totalAssignmentsCount = waveAssignments.Count,
-                    finalExamPercent = finalExamPercent,
-                    finalTaken = finalTaken,
-                    compositeScore = compositeScore,
-                    currentCertScore = t.CurrentCertScore != null ? (decimal)t.CurrentCertScore : (decimal?)null,
-                    certificateCode = (string)t.CertificateCode,
-                    fileUploaded = t.FileUploaded != null && (bool)t.FileUploaded,
-                    isPassed = isPassed
+                    success = true,
+                    weights = new
+                    {
+                        quizzesWeight = quizzesWeight,
+                        assignmentsWeight = assignmentsWeight,
+                        finalExamWeight = finalExamWeight,
+                        passingPercentage = passingPercentage
+                    },
+                    breakdown = new
+                    {
+                        quizzesCount = waveQuizzes.Count,
+                        assignmentsCount = waveAssignments.Count,
+                        hasFinalExam = waveFinalExam != null,
+                        finalExamTitle = waveFinalExam?.Title ?? "لا يوجد امتحان فاينال مسجل"
+                    },
+                    trainees = studentRows
                 });
             }
-
-            return Json(new
+            catch (Exception ex)
             {
-                success = true,
-                weights = new
-                {
-                    quizzesWeight = quizzesWeight,
-                    assignmentsWeight = assignmentsWeight,
-                    finalExamWeight = finalExamWeight,
-                    passingPercentage = passingPercentage
-                },
-                breakdown = new
-                {
-                    quizzesCount = waveQuizzes.Count,
-                    assignmentsCount = waveAssignments.Count,
-                    hasFinalExam = waveFinalExam != null,
-                    finalExamTitle = waveFinalExam?.Title ?? "لا يوجد امتحان فاينال مسجل"
-                },
-                trainees = studentRows
-            });
+                return Json(new { success = false, message = "خطأ في تحميل درجات الويف: " + ex.Message });
+            }
         }
 
         // ==========================================
@@ -1348,6 +1382,7 @@ namespace Exam.Controllers
 
             using var conn = new SqlConnection(_connectionString);
             await conn.OpenAsync();
+            await EnsureWaveScoreWeightsTableAsync(conn);
 
             string mergeSql = @"
                 MERGE INTO dbo.WaveScoreWeights AS target
@@ -1388,6 +1423,7 @@ namespace Exam.Controllers
 
             using var conn = new SqlConnection(_connectionString);
             await conn.OpenAsync();
+            await EnsureWaveScoreWeightsTableAsync(conn);
 
             // Save weights if submitted
             if (model.QuizzesWeight > 0 || model.AssignmentsWeight > 0 || model.FinalExamWeight > 0)
