@@ -10295,15 +10295,15 @@ ORDER BY U.UserName ASC";
                             q.SubcategoryName,
                             q.RequiredItemsCount,
                             q.ItemDefinition,
-                            q.CorrectItemNo,
-                            q.CriteriaActiveIngredient,
-                            q.CriteriaManufacturer,
-                            q.CriteriaProductForm,
+                            CorrectItemNo = string.IsNullOrWhiteSpace(q.CorrectItemNo) ? null : q.CorrectItemNo.Trim(),
+                            CriteriaActiveIngredient = string.IsNullOrWhiteSpace(q.CriteriaActiveIngredient) ? null : q.CriteriaActiveIngredient.Trim(),
+                            CriteriaManufacturer = string.IsNullOrWhiteSpace(q.CriteriaManufacturer) ? null : q.CriteriaManufacturer.Trim(),
+                            CriteriaProductForm = string.IsNullOrWhiteSpace(q.CriteriaProductForm) ? null : q.CriteriaProductForm.Trim(),
                             q.CriteriaPriceMin,
                             q.CriteriaPriceMax,
-                            q.CriteriaPriceOp,
-                            q.CriteriaKeyFeature,
-                            q.CriteriaHowToUse
+                            CriteriaPriceOp = string.IsNullOrWhiteSpace(q.CriteriaPriceOp) ? null : q.CriteriaPriceOp.Trim(),
+                            CriteriaKeyFeature = string.IsNullOrWhiteSpace(q.CriteriaKeyFeature) ? null : q.CriteriaKeyFeature.Trim(),
+                            CriteriaHowToUse = string.IsNullOrWhiteSpace(q.CriteriaHowToUse) ? null : q.CriteriaHowToUse.Trim()
                         }, transaction: transaction);
                     }
                 }
@@ -10457,15 +10457,15 @@ ORDER BY U.UserName ASC";
                             q.SubcategoryName,
                             q.RequiredItemsCount,
                             q.ItemDefinition,
-                            q.CorrectItemNo,
-                            q.CriteriaActiveIngredient,
-                            q.CriteriaManufacturer,
-                            q.CriteriaProductForm,
+                            CorrectItemNo = string.IsNullOrWhiteSpace(q.CorrectItemNo) ? null : q.CorrectItemNo.Trim(),
+                            CriteriaActiveIngredient = string.IsNullOrWhiteSpace(q.CriteriaActiveIngredient) ? null : q.CriteriaActiveIngredient.Trim(),
+                            CriteriaManufacturer = string.IsNullOrWhiteSpace(q.CriteriaManufacturer) ? null : q.CriteriaManufacturer.Trim(),
+                            CriteriaProductForm = string.IsNullOrWhiteSpace(q.CriteriaProductForm) ? null : q.CriteriaProductForm.Trim(),
                             q.CriteriaPriceMin,
                             q.CriteriaPriceMax,
-                            q.CriteriaPriceOp,
-                            q.CriteriaKeyFeature,
-                            q.CriteriaHowToUse
+                            CriteriaPriceOp = string.IsNullOrWhiteSpace(q.CriteriaPriceOp) ? null : q.CriteriaPriceOp.Trim(),
+                            CriteriaKeyFeature = string.IsNullOrWhiteSpace(q.CriteriaKeyFeature) ? null : q.CriteriaKeyFeature.Trim(),
+                            CriteriaHowToUse = string.IsNullOrWhiteSpace(q.CriteriaHowToUse) ? null : q.CriteriaHowToUse.Trim()
                         }, transaction: transaction);
                     }
                 }
