@@ -141,16 +141,19 @@
             <!-- Helpful Field Instructions -->
             <div class="w-full flex flex-wrap items-center gap-2 p-3 bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-xl text-[11px] text-indigo-950 dark:text-indigo-200">
                 <span class="font-bold flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
-                    <i class="fas fa-circle-info"></i> إرشادات كتابة البيانات بالإكسل:
+                    <i class="fas fa-circle-info"></i> إرشادات كتابة البيانات بالإكسل (كافة الحقول إلزامية عدا القسم):
                 </span>
                 <span class="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-indigo-200/60 dark:border-indigo-800">
-                    <strong>Branch / الفرع:</strong> يمكنك كتابة كود الفرع <code>BranchCode</code> (مثل <b>GESH-01</b> أو <b>AGA</b>) أو اسم الفرع بالعربي.
+                    <strong class="text-rose-600">Shift / الشفت (إلزامي):</strong> كود/اسم الشفت <code>ShiftIdentity</code> (مثل <b>M12</b> أو <b>MO3</b> أو <b>MO1</b>) أو رقم الشفت (ID). لا يمكن تركها فارغة.
                 </span>
                 <span class="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-indigo-200/60 dark:border-indigo-800">
-                    <strong>Shift / الشفت:</strong> يمكنك كتابة كود/اسم الشفت <code>ShiftIdentity</code> (مثل <b>M12</b> أو <b>MO3</b>) أو رقم الشفت (ID).
+                    <strong class="text-rose-600">Branch / الفرع (إلزامي):</strong> كود الفرع <code>BranchCode</code> (مثل <b>GESH-01</b>) أو اسم الفرع بالعربي.
                 </span>
                 <span class="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-indigo-200/60 dark:border-indigo-800">
-                    <strong>Role / الوظيفة:</strong> اكتب المسمى بالإنجليزية (مثل <b>Pharmacist</b> أو <b>Assistant</b> أو <b>HR</b>).
+                    <strong class="text-rose-600">Role / الوظيفة (إلزامي):</strong> المسمى بالإنجليزية (مثل <b>Pharmacist</b> أو <b>Assistant</b>).
+                </span>
+                <span class="bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-indigo-200/60 dark:border-indigo-800">
+                    <strong>Department / القسم (اختياري):</strong> اسم أو كود القسم، أو تركه فارغاً.
                 </span>
             </div>
         </form>

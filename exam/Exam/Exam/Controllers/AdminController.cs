@@ -4426,21 +4426,23 @@ ORDER BY U.UserName ASC";
                 var colDepartment = GetCol("Department", "DepartmentName", "Dept", "القسم", "اسم القسم", "التخصص");
 
                 var missingColumns = new List<string>();
-                if (colUserCode == null) missingColumns.Add("UserCode (كود الموظف)");
-                if (colBranchName == null) missingColumns.Add("BranchCode / BranchName (كود الفرع أو اسم الفرع)");
-                if (colshiftid == null) missingColumns.Add("ShiftIdentity / ShiftId (كود الشفت أو رقم الشفت)");
+                if (colUserCode == null) missingColumns.Add("UserCode (كود الموظف - إلزامي)");
+                if (colUserName == null) missingColumns.Add("UserName / FullName (اسم الموظف - إلزامي)");
+                if (colEmail == null) missingColumns.Add("Email (البريد الإلكتروني - إلزامي)");
+                if (colPhone == null) missingColumns.Add("Phone (رقم الهاتف - إلزامي)");
+                if (colRoleName == null) missingColumns.Add("RoleName (الوظيفة - إلزامي)");
+                if (colBranchName == null) missingColumns.Add("BranchCode / BranchName (كود الفرع أو اسم الفرع - إلزامي)");
+                if (colshiftid == null) missingColumns.Add("ShiftIdentity / ShiftId (كود الشفت أو رقم الشفت - إلزامي)");
 
                 if (missingColumns.Any())
                 {
-                    var missingStr = string.Join(", ", missingColumns);
+                    var missingStr = string.Join("<br/>• ", missingColumns);
                     return Json(new { 
                         success = false, 
-                        message = $"الملف المرفوع تنقصه الأعمدة الأساسية التالية أو لم يتم التعرف عليها: <br/><strong class='text-rose-600'>{missingStr}</strong>.<br/><br/>" +
-                                  "يرجى التأكد من احتواء الملف على الأعمدة المطلوبة بالاسم الإنجليزي أو العربي:<br/>" +
-                                  "• <b>UserCode</b> (كود الموظف - إلزامي)<br/>" +
-                                  "• <b>BranchCode</b> أو <b>BranchName</b> (كود الفرع مثل GESH-01 أو اسم الفرع)<br/>" +
-                                  "• <b>ShiftIdentity</b> أو <b>ShiftId</b> (اسم/كود الشفت مثل M12 أو رقم الشفت)<br/>" +
-                                  "• <b>UserName</b> و <b>Email</b> و <b>RoleName</b> (إلزامية في حالة إضافة موظفين جدد)"
+                        message = $"الملف المرفوع تنقصه الأعمدة الإلزامية التالية أو لم يتم التعرف عليها في الشيت:<br/><br/>" +
+                                  $"<div class='text-right text-rose-600 font-bold p-3 bg-rose-50 rounded-xl border border-rose-200'>• {missingStr}</div><br/>" +
+                                  "يرجى العلم أن <b>كافة الحقول إلزامية ولا يمكن رفع الشيت بدونها</b> (كود الموظف، الاسم، البريد، رقم الهاتف، الوظيفة، الفرع، والشفت).<br/>" +
+                                  "حقل القسم (<b>Department</b>) هو الحقل الوحيد الاختياري."
                     });
                 }
 
@@ -4530,48 +4532,87 @@ ORDER BY U.UserName ASC";
 
                         bool isEditingThisRow = existingByCode != null;
 
-                        // 4. Resolve Fields
-                        var userName = !string.IsNullOrWhiteSpace(rawUserName) ? rawUserName.Replace(" ", "_") : email;
-                        var password = colPassword != null ? worksheet.Cell(row, colPassword.Value).Value.ToString()?.Trim() : null;
+                        // 4. Resolve & Strictly Validate Fields (All mandatory except Department)
+                        // A. User Name / Full Name (Mandatory)
+                        if (string.IsNullOrWhiteSpace(rawUserName))
+                        {
+                            errorLines.Add($"Row {row}: اسم الموظف (UserName / FullName) إلزامي ولا يمكن تركه فارغاً للموظف كود '{cleanUserCode}'. تم تخطي الصف.");
+                            continue;
+                        }
+                        var userName = rawUserName.Replace(" ", "_");
+
+                        // B. Email (Mandatory)
+                        if (string.IsNullOrWhiteSpace(email))
+                        {
+                            errorLines.Add($"Row {row}: البريد الإلكتروني (Email) إلزامي ولا يمكن تركه فارغاً للموظف '{rawUserName}' (كود: {cleanUserCode}). تم تخطي الصف.");
+                            continue;
+                        }
+
+                        // C. Phone (Mandatory)
                         var phone = colPhone != null ? worksheet.Cell(row, colPhone.Value).Value.ToString()?.Trim() : null;
-                        var roleName = colRoleName != null ? worksheet.Cell(row, colRoleName.Value).Value.ToString()?.Trim() : (isEditingThisRow ? null : fallbackRoleName);
-
-                        // Role validation (English only if provided)
-                        if (!string.IsNullOrWhiteSpace(roleName))
+                        if (string.IsNullOrWhiteSpace(phone))
                         {
-                            bool hasArabic = System.Text.RegularExpressions.Regex.IsMatch(roleName, @"\p{IsArabic}");
-                            if (hasArabic || roleName.Contains("صيدلي") || roleName.Contains("مساعد"))
-                            {
-                                errorLines.Add($"Row {row}: الوظيفة '{roleName}' يجب أن تكون بالإنجليزية (مثل Pharmacist أو Assistant). تم تخطي الصف.");
-                                continue;
-                            }
+                            errorLines.Add($"Row {row}: رقم الهاتف (Phone) إلزامي ولا يمكن تركه فارغاً للموظف '{rawUserName}' (كود: {cleanUserCode}). تم تخطي الصف.");
+                            continue;
                         }
 
-                        // Resolve Branch (by Code or by Name)
+                        // D. Role (Mandatory)
+                        var roleName = colRoleName != null ? worksheet.Cell(row, colRoleName.Value).Value.ToString()?.Trim() : (isEditingThisRow ? (string)existingByCode.RoleName : fallbackRoleName);
+                        if (string.IsNullOrWhiteSpace(roleName))
+                        {
+                            errorLines.Add($"Row {row}: المسمى الوظيفي (RoleName) إلزامي ولا يمكن تركه فارغاً للموظف '{rawUserName}' (كود: {cleanUserCode}). تم تخطي الصف.");
+                            continue;
+                        }
+
+                        // Role validation (English only)
+                        bool hasArabic = System.Text.RegularExpressions.Regex.IsMatch(roleName, @"\p{IsArabic}");
+                        if (hasArabic || roleName.Contains("صيدلي") || roleName.Contains("مساعد"))
+                        {
+                            errorLines.Add($"Row {row}: الوظيفة '{roleName}' يجب أن تكون بالإنجليزية (مثل Pharmacist أو Assistant). تم تخطي الصف.");
+                            continue;
+                        }
+
+                        var password = colPassword != null ? worksheet.Cell(row, colPassword.Value).Value.ToString()?.Trim() : null;
+
+                        // E. Branch (Mandatory and must resolve to valid branch)
                         var branchRaw = colBranchName != null ? worksheet.Cell(row, colBranchName.Value).Value.ToString()?.Trim() : null;
+                        if (string.IsNullOrWhiteSpace(branchRaw))
+                        {
+                            errorLines.Add($"Row {row}: خانة الفرع (BranchCode / BranchName) إلزامية ولا يمكن تركها فارغة للموظف '{rawUserName}' (كود: {cleanUserCode}). تم تخطي الصف.");
+                            continue;
+                        }
                         int? bId = null;
-                        if (!string.IsNullOrWhiteSpace(branchRaw))
+                        if (!branchIdByExcelValue.TryGetValue(branchRaw, out bId))
                         {
-                            if (!branchIdByExcelValue.TryGetValue(branchRaw, out bId))
-                            {
-                                bId = BranchNameResolver.ResolveBranchId(branchRaw, branchList);
-                                branchIdByExcelValue[branchRaw] = bId;
-                            }
+                            bId = BranchNameResolver.ResolveBranchId(branchRaw, branchList);
+                            branchIdByExcelValue[branchRaw] = bId;
+                        }
+                        if (!bId.HasValue || bId.Value <= 0)
+                        {
+                            errorLines.Add($"Row {row}: الفرع '{branchRaw}' غير موجود أو غير معتمد في النظام للموظف '{rawUserName}' (كود: {cleanUserCode}). تم تخطي الصف.");
+                            continue;
                         }
 
-                        // Resolve Shift (by Identity/Name or by numeric ID)
+                        // F. Shift (MANDATORY and must resolve to valid shift)
                         var shiftRaw = colshiftid != null ? worksheet.Cell(row, colshiftid.Value).Value.ToString()?.Trim() : null;
-                        int? sId = null;
-                        if (!string.IsNullOrWhiteSpace(shiftRaw))
+                        if (string.IsNullOrWhiteSpace(shiftRaw))
                         {
-                            if (!shiftIdByExcelValue.TryGetValue(shiftRaw, out sId))
-                            {
-                                sId = ShiftNameResolver.ResolveShiftId(shiftRaw, allShifts);
-                                shiftIdByExcelValue[shiftRaw] = sId;
-                            }
+                            errorLines.Add($"Row {row}: خانة الشفت (ShiftIdentity / ShiftId) إلزامية ولا يمكن تركها فارغة للموظف '{rawUserName}' (كود: {cleanUserCode}). يرجى تحديد شفت معتمد. تم تخطي الصف.");
+                            continue;
+                        }
+                        int? sId = null;
+                        if (!shiftIdByExcelValue.TryGetValue(shiftRaw, out sId))
+                        {
+                            sId = ShiftNameResolver.ResolveShiftId(shiftRaw, allShifts);
+                            shiftIdByExcelValue[shiftRaw] = sId;
+                        }
+                        if (!sId.HasValue || sId.Value <= 0)
+                        {
+                            errorLines.Add($"Row {row}: الشفت '{shiftRaw}' غير موجود أو غير معتمد في النظام للموظف '{rawUserName}' (كود: {cleanUserCode}). تم تخطي الصف.");
+                            continue;
                         }
 
-                        // Resolve Department
+                        // G. Department (OPTIONAL per business requirement)
                         var rawDept = colDepartment != null ? worksheet.Cell(row, colDepartment.Value).Value.ToString()?.Trim() : null;
                         int? deptId = null;
                         if (!string.IsNullOrWhiteSpace(rawDept))

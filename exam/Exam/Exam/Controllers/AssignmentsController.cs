@@ -136,8 +136,7 @@ namespace Exam.Controllers
             {
                 if ((string)attempt.Status == "Completed")
                 {
-                    TempData["ErrorMessage"] = "You have already completed this assignment.";
-                    return RedirectToAction("Index");
+                    return RedirectToAction("Result", new { id = (int)attempt.Id });
                 }
                 attemptId = (int)attempt.Id;
             }

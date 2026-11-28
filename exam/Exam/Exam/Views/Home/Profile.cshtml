@@ -685,14 +685,63 @@
             else
             {
                 var now = DateTime.Now;
+                var allAssignments = Model.Assignments.ToList();
+                int totalCount = allAssignments.Count;
+                int activeCount = allAssignments.Count(a => ((int?)a.SubmissionsCount ?? 0) == 0 && now <= (DateTime)a.ScheduledEndTime);
+                int historyCount = totalCount - activeCount;
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    @foreach (var a in Model.Assignments)
+                var distinctWaves = allAssignments
+                    .Where(a => !string.IsNullOrEmpty((string)a.WaveName))
+                    .Select(a => new { WaveId = (int)a.WaveId, WaveName = (string)a.WaveName })
+                    .GroupBy(x => x.WaveId)
+                    .Select(g => g.First())
+                    .ToList();
+
+                <!-- Sub-filters & Wave Selector (Active vs History & Archive) -->
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/70 dark:border-slate-800">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <button type="button" onclick="filterProfileAssignments('all', this)" data-filter="all"
+                                class="assign-subfilter-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-xs cursor-pointer flex items-center gap-1.5">
+                            <i class="fas fa-layer-group text-[10px]"></i>
+                            <span>الكل (@totalCount)</span>
+                        </button>
+                        <button type="button" onclick="filterProfileAssignments('active', this)" data-filter="active"
+                                class="assign-subfilter-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                            <span>التكليفات الحالية والنشطة (@activeCount)</span>
+                        </button>
+                        <button type="button" onclick="filterProfileAssignments('history', this)" data-filter="history"
+                                class="assign-subfilter-btn px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer flex items-center gap-1.5">
+                            <i class="fas fa-history text-[10px] text-purple-600"></i>
+                            <span>سجل وأرشيف الويفات السابقة (@historyCount)</span>
+                        </button>
+                    </div>
+
+                    @if (distinctWaves.Count > 1)
+                    {
+                        <div class="flex items-center gap-2">
+                            <label class="text-[11px] font-bold text-slate-500 whitespace-nowrap"><i class="fas fa-filter text-[10px]"></i> الويف:</label>
+                            <select id="assignWaveFilter" onchange="onAssignWaveFilterChange()" class="text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
+                                <option value="all">كافة الويفات المسجلة (@distinctWaves.Count)</option>
+                                @foreach (var w in distinctWaves)
+                                {
+                                    <option value="@w.WaveId">@w.WaveName</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5" id="profileAssignmentsGrid">
+                    @foreach (var a in allAssignments)
                     {
                         bool isExpired = now > (DateTime)a.ScheduledEndTime;
                         bool isSubmitted = ((int?)a.SubmissionsCount ?? 0) > 0;
+                        string cardStatus = (!isSubmitted && !isExpired) ? "active" : "history";
+                        string waveIdStr = a.WaveId != null ? a.WaveId.ToString() : "0";
 
-                        <div class="bg-slate-50/60 border border-slate-200/80 rounded-2xl p-5 hover:border-indigo-500/30 hover:bg-white hover:shadow-md transition-all flex flex-col justify-between space-y-4">
+                        <div class="assignment-profile-card bg-slate-50/60 border border-slate-200/80 rounded-2xl p-5 hover:border-indigo-500/30 hover:bg-white hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                             data-status="@cardStatus" data-wave="@waveIdStr">
                             <div>
                                 <div class="flex items-center justify-between gap-2 mb-2.5">
                                     <div class="flex items-center gap-1.5 flex-wrap">
@@ -706,14 +755,22 @@
                                     </div>
                                     @if (isSubmitted)
                                     {
-                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center gap-1 shadow-xs">
-                                            <i class="fas fa-check-circle"></i> تم التسليم
-                                        </span>
+                                        <div class="flex items-center gap-1.5">
+                                            @if (a.AttemptScore != null)
+                                            {
+                                                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                                    @(a.AttemptScore) pts
+                                                </span>
+                                            }
+                                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center gap-1 shadow-xs">
+                                                <i class="fas fa-check-circle"></i> تم التسليم
+                                            </span>
+                                        </div>
                                     }
                                     else if (isExpired)
                                     {
                                         <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200/60">
-                                            انتهى الموعد
+                                            انتهى الموعد (سابق)
                                         </span>
                                     }
                                     else
@@ -735,17 +792,35 @@
 
                             <div class="bg-white rounded-xl p-3 text-xs space-y-1.5 border border-slate-100 shadow-xs">
                                 <div class="flex items-center justify-between text-slate-500 text-[11px]">
-                                    <span><i class="far fa-calendar-check mr-1 text-slate-400"></i>آخر موعد للتسليم:</span>
-                                    <strong class="@(isExpired ? "text-rose-600" : "text-slate-800")">@(((DateTime)a.ScheduledEndTime).ToString("dd/MM/yyyy hh:mm tt"))</strong>
+                                    <span><i class="far fa-calendar-check mr-1 text-slate-400"></i>موعد التسليم:</span>
+                                    <strong class="@(isExpired ? "text-slate-600" : "text-slate-800")">@(((DateTime)a.ScheduledEndTime).ToString("dd/MM/yyyy hh:mm tt"))</strong>
                                 </div>
                             </div>
 
                             <div>
-                                <a href="@(isSubmitted ? (a.AttemptId != null ? Url.Action("Result", "Assignments", new { id = a.AttemptId }) : Url.Action("Index", "Assignments")) : Url.Action("Take", "Assignments", new { id = a.Id }))" 
-                                   class="w-full py-2.5 rounded-xl @(isSubmitted ? "bg-emerald-600 hover:bg-emerald-700" : "bg-indigo-600 hover:bg-indigo-700") text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
-                                    <span>@(isSubmitted ? "عرض النتيجة والإجابات" : "فتح وحل التكليف")</span>
-                                    <i class="fas fa-arrow-left text-[10px]"></i>
-                                </a>
+                                @if (isSubmitted)
+                                {
+                                    <a href="@(a.AttemptId != null ? Url.Action("Result", "Assignments", new { id = a.AttemptId }) : Url.Action("Index", "Assignments"))"
+                                       class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
+                                        <i class="fas fa-history text-xs"></i>
+                                        <span>مراجعة الإجابات والنتيجة (Review Result)</span>
+                                    </a>
+                                }
+                                else if (!isExpired)
+                                {
+                                    <a href="@Url.Action("Take", "Assignments", new { id = a.Id })"
+                                       class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
+                                        <span>فتح وحل التكليف</span>
+                                        <i class="fas fa-arrow-left text-[10px]"></i>
+                                    </a>
+                                }
+                                else
+                                {
+                                    <div class="w-full py-2.5 rounded-xl bg-slate-200 text-slate-500 font-bold text-xs flex items-center justify-center gap-1.5">
+                                        <i class="fas fa-clock text-[10px]"></i>
+                                        <span>انتهى موعد التسليم لهذه الويف</span>
+                                    </div>
+                                }
                             </div>
                         </div>
                     }
@@ -987,4 +1062,38 @@
             switchProfileTab(targetTab.toLowerCase());
         }
     });
+
+    // Sub-filtering for Continuous Assignments (Active vs History / Archive vs Wave)
+    function filterProfileAssignments(statusFilter, btn) {
+        document.querySelectorAll('.assign-subfilter-btn').forEach(b => {
+            b.classList.remove('bg-indigo-600', 'text-white', 'shadow-xs');
+            b.classList.add('bg-slate-100', 'text-slate-600');
+        });
+        if (btn) {
+            btn.classList.remove('bg-slate-100', 'text-slate-600');
+            btn.classList.add('bg-indigo-600', 'text-white', 'shadow-xs');
+        }
+        const waveSelect = document.getElementById('assignWaveFilter');
+        const selectedWave = waveSelect ? waveSelect.value : 'all';
+
+        document.querySelectorAll('.assignment-profile-card').forEach(card => {
+            const cardStatus = card.getAttribute('data-status');
+            const cardWave = card.getAttribute('data-wave');
+
+            const matchStatus = (statusFilter === 'all') || (cardStatus === statusFilter);
+            const matchWave = (selectedWave === 'all') || (cardWave === selectedWave);
+
+            if (matchStatus && matchWave) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
+    function onAssignWaveFilterChange() {
+        const activeSubBtn = document.querySelector('.assign-subfilter-btn.bg-indigo-600');
+        const status = activeSubBtn ? activeSubBtn.getAttribute('data-filter') : 'all';
+        filterProfileAssignments(status, activeSubBtn);
+    }
 </script>
