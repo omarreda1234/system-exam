@@ -902,7 +902,12 @@ namespace Exam.Controllers
                     u.UserCode,
                     u.Email,
                     ISNULL(b.BranchName, N'غير محدد') AS BranchName,
-                    u.RoleName,
+                    ISNULL((
+                        SELECT TOP 1 r.Name 
+                        FROM dbo.AspNetUserRoles ur WITH (NOLOCK)
+                        JOIN dbo.AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id 
+                        WHERE ur.UserId = u.Id
+                    ), 'Trainee') AS RoleName,
                     uea.Score,
                     uea.FinalScore,
                     uea.IsPassed,
@@ -991,7 +996,7 @@ namespace Exam.Controllers
                         u.PhoneNumber,
                         ISNULL(b.BranchName, '--') AS BranchName,
                         ISNULL(s.ShiftName, 'Any Shift') AS ShiftName,
-                        COALESCE(NULLIF(u.RoleName, ''), ur.RoleName, 'Trainee') AS RoleName,
+                        ISNULL(ur.RoleName, 'Trainee') AS RoleName,
                         CASE 
                             WHEN la.Status = 'Completed' THEN 'Completed'
                             WHEN la.Status = 'InProgress' THEN 'InProgress'
@@ -1188,7 +1193,12 @@ namespace Exam.Controllers
                         u.UserCode,
                         u.FullName,
                         u.Email,
-                        u.RoleName,
+                        ISNULL((
+                            SELECT TOP 1 r.Name 
+                            FROM dbo.AspNetUserRoles ur WITH (NOLOCK)
+                            JOIN dbo.AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id 
+                            WHERE ur.UserId = u.Id
+                        ), 'Trainee') AS RoleName,
                         ISNULL(b.BranchName, N'غير محدد') AS BranchName,
                         uwc.Score AS CurrentCertScore,
                         uwc.CertificateCode,
@@ -1497,7 +1507,12 @@ namespace Exam.Controllers
                     u.Id AS UserId,
                     u.UserCode,
                     u.FullName,
-                    u.RoleName,
+                    ISNULL((
+                        SELECT TOP 1 r.Name 
+                        FROM dbo.AspNetUserRoles ur WITH (NOLOCK)
+                        JOIN dbo.AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id 
+                        WHERE ur.UserId = u.Id
+                    ), 'Trainee') AS RoleName,
                     uwc.Id AS CertId,
                     uwc.CertificateCode,
                     uwc.Score AS CurrentCertScore

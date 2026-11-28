@@ -236,7 +236,12 @@ namespace Exam.Controllers
                         u.UserCode,
                         ISNULL(NULLIF(u.FullName, ''), u.UserName) AS FullName,
                         u.Email,
-                        u.RoleName,
+                        ISNULL((
+                            SELECT TOP 1 r.Name 
+                            FROM dbo.AspNetUserRoles ur WITH (NOLOCK)
+                            JOIN dbo.AspNetRoles r WITH (NOLOCK) ON ur.RoleId = r.Id 
+                            WHERE ur.UserId = u.Id
+                        ), 'Trainee') AS RoleName,
                         ISNULL(b.BranchName, N'غير محدد') AS BranchName,
                         uwc.Score AS CurrentCertScore,
                         uwc.CertificateCode,
